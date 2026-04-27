@@ -406,6 +406,7 @@ body[style*="color-scheme: light"] select{color:#1f2328!important;background:#f6
 .ar-lbl{color:var(--muted);}
 .ar-val{font-family:'IBM Plex Mono',monospace;}
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
@@ -533,7 +534,10 @@ body[style*="color-scheme: light"] select{color:#1f2328!important;background:#f6
       <button class="btn btn-ghost btn-sm hdr-btn" style="color:var(--orange-l);border-color:rgba(240,136,62,.3)" onclick="document.getElementById('sesion-file-input').click()">📂 Cargar</button>
       <input type="file" id="sesion-file-input" accept=".json" style="display:none" onchange="cargarSesion(this)">
       <div class="hdr-sep"></div>
-      <button id="view-mode-btn" onclick="toggleViewMode()" title="Cambiar vista Móvil/Escritorio"
+      <div class="hdr-sep" style="display:inline-block;width:1px;height:22px;background:var(--border);margin:0 3px;vertical-align:middle"></div>
+    <button class="btn btn-ghost btn-sm" style="margin-top:0;width:auto;color:#3fb950;border-color:rgba(63,185,80,.3)" onclick="guardarSesionNube()">☁️ Nube</button>
+    <button class="btn btn-ghost btn-sm" style="margin-top:0;width:auto;color:#58a6ff;border-color:rgba(88,166,255,.3)" onclick="cargarSesionNube()">📥 Nube</button>
+    <button id="view-mode-btn" onclick="toggleViewMode()" title="Cambiar vista Móvil/Escritorio"
         style="background:rgba(139,148,158,.1);border:1px solid rgba(139,148,158,.25);border-radius:8px;padding:5px 10px;cursor:pointer;font-size:11px;color:var(--muted);white-space:nowrap;flex-shrink:0">
         📱 Móvil
       </button>
@@ -4689,7 +4693,110 @@ function applyViewMode(mode){
   }
 }
 
+
+// ── SUPABASE INTEGRATION ──
+const _SB_URL = "https://kgrunsunahooitmqzaaq.supabase.co";
+const _SB_KEY = "sb_publishable_pRDW1CDvw8iKlSy8oTz5uA_v0GA4GkA";
+let _sb = null;
+
+function initSupabase(){
+  try {
+    _sb = window.supabase.createClient(_SB_URL, _SB_KEY);
+    console.log("Supabase conectado");
+  } catch(e) {
+    console.warn("Supabase no disponible:", e);
+  }
+}
+
+async function guardarEnSupabase(nombre, datos){
+  if(!_sb){ alert("Supabase no conectado"); return false; }
+  try {
+    const payload = {
+      nombre: nombre || ("sesion_" + new Date().toISOString().slice(0,10)),
+      datos: JSON.stringify(datos),
+      updated_at: new Date().toISOString()
+    };
+    const { error } = await _sb
+      .from("simulador_sesiones")
+      .upsert(payload, { onConflict: "nombre" });
+    if(error) throw error;
+    return true;
+  } catch(e) {
+    console.error("Error guardando:", e);
+    alert("Error al guardar en la nube: " + e.message);
+    return false;
+  }
+}
+
+async function cargarDeSupabase(){
+  if(!_sb){ alert("Supabase no conectado"); return null; }
+  try {
+    const { data, error } = await _sb
+      .from("simulador_sesiones")
+      .select("nombre, datos, updated_at")
+      .order("updated_at", { ascending: false });
+    if(error) throw error;
+    return data || [];
+  } catch(e) {
+    console.error("Error cargando:", e);
+    alert("Error al cargar de la nube: " + e.message);
+    return null;
+  }
+}
+
+// Override guardarSesion to save to Supabase + local JSON download
+const _guardarSesionOriginal = typeof guardarSesion === "function" ? guardarSesion : null;
+
+async function guardarSesionNube(){
+  // Build session data (same as original)
+  const snap = window._lastSnap || {};
+  const datos = {
+    version: "3.5.7.4",
+    fecha: new Date().toISOString(),
+    tipo, termino, compar, exon,
+    snap,
+    invLines,
+    tendData: window.tendData || [],
+    nro: document.getElementById("s1_nro_emb")?.value || "",
+    desc: document.getElementById("s1_desc_emb")?.value || "",
+    origen: document.getElementById("s1_origen_emb")?.value || "",
+  };
+
+  const nombre = prompt(
+    "Nombre para esta sesión en la nube:",
+    datos.nro || ("sesion_" + new Date().toISOString().slice(0,10))
+  );
+  if(!nombre) return;
+
+  const ok = await guardarEnSupabase(nombre, datos);
+  if(ok) alert("✅ Guardado en la nube: " + nombre);
+}
+
+async function cargarSesionNube(){
+  const lista = await cargarDeSupabase();
+  if(!lista || !lista.length){ alert("No hay sesiones guardadas en la nube."); return; }
+
+  // Show a simple selector
+  const opciones = lista.map((s,i) =>
+    i + ": " + s.nombre + " (" + s.updated_at.slice(0,16).replace("T"," ") + ")"
+  ).join("\n");
+  const idx = parseInt(prompt("Elige una sesión:" + "\n" + opciones));
+  if(isNaN(idx) || idx < 0 || idx >= lista.length) return;
+
+  const datos = JSON.parse(lista[idx].datos);
+  // Restore session (same as cargarSesion)
+  if(datos.snap) window._lastSnap = datos.snap;
+  if(datos.invLines) { invLines = datos.invLines; renderInvLines(); }
+  if(datos.tendData) window.tendData = datos.tendData;
+  if(datos.tipo) setTipo(datos.tipo, document.querySelector(".seg-btn"));
+  if(datos.termino) setTermino(datos.termino, document.querySelector("#termSeg .seg-btn"));
+  calc();
+  alert("✅ Sesión cargada: " + lista[idx].nombre);
+}
+// ── END SUPABASE ──
+
 window.onload=function(){
+  initSupabase();
   // Restore view mode
   const savedViewMode=localStorage.getItem('_simViewMode')||'desktop';
   setTimeout(()=>applyViewMode(savedViewMode), 100);
