@@ -43,7 +43,8 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 .hdr-badge{font-size:10px;background:var(--green-dim);border:1px solid rgba(46,160,67,.3);color:var(--green-l);padding:2px 8px;border-radius:10px;font-weight:500;white-space:nowrap;}
 
 /* TABS */
-.tabs{background:var(--s1);border-bottom:1px solid var(--border);padding:0 24px;display:flex;overflow-x:auto;}
+.tabs{background:var(--s1);border-bottom:1px solid var(--border);padding:0 24px;display:flex;overflow-x:auto;position:sticky;top:var(--hdr-height, 90px);z-index:90;scrollbar-width:none;}
+.tabs::-webkit-scrollbar{display:none;}
 .tab{padding:11px 16px;font-size:12px;font-weight:500;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap;}
 .tab:hover{color:var(--text);}
 .tab.on{color:var(--accent);border-bottom-color:var(--accent);}
@@ -196,7 +197,10 @@ body.theme-light .tab.on { color:var(--accent)!important; }
 
 /* TABLO */
 .tbl{width:100%;border-collapse:collapse;}
-.tbl th{font-size:10px;font-weight:600;color:var(--muted);padding:8px 12px;text-align:left;border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.05em;}
+.tbl th{font-size:10px;font-weight:600;color:var(--muted);padding:8px 12px;text-align:left;border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.05em;position:sticky;top:0;background:var(--s2);z-index:5;}
+/* comp-wrap: allow scrolling with sticky headers */
+.comp-wrap{overflow-x:auto;max-height:70vh;overflow-y:auto;}
+.comp-wrap table{border-collapse:collapse;}
 .tbl td{padding:7px 12px;border-bottom:1px solid rgba(48,54,61,.4);font-size:12px;font-family:'IBM Plex Mono',monospace;}
 .tbl tr:last-child td{border-bottom:none;}
 .tbl .tot-row td{border-top:1px solid var(--border);font-weight:700;color:var(--green-l);}
@@ -235,7 +239,28 @@ body.theme-light .tab.on { color:var(--accent)!important; }
 .readonly-msg{font-size:12px;font-weight:600;color:var(--green-l);display:flex;align-items:center;gap:8px;}
 .readonly-msg small{font-size:11px;color:var(--muted);font-weight:400;}
 
-/* DENSITY MODES */
+/* MICRO-INTERACTIONS & POLISH */
+.btn{transition:opacity .15s, transform .12s, box-shadow .15s!important;}
+.btn:active{transform:scale(.97)!important;opacity:.85!important;}
+.btn-green:hover{box-shadow:0 4px 16px rgba(46,160,67,.3);}
+.btn-orange:hover{box-shadow:0 4px 16px rgba(218,54,51,.25);}
+.btn:hover{box-shadow:0 2px 12px rgba(0,0,0,.3);}
+input[type=number]:focus, input[type=text]:focus, select:focus{
+  box-shadow:0 0 0 3px rgba(88,166,255,.15)!important;
+  border-color:var(--blue-l)!important;
+}
+.card{transition:box-shadow .2s;}
+.sidebar-nav-item{transition:background .12s, transform .1s;}
+.sidebar-nav-item:active{transform:scale(.98);}
+/* Smooth tab transitions */
+.tab-pane{animation:_fadeIn .2s ease;}
+@keyframes _fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+/* Results portal slide-in */
+#results-portal.open{animation:_slideInRight .28s cubic-bezier(.25,.46,.45,.94);}
+@keyframes _slideInRight{from{transform:translateX(30px);opacity:0}to{transform:none;opacity:1}}
+/* Pulse effect for processed state */
+@keyframes _pulse{0%,100%{box-shadow:0 0 0 0 rgba(63,185,80,.4)}50%{box-shadow:0 0 0 8px rgba(63,185,80,0)}}
+.pulse-green{animation:_pulse 1.5s ease-in-out 2;}
 body.density-compact .card-bd{padding:10px 14px!important;}
 body.density-compact .field{margin-bottom:8px!important;}
 body.density-compact .card-hd{padding:8px 14px!important;}
@@ -413,25 +438,41 @@ body[style*="color-scheme: light"] #portal-content tr td[style*="background:#1c2
 #app-wrapper.hidden{opacity:0;transform:translateX(60px);pointer-events:none;}
 #app-wrapper.visible{opacity:1;transform:translateX(0);}
 
-/* SIDEBAR PANEL */
-.sidebar{position:fixed;left:0;top:0;bottom:0;width:260px;background:var(--s1);border-right:1px solid var(--border);z-index:300;transform:translateX(-100%);transition:transform .3s cubic-bezier(.25,.46,.45,.94);overflow-y:auto;padding:16px;}
+/* SIDEBAR PANEL — Wide vertical nav */
+.sidebar{position:fixed;left:0;top:0;bottom:0;width:300px;background:var(--s1);border-right:1px solid var(--border);z-index:300;transform:translateX(-100%);transition:transform .3s cubic-bezier(.25,.46,.45,.94);overflow-y:auto;padding:0;display:flex;flex-direction:column;}
 .sidebar.open{transform:translateX(0);}
-.sidebar-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:299;display:none;}
+.sidebar-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:299;display:none;backdrop-filter:blur(2px);}
 .sidebar-overlay.open{display:block;}
-.sidebar h3{font-size:12px;font-weight:700;color:var(--text);letter-spacing:.06em;text-transform:uppercase;margin-bottom:12px;margin-top:16px;}
+.sidebar-hdr{padding:20px 20px 16px;border-bottom:1px solid var(--border);background:linear-gradient(135deg,var(--s2),var(--s1));display:flex;justify-content:space-between;align-items:center;flex-shrink:0;}
+.sidebar-brand{font-size:15px;font-weight:800;color:var(--text);letter-spacing:-.01em;}
+.sidebar-brand span{color:var(--green-l);}
+.sidebar-close{background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;line-height:1;padding:4px;}
+.sidebar-close:hover{color:var(--text);}
+.sidebar-section{padding:16px 14px 8px;}
+.sidebar-section-lbl{font-size:10px;font-weight:700;color:var(--muted2);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px;padding:0 6px;}
+.sidebar-nav-item{display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:10px;cursor:pointer;transition:background .15s;margin-bottom:3px;text-decoration:none;}
+.sidebar-nav-item:hover{background:rgba(255,255,255,.05);}
+.sidebar-nav-item.active{background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.2);}
+.sidebar-nav-item .nav-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;}
+.sidebar-nav-item .nav-label{font-size:13px;font-weight:600;color:var(--text);}
+.sidebar-nav-item .nav-sub{font-size:10px;color:var(--muted);margin-top:1px;}
+.sidebar-divider{height:1px;background:var(--border);margin:6px 14px;}
+.sidebar h3{font-size:10px;font-weight:700;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase;margin:16px 20px 10px;padding:0;}
 .sidebar h3:first-child{margin-top:0;}
-.toggle-item{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(48,54,61,.4);}
-.toggle-item label{font-size:12px;color:var(--muted);}
-.toggle-sw{width:36px;height:20px;background:var(--border);border-radius:10px;position:relative;cursor:pointer;transition:background .2s;}
+.toggle-item{display:flex;justify-content:space-between;align-items:center;padding:9px 20px;border-bottom:1px solid rgba(48,54,61,.25);}
+.toggle-item label{font-size:12px;color:var(--muted);font-weight:500;}
+.toggle-sw{width:36px;height:20px;background:var(--border);border-radius:10px;position:relative;cursor:pointer;transition:background .2s;flex-shrink:0;}
 .toggle-sw.on{background:var(--green-l);}
 .toggle-sw::after{content:'';position:absolute;width:16px;height:16px;background:#fff;border-radius:50%;top:2px;left:2px;transition:left .2s;}
 .toggle-sw.on::after{left:18px;}
+.sidebar-footer{margin-top:auto;padding:16px 14px;border-top:1px solid var(--border);background:var(--s2);}
+.sidebar-footer-kpi{font-size:11px;color:var(--muted);line-height:1.6;}
 
 /* BTN INICIO */
 .btn-inicio{background:var(--s2);border:1px solid var(--border);color:var(--muted);border-radius:7px;padding:5px 12px;font-size:11px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:5px;}
 .btn-inicio:hover{color:var(--text);border-color:var(--muted);}
-.btn-sidebar{background:var(--s2);border:1px solid var(--border);color:var(--muted);border-radius:7px;padding:5px 12px;font-size:11px;font-weight:500;cursor:pointer;}
-.btn-sidebar:hover{color:var(--text);}
+.btn-sidebar{background:var(--s2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all .15s;}
+.btn-sidebar:hover{background:rgba(255,255,255,.06);border-color:var(--muted);}
 
 /* DASHBOARD ACCORDIONS */
 .dash-acc{margin-bottom:12px;border:1px solid var(--border);border-radius:8px;overflow:hidden;}
@@ -568,23 +609,103 @@ body[style*="color-scheme: light"] #portal-content tr td[style*="background:#1c2
 
 <!-- SIDEBAR -->
 <div class="sidebar" id="sidebar">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-    <span style="font-size:13px;font-weight:700;color:var(--text)">⚙ Panel de Configuración</span>
-    <button onclick="closeSidebar()" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer">×</button>
+  <!-- Header -->
+  <div class="sidebar-hdr">
+    <div>
+      <div class="sidebar-brand">SIMULA<span>DOR</span></div>
+      <div style="font-size:10px;color:var(--muted);margin-top:2px">Zona Libre · Panamá</div>
+    </div>
+    <button class="sidebar-close" onclick="closeSidebar()">×</button>
   </div>
+
+  <!-- EMBARQUES Nav -->
+  <div class="sidebar-section">
+    <div class="sidebar-section-lbl">Embarques</div>
+
+    <div class="sidebar-nav-item active" onclick="closeSidebar();switchTab('sim',document.querySelector('.tab'))">
+      <div class="nav-icon" style="background:rgba(63,185,80,.15)">📋</div>
+      <div><div class="nav-label">Esc. Regular</div><div class="nav-sub">Pago de impuestos estándar</div></div>
+    </div>
+
+    <div class="sidebar-nav-item" onclick="closeSidebar();switchTab('cifexp',document.querySelectorAll('.tab')[1])">
+      <div class="nav-icon" style="background:rgba(88,166,255,.15)">⚡</div>
+      <div><div class="nav-label">CIF Express</div><div class="nav-sub">Exoneración arancelaria</div></div>
+    </div>
+
+    <div class="sidebar-nav-item" onclick="closeSidebar();switchTab('sababa',document.querySelectorAll('.tab')[2])">
+      <div class="nav-icon" style="background:rgba(240,136,62,.15)">🤝</div>
+      <div><div class="nav-label">Sababa Imports</div><div class="nav-sub">Facturación fiscal homologada</div></div>
+    </div>
+
+    <div class="sidebar-nav-item" onclick="closeSidebar();switchTab('unico',document.querySelectorAll('.tab')[3])">
+      <div class="nav-icon" style="background:rgba(163,113,247,.15)">🔒</div>
+      <div><div class="nav-label">Escenario Único</div><div class="nav-sub">Sin alternativa de comparación</div></div>
+    </div>
+
+    <div class="sidebar-nav-item" onclick="closeSidebar();switchTab('facturas',document.querySelectorAll('.tab')[4])">
+      <div class="nav-icon" style="background:rgba(63,185,80,.1)">🧾</div>
+      <div><div class="nav-label">Proveedores</div><div class="nav-sub">Facturas del embarque</div></div>
+    </div>
+  </div>
+
+  <div class="sidebar-divider"></div>
+
+  <!-- ESTADOS Nav -->
+  <div class="sidebar-section">
+    <div class="sidebar-section-lbl">Análisis</div>
+
+    <div class="sidebar-nav-item" onclick="closeSidebar();switchTab('comparativo',document.querySelectorAll('.tab')[5])">
+      <div class="nav-icon" style="background:rgba(88,166,255,.1)">📊</div>
+      <div><div class="nav-label">Comparativo</div><div class="nav-sub">3 escenarios lado a lado</div></div>
+    </div>
+
+    <div class="sidebar-nav-item" onclick="closeSidebar();switchTab('aranceles',document.querySelectorAll('.tab')[6])">
+      <div class="nav-icon" style="background:rgba(240,136,62,.1)">📦</div>
+      <div><div class="nav-label">Aranceles por Ítem</div><div class="nav-sub">Factor arancelario ponderado</div></div>
+    </div>
+
+    <div class="sidebar-nav-item" onclick="closeSidebar();switchTab('tendencias',document.querySelectorAll('.tab')[7])">
+      <div class="nav-icon" style="background:rgba(210,153,34,.1)">📈</div>
+      <div><div class="nav-label">Tendencias</div><div class="nav-sub">Historial y top proveedores</div></div>
+    </div>
+  </div>
+
+  <div class="sidebar-divider"></div>
+
+  <!-- SISTEMA -->
+  <div class="sidebar-section">
+    <div class="sidebar-section-lbl">Sistema</div>
+
+    <div class="sidebar-nav-item" onclick="closeSidebar();switchTab('config',document.querySelectorAll('.tab')[8])">
+      <div class="nav-icon" style="background:rgba(139,148,158,.1)">⚙️</div>
+      <div><div class="nav-label">Configuración</div><div class="nav-sub">Aranceles, temas, densidad</div></div>
+    </div>
+  </div>
+
+  <div class="sidebar-divider"></div>
+
+  <!-- DASHBOARD TOGGLES -->
   <h3>Dashboard — Mostrar</h3>
   <div class="toggle-item"><label>KPIs principales</label><div class="toggle-sw on" id="sw-kpis" onclick="toggleSw(this,'kpis')"></div></div>
   <div class="toggle-item"><label>Barras comparativas</label><div class="toggle-sw on" id="sw-bars" onclick="toggleSw(this,'bars')"></div></div>
   <div class="toggle-item"><label>Ahorro Real</label><div class="toggle-sw on" id="sw-ahorro" onclick="toggleSw(this,'ahorro')"></div></div>
   <div class="toggle-item"><label>Desglose detallado</label><div class="toggle-sw on" id="sw-detail" onclick="toggleSw(this,'detail')"></div></div>
   <div class="toggle-item"><label>Tabla comparativa</label><div class="toggle-sw on" id="sw-tabla" onclick="toggleSw(this,'tabla')"></div></div>
-  <h3>Mostrar Primero</h3>
-  <div class="toggle-item"><label>% Importación grande</label><div class="toggle-sw on" id="sw-pct" onclick="toggleSw(this,'pct')"></div></div>
-  <div class="toggle-item"><label>Costo Landed prominente</label><div class="toggle-sw on" id="sw-landed" onclick="toggleSw(this,'landed')"></div></div>
-  <div class="toggle-item"><label>Master Value visible</label><div class="toggle-sw on" id="sw-mv" onclick="toggleSw(this,'mv')"></div></div>
+
   <h3>Escenarios</h3>
   <div class="toggle-item"><label>Comparar vs CIF Express</label><div class="toggle-sw on" id="sw-sc2" onclick="toggleSw(this,'sc2')"></div></div>
   <div class="toggle-item"><label>Comparar vs Sababa</label><div class="toggle-sw" id="sw-sc3" onclick="toggleSw(this,'sc3')"></div></div>
+
+  <!-- Footer with quick actions -->
+  <div class="sidebar-footer">
+    <div class="sidebar-footer-kpi">
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <button onclick="guardarSesionNube();closeSidebar()" style="flex:1;background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.25);color:var(--green-l);border-radius:8px;padding:8px;font-size:11px;font-weight:600;cursor:pointer">☁️ Guardar Nube</button>
+        <button onclick="cargarSesionNube();closeSidebar()" style="flex:1;background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);color:var(--blue-l);border-radius:8px;padding:8px;font-size:11px;font-weight:600;cursor:pointer">📥 Cargar Nube</button>
+      </div>
+      <div style="text-align:center;font-size:10px;color:var(--muted2)">Simulador Aduanal v3.5.7.3 · ZLC Panamá</div>
+    </div>
+  </div>
 </div>
 
 <div id="app-wrapper">
@@ -631,6 +752,7 @@ body[style*="color-scheme: light"] #portal-content tr td[style*="background:#1c2
   <div class="tab on" onclick="switchTab('sim',this)">📋 Esc. Regular</div>
   <div class="tab" onclick="switchTab('cifexp',this)">⚡ CIF Express</div>
   <div class="tab" onclick="switchTab('sababa',this)">🤝 Sababa Imports</div>
+  <div class="tab" onclick="switchTab('unico',this)">🔒 Único</div>
   <div class="tab" onclick="switchTab('facturas',this)">🧾 Proveedores</div>
   <div class="tab" onclick="switchTab('comparativo',this)">📊 Comparativo</div>
   <div class="tab" onclick="switchTab('aranceles',this)">📦 Aranceles</div>
@@ -707,7 +829,7 @@ body[style*="color-scheme: light"] #portal-content tr td[style*="background:#1c2
           <input type="number" id="s1_traspaso" value="" placeholder="0.00" step="0.01" oninput="syncTraspasoSC3();calc()">
         </div>
         <div id="blk-s1-difpago" class="field">
-          <label>Diferencia Sababa (± USD)</label>
+          <label>Diferencia CIF (± USD) <span id="difpago-tipo-hint" style="font-size:10px;color:var(--blue-l)">← ajuste de centavos / redondeo</span></label>
           <input type="number" id="s1_dif_pago" value="" placeholder="0.00" step="0.01" oninput="syncDifPagoSC3();calc()">
         </div>
       </div>
@@ -736,16 +858,23 @@ body[style*="color-scheme: light"] #portal-content tr td[style*="background:#1c2
 
   <!-- IMPUESTOS -->
   <div class="card" style="margin-bottom:12px">
-    <div class="card-hd"><div class="dot g"></div><h3>2 · Impuestos</h3></div>
+    <div class="card-hd"><div class="dot g"></div><h3>2 · Impuestos</h3>
+      <span class="info-btn" onclick="document.getElementById('imp-info').classList.toggle('open')" title="Info sobre cálculos">i</span>
+    </div>
+    <div id="imp-info" class="info-box">
+      <strong>Factor Arancelario (DAI):</strong> CIF × Arancel% = Pago Arancelario.<br>
+      <strong>ITBMS:</strong> (CIF + Arancel) × 7% = ITBMS sobre Arancel.<br>
+      <strong>Tasa Aduana:</strong> Tasa fija + ITBMS s/Tasa (Tasa × 7%).<br>
+      <strong>Uso de Sistema:</strong> Formulario Esc.#1 = Uso de Sistema × renglones.<br>
+      Todos los campos de resultado están bloqueados y se calculan automáticamente.
+    </div>
     <div class="card-bd">
       <div class="r2">
         <div class="field"><label>Factor Arancelario % (DAI)</label>
           <input type="number" id="s1_ar" value="10" step="0.0001" oninput="calc()">
-          <p class="note">Editable en ⚙ Config.</p>
         </div>
         <div class="field"><label>Pago Arancelario (USD)</label>
           <input type="number" id="disp_ar_pago" readonly style="background:var(--bg);color:var(--orange-l);font-weight:600" placeholder="0.00">
-          <p class="note">CIF × Arancel%</p>
         </div>
       </div>
       <div class="r2">
@@ -754,7 +883,6 @@ body[style*="color-scheme: light"] #portal-content tr td[style*="background:#1c2
         </div>
         <div class="field"><label>ITBMS Arancel (USD)</label>
           <input type="number" id="disp_itbms_ar" readonly style="background:var(--bg);color:var(--orange-l);font-weight:600" placeholder="0.00">
-          <p class="note">(CIF + Arancel) × 7%</p>
         </div>
       </div>
       <div class="r2">
@@ -764,7 +892,6 @@ body[style*="color-scheme: light"] #portal-content tr td[style*="background:#1c2
       <div class="r2">
         <div class="field"><label>Uso de Sistema (USD)</label>
           <input type="number" id="s2_form" value="6" step="0.01" oninput="calc()">
-          <p class="note">Editable</p>
         </div>
         <div class="field"><label>Formulario Esc.#1 (USD)</label>
           <input type="number" id="disp_form1" readonly style="background:var(--bg)" placeholder="0.00">
@@ -778,12 +905,19 @@ body[style*="color-scheme: light"] #portal-content tr td[style*="background:#1c2
     <div class="card-hd"><div class="dot g"></div><h3>3 · Honorarios del Corredor</h3>
       <span class="info-btn" onclick="document.getElementById('hon-info').classList.toggle('open')">i</span>
     </div>
-    <div id="hon-info" class="info-box">Honorarios calculados automáticamente según fórmula del corredor.</div>
+    <div id="hon-info" class="info-box">
+      <strong>Honorarios del Corredor — Fórmulas:</strong><br>
+      • <strong>Hon. Mínimo Legal:</strong> Si CIF ≤ $10,000 → $80 fijo. Si CIF &gt; $10,000 → CIF × 0.27% + $80.<br>
+      • <strong>Formulario:</strong> Si renglones ≤ 5 → $3. Más de 5 renglones: 1 + REDONDEAR.ARRIBA((rengl-5)/10, 0) × $3.<br>
+      • <strong>Coord. Logística:</strong> CIF × 0.5%.<br>
+      • <strong>Renglones Extra:</strong> Si rengl ≤ 1 → $0. Si rengl &gt; 1 → (rengl-1) × $5.<br>
+      • <strong>Total SC1:</strong> Hon.Mín + Formulario + GZLC + Coord + Renglones.<br>
+      • <strong>Total CIF Express (SC2):</strong> CIF × 3% (incluye todo).
+    </div>
     <div class="card-bd">
       <div class="r2">
         <div class="field"><label>Renglones (#)</label>
           <input type="number" id="s1_reng" value="1" step="1" min="1" oninput="calc()">
-          <p class="note">Afecta formulario y costo de renglones</p>
         </div>
         <div class="field"><label>Gestión Ingreso ZLC (USD)</label>
           <input type="number" id="s1_gzlc" value="133" step="0.01" oninput="calc()">
@@ -909,13 +1043,19 @@ body[style*="color-scheme: light"] #portal-content tr td[style*="background:#1c2
 <!-- ============================================ -->
 <div id="results-portal">
   <div class="portal-hdr">
-    <button class="btn-back" onclick="closePortal()">← Volver a Parámetros</button>
+    <button class="btn-back" onclick="closePortal()">← Volver</button>
     <h2 id="portal-title">Dashboard Comparativo</h2>
     <div style="display:flex;gap:6px">
       <button class="btn btn-print btn-sm" style="margin-top:0;width:auto" onclick="window.print()">🖨 PDF</button>
       <button class="btn btn-print btn-sm" style="margin-top:0;width:auto" onclick="exportCSV()">📊 CSV</button>
       <button class="btn btn-print btn-sm" style="margin-top:0;width:auto;background:rgba(88,166,255,.12);color:var(--blue-l);border:1px solid rgba(88,166,255,.3)" onclick="exportarComparativo()">📥 HTML</button>
     </div>
+  </div>
+  <!-- STICKY SCENARIO RIBBON — visible while scrolling so you always know which column is which -->
+  <div id="portal-ribbon" style="display:none;position:sticky;top:50px;z-index:8;background:var(--bg);border-bottom:2px solid var(--border);display:flex;flex-shrink:0">
+    <div style="flex:2;padding:6px 10px;font-size:10px;font-weight:700;color:#3fb950;text-transform:uppercase;letter-spacing:.04em;border-right:1px solid var(--border)">📋 Liquidación Aduanal</div>
+    <div style="flex:2;padding:6px 10px;font-size:10px;font-weight:700;color:#58a6ff;text-transform:uppercase;letter-spacing:.04em;border-right:1px solid var(--border)">⚡ CIF Express</div>
+    <div style="flex:2;padding:6px 10px;font-size:10px;font-weight:700;color:#f08632;text-transform:uppercase;letter-spacing:.04em">🤝 Sababa Imports</div>
   </div>
   <div class="portal-body" id="portal-content">
     <div class="ph"><div class="ph-icon">📊</div><div class="ph-txt">Presiona Calcular para ver el dashboard.</div></div>
@@ -925,6 +1065,85 @@ body[style*="color-scheme: light"] #portal-content tr td[style*="background:#1c2
 <!-- ============================= -->
 <!-- TAB 2: SABABA STANDALONE      -->
 <!-- ============================= -->
+
+<!-- ===================================================== -->
+<!-- TAB: ESCENARIO ÚNICO (sin alternativa de comparación) -->
+<!-- ===================================================== -->
+<div id="tab-unico" class="tab-pane">
+<div class="page" style="max-width:900px">
+  <div class="card" style="margin-bottom:14px;border-color:rgba(163,113,247,.4)">
+    <div class="card-hd" style="background:linear-gradient(135deg,rgba(163,113,247,.12),rgba(88,166,255,.06))">
+      <div class="dot" style="background:#a371f7"></div>
+      <h3 style="color:#a371f7">🔒 Escenario Único — Sin Alternativa</h3>
+    </div>
+    <div class="card-bd">
+      <div class="callout callout-b" style="margin-bottom:16px">
+        <div style="font-size:11px;color:var(--blue-l);line-height:1.6">
+          <strong>Modo Único:</strong> Al seleccionar este escenario, los demás escenarios (CIF Express y Sababa Imports) quedan <strong>inoperantes</strong> durante toda la sesión activa. Solo se activa comparación nuevamente al iniciar nueva sesión. Los honorarios aquí son calculados por porcentaje (factor) sobre el valor de la mercancía.
+        </div>
+      </div>
+
+      <!-- CORREDOR SELECTOR -->
+      <div class="field">
+        <label>Seleccionar Corredor <span class="info-btn" onclick="document.getElementById('unico-corredor-info').classList.toggle('open')" style="font-style:normal">i</span></label>
+        <div id="unico-corredor-info" class="info-box">
+          El corredor define el factor (%) sobre el valor CIF o FOB para calcular sus honorarios.<br>
+          <strong>CIF Express:</strong> 3% sobre CIF total (incluye ITBMS).<br>
+          <strong>Sababa Imports:</strong> Factor configurable (sugerido 10%) sobre el monto pagado.
+        </div>
+        <select id="unico_corredor" onchange="calcUnico()" style="background:var(--s2);border:1px solid rgba(163,113,247,.4);border-radius:6px;padding:8px 10px;color:var(--text);font-size:13px;font-weight:600;width:100%">
+          <option value="cifexp">⚡ CIF Express</option>
+          <option value="sababa">🤝 Sababa Imports</option>
+        </select>
+      </div>
+
+      <!-- DATOS DEL EMBARQUE -->
+      <div class="sep-lbl">Datos del Embarque</div>
+      <div class="r2">
+        <div class="field"><label>N° Embarque</label><input type="text" id="unico_nro" placeholder="Ej: EMB-2025-001"></div>
+        <div class="field"><label>Tipo de Mercancía</label><input type="text" id="unico_desc" placeholder="Ej: Ropa, Mixto"></div>
+      </div>
+      <div class="r2">
+        <div class="field"><label>Fecha del Embarque</label><input type="date" id="unico_fecha"></div>
+        <div class="field"><label>Origen</label><input type="text" id="unico_origen" placeholder="Ej: China, USA"></div>
+      </div>
+
+      <!-- VALOR -->
+      <div class="sep-lbl">Valor de la Mercancía</div>
+      <div class="field">
+        <label>Monto CIF Total (USD)</label>
+        <input type="number" id="unico_cif" placeholder="Ej: 148,862.32" step="0.01" oninput="calcUnico()">
+      </div>
+      <div class="r2">
+        <div class="field"><label>Factor Arancelario % (DAI)</label><input type="number" id="unico_ar" value="10" step="0.0001" oninput="calcUnico()"></div>
+        <div class="field"><label>ITBMS %</label><input type="number" id="unico_itbms" value="7" step="0.01" oninput="calcUnico()"></div>
+      </div>
+
+      <!-- HONORARIOS POR FACTOR -->
+      <div class="sep-lbl">Honorarios del Corredor (por Factor %)</div>
+      <div class="r2" id="unico_hon_inputs">
+        <div class="field"><label id="unico_hon_lbl">Factor Honorarios %</label>
+          <input type="number" id="unico_hon_pct" value="3" step="0.01" oninput="calcUnico()" min="0">
+        </div>
+        <div class="field"><label>Honorarios Calculados (USD)</label>
+          <input type="number" id="unico_hon_result" readonly style="background:var(--bg);color:var(--orange-l);font-weight:700">
+        </div>
+      </div>
+      <div class="r2">
+        <div class="field"><label>Tasa Aduana (USD)</label><input type="number" id="unico_tasa" value="100" step="0.01" oninput="calcUnico()"></div>
+        <div class="field"><label>Gastos Origen/Destino (USD)</label><input type="number" id="unico_agente" value="0" step="0.01" oninput="calcUnico()"></div>
+      </div>
+
+      <button class="btn" style="background:linear-gradient(135deg,#a371f7,#58a6ff);margin-top:8px" onclick="calcUnicoFull()">⚡ Calcular Costo Único →</button>
+    </div>
+  </div>
+
+  <!-- RESULTADO ÚNICO -->
+  <div id="res-unico">
+    <div class="ph"><div class="ph-icon">🔒</div><div class="ph-txt">Ingresa los datos y presiona Calcular para ver el resumen del Escenario Único.</div></div>
+  </div>
+</div>
+</div>
 
 <!-- ===================================================== -->
 <!-- TAB: ESCENARIO CIF EXPRESS                           -->
@@ -1018,17 +1237,15 @@ body[style*="color-scheme: light"] #portal-content tr td[style*="background:#1c2
         <div class="callout callout-g" id="sab2-cif-note"><span style="color:var(--green-l);font-weight:600">Término CIF:</span> Valor ya incluye costo + flete + seguro.</div>
         <div class="field"><label>Valor CIF del Embarque (USD)</label>
           <input type="number" id="s2_costo_zl" value="" placeholder="Ej: 148,862.32" step="0.01" oninput="this.dataset.autoSet='false';calcSab2()">
-          <p class="note">Ingresa el valor CIF total de las facturas.</p>
         </div>
         <!-- Traspaso solo aplica en ZL CIF -->
         <div id="sab2-trasp-row" class="field"><label>Descuento Traspasos (USD)</label>
           <input type="number" id="s2_trasp" value="" placeholder="0.00" step="0.01" oninput="calcSab2()">
-          <p class="note">Solo para Zona Libre — suma de montos de traspaso.</p>
         </div>
         <!-- Diferencia aplica en EXT CIF -->
-        <div id="sab2-dif-cif-row" class="field" style="display:none"><label>Diferencia Sababa (± USD) <span style="font-size:10px;color:var(--blue-l)">← centavos de redondeo</span></label>
+        <div id="sab2-dif-cif-row" class="field" style="display:none"><label>Diferencia Sababa (± USD) <span class="info-btn" onclick="document.getElementById('dif-cif-info').classList.toggle('open')" style="font-style:normal">i</span></label>
+          <div id="dif-cif-info" class="info-box">Centavos de redondeo: se suma/resta al CIF antes de ÷ 1.07 para homologar al inventario de Sababa.</div>
           <input type="number" id="s2_dif_cif" value="" placeholder="0.00" step="0.01" oninput="calcSab2()">
-          <p class="note">Se suma/resta al CIF antes de ÷ 1.07 para homologar.</p>
         </div>
       </div>
 
@@ -1042,22 +1259,34 @@ body[style*="color-scheme: light"] #portal-content tr td[style*="background:#1c2
             <input type="number" id="s2_flete" value="" placeholder="Ej: 2,950.00" step="0.01" oninput="this.dataset.autoSet='false';setIfEmpty('s2_flete_sab',parseFloat(this.value)||0);s2RecalcPago();calcSab2()"></div>
         </div>
         <div class="field">
-          <label>Diferencia Sababa (± USD) <span style="font-size:10px;color:var(--blue-l)">← centavos de redondeo</span></label>
+          <label>Diferencia Sababa (± USD) <span class="info-btn" onclick="document.getElementById('dif-fob-info').classList.toggle('open')" style="font-style:normal">i</span></label>
+          <div id="dif-fob-info" class="info-box">Centavos de redondeo: se suma al FOB + Flete antes de dividir ÷ 1.07 para homologar al inventario de Sababa.</div>
           <input type="number" id="s2_dif_fob" value="" placeholder="0.00" step="0.01" oninput="s2RecalcPago();calcSab2()">
-          <p class="note">Se suma al FOB + Flete antes de dividir ÷ 1.07 para homologar.</p>
         </div>
       </div>
 
       <!-- PAGO -->
-      <div class="field"><label>Total Pago Realizado (USD) <span style="font-size:10px;color:var(--muted2)">(auto-calculado: FOB + Flete + Diferencia)</span></label>
+      <div class="field"><label>Total Pago Realizado (USD) <span class="info-btn" onclick="document.getElementById('pago-info').classList.toggle('open')" style="font-style:normal">i</span></label>
+        <div id="pago-info" class="info-box">Auto-calculado: FOB + Flete + Diferencia = Base → ÷ 1.07 = Valor Homologado. Puedes editarlo manualmente si el valor real difiere.</div>
         <input type="number" id="s2_pago" value="" step="0.01" oninput="this.dataset.autoSet='false';calcSab2()" style="border-color:rgba(88,166,255,.5);background:rgba(88,166,255,.04)">
-        <p class="note" id="s2_pago_formula_note">Fórmula: FOB + Flete + Diferencia = Base → ÷ 1.07 = Valor Homologado</p>
+        <p class="note" id="s2_pago_formula_note"></p>
       </div>
       <div id="s2_alert" class="alert"></div>
 
       <div class="sep-lbl">Comisión + Proveedores</div>
       <div class="r2">
-        <div class="field"><label>Comisión Sababa % (sugerido 10%)</label><input type="number" id="s2_com" value="10" step="0.01" oninput="calcSab2()"></div>
+        <div class="field">
+          <label>Comisión Sababa %
+            <span class="info-btn" onclick="document.getElementById('sab-com-info').classList.toggle('open')" title="Info comisión">i</span>
+          </label>
+          <div id="sab-com-info" class="info-box">
+            <strong>Comisión Sababa:</strong> Se calcula como Total Pago × Factor%.<br>
+            El factor sugerido es 10%. Incluye ITBMS internamente.<br>
+            <strong>Base FOB+Flete:</strong> Comisión sobre (FOB + Flete + Diferencia).<br>
+            <strong>Base CIF:</strong> Comisión sobre (CIF − Traspaso + Diferencia).
+          </div>
+          <input type="number" id="s2_com" value="10" step="0.01" oninput="calcSab2()">
+        </div>
         <div class="field"><label>ITBMS %</label><input type="number" id="s2_itbms" value="7" step="0.01" oninput="calcSab2()"></div>
       </div>
 
@@ -1065,18 +1294,20 @@ body[style*="color-scheme: light"] #portal-content tr td[style*="background:#1c2
       <div id="sab2-flete-nm" class="field" style="display:none">
         <label>Flete del Embarque (USD) — suma al No Mercancía</label>
         <input type="number" id="s2_flete_sab" value="" placeholder="Ej: 2,950.00" step="0.01" oninput="calcSab2()">
-        <p class="note">Se sincroniza del campo Flete del Esc.#1 automáticamente.</p>
       </div>
 
       <!-- Comision editable display -->
       <div class="field">
         <label>Comisión calculada (auto — editable)</label>
         <input type="number" id="s2_comision_display" step="0.01" class="mv-editable" placeholder="Se calcula: Pago×10%" oninput="window.s2_comisionEditada=true;calcSab2()">
-        <p class="note">Total Pago × Comisión%. Editable para ajustar centavos.</p>
       </div>
 
       <div class="r2">
-        <div class="field"><label>Master Value (auto — editable)</label><input type="number" id="s2_mv_display" step="0.01" oninput="calcSab2()" class="mv-editable" placeholder="Se calcula automático"><p class="note">Calculado = Landed#1(Esc.1) − Landed#1(Sababa sin MV). Editable para ajustar centavos.</p></div>
+        <div class="field">
+          <label>Master Value (auto — editable) <span class="info-btn" onclick="document.getElementById('mv-info').classList.toggle('open')" style="font-style:normal">i</span></label>
+          <div id="mv-info" class="info-box">Calculado = Costo Landed Esc.#1 − Costo Landed Sababa sin MV. Ajusta centavos si es necesario. El MV no se paga — es un puente contable.</div>
+          <input type="number" id="s2_mv_display" step="0.01" oninput="calcSab2()" class="mv-editable" placeholder="Se calcula automático">
+        </div>
         <div class="field"><label>Gastos Destino / Agente (USD)</label><input type="number" id="s2_agente" value="" placeholder="0.00" step="0.01" oninput="this.dataset.autoSet='false';calcSab2()"></div>
       </div>
 
@@ -1221,11 +1452,34 @@ body[style*="color-scheme: light"] #portal-content tr td[style*="background:#1c2
       <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px">📈 Historial de Ahorros</div>
       <div style="font-size:11px;color:var(--muted)">Embarques procesados guardados en este dispositivo</div>
     </div>
-    <div class="seg" style="width:auto">
-      <div class="seg-btn on b" onclick="setTendPeriod('semana',this)">Semana</div>
-      <div class="seg-btn" onclick="setTendPeriod('mes',this)">Mes</div>
-      <div class="seg-btn" onclick="setTendPeriod('anio',this)">Año</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <div class="seg" style="width:auto">
+        <div class="seg-btn b" onclick="setTendPeriod('dia',this)">Día</div>
+        <div class="seg-btn b" onclick="setTendPeriod('semana',this)">Semana</div>
+        <div class="seg-btn on b" onclick="setTendPeriod('mes',this)">Mes</div>
+        <div class="seg-btn b" onclick="setTendPeriod('anio',this)">Año</div>
+      </div>
     </div>
+  </div>
+
+  <!-- YEAR/MONTH FILTER ROW -->
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
+    <div style="font-size:11px;color:var(--muted);font-weight:600">Filtrar:</div>
+    <select id="tend_filter_year" onchange="renderTend()" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:5px 10px;color:var(--text);font-size:12px">
+      <option value="">— Todos los años —</option>
+    </select>
+    <select id="tend_filter_month" onchange="renderTend()" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:5px 10px;color:var(--text);font-size:12px">
+      <option value="">— Todos los meses —</option>
+      <option value="01">Enero</option><option value="02">Febrero</option><option value="03">Marzo</option>
+      <option value="04">Abril</option><option value="05">Mayo</option><option value="06">Junio</option>
+      <option value="07">Julio</option><option value="08">Agosto</option><option value="09">Septiembre</option>
+      <option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option>
+    </select>
+    <select id="tend_filter_tipo" onchange="renderTopProvs()" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:5px 10px;color:var(--text);font-size:12px">
+      <option value="">Top Proveedores: Global</option>
+      <option value="CIF Express">Solo CIF Express</option>
+      <option value="Sababa">Solo Sababa Imports</option>
+    </select>
   </div>
 
   <!-- STATS KPIs -->
@@ -1246,10 +1500,20 @@ body[style*="color-scheme: light"] #portal-content tr td[style*="background:#1c2
 
   <!-- KPI CHART CARD -->
   <div class="card" style="margin-bottom:16px">
-    <div class="card-hd">
+    <div class="card-hd" style="flex-wrap:wrap;gap:8px">
       <div class="dot b"></div>
       <h3 id="tend-chart-title">Curva de Ahorros — Por Mes</h3>
-      <div style="margin-left:auto;font-size:10px;color:var(--muted)">Área = histórico · Línea = objetivo</div>
+      <!-- Chart type toggle — inline in header for easy access -->
+      <div style="margin-left:auto;display:flex;gap:6px;align-items:center;flex-shrink:0">
+        <button id="chart-btn-curva" onclick="setChartOrientInline('horizontal',this)" 
+          style="background:rgba(88,166,255,.2);border:1px solid rgba(88,166,255,.4);color:var(--blue-l);border-radius:6px;padding:4px 10px;font-size:10px;font-weight:600;cursor:pointer;transition:all .15s">
+          📈 Curva
+        </button>
+        <button id="chart-btn-barras" onclick="setChartOrientInline('vertical',this)"
+          style="background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:4px 10px;font-size:10px;font-weight:600;cursor:pointer;transition:all .15s">
+          📊 Barras
+        </button>
+      </div>
     </div>
     <div class="card-bd" style="padding:16px;position:relative;min-height:200px">
       <canvas id="tend-canvas" style="width:100%;display:block"></canvas>
@@ -1262,7 +1526,12 @@ body[style*="color-scheme: light"] #portal-content tr td[style*="background:#1c2
 
   <!-- MANUAL REGISTER (quick add) -->
   <div class="card" style="margin-bottom:16px">
-    <div class="card-hd"><div class="dot g"></div><h3>+ Registrar Ahorro Manualmente</h3></div>
+    <div class="card-hd"><div class="dot g"></div><h3>+ Registrar Embarque Manualmente</h3>
+      <span class="info-btn" onclick="document.getElementById('tend-manual-info').classList.toggle('open')" style="margin-left:auto">i</span>
+    </div>
+    <div id="tend-manual-info" class="info-box">
+      Puedes registrar embarques históricos con fecha forzada — útil para agregar embarques del año en curso que ocurrieron antes. La fecha que ingreses se usará para filtros por año/mes/semana/día.
+    </div>
     <div class="card-bd">
       <div class="r2">
         <div class="field"><label>N° Embarque</label><input type="text" id="tend_nro" placeholder="EMB-2025-001"></div>
@@ -1273,7 +1542,10 @@ body[style*="color-scheme: light"] #portal-content tr td[style*="background:#1c2
         <div class="field"><label>CIF del Embarque (USD)</label><input type="number" id="tend_cif" step="0.01" placeholder="Ej: 148,862.32"></div>
       </div>
       <div class="r2">
-        <div class="field"><label>Fecha</label><input type="date" id="tend_fecha"></div>
+        <div class="field">
+          <label>📅 Fecha del Embarque <span style="font-size:10px;color:var(--blue-l)">← forzable para históricos</span></label>
+          <input type="date" id="tend_fecha">
+        </div>
         <div class="field"><label>Escenario</label>
           <select id="tend_esc">
             <option value="CIF Express">Escenario Cif Express</option>
@@ -1293,7 +1565,7 @@ body[style*="color-scheme: light"] #portal-content tr td[style*="background:#1c2
     <div class="card-hd">
       <div class="dot o"></div>
       <h3>🏆 Top 10 Proveedores — por Facturación</h3>
-      <div style="margin-left:auto;font-size:10px;color:var(--muted)">Del historial procesado</div>
+      <div style="margin-left:auto;font-size:10px;color:var(--muted)">Usa el filtro de tipo arriba ↑</div>
     </div>
     <div id="top-provs-wrap" style="min-height:60px">
       <div style="text-align:center;padding:32px;color:var(--muted);font-size:12px">Procesa embarques con facturas para ver estadísticas de proveedores.</div>
@@ -1469,6 +1741,11 @@ const fmtP=n=>(n*100).toFixed(4)+'%';
 const lookupArt=desc=>{const q=desc.toUpperCase().trim();const f=arts.find(a=>q.includes(a.d)||a.d.split(' ').every(w=>q.includes(w)));return f?f.p:null;};
 
 function switchTab(id,el){
+  // Block cifexp/sababa tabs when único mode is active (for this session)
+  if(window._unicoModeActive && (id==='cifexp'||id==='sababa')){
+    alert('🔒 Modo Único activo: Los escenarios CIF Express y Sababa Imports están inoperantes. Inicia una nueva sesión para cambiar.');
+    return;
+  }
   document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
   const pane=document.getElementById('tab-'+id);
@@ -1477,7 +1754,14 @@ function switchTab(id,el){
   if(id==='config'){ renderConfig(); if(typeof renderDeptConfig==='function') renderDeptConfig(); }
   if(id==='cifexp'){ updateCifExpDisplays(); }
   if(id==='facturas'){ renderInvLines(); }
-  if(id==='tendencias'){ renderTend(); renderTopProvs(); }
+  if(id==='tendencias'){
+    // First make tab visible, then render with correct width
+    setTimeout(()=>{ renderTend(); renderTopProvs(); }, 50);
+  }
+  if(id==='unico'){
+    const f=document.getElementById('unico_fecha');
+    if(f&&!f.value) f.value=new Date().toISOString().slice(0,10);
+  }
 }
 function updateCifExpDisplays(){
   const vv=id=>{const el=document.getElementById(id);return el?parseFloat(el.value)||0:0;};
@@ -1519,11 +1803,11 @@ function setTipo(val, el){
   if(cifBlk) cifBlk.style.display = isFOB ? 'none' : '';
   if(fobBlk) fobBlk.style.display = isFOB ? '' : 'none';
   if(prompt) prompt.style.display = 'none';
-  // Traspaso + Diferencia: ZL+CIF only
+  // Traspaso: ZL+CIF only. Diferencia: show for ALL tipos in CIF mode (both ZL and EXT/importación)
   const trBlk = document.getElementById('blk-s1-traspaso');
   const difBlk = document.getElementById('blk-s1-difpago');
   if(trBlk) trBlk.style.display = (val==='ZL' && termino!=='FOB') ? '' : 'none';
-  if(difBlk) difBlk.style.display = (val==='ZL' && termino!=='FOB') ? '' : 'none';
+  if(difBlk) difBlk.style.display = (termino!=='FOB') ? '' : 'none';
   updateSab2View();
   syncSC3fromSC1();
   calc();
@@ -1541,11 +1825,11 @@ function setTermino(val,el){
   if(prompt) prompt.style.display='none';
   if(cifBlk) cifBlk.style.display = isFOB ? 'none' : '';
   if(fobBlk) fobBlk.style.display = isFOB ? '' : 'none';
-  // Traspaso + Diferencia: only for ZL+CIF
+  // Traspaso: ZL+CIF only. Diferencia: any tipo in CIF mode
   const trBlk=document.getElementById('blk-s1-traspaso');
   const difBlk=document.getElementById('blk-s1-difpago');
   if(trBlk) trBlk.style.display=(tipo==='ZL'&&!isFOB)?'':'none';
-  if(difBlk) difBlk.style.display=(tipo==='ZL'&&!isFOB)?'':'none';
+  if(difBlk) difBlk.style.display=(!isFOB)?'':'none';
   updateSab2View();
   syncSC3fromSC1();
   calcFOB(); calc();
@@ -1629,22 +1913,39 @@ function setEquipo(val){
 function isDesktop(){ return window.innerWidth >= 1024; }
 
 function calcAndShow(){
-  calc();
-  document.getElementById('portal-title').textContent='Dashboard Comparativo — Esc. #1 vs Esc. #2';
-  document.getElementById('results-portal').classList.add('open');
-  window._portalOpen=true;
+  const btn = event?.target;
+  if(btn){ btn.style.opacity='.6'; btn.style.transform='scale(.97)'; }
+  setTimeout(()=>{
+    calc();
+    document.getElementById('portal-title').textContent='Dashboard Comparativo — Esc. #1 vs Esc. #2';
+    document.getElementById('results-portal').classList.add('open');
+    window._portalOpen=true;
+    if(btn){ btn.style.opacity=''; btn.style.transform=''; }
+    // Scroll portal to top
+    const portal=document.getElementById('results-portal');
+    if(portal) portal.scrollTop=0;
+  }, 120);
 }
 function calcSab2AndShow(){
-  calcSab2();
-  document.getElementById('portal-title').textContent='Dashboard — Escenario #3 Sababa';
-  const sab = document.getElementById('res-sab2');
-  const portal = document.getElementById('portal-content');
-  if(sab && portal) portal.innerHTML = sab.innerHTML;
-  document.getElementById('results-portal').classList.add('open');
+  const btn = event?.target;
+  if(btn){ btn.style.opacity='.6'; btn.style.transform='scale(.97)'; }
+  setTimeout(()=>{
+    calcSab2();
+    document.getElementById('portal-title').textContent='Dashboard — Escenario #3 Sababa';
+    const sab = document.getElementById('res-sab2');
+    const portal = document.getElementById('portal-content');
+    if(sab && portal) portal.innerHTML = sab.innerHTML;
+    document.getElementById('results-portal').classList.add('open');
+    if(btn){ btn.style.opacity=''; btn.style.transform=''; }
+    const portalEl=document.getElementById('results-portal');
+    if(portalEl) portalEl.scrollTop=0;
+  }, 120);
 }
 function closePortal(){
   document.getElementById('results-portal').classList.remove('open');
   window._portalOpen=false;
+  const ribbon=document.getElementById('portal-ribbon');
+  if(ribbon) ribbon.style.display='none';
 }
 // ── FACTURAS ACCORDION ──
 let _facturasOpen = true;
@@ -1898,6 +2199,7 @@ function iniciarApp(tab){
     splash.style.display='none';
     app.style.opacity='1';
     app.style.transform='translateX(0)';
+    setTimeout(_updateHdrHeight, 100);
   }, 120);
 }
 function volverInicio(){
@@ -2081,9 +2383,11 @@ function calc(){
   {
     const sc3ZL=sabTipoCmp==='ZL';
     let montoBase=sc3ZL?v('sc_costo_zl')-v('sc_trasp'):v('sc_fob')+v('sc_flete');
-    // If inline fields not populated, use CIF/FOB values from SC1 directly
+    // Robust fallback: always use SC1 values when inline fields are empty
     if(montoBase<=0 && termino==='CIF') montoBase = CIF - v('sc_trasp');
     if(montoBase<=0 && termino==='FOB') montoBase = v('s1_fob')+v('s1_flete_fob');
+    // Last resort: use CIF directly
+    if(montoBase<=0 && CIF>0) montoBase = CIF;
     if(montoBase>0){
       const DIV=1+itbPct;
       const pagado = v('sc_pago');
@@ -2100,9 +2404,7 @@ function calc(){
       sc3_comision = window.sc_comisionEditada ? (parseFloat(comisionEl?.value)||comisionAuto) : comisionAuto;
       // Flete: from inline field or from SC1 flete
       sc3_flete  = v('sc_flete_sab') || (termino==='FOB'&&tipo==='EXT' ? v('s1_flete_fob') : 0);
-      // Gastos: use sc_origen_sab (which mirrors agente via mirrorAgente)
-      // Do NOT add agente again — it's already in sc_origen_sab
-      sc3_gastos = v('sc_origen_sab') || agente; // use whichever is set
+      sc3_gastos = v('sc_origen_sab') || agente;
       const sc3_nm_sinMV = sc3_flete + sc3_gastos + sc3_comision;
       sc3_base   = sc3_mercHomol;
       const sc3_l1_sinMV = sc3_base + sc3_nm_sinMV;
@@ -2145,6 +2447,9 @@ function calc(){
     sc3:{base:sc3_base, mercHomol:sc3_mercHomol, itbmsHomol:sc3_itbmsHomol, comision:sc3_comision, flete:sc3_flete,
          gastos:sc3_gastos, mv:sc3_mv, mvPct:sc3_mvPct,
          noMerc:sc3_noMerc, landed1:sc3_landed1, landedG:sc3_landedG, factor:sc3_factor,
+         pagFinal: v('sc_pago')>0 ? v('sc_pago') : (CIF - v('sc_trasp')),
+         comPct: sc3_comPct,
+         baseAjustada: sc3_baseAjustada,
          ahorroNeto: sc1_arancel}
   };
 
@@ -3911,6 +4216,23 @@ function setTendPeriod(p,el){
   el.classList.add('on','b');
   renderTend();
 }
+function _populateYearFilter(){
+  const sel=document.getElementById('tend_filter_year');
+  if(!sel) return;
+  const years=[...new Set(tendData.map(d=>d.fecha?.slice(0,4)).filter(Boolean))].sort().reverse();
+  const cur=sel.value;
+  sel.innerHTML='<option value="">— Todos los años —</option>'+years.map(y=>`<option value="${y}" ${y===cur?'selected':''}>${y}</option>`).join('');
+}
+function _getFilteredTendData(){
+  const yr=(document.getElementById('tend_filter_year')?.value)||'';
+  const mo=(document.getElementById('tend_filter_month')?.value)||'';
+  return tendData.filter(d=>{
+    if(!d.fecha) return true;
+    if(yr && !d.fecha.startsWith(yr)) return false;
+    if(mo && d.fecha.slice(5,7)!==mo) return false;
+    return true;
+  });
+}
 function autoFillTend(){
   const nroEl=document.getElementById('tend_nro');
   const descEl=document.getElementById('tend_desc');
@@ -3927,17 +4249,22 @@ function autoFillTend(){
 }
 function procesarEmbarque(){
   if(!window._lastCIF&&!window._sc1_landed1){
-    alert('Primero calcula el Escenario #1 para poder procesar el embarque.');
+    _showToast('⚠️ Calcula primero el Escenario #1 antes de procesar.', 'red', 3000);
     return;
   }
   const nro=document.getElementById('s1_nro_emb')?.value?.trim()||'';
   if(!nro){
     const nroEl=document.getElementById('s1_nro_emb');
     if(nroEl){ nroEl.style.borderColor='var(--red-l)'; nroEl.focus(); setTimeout(()=>nroEl.style.borderColor='',2000); }
-    if(!confirm('⚠️ No has ingresado un N° de Embarque.\n\n¿Deseas guardar sin número?')) return;
+    if(!confirm('⚠️ No has ingresado un N° de Embarque.\n\n¿Deseas continuar sin número?')) return;
   }
   const desc=document.getElementById('s1_desc_emb')?.value||window._lastDesc||'Embarque';
-  const fecha=new Date().toISOString().slice(0,10);
+  // Allow forced date
+  let fecha = new Date().toISOString().slice(0,10);
+  const fechaForzada = prompt('📅 Fecha del embarque (editable para históricos):', fecha);
+  if(fechaForzada===null) return;
+  if(fechaForzada && /^\d{4}-\d{2}-\d{2}$/.test(fechaForzada.trim())) fecha = fechaForzada.trim();
+
   const snapInvLines = JSON.parse(JSON.stringify(invLines||[]));
   const snap={
     nro: nro||`SIN-NRO-${Date.now()}`, desc, fecha,
@@ -3953,23 +4280,87 @@ function procesarEmbarque(){
   renderTend();
   renderTopProvs();
   updateCmpNroList();
-  const btn=event?.target;
-  if(btn){
-    const orig=btn.textContent;
-    btn.textContent='✓ ¡Procesado y Guardado!';
-    btn.style.color='var(--green-l)';
-    const _nroGuardar = document.getElementById('s1_nro_emb')?.value || ('EMB-'+Date.now());
-    autoGuardarSupabase(_nroGuardar);
-    setTimeout(()=>{
-      btn.textContent=orig;
-      btn.style.color='';
-      // Activate read-only mode — show embarque as "abierto" (reference view)
-      activarModoLectura();
-      // Show success overlay instead of going back to inicio
-      const banner = document.getElementById('readonly-banner');
-      if(banner) banner.style.display='flex';
-    },1500);
-  }
+
+  // Save to cloud silently
+  const _nroGuardar = nro || ('EMB-'+Date.now());
+  autoGuardarSupabase(_nroGuardar);
+
+  // Show processing overlay
+  _showProcessingOverlay(nro, desc, window._lastCIF||0, window._lastAhorroNeto||0, ()=>{
+    // After overlay dismissal: clear all and go to splash
+    _clearFormSilent();
+    volverInicio();
+  });
+}
+
+function _showProcessingOverlay(nro, desc, cif, ahorro, onDone){
+  const fmt=n=>'$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const old=document.getElementById('_procOverlay'); if(old) old.remove();
+  const div=document.createElement('div');
+  div.id='_procOverlay';
+  div.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px)';
+  div.innerHTML=`
+    <div style="background:var(--s1);border:1px solid rgba(63,185,80,.4);border-radius:20px;padding:32px 28px;max-width:380px;width:100%;text-align:center;animation:_pop .35s cubic-bezier(.34,1.56,.64,1)">
+      <style>@keyframes _pop{from{transform:scale(.8);opacity:0}to{transform:scale(1);opacity:1}}</style>
+      <div style="font-size:48px;margin-bottom:16px;animation:_pop .4s .1s both">✅</div>
+      <div style="font-size:18px;font-weight:800;color:var(--green-l);margin-bottom:8px">¡Embarque Procesado!</div>
+      <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px">${nro||'Sin número'}</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:16px">${desc}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px">
+        <div style="background:rgba(63,185,80,.08);border:1px solid rgba(63,185,80,.2);border-radius:10px;padding:12px">
+          <div style="font-size:9px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">CIF</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:700;color:var(--green-l)">${fmt(cif)}</div>
+        </div>
+        <div style="background:rgba(88,166,255,.08);border:1px solid rgba(88,166,255,.2);border-radius:10px;padding:12px">
+          <div style="font-size:9px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Ahorro</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:700;color:var(--blue-l)">${fmt(ahorro)}</div>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:20px">☁️ Guardado en la nube automáticamente</div>
+      <button onclick="document.getElementById('_procOverlay')._done()" 
+        style="width:100%;background:linear-gradient(135deg,var(--green),var(--blue));border:none;border-radius:12px;padding:14px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;letter-spacing:.02em">
+        🚀 Nuevo Embarque
+      </button>
+    </div>`;
+  div._done = onDone;
+  document.body.appendChild(div);
+}
+
+function _clearFormSilent(){
+  // Clear all form fields without confirmation
+  ['s1_cif','s1_fob','s1_flete_fob','s1_seguro','s1_cif_calc',
+   's1_acarreo','s1_dmce','s1_agente','s1_nro_emb','s1_desc_emb','s1_origen_emb','s1_destino'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  ['s1_ar','s1_itbms','s1_reng','s1_gzlc','s1_tasa','s2_form','s1_equipos'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el)return;
+    const defaults={'s1_ar':'10','s1_itbms':'7','s1_reng':'1','s1_gzlc':'133','s1_tasa':'100','s2_form':'6','s1_equipos':'1'};
+    el.value=defaults[id]||'';
+  });
+  // Clear Sababa fields
+  ['sc_costo_zl','sc_trasp','sc_fob','sc_flete','sc_pago','s2_costo_zl','s2_trasp','s2_fob','s2_flete','s2_dif_fob','s2_dif_cif','s2_pago','s2_mv_display','s2_flete_sab','s2_comision_display'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el){ el.value=''; if(el.dataset){ el.dataset.autoSet='false'; el.dataset.userEdited='false'; } }
+  });
+  const scCom=document.getElementById('sc_com'); if(scCom) scCom.value='10';
+  const s2Com=document.getElementById('s2_com'); if(s2Com) s2Com.value='10';
+  const s2Itbms=document.getElementById('s2_itbms'); if(s2Itbms) s2Itbms.value='7';
+  // Clear results
+  const res=document.getElementById('portal-content');
+  if(res) res.innerHTML='<div class="ph"><div class="ph-icon">📊</div><div class="ph-txt">Presiona Calcular para ver el dashboard.</div></div>';
+  // Clear invLines
+  invLines=[];
+  renderInvLines();
+  // Reset globals
+  window._lastCIF=0; window._lastAhorroNeto=0; window._lastSnap=null; window._sc1_landed1=0;
+  window.s2_comisionEditada=false; window.sc_comisionEditada=false; window._s1TotalPagoEditado=false;
+  // Reset tipo/termino
+  tipo='ZL'; termino='CIF'; compar='cifexp'; exon=true; sabTipoCmp='ZL'; sab2Tipo='ZL';
+  // Reset seg buttons
+  document.querySelectorAll('.seg-btn').forEach(b=>b.classList.remove('on','g','b','o','r'));
+  const zlBtns=document.querySelectorAll('[onclick*="setTipo(\'ZL\'"]');
+  zlBtns.forEach(b=>{b.classList.add('on','g');});
 }
 
 // Ver los 3 escenarios simultáneamente
@@ -4010,9 +4401,9 @@ function verTres3(){
   const d2_gas       = d2_liq+d2_itbms+d2_hon+d2_tasa+d2_itbms_t+d2_itbms_hon+d2_uso+d2_ac+d2_dmce+d2_ag+d2_fl;
   const d2_tot       = d2_gas+(sc2.base||0);
 
-  // ── ESC.#3 Sababa — SOLO: comisión + flete + gastos ──
+  // ── ESC.#3 Sababa — desembolso real ──
   const sc3OK  = (sc3.comision||0)>0 || (sc3.landed1||0)>0;
-  const d3_com = sc3.comision||0;
+  const d3_com = sc3.comision||0;           // Total Pago × % comisión (comisión bruta total)
   const d3_fl  = sc3.flete||(isEXT?(s.flete||0):0);
   const d3_ag  = sc3.gastos||d1_ag;
   const d3_gas = d3_com+d3_fl+d3_ag;
@@ -4021,11 +4412,20 @@ function verTres3(){
   const aho12  = d1_tot-d2_tot;
   const aho13  = sc3OK ? d1_tot-d3_tot : null;
 
-  // ── SC3 comisión desglose ITBMS ──
+  // ── SC3 comisión desglose — FÓRMULA EXACTA del usuario ──
+  // pagFinal  = Total Pago realizado (lo que se pagó a Sababa, base de la factura)
+  // comBruta  = pagFinal × % comisión  (ej: 46,180.30 × 10% = 4,618.03)
+  // itbmsHom  = ITBMS embebido en factura (sc3.itbmsHomol = baseAjustada × 7/107)
+  //             ej: 46,180.30 × (7/107) = 3,021.14
+  // comNeta   = comBruta − itbmsHom    (ej: 4,618.03 − 3,021.14 = 1,596.89)
+  // pctNeta   = comNeta / pagFinal × 100  (ej: 1,596.89 / 46,180.30 = 3.46%)
   const itbmsHom  = sc3.itbmsHomol||0;
-  const comNeta   = d3_com-itbmsHom;
-  const baseOp    = (sc1.base||0)+(s.flete||0);
-  const pctComNeta= baseOp>0?((comNeta/baseOp)*100).toFixed(2)+'%':'';
+  const pagFinal3 = sc3.pagFinal || sc3.baseAjustada || (sc3.mercHomol ? sc3.mercHomol*(1+(s.itbPct||0.07)) : 0) || (sc1.base||0);
+  const comPct3   = sc3.comPct || 0.10;
+  const comBruta  = d3_com>0 ? d3_com : pagFinal3 * comPct3;
+  const comNeta   = Math.max(0, comBruta - itbmsHom);
+  const pctComBruta = pagFinal3>0 ? ((comBruta/pagFinal3)*100).toFixed(2)+'%' : '';
+  const pctComNeta  = pagFinal3>0 ? ((comNeta/pagFinal3)*100).toFixed(2)+'%'  : '';
 
   // ── Info embarque ──
   const nroEmb   = document.getElementById('s1_nro_emb')?.value||s.nro||'—';
@@ -4070,6 +4470,9 @@ function verTres3(){
   const tr=(lbl,c1,c2,c3)=>`<tr><td class="tm">${lbl}</td><td class="tr">${c1}</td><td class="tr">${c2}</td><td class="tr">${c3}</td></tr>`;
 
   document.getElementById('portal-title').textContent='📊 Comparativo — 3 Escenarios';
+  // Show the sticky scenario ribbon for easy navigation
+  const ribbon=document.getElementById('portal-ribbon');
+  if(ribbon) ribbon.style.display='flex';
   document.getElementById('portal-content').innerHTML=`
     <!-- INFO EMBARQUE -->
     <div style="background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:14px;display:flex;flex-wrap:wrap;gap:10px 20px;font-size:12px">
@@ -4088,33 +4491,42 @@ function verTres3(){
     <!-- DEPT BAR CHART — drawn by drawDeptBarsInPortal() after render -->
     <div id="dept-bar-portal" class="card" style="display:none;padding:14px 16px;margin-bottom:14px"></div>
 
-    <!-- KPI CARDS -->
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">
-      <div style="text-align:center;background:var(--s1);border:2px solid rgba(63,185,80,.3);border-radius:10px;padding:14px">
-        <div style="font-size:9px;font-weight:700;color:#3fb950;text-transform:uppercase;margin-bottom:4px">Escenario Regular</div>
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:800;color:#3fb950">${f(d1_tot)}</div>
-        <div style="font-size:9px;color:#8b949e;margin:2px 0">Desembolso Total</div>
-        <div style="font-size:10px;color:#f08632">${pct(sc1.factor||1)} importación</div>
-        <div style="font-size:9px;color:#8b949e;margin-top:2px">Gastos: ${f(d1_gas)}</div>
+    <!-- KPI CARDS — Mobile-first layout: alternativas arriba, Regular abajo -->
+    <!-- Fila 1: CIF Express + Sababa (los 2 escenarios alternativos comparados) -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <div style="text-align:center;background:var(--s1);border:2px solid ${elegido==='SC2'?'rgba(88,166,255,.7)':'rgba(88,166,255,.25)'};border-radius:12px;padding:14px;position:relative">
+        ${elegido==='SC2'?`<div style="position:absolute;top:-9px;left:50%;transform:translateX(-50%);background:#58a6ff;color:#0d1117;font-size:8px;font-weight:800;padding:2px 8px;border-radius:8px;white-space:nowrap">ELEGIDO ✓</div>`:''}
+        <div style="font-size:9px;font-weight:700;color:#58a6ff;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">⚡ CIF Express</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:19px;font-weight:800;color:#58a6ff;line-height:1.1">${f(d2_tot)}</div>
+        <div style="font-size:9px;color:#8b949e;margin:3px 0">Desembolso Total</div>
+        <div style="font-size:11px;font-weight:700;color:${aho12>=0?'#3fb950':'#f85149'};margin-top:2px">
+          ${aho12>=0?'💰 +'+f(aho12):'⚠️ −'+f(Math.abs(aho12))}
+        </div>
+        <div style="font-size:9px;color:#8b949e">vs Regular</div>
       </div>
-      <div style="text-align:center;background:var(--s1);border:2px solid ${elegido==='SC2'?'rgba(88,166,255,.6)':'rgba(88,166,255,.2)'};border-radius:10px;padding:14px;position:relative">
-        ${elegido==='SC2'?`<div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:var(--blue-l);color:#0d1117;font-size:9px;font-weight:800;padding:2px 10px;border-radius:10px">ELEGIDO ✓</div>`:''}
-        <div style="font-size:9px;font-weight:700;color:#58a6ff;text-transform:uppercase;margin-bottom:4px">Escenario Cif Express</div>
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:800;color:#58a6ff">${f(d2_tot)}</div>
-        <div style="font-size:9px;color:#8b949e;margin:2px 0">Desembolso Total</div>
-        <div style="font-size:11px;color:${aho12>=0?'#3fb950':'#f85149'}">Ahorro: ${aho12>=0?f(aho12):'(−'+f(Math.abs(aho12))+')'}</div>
-        <div style="font-size:9px;color:#8b949e;margin-top:2px">Gastos: ${f(d2_gas)}</div>
-      </div>
-      <div style="text-align:center;background:var(--s1);border:2px solid ${elegido==='SC3'?'rgba(240,136,62,.6)':'rgba(240,136,62,.2)'};border-radius:10px;padding:14px;position:relative">
-        ${elegido==='SC3'?`<div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:var(--orange-l);color:#0d1117;font-size:9px;font-weight:800;padding:2px 10px;border-radius:10px">ELEGIDO ✓</div>`:''}
-        <div style="font-size:9px;font-weight:700;color:#f08632;text-transform:uppercase;margin-bottom:4px">Escenario Sababa Imports</div>
+      <div style="text-align:center;background:var(--s1);border:2px solid ${elegido==='SC3'?'rgba(240,136,62,.7)':'rgba(240,136,62,.25)'};border-radius:12px;padding:14px;position:relative">
+        ${elegido==='SC3'?`<div style="position:absolute;top:-9px;left:50%;transform:translateX(-50%);background:#f08632;color:#0d1117;font-size:8px;font-weight:800;padding:2px 8px;border-radius:8px;white-space:nowrap">ELEGIDO ✓</div>`:''}
+        <div style="font-size:9px;font-weight:700;color:#f08632;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">🤝 Sababa</div>
         ${sc3OK?`
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:800;color:#f08632">${f(d3_tot)}</div>
-          <div style="font-size:9px;color:#8b949e;margin:2px 0">Desembolso Total</div>
-          <div style="font-size:11px;color:#3fb950">Ahorro: ${f(aho13)}</div>
-          <div style="font-size:9px;color:#8b949e;margin-top:2px">Gastos: ${f(d3_gas)}</div>
-        `:`<div style="font-size:20px;color:#8b949e;font-weight:800;margin:8px 0">N/D</div>
-           <div style="font-size:10px;color:#f08632;line-height:1.4">Ingresa datos<br>Esc.#3 Sababa</div>`}
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:19px;font-weight:800;color:#f08632;line-height:1.1">${f(d3_tot)}</div>
+          <div style="font-size:9px;color:#8b949e;margin:3px 0">Desembolso Total</div>
+          <div style="font-size:11px;font-weight:700;color:#3fb950;margin-top:2px">💰 +${f(aho13)}</div>
+          <div style="font-size:9px;color:#8b949e">vs Regular</div>
+        `:`<div style="font-size:18px;color:#8b949e;font-weight:800;margin:8px 0">N/D</div>
+           <div style="font-size:10px;color:#f08632;line-height:1.4">Ingresa datos<br>Esc.#3</div>`}
+      </div>
+    </div>
+    <!-- Fila 2: Escenario Regular (base de comparación) -->
+    <div style="background:var(--s1);border:2px solid rgba(63,185,80,.25);border-radius:12px;padding:14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+      <div>
+        <div style="font-size:10px;font-weight:700;color:#3fb950;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">📋 Escenario Regular — Base de comparación</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:800;color:#3fb950">${f(d1_tot)}</div>
+        <div style="font-size:11px;color:#8b949e;margin-top:2px">Desembolso Total · ${pct(sc1.factor||1)} importación</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:10px;color:#8b949e;margin-bottom:2px">Gastos No Mercancía</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:14px;color:#8b949e">${f(d1_gas)}</div>
+        <div style="font-size:10px;color:#f85149;margin-top:4px">Arancel: ${f(d1_liq)}</div>
       </div>
     </div>
 
@@ -4155,9 +4567,16 @@ function verTres3(){
             ${secHd('Honorarios / Comisión')}
             ${tr('Honorarios Corredor / Comisión Sababa',
               f(d1_hon), f(d2_hon),
-              sc3OK?`<div style="color:#f08632;font-weight:600">${f(d3_com)} bruta</div>
-                <div style="font-size:10px;color:#8b949e">− ITBMS homolog: ${f(itbmsHom)}</div>
-                <div style="font-size:10px;color:#f08632;font-weight:700">= Neta: ${f(comNeta)} (${pctComNeta})</div>`:nd)}
+              sc3OK?`
+                <div style="font-size:12px;color:#f08632;font-weight:700">${f(comBruta)}</div>
+                <div style="font-size:9px;color:#8b949e;margin-top:1px">${f(pagFinal3)} × ${(comPct3*100).toFixed(0)}%</div>
+                <div style="font-size:10px;color:rgba(240,136,62,.7);margin-top:3px">− ITBMS facturado:</div>
+                <div style="font-size:10px;color:#f08632;font-weight:600">  ${f(itbmsHom)}</div>
+                <div style="border-top:1px dashed rgba(63,185,80,.4);margin-top:3px;padding-top:3px">
+                  <div style="font-size:11px;color:#3fb950;font-weight:800">= ${f(comNeta)} neto</div>
+                  <div style="font-size:9px;color:#8b949e">${pctComNeta} del pago total</div>
+                </div>
+              `:nd)}
             ${d2_itbms_hon>0?tr('ITBMS s/Honorarios Gravados Esc.#2',dash,`<span style="color:#f08632">${f(d2_itbms_hon)}</span>`,dash):''}
             ${secHd('Otros Gastos Operativos')}
             ${d1_ac>0?tr('Acarreo',f(d1_ac),
@@ -4311,12 +4730,14 @@ function deleteTend(idx){
   tendData.splice(idx,1); saveTendData(); renderTend();
 }
 function renderTend(){
+  _populateYearFilter();
+  const filteredData = _getFilteredTendData();
   const canvas=document.getElementById('tend-canvas');
   const emptyEl=document.getElementById('tend-empty');
-  if(!tendData.length){
+  if(!filteredData.length){
     if(emptyEl) emptyEl.style.display='flex';
     if(canvas) canvas.style.display='none';
-    document.getElementById('tend-hist').innerHTML='<div style="text-align:center;padding:32px;color:var(--muted);font-size:12px">Sin registros aún. Procesa embarques desde el formulario o regístralos manualmente.</div>';
+    document.getElementById('tend-hist').innerHTML='<div style="text-align:center;padding:32px;color:var(--muted);font-size:12px">Sin registros para este período. Procesa embarques o ajusta los filtros.</div>';
     document.getElementById('stat-total').textContent='$0';
     document.getElementById('stat-avg').textContent='$0';
     document.getElementById('stat-var').textContent='—';
@@ -4325,13 +4746,15 @@ function renderTend(){
   if(emptyEl) emptyEl.style.display='none';
   if(canvas) canvas.style.display='block';
 
-  // Group by period
+  // Group by period using filtered data
   const groups={};
-  const sorted=[...tendData].sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  const sorted=[...filteredData].sort((a,b)=>a.fecha.localeCompare(b.fecha));
   sorted.forEach(d=>{
     const dt=new Date(d.fecha);
     let key;
-    if(tendPeriod==='semana'){
+    if(tendPeriod==='dia'){
+      key=d.fecha; // full date as key
+    } else if(tendPeriod==='semana'){
       const y=dt.getFullYear(), m=String(dt.getMonth()+1).padStart(2,'0');
       const wk=Math.ceil(dt.getDate()/7);
       key=`${y}-${m} S${wk}`;
@@ -4352,10 +4775,12 @@ function renderTend(){
 
   // Draw KPI curve chart
   const dpr=window.devicePixelRatio||1;
-  const W=canvas.offsetWidth||360;
+  // canvas.offsetWidth is 0 if tab is hidden — use window width minus padding as fallback
+  const W=canvas.offsetWidth||Math.max(300, (window.innerWidth||360)-32);
   const H=220;
   canvas.width=W*dpr; canvas.height=H*dpr;
   canvas.style.height=H+'px';
+  canvas.style.width='100%';
   const ctx=canvas.getContext('2d');
   ctx.scale(dpr,dpr);
   ctx.clearRect(0,0,W,H);
@@ -4390,10 +4815,10 @@ function renderTend(){
       const lbl2=lbl.length>8?lbl.slice(-6):lbl;
       ctx.fillText(lbl2, x+barW2/2, pad.t+ch+16);
     });
-    const titles2={semana:'Barras de Ahorros por Semana',mes:'Barras de Ahorros por Mes',anio:'Barras de Ahorros por Año'};
+    const titles2={dia:'Barras de Ahorros por Día',semana:'Barras de Ahorros por Semana',mes:'Barras de Ahorros por Mes',anio:'Barras de Ahorros por Año'};
     document.getElementById('tend-chart-title').textContent=titles2[tendPeriod];
-    const total2=tendData.reduce((s,d)=>s+d.ahorro,0);
-    const avgAll2=total2/tendData.length;
+    const total2=filteredData.reduce((s,d)=>s+d.ahorro,0);
+    const avgAll2=total2/(filteredData.length||1);
     const lastTwo2=values.slice(-2);
     const varPct2=lastTwo2.length===2&&lastTwo2[0]>0?((lastTwo2[1]-lastTwo2[0])/lastTwo2[0]*100):null;
     document.getElementById('stat-total').textContent='$'+(total2/1000).toFixed(1)+'k';
@@ -4403,8 +4828,8 @@ function renderTend(){
       el.textContent=(varPct2>0?'+':'')+varPct2.toFixed(1)+'%';
       el.style.color=varPct2>0?'var(--green-l)':'var(--red-l)';
     }
-    const rows2=[...tendData].reverse().map((d,ri)=>{
-      const idx=tendData.length-1-ri;
+    const rows2=[...filteredData].reverse().map((d,ri)=>{
+      const idx=tendData.indexOf(d);
       const pct=d.cif>0?(d.ahorro/d.cif*100).toFixed(2)+'%':'—';
       return `<div style="display:grid;grid-template-columns:auto 1fr auto auto auto;gap:8px;align-items:center;padding:9px 14px;border-bottom:1px solid rgba(48,54,61,.4)">
         <div style="font-size:10px;font-weight:700;color:var(--orange-l);white-space:nowrap">${d.nro||'—'}</div>
@@ -4508,12 +4933,12 @@ function renderTend(){
   }
 
   // Chart title
-  const titles={semana:'Curva de Ahorros por Semana',mes:'Curva de Ahorros por Mes',anio:'Curva de Ahorros por Año'};
-  document.getElementById('tend-chart-title').textContent=titles[tendPeriod];
+  const titles={dia:'Curva de Ahorros por Día',semana:'Curva de Ahorros por Semana',mes:'Curva de Ahorros por Mes',anio:'Curva de Ahorros por Año'};
+  document.getElementById('tend-chart-title').textContent=titles[tendPeriod]||'Historial de Ahorros';
 
-  // Stats
-  const total=tendData.reduce((s,d)=>s+d.ahorro,0);
-  const avgAll=total/tendData.length;
+  // Stats (use filteredData for accuracy)
+  const total=filteredData.reduce((s,d)=>s+d.ahorro,0);
+  const avgAll=total/(filteredData.length||1);
   const lastTwo=values.slice(-2);
   const varPct=lastTwo.length===2&&lastTwo[0]>0?((lastTwo[1]-lastTwo[0])/lastTwo[0]*100):null;
   document.getElementById('stat-total').textContent='$'+(total/1000).toFixed(1)+'k';
@@ -4524,9 +4949,9 @@ function renderTend(){
     el.style.color=varPct>0?'var(--green-l)':'var(--red-l)';
   }
 
-  // History table
-  const rows=[...tendData].reverse().map((d,ri)=>{
-    const idx=tendData.length-1-ri;
+  // History table (use filteredData)
+  const rows=[...filteredData].reverse().map((d)=>{
+    const idx=tendData.indexOf(d);
     const pct=d.cif>0?(d.ahorro/d.cif*100).toFixed(2)+'%':'—';
     return `<div style="display:grid;grid-template-columns:auto 1fr auto auto auto;gap:8px;align-items:center;padding:9px 14px;border-bottom:1px solid rgba(48,54,61,.4)">
       <div style="font-size:10px;font-weight:700;color:var(--orange-l);white-space:nowrap">${d.nro||'—'}</div>
@@ -4539,7 +4964,7 @@ function renderTend(){
       <button class="del-btn" onclick="deleteTend(${idx})" style="font-size:10px;padding:2px 6px;height:22px;flex-shrink:0">×</button>
     </div>`;
   }).join('');
-  document.getElementById('tend-hist').innerHTML=rows||'<div style="text-align:center;padding:24px;color:var(--muted)">Sin registros.</div>';
+  document.getElementById('tend-hist').innerHTML=rows||'<div style="text-align:center;padding:24px;color:var(--muted)">Sin registros para este período.</div>';
 }
 // =====================================================
 // END TENDENCIAS
@@ -4833,9 +5258,23 @@ function applyInvToForm(){
     const el=document.getElementById('s1_cif');
     if(el){ el.value=total.toFixed(2); syncSC3fromSC1(); calc(); }
   }
-  goWiz(0);
+  // Show success toast then auto-navigate to Escenario Regular
   const btn=event&&event.target;
-  if(btn){ const o=btn.textContent; btn.textContent='✓ ¡Aplicado!'; setTimeout(()=>btn.textContent=o,2000); }
+  const fmt=n=>'$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  _showToast(`✅ ${fmt(total)} aplicado → Escenario Regular`, 'green', 2200);
+  // After short delay, jump to Escenario Regular tab and scroll to CIF field
+  setTimeout(()=>{
+    const simTab = document.querySelector('.tab');
+    switchTab('sim', simTab);
+    const cifEl = document.getElementById(termino==='FOB'?'s1_fob':'s1_cif');
+    if(cifEl){
+      cifEl.style.transition = 'box-shadow .3s, border-color .3s';
+      cifEl.style.borderColor = 'var(--green-l)';
+      cifEl.style.boxShadow = '0 0 0 3px rgba(63,185,80,.25)';
+      cifEl.scrollIntoView({behavior:'smooth', block:'center'});
+      setTimeout(()=>{ cifEl.style.borderColor=''; cifEl.style.boxShadow=''; }, 2000);
+    }
+  }, 400);
 }
 function downloadInvTemplate(fmt){
   const headers=['PROVEEDOR','DEPARTAMENTO','No.FACTURA','MONTO_CIF_FOB','CANTIDAD','ORDEN_COMPRA'];
@@ -5126,22 +5565,68 @@ async function cargarSesionNube(){
   const lista = await cargarDeSupabase();
   if(!lista || !lista.length){ alert("No hay sesiones guardadas en la nube."); return; }
 
-  // Show a simple selector
-  const opciones = lista.map((s,i) =>
-    i + ": " + s.nombre + " (" + s.updated_at.slice(0,16).replace("T"," ") + ")"
-  ).join("\n");
-  const idx = parseInt(prompt("Elige una sesión:" + "\n" + opciones));
-  if(isNaN(idx) || idx < 0 || idx >= lista.length) return;
+  // Build a modal-style picker with delete option
+  const old = document.getElementById('_nubeModal');
+  if(old) old.remove();
 
+  const modal = document.createElement('div');
+  modal.id = '_nubeModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px';
+  modal.innerHTML = `
+    <div style="background:var(--s1);border:1px solid var(--border);border-radius:14px;padding:20px;max-width:480px;width:100%;max-height:80vh;overflow-y:auto" onclick="event.stopPropagation()">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div style="font-size:14px;font-weight:700;color:var(--text)">☁️ Sesiones en la Nube</div>
+        <button onclick="document.getElementById('_nubeModal').remove()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer">×</button>
+      </div>
+      <div id="_nubeList">
+        ${lista.map((s,i)=>`
+          <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;background:var(--bg)">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.nombre}</div>
+              <div style="font-size:11px;color:var(--muted)">${s.updated_at.slice(0,16).replace('T',' ')}</div>
+            </div>
+            <button onclick="cargarSesionNubeIdx(${i})" style="background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:6px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0">📥 Cargar</button>
+            <button onclick="eliminarSesionNube('${s.nombre.replace(/'/g,"\\'")}',this)" style="background:rgba(218,54,51,.1);border:1px solid rgba(218,54,51,.25);color:var(--red-l);border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;flex-shrink:0">🗑</button>
+          </div>
+        `).join('')}
+      </div>
+    </div>`;
+  modal.onclick = () => modal.remove();
+  document.body.appendChild(modal);
+
+  // Store lista globally for access in callbacks
+  window._nubeListaCache = lista;
+}
+
+async function cargarSesionNubeIdx(idx){
+  const lista = window._nubeListaCache;
+  if(!lista||idx<0||idx>=lista.length) return;
   const datos = JSON.parse(lista[idx].datos);
-  // Restore session (same as cargarSesion)
   if(datos.snap) window._lastSnap = datos.snap;
   if(datos.invLines) { invLines = datos.invLines; renderInvLines(); }
-  if(datos.tendData) window.tendData = datos.tendData;
-  if(datos.tipo) setTipo(datos.tipo, document.querySelector(".seg-btn"));
-  if(datos.termino) setTermino(datos.termino, document.querySelector("#termSeg .seg-btn"));
+  if(datos.tendData) { window.tendData = datos.tendData; saveTendData(); }
+  if(datos.tipo) setTipo(datos.tipo, document.querySelector('.seg-btn'));
+  if(datos.termino) setTermino(datos.termino, document.querySelector('#termSeg .seg-btn'));
   calc();
-  alert("✅ Sesión cargada: " + lista[idx].nombre);
+  const modal = document.getElementById('_nubeModal');
+  if(modal) modal.remove();
+  alert('✅ Sesión cargada: ' + lista[idx].nombre);
+}
+
+async function eliminarSesionNube(nombre, btnEl){
+  if(!confirm(`¿Eliminar la sesión "${nombre}" de la nube?`)) return;
+  if(!_sb){ alert('Supabase no conectado'); return; }
+  try {
+    const { error } = await _sb.from('simulador_sesiones').delete().eq('nombre', nombre);
+    if(error) throw error;
+    // Remove card from modal UI
+    const card = btnEl.closest('[style*="padding:10px"]');
+    if(card) { card.style.transition='opacity .3s'; card.style.opacity='0'; setTimeout(()=>card.remove(),300); }
+    // Update cache
+    if(window._nubeListaCache) window._nubeListaCache = window._nubeListaCache.filter(s=>s.nombre!==nombre);
+  } catch(e) {
+    alert('Error al eliminar: ' + e.message);
+  }
 }
 // ── END SUPABASE ──
 
@@ -5184,7 +5669,47 @@ function setChartOrient(val, el){
     el.parentElement.querySelectorAll('.seg-btn').forEach(b=>b.classList.remove('on','b'));
     el.classList.add('on','b');
   }
+  _syncChartBtns(val);
   renderTend();
+}
+
+function setChartOrientInline(val, btn){
+  _chartOrient = val;
+  localStorage.setItem('_simChartOrient', val);
+  _syncChartBtns(val);
+  renderTend();
+}
+
+function _syncChartBtns(val){
+  // Update inline buttons
+  const btnCurva = document.getElementById('chart-btn-curva');
+  const btnBarras = document.getElementById('chart-btn-barras');
+  if(btnCurva && btnBarras){
+    if(val==='horizontal'){
+      btnCurva.style.background='rgba(88,166,255,.2)';
+      btnCurva.style.borderColor='rgba(88,166,255,.4)';
+      btnCurva.style.color='var(--blue-l)';
+      btnBarras.style.background='transparent';
+      btnBarras.style.borderColor='var(--border)';
+      btnBarras.style.color='var(--muted)';
+    } else {
+      btnBarras.style.background='rgba(88,166,255,.2)';
+      btnBarras.style.borderColor='rgba(88,166,255,.4)';
+      btnBarras.style.color='var(--blue-l)';
+      btnCurva.style.background='transparent';
+      btnCurva.style.borderColor='var(--border)';
+      btnCurva.style.color='var(--muted)';
+    }
+  }
+  // Sync config seg
+  const orientSeg = document.getElementById('chart-orient-seg');
+  if(orientSeg){
+    orientSeg.querySelectorAll('.seg-btn').forEach(b=>{
+      b.classList.remove('on','b');
+      if((val==='horizontal'&&b.textContent.includes('Curva'))||(val==='vertical'&&b.textContent.includes('Barras')))
+        b.classList.add('on','b');
+    });
+  }
 }
 
 // ── APP DENSITY ──
@@ -5203,10 +5728,15 @@ function setAppDensity(val, el){
 function renderTopProvs(){
   const wrap = document.getElementById('top-provs-wrap');
   if(!wrap) return;
+  const tipoFiltro = document.getElementById('tend_filter_tipo')?.value || '';
   // Gather all providers from all processed shipment invLines
   const provTotals = {};
   const provCount  = {};
-  tendData.forEach(d=>{
+  const filteredByTipo = tipoFiltro
+    ? tendData.filter(d=>(d.esc||'').toLowerCase().includes(tipoFiltro.toLowerCase()))
+    : tendData;
+
+  filteredByTipo.forEach(d=>{
     const lines = d.snap?.invLines || d.invLines || [];
     lines.forEach(l=>{
       const prov = (l.prov||'').trim();
@@ -5215,16 +5745,18 @@ function renderTopProvs(){
       provCount[prov]  = (provCount[prov]||0) + 1;
     });
   });
-  // Also from invLines in current session (if processed)
-  invLines.forEach(l=>{
-    const prov=(l.prov||'').trim();
-    if(!prov||!l.costo) return;
-    provTotals[prov]=(provTotals[prov]||0)+(l.costo||0);
-    provCount[prov]=(provCount[prov]||0)+1;
-  });
+  // Also from invLines in current session (if processed) — only if no tipo filter
+  if(!tipoFiltro){
+    invLines.forEach(l=>{
+      const prov=(l.prov||'').trim();
+      if(!prov||!l.costo) return;
+      provTotals[prov]=(provTotals[prov]||0)+(l.costo||0);
+      provCount[prov]=(provCount[prov]||0)+1;
+    });
+  }
   const sorted = Object.keys(provTotals).sort((a,b)=>provTotals[b]-provTotals[a]).slice(0,10);
   if(!sorted.length){
-    wrap.innerHTML='<div style="text-align:center;padding:24px;color:var(--muted);font-size:12px">Sin proveedores registrados aún.</div>';
+    wrap.innerHTML=`<div style="text-align:center;padding:24px;color:var(--muted);font-size:12px">Sin proveedores registrados${tipoFiltro?' para '+tipoFiltro:''}.</div>`;
     return;
   }
   const f=n=>'$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -5287,11 +5819,141 @@ function salirModoLectura(){
   });
 }
 
+// =====================================================
+// ESCENARIO ÚNICO — corredor por factor %
+// =====================================================
+window._unicoModeActive = false;
+
+function calcUnico(){
+  const corredor = document.getElementById('unico_corredor')?.value || 'cifexp';
+  const cif = parseFloat(document.getElementById('unico_cif')?.value) || 0;
+  const arPct = (parseFloat(document.getElementById('unico_ar')?.value) || 10) / 100;
+  const itbPct = (parseFloat(document.getElementById('unico_itbms')?.value) || 7) / 100;
+  const honPct = (parseFloat(document.getElementById('unico_hon_pct')?.value) || (corredor==='cifexp'?3:10)) / 100;
+
+  // Update label based on corredor
+  const lblEl = document.getElementById('unico_hon_lbl');
+  if(lblEl) lblEl.textContent = corredor==='cifexp' ? 'Factor Honorarios % (CIF Express 3%)' : 'Factor Comisión % (Sababa, sugerido 10%)';
+
+  const hon = cif * honPct;
+  const honEl = document.getElementById('unico_hon_result');
+  if(honEl) honEl.value = hon > 0 ? hon.toFixed(2) : '';
+}
+
+function calcUnicoFull(){
+  const corredor = document.getElementById('unico_corredor')?.value || 'cifexp';
+  const nro = document.getElementById('unico_nro')?.value || '';
+  const desc = document.getElementById('unico_desc')?.value || '';
+  const fecha = document.getElementById('unico_fecha')?.value || new Date().toISOString().slice(0,10);
+  const origen = document.getElementById('unico_origen')?.value || '';
+  const cif = parseFloat(document.getElementById('unico_cif')?.value) || 0;
+  if(!cif){ alert('Ingresa el valor CIF del embarque.'); return; }
+
+  const arPct = (parseFloat(document.getElementById('unico_ar')?.value) || 10) / 100;
+  const itbPct = (parseFloat(document.getElementById('unico_itbms')?.value) || 7) / 100;
+  const honPct = (parseFloat(document.getElementById('unico_hon_pct')?.value) || (corredor==='cifexp'?3:10)) / 100;
+  const tasa = parseFloat(document.getElementById('unico_tasa')?.value) || 100;
+  const agente = parseFloat(document.getElementById('unico_agente')?.value) || 0;
+
+  const hon = cif * honPct;
+  const arancel = corredor==='cifexp' ? 0 : cif * arPct;  // CIF Express = exonerado; Sababa = exonerado
+  // Both corredores are exonerado for this simplified unique mode
+  const itbms = cif * itbPct;
+  const noMerc = hon + tasa + agente; // exonerado: no arancel
+  const landed = cif + noMerc;
+  const factor = cif > 0 ? landed/cif : 1;
+  const landedG = landed + itbms + tasa*itbPct;
+
+  const corName = corredor==='cifexp' ? '⚡ CIF Express' : '🤝 Sababa Imports';
+  const corColor = corredor==='cifexp' ? 'var(--blue-l)' : 'var(--orange-l)';
+  const fmt = n => '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+  // Activate único mode — lock other comparison tabs
+  window._unicoModeActive = true;
+  // Mark comparison tabs as disabled visually
+  document.querySelectorAll('.tab').forEach(t=>{
+    const txt = t.textContent;
+    if(txt.includes('CIF Express')||txt.includes('Sababa Imports')){
+      t.style.opacity='.35';
+      t.style.textDecoration='line-through';
+      t.title='🔒 Bloqueado — Modo Único activo';
+    }
+  });
+
+  document.getElementById('res-unico').innerHTML = `
+    <div style="background:linear-gradient(135deg,rgba(163,113,247,.1),rgba(88,166,255,.07));border:2px solid rgba(163,113,247,.4);border-radius:14px;padding:20px;margin-bottom:14px">
+      <div style="font-size:10px;font-weight:700;color:#a371f7;letter-spacing:.1em;text-transform:uppercase;margin-bottom:12px;text-align:center">
+        ESCENARIO ÚNICO · ${nro||'—'} · ${corName}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">
+        <div style="text-align:center;background:rgba(163,113,247,.08);border:1px solid rgba(163,113,247,.3);border-radius:10px;padding:14px">
+          <div style="font-size:9px;font-weight:700;color:#a371f7;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Valor CIF</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:800;color:#a371f7">${fmt(cif)}</div>
+        </div>
+        <div style="text-align:center;background:rgba(240,136,62,.08);border:1px solid rgba(240,136,62,.3);border-radius:10px;padding:14px">
+          <div style="font-size:9px;font-weight:700;color:${corColor};text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Honorarios (${(honPct*100).toFixed(2)}%)</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:800;color:${corColor}">${fmt(hon)}</div>
+          <div style="font-size:9px;color:var(--muted);margin-top:2px">${corName}</div>
+        </div>
+        <div style="text-align:center;background:rgba(63,185,80,.08);border:1px solid rgba(63,185,80,.3);border-radius:10px;padding:14px">
+          <div style="font-size:9px;font-weight:700;color:var(--green-l);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">% Importación</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:800;color:var(--green-l)">${((factor-1)*100).toFixed(2)}%</div>
+        </div>
+      </div>
+
+      <div style="background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:10px;overflow:hidden">
+        <div style="padding:8px 14px;background:var(--s2);font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.06em;text-transform:uppercase">Desglose de Costos</div>
+        <div style="padding:10px 14px">
+          <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(48,54,61,.3)"><span style="font-size:12px;color:var(--muted)">Valor Mercancía (CIF)</span><span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--text);font-weight:600">${fmt(cif)}</span></div>
+          <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(48,54,61,.3)"><span style="font-size:12px;color:var(--muted)">Arancel (Exonerado)</span><span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--green-l)">✓ $0.00</span></div>
+          <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(48,54,61,.3)"><span style="font-size:12px;color:var(--muted)">Honorarios ${corName} (${(honPct*100).toFixed(2)}%)</span><span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:${corColor};font-weight:600">${fmt(hon)}</span></div>
+          <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(48,54,61,.3)"><span style="font-size:12px;color:var(--muted)">Tasa Aduana</span><span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--text)">${fmt(tasa)}</span></div>
+          ${agente>0?`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(48,54,61,.3)"><span style="font-size:12px;color:var(--muted)">Gastos Origen/Destino</span><span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--text)">${fmt(agente)}</span></div>`:''}
+          <div style="display:flex;justify-content:space-between;padding:8px 0;background:rgba(63,185,80,.06);margin-top:4px;border-radius:6px;padding:8px">
+            <span style="font-size:13px;font-weight:700;color:var(--text)">Costo Landed Total</span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:800;color:var(--green-l)">${fmt(landed)}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:5px 0;border-top:1px solid rgba(48,54,61,.3);margin-top:4px"><span style="font-size:11px;color:var(--muted)">ITBMS (7% sobre CIF)</span><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted)">${fmt(itbms)}</span></div>
+          <div style="display:flex;justify-content:space-between;padding:5px 0"><span style="font-size:11px;color:var(--muted)">Costo Landed Global</span><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted)">${fmt(landedG)}</span></div>
+        </div>
+      </div>
+
+      <div style="margin-top:14px;background:rgba(218,54,51,.08);border:1px solid rgba(218,54,51,.3);border-radius:8px;padding:10px 14px;font-size:11px;color:var(--red-l)">
+        🔒 <strong>Modo Único activado:</strong> Los escenarios CIF Express y Sababa Imports están bloqueados para esta sesión. Recarga la página para desactivar.
+      </div>
+    </div>
+  `;
+}
+
+// ── TOAST NOTIFICATION SYSTEM ──
+function _showToast(msg, type='green', duration=2500){
+  const colors={green:'rgba(63,185,80,.15)',blue:'rgba(88,166,255,.15)',red:'rgba(218,54,51,.15)',orange:'rgba(240,136,62,.15)'};
+  const borders={green:'rgba(63,185,80,.4)',blue:'rgba(88,166,255,.4)',red:'rgba(218,54,51,.4)',orange:'rgba(240,136,62,.4)'};
+  const textc={green:'#3fb950',blue:'#58a6ff',red:'#f85149',orange:'#f08632'};
+  const old=document.getElementById('_toast'); if(old) old.remove();
+  const t=document.createElement('div');
+  t.id='_toast';
+  t.style.cssText=`position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);z-index:999999;background:${colors[type]};border:1px solid ${borders[type]};color:${textc[type]};border-radius:12px;padding:12px 20px;font-size:13px;font-weight:600;box-shadow:0 8px 32px rgba(0,0,0,.4);transition:transform .3s,opacity .3s;opacity:0;white-space:nowrap;backdrop-filter:blur(8px);`;
+  t.textContent=msg;
+  document.body.appendChild(t);
+  requestAnimationFrame(()=>{ t.style.transform='translateX(-50%) translateY(0)'; t.style.opacity='1'; });
+  setTimeout(()=>{ t.style.transform='translateX(-50%) translateY(20px)'; t.style.opacity='0'; setTimeout(()=>t.remove(),350); }, duration);
+}
+
+// ── DYNAMIC HEADER HEIGHT for sticky tabs ──
+function _updateHdrHeight(){
+  const hdr=document.getElementById('main-hdr');
+  if(hdr){
+    document.documentElement.style.setProperty('--hdr-height', hdr.offsetHeight+'px');
+  }
+}
+
 window.onload=function(){
   initSupabase();
   // Restore chart orient
   const savedOrient = localStorage.getItem('_simChartOrient') || 'horizontal';
   _chartOrient = savedOrient;
+  _syncChartBtns(savedOrient);
   const orientSeg = document.getElementById('chart-orient-seg');
   if(orientSeg){
     orientSeg.querySelectorAll('.seg-btn').forEach(b=>{
@@ -5355,6 +6017,13 @@ window.onload=function(){
   addArRow();
   renderTend();
   updateSab2View(); initFormScroll();
+  // Init Único tab date
+  const unicoFecha=document.getElementById('unico_fecha');
+  if(unicoFecha&&!unicoFecha.value) unicoFecha.value=new Date().toISOString().slice(0,10);
+  calcUnico();
+  // Measure header height for sticky tabs
+  setTimeout(_updateHdrHeight, 200);
+  window.addEventListener('resize', _updateHdrHeight);
 };
 </script>
 </div><!-- /app-wrapper -->
