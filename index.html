@@ -50,7 +50,9 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 
 /* LAYOUT */
 .page{max-width:100%;margin:0;padding:16px 12px;}
-@media(min-width:600px){.page{max-width:860px;margin:0 auto;}}
+@media(min-width:600px){.page{max-width:820px;margin:0 auto;padding:16px 20px;}}
+@media(min-width:1100px){.page{max-width:880px;margin:0 auto;}}
+@media(min-width:1400px){.app-wrapper-inner,.tab-content,.page{max-width:940px;margin-left:auto;margin-right:auto;}}
 .tab-pane{display:none;}.tab-pane.on{display:block;}
 .cols{display:grid;grid-template-columns:380px 1fr;gap:18px;align-items:start;}
 
@@ -230,6 +232,11 @@ body.theme-light .tab.on { color:var(--accent)!important; }
 .ph{text-align:center;padding:48px 24px;color:var(--muted);}
 .ph-icon{font-size:40px;margin-bottom:12px;opacity:.35;}
 .ph-txt{font-size:12px;line-height:1.7;}
+
+/* PENDIENTE BADGE */
+.badge-pendiente{display:inline-flex;align-items:center;gap:3px;background:rgba(210,153,34,.15);border:1px solid rgba(210,153,34,.4);color:var(--orange-l);font-size:9px;font-weight:700;padding:2px 6px;border-radius:8px;letter-spacing:.03em;white-space:nowrap;}
+.btn-reabrir{background:rgba(210,153,34,.12);border:1px solid rgba(210,153,34,.35);color:var(--orange-l);border-radius:5px;padding:3px 9px;font-size:10px;font-weight:600;cursor:pointer;white-space:nowrap;transition:background .15s;}
+.btn-reabrir:hover{background:rgba(210,153,34,.25);}
 
 /* READONLY BANNER */
 #readonly-banner{display:none;position:sticky;top:0;z-index:200;background:linear-gradient(90deg,rgba(63,185,80,.15),rgba(88,166,255,.12));border-bottom:2px solid rgba(63,185,80,.4);padding:10px 20px;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
@@ -4682,16 +4689,26 @@ function procesarEmbarque(){
     if(nroEl){ nroEl.style.borderColor='var(--red-l)'; nroEl.focus(); setTimeout(()=>nroEl.style.borderColor='',2000); }
     if(!confirm('⚠️ No has ingresado un N° de Embarque.\n\n¿Deseas continuar sin número?')) return;
   }
-  // ── REGLA DE ORO: no duplicar numeración ──
+  // ── REGLA DE ORO: no duplicar numeración (salvo pendientes) ──
   if(nro){
-    const dup = tendData.find(t => t.nro && t.nro.trim().toUpperCase() === nro.toUpperCase());
-    if(dup){
-      const nroEl=document.getElementById('s1_nro_emb');
-      if(nroEl){ nroEl.style.borderColor='var(--red-l)'; nroEl.style.boxShadow='0 0 0 3px rgba(248,81,73,.25)'; setTimeout(()=>{ nroEl.style.borderColor=''; nroEl.style.boxShadow=''; },3000); }
-      _showToast(`🚫 El embarque #${nro} ya está registrado. Elimínalo primero si deseas reemplazarlo.`, 'red', 5000);
-      alert(`🚫 Embarque ya registrado\n\nEl N° "${nro}" ya existe en el historial (${dup.fecha||'fecha desconocida'}).\n\nPara volver a registrarlo, primero elimina el registro existente en la pestaña Tendencias.`);
-      return;
+    const dupIdx = tendData.findIndex(t => t.nro && t.nro.trim().toUpperCase() === nro.toUpperCase());
+    if(dupIdx !== -1){
+      const dup = tendData[dupIdx];
+      if(dup.status === 'pendiente'){
+        // Permitir reconfirmación: actualizar el registro existente
+        window._pendienteUpdateIdx = dupIdx;
+      } else {
+        const nroEl=document.getElementById('s1_nro_emb');
+        if(nroEl){ nroEl.style.borderColor='var(--red-l)'; nroEl.style.boxShadow='0 0 0 3px rgba(248,81,73,.25)'; setTimeout(()=>{ nroEl.style.borderColor=''; nroEl.style.boxShadow=''; },3000); }
+        _showToast(`🚫 El embarque #${nro} ya está registrado. Elimínalo primero si deseas reemplazarlo.`, 'red', 5000);
+        alert(`🚫 Embarque ya registrado\n\nEl N° "${nro}" ya existe en el historial (${dup.fecha||'fecha desconocida'}).\n\nPara volver a registrarlo, primero elimina el registro existente en la pestaña Tendencias.`);
+        return;
+      }
+    } else {
+      window._pendienteUpdateIdx = -1;
     }
+  } else {
+    window._pendienteUpdateIdx = -1;
   }
   const desc=document.getElementById('s1_desc_emb')?.value||window._lastDesc||'Embarque';
   // Allow forced date
@@ -4700,7 +4717,15 @@ function procesarEmbarque(){
   if(fechaForzada===null) return;
   if(fechaForzada && /^\d{4}-\d{2}-\d{2}$/.test(fechaForzada.trim())) fecha = fechaForzada.trim();
 
-  const snapInvLines = JSON.parse(JSON.stringify(invLines||[]));
+  // Enrich each invLine with computed arancel before saving
+  const snapInvLines = JSON.parse(JSON.stringify(invLines||[])).map(l => {
+    // ar = costo * arPct (main rate) — use per-line si if available, else global arPct
+    const _arPct = window._lastSnap?.arPct || 0;
+    const _siPct = (typeof l.si === 'number' ? l.si : parseFloat(l.si)) || _arPct;
+    l.ar = l.ar || (l.costo||0) * _siPct;
+    l.arPct = l.arPct || _siPct;
+    return l;
+  });
   const snap={
     nro: nro||`SIN-NRO-${Date.now()}`, desc, fecha,
     ahorro: window._lastAhorroNeto||0,
@@ -4708,9 +4733,18 @@ function procesarEmbarque(){
     esc:    compar==='cifexp'?'CIF Express':'Sababa',
     ts:     Date.now(),
     snap:   window._lastSnap||null,
-    invLines: snapInvLines
+    invLines: snapInvLines,
+    status: 'completo'
   };
-  tendData.push(snap);
+  // Si es actualización de un pendiente, reemplazar en lugar de agregar
+  const _updIdx = window._pendienteUpdateIdx;
+  if(typeof _updIdx === 'number' && _updIdx >= 0){
+    tendData[_updIdx] = snap;
+    _showToast(`✅ Embarque #${nro} confirmado y actualizado.`, 'green', 3000);
+  } else {
+    tendData.push(snap);
+  }
+  window._pendienteUpdateIdx = -1;
   saveTendData();
   renderTend();
   renderTopProvs();
@@ -4721,6 +4755,7 @@ function procesarEmbarque(){
   autoGuardarSupabase(_nroGuardar);
 
   // Show processing overlay
+  window._procOverlayNro = nro;
   _showProcessingOverlay(nro, desc, window._lastCIF||0, window._lastAhorroNeto||0, ()=>{
     // After overlay dismissal: clear all and go to splash
     _clearFormSilent();
@@ -4741,7 +4776,7 @@ function _showProcessingOverlay(nro, desc, cif, ahorro, onDone){
       <style>@keyframes _pop{from{transform:scale(.75);opacity:0}to{transform:scale(1);opacity:1}}</style>
       <div style="width:72px;height:72px;background:linear-gradient(135deg,#22c55e,#16a34a);border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:38px;margin:0 auto 20px;box-shadow:0 8px 24px rgba(34,197,94,.35)">✅</div>
       <div style="font-size:20px;font-weight:800;color:#15803d;margin-bottom:8px">¡Embarque Procesado!</div>
-      <div style="font-size:14px;font-weight:700;color:#1f2328;margin-bottom:4px">${nro||'Sin número'}</div>
+      <div style="font-size:14px;font-weight:700;color:var(--modal-text);margin-bottom:4px">${nro||'Sin número'}</div>
       <div style="font-size:12px;color:#636c76;margin-bottom:20px">${desc}</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px">
         <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px">
@@ -4755,11 +4790,77 @@ function _showProcessingOverlay(nro, desc, cif, ahorro, onDone){
       </div>
       <div style="font-size:11px;color:#636c76;margin-bottom:20px">☁️ Guardado en la nube automáticamente</div>
       <button onclick="window._procOverlayDone&&window._procOverlayDone();document.getElementById('_procOverlay')?.remove()" 
-        style="width:100%;background:linear-gradient(135deg,#22c55e,#2563eb);border:none;border-radius:14px;padding:16px;color:#fff;font-size:15px;font-weight:800;cursor:pointer;letter-spacing:.02em;box-shadow:0 4px 20px rgba(34,197,94,.4)">
+        style="width:100%;background:linear-gradient(135deg,#22c55e,#2563eb);border:none;border-radius:14px;padding:16px;color:#fff;font-size:15px;font-weight:800;cursor:pointer;letter-spacing:.02em;box-shadow:0 4px 20px rgba(34,197,94,.4);margin-bottom:10px">
         🏠 Inicio
+      </button>
+      <button onclick="_marcarPendienteYCerrar()" 
+        style="width:100%;background:rgba(210,153,34,.12);border:1.5px solid rgba(210,153,34,.5);border-radius:14px;padding:11px;color:#d29922;font-size:12px;font-weight:700;cursor:pointer;letter-spacing:.01em;">
+        🟡 Marcar como Pendiente (factura por confirmar)
       </button>
     </div>`;
   document.body.appendChild(div);
+}
+
+// ── PENDIENTE: marcar el último embarque procesado como pendiente ──
+function _marcarPendienteYCerrar(){
+  // El último snap procesado es el último en tendData (o el índice si fue update)
+  // Lo buscamos por nro del overlay (guardado en _procOverlayNro)
+  const nro = window._procOverlayNro;
+  if(nro){
+    const idx = tendData.findIndex(d => d.nro && d.nro.trim().toUpperCase() === nro.trim().toUpperCase());
+    if(idx >= 0){
+      tendData[idx].status = 'pendiente';
+      saveTendData();
+      renderTend();
+      _showToast('🟡 Embarque marcado como Pendiente. Puedes reabrirlo desde el historial.', 'orange', 4000);
+    }
+  }
+  document.getElementById('_procOverlay')?.remove();
+  window._procOverlayDone && window._procOverlayDone();
+}
+
+// ── REABRIR: carga un embarque pendiente al formulario para edición ──
+function reabrirEmbarquePendiente(idx){
+  const d = tendData[idx];
+  if(!d) return;
+  if(!confirm(`¿Reabrir el embarque "${d.nro}" para editar y reconfirmar?\n\nLos datos se cargarán en el formulario. Al procesar nuevamente quedará como confirmado.`)) return;
+
+  const s = d.snap || {};
+  // Rellenar campos principales del formulario
+  const _set = (id, val) => { const el=document.getElementById(id); if(el && val!==undefined && val!==null) el.value=val; };
+
+  _set('s1_nro_emb', d.nro || '');
+  _set('s1_desc_emb', d.desc || '');
+  _set('s1_origen_emb', s.origen || '');
+
+  // CIF / FOB
+  if(s.termino === 'FOB'){
+    _set('s1_fob', s.CIF || '');
+    _set('s1_flete_fob', s.flete || '');
+    _set('s1_seguro', s.seguro || '');
+  } else {
+    _set('s1_cif', s.CIF || (s.sc1 && s.sc1.base) || '');
+  }
+  _set('s1_acarreo', s.acarreo || '');
+  _set('s1_dmce', s.dmce || '');
+  _set('s1_agente', s.agente || '');
+  if(s.arPct !== undefined) _set('s1_ar', ((s.arPct||0)*100).toFixed(2));
+  if(s.itbPct !== undefined) _set('s1_itbms', ((s.itbPct||0.07)*100).toFixed(0));
+
+  // Cargar facturas/invLines si existen
+  if(d.invLines && d.invLines.length){
+    window.invLines = JSON.parse(JSON.stringify(d.invLines));
+    if(typeof renderInvLines === 'function') renderInvLines();
+  }
+
+  // Marcar como reabierto para que procesarEmbarque sepa que puede reemplazarlo
+  window._pendienteUpdateIdx = idx;
+
+  // Ir al formulario principal
+  const tab = document.querySelector('.tab');
+  if(typeof switchTab === 'function') switchTab('sim', tab);
+
+  _showToast(`✏️ Embarque ${d.nro} cargado — edita lo que necesitas y presiona Procesar Embarque.`, 'orange', 5000);
 }
 
 function _clearFormSilent(){
@@ -5324,12 +5425,16 @@ function renderTend(){
     const rows2=[...filteredData].reverse().map((d,ri)=>{
       const idx=tendData.indexOf(d);
       const pct=d.cif>0?(d.ahorro/d.cif*100).toFixed(2)+'%':'—';
-      return `<div style="display:grid;grid-template-columns:auto 1fr auto auto auto;gap:8px;align-items:center;padding:9px 14px;border-bottom:1px solid rgba(48,54,61,.4);cursor:pointer;transition:background .15s" onclick="if(event.target.classList.contains('del-btn')){return;}abrirModuloComparativo_idx(${idx})" onmouseover="this.style.background='rgba(255,255,255,.03)'" onmouseout="this.style.background=''">
+      const isPend = d.status === 'pendiente';
+      return `<div style="display:grid;grid-template-columns:auto 1fr auto auto auto;gap:8px;align-items:center;padding:9px 14px;border-bottom:1px solid rgba(48,54,61,.4);cursor:pointer;transition:background .15s${isPend?';border-left:3px solid var(--orange-l)':''}" onclick="if(event.target.classList.contains('del-btn')||event.target.classList.contains('btn-reabrir')){return;}abrirModuloComparativo_idx(${idx})" onmouseover="this.style.background='rgba(255,255,255,.03)'" onmouseout="this.style.background=''">
         <div style="font-size:10px;font-weight:700;color:var(--orange-l);white-space:nowrap">${d.nro||'—'}</div>
-        <div><div style="font-size:12px;font-weight:500;color:var(--text)">${d.desc}</div><div style="font-size:10px;color:var(--muted)">${d.fecha} · ${d.esc||''}</div></div>
+        <div><div style="font-size:12px;font-weight:500;color:var(--text)">${d.desc}${isPend?'&nbsp;<span class="badge-pendiente">🟡 PENDIENTE</span>':''}</div><div style="font-size:10px;color:var(--muted)">${d.fecha} · ${d.esc||''}</div></div>
         <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--green-l);font-weight:700;white-space:nowrap">$${(d.ahorro/1000).toFixed(2)}k</div>
         <div style="font-size:11px;color:var(--orange-l);white-space:nowrap">${pct}</div>
-        <button class="del-btn" onclick="event.stopPropagation();deleteTend(${idx})" style="font-size:10px;padding:2px 6px;height:22px;flex-shrink:0">×</button>
+        <div style="display:flex;gap:4px;align-items:center">
+          ${isPend?`<button class="btn-reabrir" onclick="event.stopPropagation();reabrirEmbarquePendiente(${idx})">✏️ Reabrir</button>`:''}
+          <button class="del-btn" onclick="event.stopPropagation();deleteTend(${idx})" style="font-size:10px;padding:2px 6px;height:22px;flex-shrink:0">×</button>
+        </div>
       </div>`;
     }).join('');
     document.getElementById('tend-hist').innerHTML=rows2||'<div style="text-align:center;padding:24px;color:var(--muted)">Sin registros.</div>';
@@ -5446,15 +5551,19 @@ function renderTend(){
   const rows=[...filteredData].reverse().map((d)=>{
     const idx=tendData.indexOf(d);
     const pct=d.cif>0?(d.ahorro/d.cif*100).toFixed(2)+'%':'—';
-    return `<div style="display:grid;grid-template-columns:auto 1fr auto auto auto;gap:8px;align-items:center;padding:9px 14px;border-bottom:1px solid rgba(48,54,61,.4);cursor:pointer;transition:background .15s" onclick="if(event.target.classList.contains('del-btn')){return;}abrirModuloComparativo_idx(${idx})" onmouseover="this.style.background='rgba(255,255,255,.03)'" onmouseout="this.style.background=''">
+    const isPend = d.status === 'pendiente';
+    return `<div style="display:grid;grid-template-columns:auto 1fr auto auto auto;gap:8px;align-items:center;padding:9px 14px;border-bottom:1px solid rgba(48,54,61,.4);cursor:pointer;transition:background .15s${isPend?';border-left:3px solid var(--orange-l)':''}" onclick="if(event.target.classList.contains('del-btn')||event.target.classList.contains('btn-reabrir')){return;}abrirModuloComparativo_idx(${idx})" onmouseover="this.style.background='rgba(255,255,255,.03)'" onmouseout="this.style.background=''">
       <div style="font-size:10px;font-weight:700;color:var(--orange-l);white-space:nowrap">${d.nro||'—'}</div>
       <div>
-        <div style="font-size:12px;font-weight:500;color:var(--text)">${d.desc}</div>
+        <div style="font-size:12px;font-weight:500;color:var(--text)">${d.desc}${isPend?'&nbsp;<span class="badge-pendiente">🟡 PENDIENTE</span>':''}</div>
         <div style="font-size:10px;color:var(--muted)">${d.fecha} · ${d.esc||''}</div>
       </div>
       <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--green-l);font-weight:700;white-space:nowrap">$${(d.ahorro/1000).toFixed(2)}k</div>
       <div style="font-size:11px;color:var(--orange-l);white-space:nowrap">${pct}</div>
-      <button class="del-btn" onclick="event.stopPropagation();deleteTend(${idx})" style="font-size:10px;padding:2px 6px;height:22px;flex-shrink:0">×</button>
+      <div style="display:flex;gap:4px;align-items:center">
+        ${isPend?`<button class="btn-reabrir" onclick="event.stopPropagation();reabrirEmbarquePendiente(${idx})">✏️ Reabrir</button>`:''}
+        <button class="del-btn" onclick="event.stopPropagation();deleteTend(${idx})" style="font-size:10px;padding:2px 6px;height:22px;flex-shrink:0">×</button>
+      </div>
     </div>`;
   }).join('');
   document.getElementById('tend-hist').innerHTML=rows||'<div style="text-align:center;padding:24px;color:var(--muted)">Sin registros para este período.</div>';
@@ -5654,11 +5763,20 @@ function renderHistFact(){
         </div>
       </div>
       <div class="hfact-body" id="${uid}">
-        ${invL.length?invL.map(l=>`
-          <div class="hfact-inv-row">
-            <div><div class="hfact-inv-prov">${l.prov||l.dept||'—'} · ${l.deptCat||''}</div><div class="hfact-inv-oc">OC: ${l.oc||'—'}</div></div>
-            <div class="hfact-inv-val">${fmt(l.costo||0)}</div>
-          </div>`).join('')+'<div style="display:flex;justify-content:space-between;padding:10px 14px;background:rgba(63,185,80,.05);font-weight:700;font-size:12px"><span>Total Facturas</span><span style="color:var(--green-l)">${fmt(total)}</span></div>'
+        ${invL.length?invL.map(l=>{
+          const _arRate = l.arPct||l.si||0;
+          const _arAmt = l.ar||(l.costo*_arRate)||0;
+          return `<div class="hfact-inv-row" style="flex-direction:column;gap:2px">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div><div class="hfact-inv-prov">${l.prov||l.dept||'—'} · ${l.deptCat||''}</div>
+              <div class="hfact-inv-oc">OC: ${l.oc||'—'}${_arRate>0?' · Arancel: '+(_arRate*100).toFixed(2)+'%':''}</div></div>
+              <div style="text-align:right">
+                <div class="hfact-inv-val">${fmt(l.costo||0)}</div>
+                ${_arAmt>0?`<div style="font-size:10px;color:#f85149">Ar: ${fmt(_arAmt)}</div>`:''}
+              </div>
+            </div>
+          </div>`;
+        }).join('')+'<div style="display:flex;justify-content:space-between;padding:10px 14px;background:rgba(63,185,80,.05);font-weight:700;font-size:12px"><span>Total Facturas</span><span style="color:var(--green-l)">${fmt(total)}</span></div>'
         :'<div style="padding:12px 14px;color:var(--muted);font-size:11px">Sin facturas registradas en este embarque.</div>'}
       </div>
     </div>`;
@@ -5831,18 +5949,18 @@ function showTendDetail_OLD_DISABLED(idx){
   div.onclick = e => { if(e.target===div) div.remove(); };
 
   div.innerHTML = `
-    <div style="background:#fff;border-radius:24px 24px 0 0;padding:24px 20px 32px;max-width:480px;width:100%;max-height:90vh;overflow-y:auto;animation:_slideUp .35s cubic-bezier(.25,.46,.45,.94)" onclick="event.stopPropagation()">
+    <div style="background:var(--modal-bg);border-radius:24px 24px 0 0;padding:24px 20px 32px;max-width:480px;width:100%;max-height:90vh;overflow-y:auto;animation:_slideUp .35s cubic-bezier(.25,.46,.45,.94)" onclick="event.stopPropagation()">
       <style>@keyframes _slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}</style>
 
       <!-- HANDLE + CLOSE -->
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
         <div style="width:36px;height:4px;background:#e0e0e0;border-radius:2px;margin:0 auto;position:absolute;left:50%;transform:translateX(-50%)"></div>
         <div></div>
-        <button onclick="document.getElementById('_tendDetailPop').remove()" style="background:none;border:none;font-size:22px;color:#999;cursor:pointer;line-height:1">×</button>
+        <button onclick="document.getElementById('_tendDetailPop').remove()" style="background:none;border:none;font-size:22px;color:var(--modal-sub);cursor:pointer;line-height:1">×</button>
       </div>
 
       <!-- TITLE -->
-      <div style="font-size:18px;font-weight:800;color:#1f2328;margin-bottom:2px">${d.nro||'—'}</div>
+      <div style="font-size:18px;font-weight:800;color:var(--modal-text);margin-bottom:2px">${d.nro||'—'}</div>
       <div style="font-size:12px;color:#636c76;margin-bottom:${isSababa&&sc3._derived&&!sc3._derived.rangoOk?'8':'16'}px">${d.desc||'—'} · ${d.fecha||'—'} · ${tipoEmb}</div>
 
       ${isSababa&&sc3._derived&&!sc3._derived.rangoOk?`
@@ -5851,7 +5969,7 @@ function showTendDetail_OLD_DISABLED(idx){
       </div>`:''}
 
       ${isSababa&&sc3._derived&&!sc3._derived.pagFinal?`
-      <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:11px;color:#92400e">
+      <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:11px;color:var(--orange-l)">
         ℹ️ <strong>Snap generado con versión anterior</strong> — Algunos valores se derivaron del CIF sin traspaso aplicado. Re-procesa el embarque para obtener datos exactos.
       </div>`:''}
 
@@ -5873,10 +5991,10 @@ function showTendDetail_OLD_DISABLED(idx){
       <div id="_tendEscCard"></div>
 
       <!-- DESEMBOLSO DETALLE (desplegable) -->
-      <div style="margin-bottom:14px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden">
+      <div style="margin-bottom:14px;border:1px solid var(--modal-border);border-radius:12px;overflow:hidden">
         <button onclick="(function(el){el.style.display=el.style.display==='none'?'block':'none'})(this.nextElementSibling)"
-          style="width:100%;background:#f8fafc;border:none;padding:12px 14px;text-align:left;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
-          <div style="font-size:11px;font-weight:700;color:#64748b;letter-spacing:.07em;text-transform:uppercase">💳 DESEMBOLSO REAL — Concepto a Concepto</div>
+          style="width:100%;background:var(--modal-row);border:none;padding:12px 14px;text-align:left;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
+          <div style="font-size:11px;font-weight:700;color:var(--modal-sub);letter-spacing:.07em;text-transform:uppercase">💳 DESEMBOLSO REAL — Concepto a Concepto</div>
           <span style="font-size:16px;color:#94a3b8">▼</span>
         </button>
         <div style="display:none;padding:12px 14px;background:#fff">
@@ -5902,56 +6020,56 @@ function showTendDetail_OLD_DISABLED(idx){
             {lbl:'Gastos Origen/Destino', val: sc1.agente||0, color:'#1f2328'},
             {lbl:'Flete (si EXT)', val: isEXT?(s.flete||0):0, color:'#1f2328'},
           ]).filter(r=>r.val>0).map(r=>`
-            <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f1f5f9">
+            <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--modal-border)">
               <span style="font-size:12px;color:#64748b">${r.lbl}</span>
               <span style="font-family:monospace;font-size:12px;font-weight:600;color:${r.color}">${fmt(r.val)}</span>
             </div>`).join('')}
-          <div style="display:flex;justify-content:space-between;padding:8px 0;margin-top:4px;border-top:2px solid #e2e8f0">
-            <span style="font-size:13px;font-weight:800;color:#1f2328">TOTAL DESEMBOLSO</span>
+          <div style="display:flex;justify-content:space-between;padding:8px 0;margin-top:4px;border-top:2px solid var(--modal-border)">
+            <span style="font-size:13px;font-weight:800;color:var(--modal-text)">TOTAL DESEMBOLSO</span>
             <span style="font-family:monospace;font-size:14px;font-weight:800;color:#15803d">${fmt(desembolso||cif)}</span>
           </div>
         </div>
       </div>
 
       <!-- PARÁMETROS -->
-      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-bottom:14px">
-        <div style="font-size:10px;font-weight:700;color:#64748b;letter-spacing:.07em;text-transform:uppercase;margin-bottom:10px">PARÁMETROS DEL EMBARQUE</div>
+      <div style="background:var(--modal-row);border:1px solid var(--modal-border);border-radius:12px;padding:14px;margin-bottom:14px">
+        <div style="font-size:10px;font-weight:700;color:var(--modal-sub);letter-spacing:.07em;text-transform:uppercase;margin-bottom:10px">PARÁMETROS DEL EMBARQUE</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-          <div><div style="font-size:10px;color:#94a3b8">Valor Original (${s.termino||'CIF'}):</div><div style="font-family:monospace;font-size:13px;font-weight:600;color:#1f2328">${fmt(cif)}</div></div>
-          <div><div style="font-size:10px;color:#94a3b8">Tipo de Embarque:</div><div style="font-size:13px;font-weight:600;color:#1f2328">${tipoEmb}</div></div>
+          <div><div style="font-size:10px;color:#94a3b8">Valor Original (${s.termino||'CIF'}):</div><div style="font-family:monospace;font-size:13px;font-weight:600;color:var(--modal-text)">${fmt(cif)}</div></div>
+          <div><div style="font-size:10px;color:#94a3b8">Tipo de Embarque:</div><div style="font-size:13px;font-weight:600;color:var(--modal-text)">${tipoEmb}</div></div>
           ${isSababa ? `
-          <div><div style="font-size:10px;color:#94a3b8">Valor Original (${s.termino||'CIF'}):</div><div style="font-family:monospace;font-size:13px;font-weight:700;color:#1f2328">${fmt(cif)}</div></div>
-          <div><div style="font-size:10px;color:#94a3b8">Tipo de Embarque:</div><div style="font-size:13px;font-weight:600;color:#1f2328">${tipoEmb}</div></div>
+          <div><div style="font-size:10px;color:#94a3b8">Valor Original (${s.termino||'CIF'}):</div><div style="font-family:monospace;font-size:13px;font-weight:700;color:var(--modal-text)">${fmt(cif)}</div></div>
+          <div><div style="font-size:10px;color:#94a3b8">Tipo de Embarque:</div><div style="font-size:13px;font-weight:600;color:var(--modal-text)">${tipoEmb}</div></div>
           <div><div style="font-size:10px;color:#94a3b8">Total Pago Realizado:</div><div style="font-family:monospace;font-size:13px;font-weight:700;color:#f97316">${fmt(sc3._derived?.pagFinal||0)}</div></div>
-          <div><div style="font-size:10px;color:#94a3b8">Término de Embarque:</div><div style="font-size:13px;font-weight:600;color:#1f2328">${s.termino||'CIF'}</div></div>
-          <div style="grid-column:1/-1;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px;margin-top:2px">
-            <div style="font-size:10px;color:#92400e;font-weight:700;margin-bottom:6px">Descomposición del Pago</div>
+          <div><div style="font-size:10px;color:#94a3b8">Término de Embarque:</div><div style="font-size:13px;font-weight:600;color:var(--modal-text)">${s.termino||'CIF'}</div></div>
+          <div style="grid-column:1/-1;background:rgba(249,115,22,.06);border:1px solid rgba(249,115,22,.2);border-radius:8px;padding:10px;margin-top:2px">
+            <div style="font-size:10px;color:var(--orange-l);font-weight:700;margin-bottom:6px">Descomposición del Pago</div>
             <div style="display:flex;justify-content:space-between;padding:3px 0"><span style="font-size:11px;color:#64748b">Valor Homologado (÷1.07)</span><span style="font-family:monospace;font-size:12px;font-weight:700;color:#f97316">${fmt(sc3._derived?.sc3mercH||0)}</span></div>
             <div style="display:flex;justify-content:space-between;padding:3px 0"><span style="font-size:11px;color:#64748b">ITBMS (informativo)</span><span style="font-family:monospace;font-size:12px;color:#94a3b8">${fmt(sc3._derived?.sc3itbmsH||0)}</span></div>
             <div style="display:flex;justify-content:space-between;padding:3px 0;border-top:1px solid #fed7aa;margin-top:3px;padding-top:6px"><span style="font-size:11px;color:#64748b">Comisión Total (10%)</span><span style="font-family:monospace;font-size:12px;font-weight:700;color:#f97316">${fmt(sc3._derived?.sc3com||0)}</span></div>
             <div style="display:flex;justify-content:space-between;padding:3px 0"><span style="font-size:11px;color:#94a3b8;padding-left:10px">└ ITBMS de la comisión</span><span style="font-family:monospace;font-size:12px;color:#94a3b8">${fmt(sc3._derived?.sc3itbmsH||0)}</span></div>
             <div style="display:flex;justify-content:space-between;padding:3px 0"><span style="font-size:11px;color:#f97316;padding-left:10px">└ Comisión Bruta Real</span><span style="font-family:monospace;font-size:12px;font-weight:700;color:#f97316">${fmt(sc3._derived?.sc3comBruta||0)}</span></div>
-            ${(sc3._derived?.sc3Flete||0)>0?`<div style="display:flex;justify-content:space-between;padding:3px 0"><span style="font-size:11px;color:#64748b">Flete</span><span style="font-family:monospace;font-size:12px;color:#1f2328">${fmt(sc3._derived.sc3Flete)}</span></div>`:''}
-            ${(sc3._derived?.sc3Gastos||0)>0?`<div style="display:flex;justify-content:space-between;padding:3px 0"><span style="font-size:11px;color:#64748b">Gastos origen/destino</span><span style="font-family:monospace;font-size:12px;color:#1f2328">${fmt(sc3._derived.sc3Gastos)}</span></div>`:''}
+            ${(sc3._derived?.sc3Flete||0)>0?`<div style="display:flex;justify-content:space-between;padding:3px 0"><span style="font-size:11px;color:#64748b">Flete</span><span style="font-family:monospace;font-size:12px;color:var(--modal-text)">${fmt(sc3._derived.sc3Flete)}</span></div>`:''}
+            ${(sc3._derived?.sc3Gastos||0)>0?`<div style="display:flex;justify-content:space-between;padding:3px 0"><span style="font-size:11px;color:#64748b">Gastos origen/destino</span><span style="font-family:monospace;font-size:12px;color:var(--modal-text)">${fmt(sc3._derived.sc3Gastos)}</span></div>`:''}
             ${(sc3._derived?.sc3mv||0)>0?`<div style="display:flex;justify-content:space-between;padding:3px 0;border-top:1px solid #fed7aa;margin-top:3px;padding-top:6px"><span style="font-size:11px;color:#3b82f6">Master Value (puente)</span><span style="font-family:monospace;font-size:12px;font-weight:700;color:#3b82f6">${fmt(sc3._derived.sc3mv)}</span></div>`:''}
           </div>
           <div style="grid-column:1/-1"><div style="font-size:10px;color:#94a3b8">Costo No Mercancía (com + MV):</div><div style="font-family:monospace;font-size:13px;font-weight:700;color:#f97316">${fmt(sc3._derived?.sc3noMerc||0)}</div></div>
           <div><div style="font-size:10px;color:#94a3b8">% Costeo inventario:</div><div style="font-family:monospace;font-size:13px;font-weight:700;color:#f97316">${sc3._derived?.sc3mercH>0?((sc3._derived.sc3noMerc/sc3._derived.sc3mercH)*100).toFixed(2)+'%':'—'}</div></div>
-          <div><div style="font-size:10px;color:#94a3b8">Escenario Elegido:</div><div style="font-size:13px;font-weight:600;color:#1f2328">${escLabel}</div></div>
+          <div><div style="font-size:10px;color:#94a3b8">Escenario Elegido:</div><div style="font-size:13px;font-weight:600;color:var(--modal-text)">${escLabel}</div></div>
           ` : `
           <div><div style="font-size:10px;color:#94a3b8">Arancel:</div><div style="font-family:monospace;font-size:13px;font-weight:600;color:#dc2626">${fmt(sc1.arancel||0)}</div></div>
-          <div><div style="font-size:10px;color:#94a3b8">ITBMS:</div><div style="font-family:monospace;font-size:13px;font-weight:600;color:#1f2328">${fmt(itbms)}</div></div>
-          <div><div style="font-size:10px;color:#94a3b8">Honorarios:</div><div style="font-family:monospace;font-size:13px;font-weight:600;color:#1f2328">${fmt(honorarios)}</div></div>
-          <div><div style="font-size:10px;color:#94a3b8">Escenario:</div><div style="font-size:13px;font-weight:600;color:#1f2328">${escLabel}</div></div>
-          <div><div style="font-size:10px;color:#94a3b8">Equipo:</div><div style="font-size:13px;font-weight:600;color:#1f2328">${s.equipo||'—'}</div></div>
+          <div><div style="font-size:10px;color:#94a3b8">ITBMS:</div><div style="font-family:monospace;font-size:13px;font-weight:600;color:var(--modal-text)">${fmt(itbms)}</div></div>
+          <div><div style="font-size:10px;color:#94a3b8">Honorarios:</div><div style="font-family:monospace;font-size:13px;font-weight:600;color:var(--modal-text)">${fmt(honorarios)}</div></div>
+          <div><div style="font-size:10px;color:#94a3b8">Escenario:</div><div style="font-size:13px;font-weight:600;color:var(--modal-text)">${escLabel}</div></div>
+          <div><div style="font-size:10px;color:#94a3b8">Equipo:</div><div style="font-size:13px;font-weight:600;color:var(--modal-text)">${s.equipo||'—'}</div></div>
           `}
           <div style="grid-column:1/-1"><div style="font-size:10px;color:#94a3b8">Costo No Mercancía (Esc.#1 sin ITBMS):</div><div style="font-family:monospace;font-size:13px;font-weight:700;color:#dc2626">${sc1.noMerc>0?fmt(sc1.noMerc):'—'}</div></div>
         </div>
       </div>
 
       <!-- COSTOS ADICIONALES + FACTOR -->
-      <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:14px;margin-bottom:14px">
-        <div style="font-size:10px;font-weight:700;color:#92400e;letter-spacing:.07em;text-transform:uppercase;margin-bottom:10px">COSTOS ADICIONALES</div>
+      <div style="background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.25);border-radius:12px;padding:14px;margin-bottom:14px">
+        <div style="font-size:10px;font-weight:700;color:var(--orange-l);letter-spacing:.07em;text-transform:uppercase;margin-bottom:10px">COSTOS ADICIONALES</div>
         ${isSababa ? (() => {
           const D = sc3._derived || {};
           const mH     = D.sc3mercH || 0;
@@ -5962,27 +6080,27 @@ function showTendDetail_OLD_DISABLED(idx){
           const fDesemb = cif>0 ? ((desembolso/cif-1)*100).toFixed(2) : '—';
           const ahorroDisp = D.ahorroCalc > 0 ? D.ahorroCalc : (D.sc1desemb - desembolso);
           return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
-            <div><div style="font-size:10px;color:#94a3b8;margin-bottom:2px">Valor compra (${s.termino||'CIF'})</div><div style="font-family:monospace;font-size:14px;font-weight:700;color:#1f2328">${fmt(cif)}</div></div>
+            <div><div style="font-size:10px;color:#94a3b8;margin-bottom:2px">Valor compra (${s.termino||'CIF'})</div><div style="font-family:monospace;font-size:14px;font-weight:700;color:var(--modal-text)">${fmt(cif)}</div></div>
             <div><div style="font-size:10px;color:#94a3b8;margin-bottom:2px">Total Pago Sababa</div><div style="font-family:monospace;font-size:14px;font-weight:700;color:#f97316">${fmt(D.pagFinal||0)}</div></div>
             <div><div style="font-size:10px;color:#94a3b8;margin-bottom:2px">Merc. Homologada</div><div style="font-family:monospace;font-size:14px;font-weight:700;color:#f97316">${fmt(mH)}</div></div>
             <div><div style="font-size:10px;color:#94a3b8;margin-bottom:2px">Comisión Total</div><div style="font-family:monospace;font-size:14px;font-weight:700;color:#f97316">${fmt(com)}</div></div>
           </div>
           <div style="background:#fef3c7;border-radius:8px;padding:10px">
             <div style="display:flex;justify-content:space-between;margin-bottom:5px">
-              <span style="font-size:11px;color:#92400e">% Costeo inventario (noMerc ÷ homologada)</span>
+              <span style="font-size:11px;color:var(--orange-l)">% Costeo inventario (noMerc ÷ homologada)</span>
               <strong style="color:#f97316;font-size:15px">${fCosteo}%</strong>
             </div>
             <div style="display:flex;justify-content:space-between;margin-bottom:5px">
-              <span style="font-size:11px;color:#92400e">% Desembolso (total ÷ original − 1)</span>
+              <span style="font-size:11px;color:var(--orange-l)">% Desembolso (total ÷ original − 1)</span>
               <strong style="color:#15803d;font-size:15px">${fDesemb}%</strong>
             </div>
             ${ahorroDisp>0?`<div style="display:flex;justify-content:space-between;border-top:1px solid #fcd34d;padding-top:5px;margin-top:2px">
-              <span style="font-size:11px;color:#92400e">💰 Ahorro vs Esc.#1</span>
+              <span style="font-size:11px;color:var(--orange-l)">💰 Ahorro vs Esc.#1</span>
               <strong style="color:#15803d;font-size:15px">${fmt(ahorroDisp)}</strong>
             </div>`:''}
           </div>`;
         })() : `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-          <div><div style="font-size:10px;color:#94a3b8;margin-bottom:2px">Valor Compra (${s.termino||'CIF'})</div><div style="font-family:monospace;font-size:14px;font-weight:700;color:#1f2328">${fmt(cif)}</div></div>
+          <div><div style="font-size:10px;color:#94a3b8;margin-bottom:2px">Valor Compra (${s.termino||'CIF'})</div><div style="font-family:monospace;font-size:14px;font-weight:700;color:var(--modal-text)">${fmt(cif)}</div></div>
           <div><div style="font-size:10px;color:#94a3b8;margin-bottom:2px">Costo Landed</div><div style="font-family:monospace;font-size:14px;font-weight:700;color:#f97316">${(sc2.landed1||sc1.landed1)>0?fmt(sc2.landed1||sc1.landed1):'—'}</div></div>
           <div><div style="font-size:10px;color:#94a3b8;margin-bottom:2px">% Importación</div><div style="font-family:monospace;font-size:14px;font-weight:700;color:#f97316">${factor>1?((factor-1)*100).toFixed(2)+'%':'—'}</div></div>
           <div><div style="font-size:10px;color:#94a3b8;margin-bottom:2px">% Ahorro / ${s.termino||'CIF'}</div><div style="font-family:monospace;font-size:14px;font-weight:700;color:#16a34a">${cif>0?((ahorroReg/cif)*100).toFixed(2)+'%':'—'}</div></div>
@@ -5994,15 +6112,15 @@ function showTendDetail_OLD_DISABLED(idx){
       <div style="margin-bottom:14px">
         <div style="font-size:11px;font-weight:700;color:#64748b;letter-spacing:.05em;text-transform:uppercase;margin-bottom:8px">FACTURAS DEL EMBARQUE (${invL.length})</div>
         ${invL.map(l=>`
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid #f1f5f9">
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--modal-border)">
             <div style="flex:1;min-width:0">
               <div style="font-size:12px;font-weight:600;color:#1f2328;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${l.prov||l.dept||'—'} · ${l.deptCat||l.dept||''}</div>
               <div style="font-size:10px;color:#94a3b8">OC: ${l.oc||'—'}</div>
             </div>
             <div style="font-family:monospace;font-size:13px;font-weight:700;color:#16a34a;white-space:nowrap;margin-left:12px">${fmt(l.costo||0)}</div>
           </div>`).join('')}
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:2px solid #e2e8f0;margin-top:4px">
-          <div style="font-size:13px;font-weight:800;color:#1f2328">Total Facturas</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:2px solid var(--modal-border);margin-top:4px">
+          <div style="font-size:13px;font-weight:800;color:var(--modal-text)">Total Facturas</div>
           <div style="font-family:monospace;font-size:15px;font-weight:800;color:#16a34a">${fmt(invL.reduce((s,l)=>s+(l.costo||0),0))}</div>
         </div>
       </div>` : '<div style="text-align:center;padding:16px;color:#94a3b8;font-size:12px">Sin facturas registradas</div>'}
@@ -6021,7 +6139,7 @@ function showTendDetail_OLD_DISABLED(idx){
 
       <!-- CLOSE -->
       <button onclick="document.getElementById('_tendDetailPop').remove()"
-        style="width:100%;margin-top:12px;background:#f1f5f9;border:none;border-radius:12px;padding:14px;color:#64748b;font-size:14px;font-weight:600;cursor:pointer">
+        style="width:100%;margin-top:12px;background:var(--modal-row);border:none;border-radius:12px;padding:14px;color:#64748b;font-size:14px;font-weight:600;cursor:pointer">
         Cerrar
       </button>
     </div>`;
@@ -6127,10 +6245,10 @@ function _getTendDetailHTML(idx){
     /* Desglose section */
     .section{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:13px;margin-bottom:13px}
     .section-title{font-size:9px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em;margin-bottom:9px}
-    .desg-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #f1f5f9}
+    .desg-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--modal-border)}
     .desg-lbl{font-size:11px;color:#475569}
     .desg-val{font-family:monospace;font-size:11px;font-weight:700;color:#1f2328}
-    .desg-total{display:flex;justify-content:space-between;padding:8px 0;margin-top:4px;border-top:2px solid #e2e8f0}
+    .desg-total{display:flex;justify-content:space-between;padding:8px 0;margin-top:4px;border-top:2px solid var(--modal-border)}
     .desg-total span:first-child{font-size:12px;font-weight:800;color:#1f2328}
     .desg-total span:last-child{font-family:monospace;font-size:13px;font-weight:900;color:#15803d}
 
@@ -6140,11 +6258,11 @@ function _getTendDetailHTML(idx){
     .p-val{font-size:12px;font-weight:700;color:#1f2328}
 
     /* Facturas */
-    .inv-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f1f5f9}
+    .inv-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--modal-border)}
     .inv-prov{font-size:11px;font-weight:600;color:#1f2328}
     .inv-oc{font-size:9px;color:#94a3b8}
     .inv-val{font-family:monospace;font-size:11px;font-weight:700;color:#16a34a}
-    .total-row{display:flex;justify-content:space-between;padding:9px 0;border-top:2px solid #e2e8f0;font-weight:800;font-size:13px}
+    .total-row{display:flex;justify-content:space-between;padding:9px 0;border-top:2px solid var(--modal-border);font-weight:800;font-size:13px}
     .footer{text-align:center;font-size:9px;color:#94a3b8;margin-top:18px;padding-top:10px;border-top:1px solid #e2e8f0}
   </style></head><body>
 
@@ -6183,7 +6301,7 @@ function _getTendDetailHTML(idx){
   <!-- DESGLOSE SABABA -->
   ${isSab ? `<div class="section">
     <div class="section-title">💸 Desglose — ${d.esc||'Sababa'}</div>
-    <div class="desg-row"><span class="desg-lbl">Valor original mercancía (${termino})</span><span class="desg-val" style="color:#1f2328">${fmt(cif)}</span></div>
+    <div class="desg-row"><span class="desg-lbl">Valor original mercancía (${termino})</span><span class="desg-val" style="color:var(--modal-text)">${fmt(cif)}</span></div>
     <div class="desg-row"><span class="desg-lbl">└ Merc. homologada (÷1.07)</span><span class="desg-val" style="color:#f97316">${fmt(sc3mercH)}</span></div>
     <div class="desg-row"><span class="desg-lbl">└ ITBMS del valor homologado</span><span class="desg-val" style="color:#64748b">${fmt(sc3itbH)}</span></div>
     ${sc3.flete>0?`<div class="desg-row"><span class="desg-lbl">Flete</span><span class="desg-val">${fmt(sc3.flete)}</span></div>`:''}
@@ -6220,11 +6338,11 @@ function _getTendDetailHTML(idx){
       <div><div class="p-lbl">Escenario Elegido</div><div class="p-val">${d.esc||'—'}</div></div>
       <div style="grid-column:1/-1;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:8px 10px;margin-top:4px">
         <div style="display:flex;justify-content:space-between;margin-bottom:5px">
-          <span style="font-size:9px;color:#92400e">% Costeo inventario = (Comisión + MV) ÷ Homologada</span>
+          <span style="font-size:9px;color:var(--orange-l)">% Costeo inventario = (Comisión + MV) ÷ Homologada</span>
           <strong style="color:#f97316;font-size:13px">${factorCosteo.toFixed(2)}%</strong>
         </div>
         <div style="display:flex;justify-content:space-between">
-          <span style="font-size:9px;color:#92400e">% Desembolso = Monto Pago ÷ Valor Original − 1</span>
+          <span style="font-size:9px;color:var(--orange-l)">% Desembolso = Monto Pago ÷ Valor Original − 1</span>
           <strong style="color:#15803d;font-size:13px">${factorDesembolso.toFixed(2)}%</strong>
         </div>
       </div>` :
@@ -7655,14 +7773,24 @@ function _calcEngine(snap) {
   const s1 = snap.sc1 || {}, s2 = snap.sc2 || {}, s3 = snap.sc3 || {};
   const itb = snap.itbPct || 0.07;
   const isEXT = (snap.tipo || '') === 'EXT';
+  const isFOB = (snap.termino || '') === 'FOB';
   const isExon = s2.exon !== false;
-  const flete = isEXT ? (snap.flete || 0) : 0;
+  // Flete: solo para Importación Exterior (EXT) con término FOB
+  // Zona Libre = flete siempre 0 (ya viene en el valor CIF/FOB de ZL)
+  const flete = (isEXT && isFOB) ? (snap.flete || 0) : 0;
   const comPct = snap.sc3ComPct || 0.10;
 
-  // ── SC1: Liquidación Aduanal Regular ──
-  const C = s1.base || 0;
+  // ── SC1 ──
+  const C = s1.base || 0;   // FOB for FOB term, CIF for CIF term (valor mercancía)
   const ar = s1.arancel || 0;
-  const i1 = (C + ar) * itb;
+  // ── Base Aduanal (CIF = Costo+Flete+Seguro) ──
+  // Para FOB term: snap.CIF = FOB+Flete+Seguro (calculado en calc())
+  // Para CIF term: snap.CIF = CIF (= sc1.base)
+  // Este valor es la BASE para calcular Arancel e ITBMS en los 3 escenarios
+  const _CIF_full = snap.CIF || (isFOB ? (C + flete) : C);
+
+  // ── SC1: ITBMS = (CIF + Arancel) × 7% ──
+  const i1 = (_CIF_full + ar) * itb;
   const ta = s1.tasa || 0;
   const iT = s1.itbmsTasa || (ta * itb);
   const u1 = s1.form1 || 0;
@@ -7673,35 +7801,37 @@ function _calcEngine(snap) {
   const D1 = C + ar + i1 + ta + iT + u1 + h1 + ac + dm + ag + flete;
 
   // ── SC2: CIF Express (Exonerado: sin arancel, sin acarreo, sin DMCE) ──
-  const C2 = s2.base || C;
-  const i2 = C2 * itb;  // exonerado: solo ITBMS sobre CIF
-  const h2 = s2.hon || (C2 * 0.03);
+  const C2 = s2.base || _CIF_full;  // sc2.base = CIF stored at calc time
+  // ITBMS SC2 = CIF × 7% — usa _CIF_full (base aduanal correcta para FOB y CIF)
+  const i2 = _CIF_full * itb;
+  // Honorarios SC2 = CIF × 3% (sobre base aduanal)
+  const h2 = s2.hon || (_CIF_full * 0.03);
   const ng2 = s2.honNg || 0;
   const iH2 = s2.itbmsHon > 0 ? s2.itbmsHon : Math.max(0, h2 - ng2) * itb;
   const ta2 = s2.tasa || ta;
   const iT2 = s2.itbmsTasa || (ta2 * itb);
   const u2 = s2.form2 || u1;
-  const D2 = C2 + i2 + h2 + iH2 + ta2 + iT2 + u2 + ag + flete;
+  // For FOB term: mercancía base = FOB (C), flete added separately (no double count)
+  // For CIF term: mercancía base = CIF (C2 = C), flete = 0
+  const C2_merc = isFOB ? C : C2;
+  const D2 = C2_merc + i2 + h2 + iH2 + ta2 + iT2 + u2 + ag + flete;
 
   // ── SC3: Sababa Imports ──
-  // REGLA: Comisión = BaseAjustada × % (NO sobre CIF bruto)
-  // BaseAjustada = CIF - Traspaso + Diferencia
-  // PRIORIDAD: 1) baseAjustada guardada  2) CIF - trasp (trasp está en snap)
-  //            3) pagFinal si < CIF      4) CIF (fallback sin sababa)
+  // BaseAjustada = total factura Sababa (pagFinal):
+  //   CIF term: pagFinal = CIF - Traspaso + Diferencia (< CIF ✓)
+  //   FOB term: pagFinal = FOB + Flete + Diferencia (> FOB pero < CIF_full ✓)
+  // COMPARAR contra _CIF_full (no contra C/FOB) para que FOB term pase el filtro
   const _trasp = snap.trasp || 0;
   const _dif = s3.difPago || 0;
-  const _bA_from_trasp = _trasp > 0 ? C - _trasp + _dif : 0;
-  // PRIORITY: pagFinal = exact Sababa invoice (absorbs all cents, gives correct homologado)
-  // Then baseAjustada → CIF-trasp+dif → pagFinal<CIF → CIF
-  // sc_pago = exact Sababa invoice amount (CIF-trasp+dif) — most accurate
+  const _bA_from_trasp = _trasp > 0 ? _CIF_full - _trasp + _dif : 0;
   const _sc_pago = s3.sc_pago || 0;
-  const bA = (_sc_pago > 0 && _sc_pago < C)
+  const bA = (_sc_pago > 0 && _sc_pago <= _CIF_full)
     ? _sc_pago
-    : (s3.pagFinal > 0 && s3.pagFinal < C)
+    : (s3.pagFinal > 0 && s3.pagFinal <= _CIF_full)
     ? s3.pagFinal
-    : (s3.baseAjustada > 0 && s3.baseAjustada < C)
+    : (s3.baseAjustada > 0 && s3.baseAjustada <= _CIF_full)
     ? s3.baseAjustada
-    : (_bA_from_trasp > 0 ? _bA_from_trasp : C);
+    : (_bA_from_trasp > 0 ? _bA_from_trasp : _CIF_full);
   const com = bA * comPct;           // SIEMPRE recalcular desde baseAjustada
   const merc = bA / (1 + itb);       // Mercancía homologada
   const itb3 = bA - merc;            // ITBMS del homologado
@@ -7715,17 +7845,19 @@ function _calcEngine(snap) {
     ? Math.max(0, _L1 - merc - com - fl3 - ag3)
     : (s3.mv || 0);
   const nM = com + mv + fl3 + ag3;
-  const D3 = bA > 0 ? C + com + fl3 + ag3 : 0;  // CIF_original + comision
+  // D3 desembolso: FOB_original + Comisión + Flete + Gastos
+  // C = FOB (FOB term) o CIF (CIF term) — en ambos casos es el valor mercancía original
+  const D3 = bA > 0 ? C + com + fl3 + ag3 : 0;
 
   return {
     term: snap.termino || 'CIF',
     tipo: snap.tipo === 'ZL' ? 'Zona Libre' : 'Importación',
     arPct: ((snap.arPct || 0) * 100).toFixed(2),
     comPct: (comPct * 100).toFixed(0),
-    isExon, isEXT, flete,
+    isExon, isEXT, isFOB, flete,
     C, ar, i1, ta, iT, u1, h1, ac, dm, ag,
     D1,
-    C2, i2, h2, iH2, ta2, iT2, u2, ar2: 0,
+    C2, C2_merc, i2, h2, iH2, ta2, iT2, u2, ar2: 0, fl2: flete, ag2: ag,
     D2,
     bA, com, merc, itb3, hNeto, fl3, ag3, mv, nM,
     D3,
@@ -7770,37 +7902,58 @@ function _modCompDeleteEmb(idx) {
 
 function abrirModuloComparativo() {
   // Enrich active snap with live form values before opening
-  // Read from multiple possible field IDs (session stores as s2_pago)
   if (window._lastSnap) {
+    const _snap = window._lastSnap;
+    const _isFOB = (_snap.termino || '') === 'FOB';
+    const _isEXT = (_snap.tipo || '') === 'EXT';
+
+    // ── CIF (base aduanal) ──
+    // CRÍTICO: para FOB term, CIF = FOB+Flete+Seguro (ya calculado en calc())
+    // Usar window._lastCIF que es el valor correcto, NO el campo del formulario
+    // que puede ser solo FOB
+    const _live_cif_correct = window._lastCIF > 0
+      ? window._lastCIF
+      : (_snap.CIF || 0);
+    if (_live_cif_correct > 0) _snap.CIF = _live_cif_correct;
+
+    // ── FOB y Flete ──
+    const _live_fob = parseFloat(document.getElementById('s1_fob')?.value) || (_snap.FOB || 0);
+    const _live_flete = parseFloat(document.getElementById('s1_flete_fob')?.value)
+                     || parseFloat(document.getElementById('s1_flete')?.value)
+                     || (_snap.flete || 0);
+    if (_live_fob > 0) _snap.FOB = _live_fob;
+    if (_live_flete > 0) _snap.flete = _live_flete;
+
+    // ── Sababa fields ──
+    if (!_snap.sc3) _snap.sc3 = {};
     const _live_pago = parseFloat(document.getElementById('s2_pago')?.value)
                     || parseFloat(document.getElementById('sc_pago')?.value)
                     || 0;
     const _live_trasp = parseFloat(document.getElementById('s2_trasp')?.value)
                      || parseFloat(document.getElementById('s1_traspaso')?.value)
                      || 0;
-    const _live_cif = parseFloat(document.getElementById('s2_costo_zl')?.value)
-                   || parseFloat(document.getElementById('s1_cif')?.value)
-                   || 0;
     const _live_com = (parseFloat(document.getElementById('s2_com')?.value) || 10) / 100;
-    if (!window._lastSnap.sc3) window._lastSnap.sc3 = {};
+
     if (_live_pago > 0) {
-      window._lastSnap.sc3.sc_pago = _live_pago;
-      window._lastSnap.sc3.pagFinal = _live_pago;
-      window._lastSnap.sc3.baseAjustada = _live_pago;
+      _snap.sc3.sc_pago = _live_pago;
+      _snap.sc3.pagFinal = _live_pago;
+      _snap.sc3.baseAjustada = _live_pago;
     }
-    if (_live_trasp > 0) window._lastSnap.trasp = _live_trasp;
-    if (_live_cif > 0) window._lastSnap.CIF = _live_cif;
-    if (_live_com > 0) window._lastSnap.sc3ComPct = _live_com;
-    // Also patch itbPct and arPct if missing
-    if (!window._lastSnap.itbPct) {
-      window._lastSnap.itbPct = (parseFloat(document.getElementById('s1_itbms')?.value) || 7) / 100;
+    if (_live_trasp > 0) _snap.trasp = _live_trasp;
+    if (_live_com > 0) _snap.sc3ComPct = _live_com;
+
+    // ── Otros campos si faltan ──
+    if (!_snap.itbPct) {
+      _snap.itbPct = (parseFloat(document.getElementById('s1_itbms')?.value) || 7) / 100;
     }
-    if (!window._lastSnap.arPct) {
-      window._lastSnap.arPct = (parseFloat(document.getElementById('s1_ar')?.value) || 0) / 100;
+    if (!_snap.arPct) {
+      _snap.arPct = (parseFloat(document.getElementById('s1_ar')?.value) || 0) / 100;
     }
-    // Patch sc1.base if missing
-    if (!window._lastSnap.sc1) window._lastSnap.sc1 = {};
-    if (!window._lastSnap.sc1.base && _live_cif > 0) window._lastSnap.sc1.base = _live_cif;
+    if (!_snap.sc1) _snap.sc1 = {};
+    // sc1.base = FOB for FOB term, CIF for CIF term (valor mercancía)
+    if (!_snap.sc1.base) {
+      _snap.sc1.base = _isFOB ? (_live_fob || _live_cif_correct) : _live_cif_correct;
+    }
   }
   // Si hay snap activo, usarlo
   // Si hay tendData, mostrar selector de embarques
@@ -7967,8 +8120,8 @@ function _modCompShowSnap(snap, nro, desc, fecha) {
             ${_tblSec('Otros Gastos')}
             ${_tblRow3('Acarreo', _mf(D.ac), '<span style="color:#8b949e;font-size:9px">Incl. M.V.</span>', '<span style="color:#8b949e;font-size:9px">Incl. comisión</span>')}
             ${_tblRow3('DMCE / Otros', _mf(D.dm), '<span style="color:#8b949e;font-size:9px">Incl. M.V.</span>', '—')}
-            ${D.ag > 0 ? _tblRow('Gastos Destino', _mf(D.ag), _mf(D.ag), _mf(D.ag3)) : ''}
-            ${D.isEXT && D.flete > 0 ? _tblRow('Flete (Importación)', _mf(D.flete), _mf(D.flete), _mf(D.fl3)) : ''}
+            ${(D.ag > 0 || D.ag3 > 0) ? _tblRow('Gastos Origen/Destino', D.ag>0?_mf(D.ag):'—', D.ag2>0?_mf(D.ag2):'—', D.ag3>0?_mf(D.ag3):'—') : ''}
+            ${(D.flete > 0 || D.fl3 > 0) ? _tblRow('Flete', D.flete>0?_mf(D.flete):'—', D.fl2>0?_mf(D.fl2):'—', D.fl3>0?_mf(D.fl3):'—') : ''}
             ${_tblRow3('Master Value (no pagado)', '—', '<span style="color:#58a6ff">'+_mf(D.mv2)+'</span>', '<span style="color:#58a6ff">'+_mf(D.mv)+'</span>')}
             ${_tblSec('')}
             ${_tblRow3('💳 TOTAL DESEMBOLSO',
@@ -8009,12 +8162,13 @@ function _modCompShowSnap(snap, nro, desc, fecha) {
 
 // Table row helpers
 function _tblRow(lbl, v1, v2, v3, bold) {
-  const s = bold ? 'font-weight:700;' : 'color:#8b949e;font-size:11px;';
+  const s = bold ? 'font-weight:700;color:var(--text)' : 'color:var(--muted);font-size:11px';
+  const vs = bold ? 'color:var(--text);font-weight:700' : 'color:var(--text);opacity:.85';
   return `<tr style="${bold?'background:rgba(255,255,255,.03)':''}">
-    <td style="padding:7px 12px;${s}border-bottom:1px solid rgba(48,54,61,.4)">${lbl}</td>
-    <td style="padding:7px 10px;text-align:right;border-bottom:1px solid rgba(48,54,61,.4);font-family:'IBM Plex Mono',monospace">${v1}</td>
-    <td style="padding:7px 10px;text-align:right;border-bottom:1px solid rgba(48,54,61,.4);font-family:'IBM Plex Mono',monospace">${v2}</td>
-    <td style="padding:7px 10px;text-align:right;border-bottom:1px solid rgba(48,54,61,.4);font-family:'IBM Plex Mono',monospace">${v3}</td>
+    <td style="padding:7px 12px;${s};border-bottom:1px solid rgba(48,54,61,.4)">${lbl}</td>
+    <td style="padding:7px 10px;text-align:right;border-bottom:1px solid rgba(48,54,61,.4);font-family:'IBM Plex Mono',monospace;${vs}">${v1}</td>
+    <td style="padding:7px 10px;text-align:right;border-bottom:1px solid rgba(48,54,61,.4);font-family:'IBM Plex Mono',monospace;${vs}">${v2}</td>
+    <td style="padding:7px 10px;text-align:right;border-bottom:1px solid rgba(48,54,61,.4);font-family:'IBM Plex Mono',monospace;${vs}">${v3}</td>
   </tr>`;
 }
 function _tblRow3(lbl, v1, v2, v3, bold, bg) {
@@ -8096,6 +8250,36 @@ td{padding:8px 14px;border-bottom:1px solid rgba(48,54,61,.4)}
   opacity: 0;
   transition: opacity .4s ease .2s;
 }
+
+/* ── Modal theme support ── */
+:root {
+  --modal-bg: #ffffff;
+  --modal-text: #1f2328;
+  --modal-sub: #636c76;
+  --modal-border: #e2e8f0;
+  --modal-row: #f1f5f9;
+  --modal-card1: #f0fdf4;
+  --modal-card2: #eff6ff;
+}
+body.theme-dark, body:not(.theme-light) {
+  --modal-bg: #161b22;
+  --modal-text: #e6edf3;
+  --modal-sub: #8b949e;
+  --modal-border: #30363d;
+  --modal-row: #21262d;
+  --modal-card1: rgba(63,185,80,.08);
+  --modal-card2: rgba(88,166,255,.08);
+}
+
+/* ── Desktop centering ── */
+@media(min-width:900px) {
+  .tabs { max-width:940px; margin:0 auto; }
+  #toolbar, .toolbar { max-width:940px; margin:0 auto; }
+  .sim-layout { max-width:940px; margin:0 auto; }
+  body { background-color: var(--bg); }
+  /* Subtle vignette for non-full-width feel */
+  #app-wrapper { max-width:100%; }
+}
 </style></head>
 <body><div class="page">
   <div class="hdr">
@@ -8122,7 +8306,7 @@ td{padding:8px 14px;border-bottom:1px solid rgba(48,54,61,.4)}
     <table>
       <thead><tr><th>Concepto</th><th class="r g">Esc. Regular</th><th class="r b">CIF Express (#2)</th><th class="r o">Sababa (#3)</th></tr></thead>
       <tbody>
-        <tr><td style="font-weight:700">Valor Mercancía (${D.term})</td><td class="r g">${_mf(D.C)}</td><td class="r b">${_mf(D.C2)}</td><td class="r o">${_mf(D.C)}<br><span class="m" style="font-size:9px">Homolog: ${_mf(D.merc)}</span></td></tr>
+        <tr><td style="font-weight:700">Valor Mercancía (${D.isFOB?"FOB":"CIF"})</td><td class="r g">${_mf(D.C)}</td><td class="r b">${_mf(D.C2_merc)}</td><td class="r o">${_mf(D.C)}<br><span class="m" style="font-size:9px">Homolog: ${_mf(D.merc)}</span></td></tr>
         <tr class="sh"><td colspan="4">Impuestos</td></tr>
         <tr><td>Arancel (${D.arPct}%)</td><td class="r r">${_mf(D.ar)}</td><td class="r">${D.isExon?'<span class="g">✓ Exon.</span>':_mf(D.ar)}</td><td class="r g">✓ Exon.</td></tr>
         <tr><td>ITBMS (7%)</td><td class="r m">${_mf(D.i1)}</td><td class="r m">${_mf(D.i2)}</td><td class="r m" style="font-size:9px">Incl. com. (${_mf(D.itb3)})</td></tr>
