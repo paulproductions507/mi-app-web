@@ -7077,17 +7077,7 @@ function applyInvToForm(){
     if(el){ el.value=total.toFixed(2); syncSC3fromSC1(); calc(); }
   }
 
-  // ── Mapear diferencia Sababa si existe pago realizado en facturas ──
-  const pagoReal = invLines.reduce((s,l)=>s+(l.pagoRealizado||0),0);
-  if(pagoReal>0){
-    // Diferencia = CIF - pagoRealizado → campo dif_pago
-    const difCalc = total - pagoReal;
-    const difEl = document.getElementById('s1_dif_pago');
-    if(difEl){ difEl.value=difCalc.toFixed(2); syncDifPagoSC3(); }
-    // También campo Sababa diferencia
-    const difSabEl = document.getElementById('sc_dif_pago');
-    if(difSabEl) difSabEl.value = difCalc.toFixed(2);
-  }
+  // PAGO_REALIZADO se mapea automáticamente al cargar el archivo (no al aplicar)
 
   _showToast('✅ ' + fmt(total) + ' aplicado → Escenario Regular', 'green', 2200);
   setTimeout(()=>{
@@ -7105,24 +7095,26 @@ function applyInvToForm(){
   }, 350);
 }
 function downloadInvTemplate(fmt){
-  const headers=['PROVEEDOR','DEPARTAMENTO','No.FACTURA','MONTO_CIF_FOB','CANTIDAD','ORDEN_COMPRA','BULTOS','TRASPASO','PAGO_REALIZADO'];
+  // Columnas: PROVEEDOR | DEPARTAMENTO | No.FACTURA | MONTO_CIF_FOB | ORDEN_COMPRA | BULTOS | TRASPASO
+  // Filas especiales (col A): FLETE, SEGURO, PAGO_REALIZADO — monto en col D
+  const headers=['PROVEEDOR','DEPARTAMENTO','No.FACTURA','MONTO_CIF_FOB','ORDEN_COMPRA','BULTOS','TRASPASO'];
   const sample=[
-    ['C&B CORP','Ropa Dama','CB-1446',72326.50,226,'219701',48,0],
-    ['C&B CORP','Ropa Dama','CB-1461',2891.25,'','219704',6,0],
-    ['CAVALIER','Ropa Caballero','12335',5120.00,16,'219724',4,0],
-    ['FORTUNE DYNAMIC','Calzado','2192326',5824.20,50,'219703',10,500.00],
-    ['GOOD STUFF','Ropa Dama','7912',17348.00,204,'219691',22,0],
-    ['LOVE POEM','Accesorios','166917',900.00,1,'219693',2,0],
-    ['','','','','','','',''],
-    ['FLETE','','',2950.00,'','','',''],
-    ['SEGURO','','',1444.67,'','','',''],
+    ['C&B CORP','Ropa Dama','CB-1446',72326.50,'219701',48,0],
+    ['C&B CORP','Ropa Dama','CB-1461',2891.25,'219704',6,0],
+    ['CAVALIER','Ropa Caballero','12335',5120.00,'219724',4,0],
+    ['FORTUNE DYNAMIC','Calzado','2192326',5824.20,'219703',10,500.00],
+    ['GOOD STUFF','Ropa Dama','7912',17348.00,'219691',22,0],
+    ['LOVE POEM','Accesorios','166917',900.00,'219693',2,0],
+    ['','','','','','',''],
+    ['FLETE','','',2950.00,'','',''],
+    ['SEGURO','','',1444.67,'','',''],
+    ['PAGO_REALIZADO','','',148000.00,'','',''],
   ];
 
   if(fmt==='csv'){
-    // CSV con BOM UTF-8 — compatible con Google Sheets directamente
     const rows=[headers,...sample.map(r=>r.map(String)),
       [''],
-      ['# NOTA: FLETE y SEGURO van en col A con monto en col D. BULTOS en col G. TRASPASO en col H. PAGO_REALIZADO en col I (valor pagado, genera diferencia automática).']
+      ['# NOTA: FLETE, SEGURO y PAGO_REALIZADO van en col A con monto en col D. BULTOS en col F. TRASPASO en col G (descuento ZL). PAGO_REALIZADO = valor total pagado al proveedor/agente, genera diferencia automatica.']
     ];
     const csv=rows.map(r=>r.map(c=>{
       const s=String(c);
@@ -7146,7 +7138,7 @@ function downloadInvTemplate(fmt){
 
   // Column widths
   ws['!cols'] = [
-    {wch:28},{wch:18},{wch:14},{wch:14},{wch:10},{wch:14},{wch:8},{wch:10}
+    {wch:28},{wch:18},{wch:14},{wch:14},{wch:14},{wch:8},{wch:10}
   ];
 
   // Style header row (row 0) — blue fill, white bold text
@@ -7158,7 +7150,7 @@ function downloadInvTemplate(fmt){
     ws[cellRef].s = {fill:{patternType:'solid',...headerFill}, font:headerFont, alignment:{horizontal:'center'}};
   });
 
-  // Style FLETE / SEGURO rows — yellow bg, orange bold
+  // Style FLETE / SEGURO / PAGO_REALIZADO rows
   wsData.forEach((row,ri)=>{
     if(ri===0) return;
     const label=String(row[0]||'').toUpperCase();
@@ -7166,6 +7158,12 @@ function downloadInvTemplate(fmt){
       row.forEach((_,ci)=>{
         const cellRef=XLSX.utils.encode_cell({r:ri,c:ci});
         if(ws[cellRef]) ws[cellRef].s={fill:{patternType:'solid',fgColor:{rgb:'FFF9C4'}},font:{bold:true,color:{rgb:'E65100'}}};
+      });
+    }
+    if(label==='PAGO_REALIZADO'||label==='PAGO REALIZADO'){
+      row.forEach((_,ci)=>{
+        const cellRef=XLSX.utils.encode_cell({r:ri,c:ci});
+        if(ws[cellRef]) ws[cellRef].s={fill:{patternType:'solid',fgColor:{rgb:'E8F5E9'}},font:{bold:true,color:{rgb:'1B5E20'}}};
       });
     }
     // Monto column (col 3) — red bold
@@ -7196,31 +7194,29 @@ function loadInvFile(input){
     const montoCol=header.findIndex(h=>h.includes('MONTO')||h.includes('CIF')||h.includes('FOB'));
     const mc=montoCol>=0?montoCol:3; // fallback col D
     const deptCol=header.findIndex(h=>h.includes('DEPARTAMENTO')||h.includes('DEPT'));
-    // ── NEW: Bultos y Traspaso columns ──
+    // Columnas: PROVEEDOR(0) | DEPT(1) | NFAC(2) | MONTO(3) | OC(4) | BULTOS(5) | TRASPASO(6)
+    const ocCol    =header.findIndex(h=>h.includes('ORDEN')||h.includes('OC')||h.includes('PURCHASE'));
+    const oc2      =ocCol>=0?ocCol:4;      // fallback col E (index 4)
     const bultosCol=header.findIndex(h=>h.includes('BULTO')||h.includes('CAJA')||h.includes('CARTON'));
-    const bc=bultosCol>=0?bultosCol:6; // fallback col G (index 6)
+    const bc       =bultosCol>=0?bultosCol:5; // fallback col F (index 5)
     const traspasoCol=header.findIndex(h=>h.includes('TRASPASO')||h.includes('DESCUENTO')||h.includes('TRANSFER'));
-    const tc=traspasoCol>=0?traspasoCol:7; // fallback col H (index 7)
-    const pagoCol=header.findIndex(h=>h.includes('PAGO')||h.includes('REALIZADO')||h.includes('PAGADO'));
-    const pc=pagoCol>=0?pagoCol:8; // fallback col I (index 8)
-    const ocCol=header.findIndex(h=>h.includes('ORDEN')||h.includes('OC')||h.includes('PURCHASE'));
-    const oc2=ocCol>=0?ocCol:5; // fallback col F (index 5)
-    const nfacCol=header.findIndex(h=>h.includes('FACTURA')||h.includes('INVOICE')||h.includes('FACT'));
-    const nfc=nfacCol>=0?nfacCol:2; // fallback col C (index 2)
+    const tc       =traspasoCol>=0?traspasoCol:6; // fallback col G (index 6)
+    const nfacCol  =header.findIndex(h=>h.includes('FACTURA')||h.includes('INVOICE')||h.includes('FACT'));
+    const nfc      =nfacCol>=0?nfacCol:2;  // fallback col C (index 2)
 
     invLines=[];
-    let fleteDetectado=0, seguroDetectado=0;
+    let fleteDetectado=0, seguroDetectado=0, pagoRealizadoDetectado=0;
 
     rows.slice(1).forEach(r=>{
-      const provRaw=(r[0]||'').trim(); // col A = PROVEEDOR
-      const deptRaw=deptCol>=0?(r[deptCol]||'').trim():'';;
+      const provRaw=(r[0]||'').trim();
+      const deptRaw=deptCol>=0?(r[deptCol]||'').trim():'';
       const provUp=provRaw.toUpperCase();
-      // Parse monto — handle comma decimals and rounding
       const costoStr=(r[mc]||'').replace(/[^0-9.-]/g,'');
-      const costo=Math.round(parseFloat(costoStr||'0')*100)/100; // round to 2 decimals
+      const costo=Math.round(parseFloat(costoStr||'0')*100)/100;
 
       if(!provRaw&&!costo) return;
 
+      // ── Filas especiales globales (como FLETE) ──
       if(provUp==='FLETE'||provUp.startsWith('FLETE')){
         if(costo>0) fleteDetectado=costo;
         return;
@@ -7229,40 +7225,62 @@ function loadInvFile(input){
         if(costo>0) seguroDetectado=costo;
         return;
       }
-      // ── Map all fields including bultos and traspaso ──
+      if(provUp==='PAGO_REALIZADO'||provUp==='PAGO REALIZADO'||provUp==='PAGADO'||provUp==='PAGO'){
+        if(costo>0) pagoRealizadoDetectado=costo;
+        return;
+      }
+      // ── Línea de proveedor normal ──
       const bultosRaw=(r[bc]||'').replace(/[^0-9]/g,'');
       const bultos=bultosRaw?parseInt(bultosRaw)||0:0;
       const traspasoRaw=(r[tc]||'').replace(/[^0-9.-]/g,'');
       const traspaso=traspasoRaw?Math.round(parseFloat(traspasoRaw)*100)/100:0;
       const ocVal=(r[oc2]||'').trim();
       const nfacVal=(r[nfc]||'').trim();
-      const pagoRealRaw=(r[pc]||'').replace(/[^0-9.-]/g,'');
-      const pagoRealizado=pagoRealRaw?Math.round(parseFloat(pagoRealRaw)*100)/100:0;
-      const line={prov:provRaw, deptCat:deptRaw, costo, bultos, traspaso, pagoRealizado, oc:ocVal, nfac:nfacVal};
+      const line={prov:provRaw, deptCat:deptRaw, costo, bultos, traspaso, oc:ocVal, nfac:nfacVal};
       if(provRaw) line._match=provMatch(provRaw);
       if(provRaw||costo>0) invLines.push(line);
     });
 
     renderInvLines();
-    // Auto-sum traspaso and bultos from loaded lines
     _autoSumTraspaso();
     _autoSumBultos();
 
-    const totalBultos=invLines.reduce((s,l)=>s+(l.bultos||0),0);
-    const totalTraspaso=invLines.reduce((s,l)=>s+(l.traspaso||0),0);
-    let msg='✓ '+invLines.length+' facturas cargadas.';
-    if(totalBultos>0) msg+='\n📦 Bultos totales: '+totalBultos;
-    if(totalTraspaso>0) msg+='\n🔄 Traspaso total: $'+totalTraspaso.toFixed(2)+' → aplicado automáticamente.';
+    const totalBultos   = invLines.reduce((s,l)=>s+(l.bultos||0),0);
+    const totalTraspaso = invLines.reduce((s,l)=>s+(l.traspaso||0),0);
+    const totalMerc     = invLines.reduce((s,l)=>s+(l.costo||0),0);
+
+    let msg = invLines.length + ' facturas cargadas.';
+    if(totalBultos>0)   msg += '\nBultos: '+totalBultos;
+    if(totalTraspaso>0) msg += '\nTraspaso: $'+totalTraspaso.toFixed(2)+' aplicado.';
+
+    // ── Aplicar FLETE ──
     if(fleteDetectado>0){
-      const flEl=document.getElementById('s1_flete_fob');
+      const flEl = document.getElementById('s1_flete_fob');
       if(flEl){ flEl.value=fleteDetectado.toFixed(2); calcFOB(); }
-      const sc3Fl=document.getElementById('sc_flete_sab');
-      if(sc3Fl&&!parseFloat(sc3Fl.value)) sc3Fl.value=fleteDetectado.toFixed(2);
-      msg+='\n\n🚢 FLETE: $'+fleteDetectado.toFixed(2)+' → aplicado al campo Flete.';
-    } else {
-      msg+='\n\nℹ️ No se detectó fila FLETE. Agrégalo manualmente si aplica.';
+      const sc3Fl = document.getElementById('sc_flete_sab');
+      if(sc3Fl && !parseFloat(sc3Fl.value)) sc3Fl.value=fleteDetectado.toFixed(2);
+      msg += '\nFLETE: $'+fleteDetectado.toFixed(2)+' aplicado.';
     }
-    if(seguroDetectado>0) msg+='\n📋 Seguro (info): $'+seguroDetectado.toFixed(2);
+    if(seguroDetectado>0) msg += '\nSeguro: $'+seguroDetectado.toFixed(2);
+
+    // ── Aplicar PAGO_REALIZADO → diferencia automática ──
+    if(pagoRealizadoDetectado>0){
+      // Diferencia = (Mercancia + Flete) - PagoRealizado
+      const baseParaDif = totalMerc + fleteDetectado;
+      const diferencia  = Math.round((baseParaDif - pagoRealizadoDetectado)*100)/100;
+
+      // Mapear al campo de diferencia en Liq. Aduanal
+      const difEl = document.getElementById('s1_dif_pago');
+      if(difEl){ difEl.value=diferencia.toFixed(2); if(typeof syncDifPagoSC3==='function') syncDifPagoSC3(); }
+      // Mapear también al campo diferencia de Sababa si existe
+      const difSabEl = document.getElementById('sc_dif_pago') || document.getElementById('s2_dif_pago');
+      if(difSabEl) difSabEl.value = diferencia.toFixed(2);
+
+      msg += '\n\nPAGO REALIZADO: $'+pagoRealizadoDetectado.toFixed(2);
+      msg += '\nMercancia + Flete: $'+baseParaDif.toFixed(2);
+      msg += '\nDiferencia calculada: $'+diferencia.toFixed(2)+' → aplicada automaticamente.';
+    }
+
     alert(msg);
     calc();
   } // end parseRows
