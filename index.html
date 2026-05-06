@@ -1016,8 +1016,8 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
           <input type="number" id="s1_traspaso" value="" placeholder="0.00" step="0.01" oninput="syncTraspasoSC3();calc()">
         </div>
         <div id="blk-s1-difpago" class="field">
-          <label>Diferencia CIF (± USD) <span id="difpago-tipo-hint" style="font-size:10px;color:var(--blue-l)">← ajuste de centavos / redondeo</span></label>
-          <input type="number" id="s1_dif_pago" value="" placeholder="0.00" step="0.01" oninput="syncDifPagoSC3();calc()">
+          <label>Diferencia CIF <span style="font-size:9px;color:var(--blue-l);font-weight:400">✏️ editable · auto</span> (± USD) <span id="difpago-tipo-hint" style="font-size:10px;color:var(--blue-l)">← ajuste de centavos / redondeo</span></label>
+          <input type="number" id="s1_dif_pago" oninput="_syncDifPago()" title="Editable — se sincroniza con Sababa" value="" placeholder="0.00" step="0.01">
         </div>
       </div>
       <!-- FOB mode -->
@@ -2084,6 +2084,7 @@ function updateCifExpDisplays(){
   const tasa=vv('s1_tasa')||100;
   const itbPct=(vv('s1_itbms')||7)/100;
   const s=window._lastSnap||{};
+  const sc1=(s.sc1)||{};
   const sc2=(s.sc2)||{};
   sd('sc_cif_display', CIF);
   sd('sc_flete_display', vv('s1_flete_fob'));
@@ -2092,6 +2093,16 @@ function updateCifExpDisplays(){
   sd('sc2_tasa_display', tasa);
   sd('sc2_itbms_tasa_display', Math.round(tasa*itbPct*100)/100);
   sd('sc2_hon_display', sc2.hon||0);
+  // FIX: Master Value = diferencia Esc.#1 vs Esc.#2
+  const mv = sc2.mv || 0;
+  sd('sc_costo_zl', mv);
+  // Highlight MV field
+  const mvEl = document.getElementById('sc_costo_zl');
+  if(mvEl){
+    mvEl.style.color = mv>0 ? 'var(--blue-l)' : 'var(--muted)';
+    mvEl.style.fontWeight = mv>0 ? '700' : '';
+    if(mv>0) mvEl.title = 'Master Value = diferencia entre Landed Esc.#1 y Esc.#2 (puente interno, no se paga)';
+  }
 }
 
 function setTipo(val, el){
@@ -2227,6 +2238,8 @@ function setEquipo(val){
 function isDesktop(){ return window.innerWidth >= 1024; }
 
 function calcAndShow(forceCompar){
+  // Sync CIF Express display fields from latest snap before opening dashboard
+  if(typeof updateCifExpDisplays==='function') setTimeout(updateCifExpDisplays, 50);
   const btn = event?.target;
   if(btn){ btn.style.opacity='.6'; btn.style.transform='scale(.97)'; }
   const prevCompar = compar;
@@ -3533,6 +3546,15 @@ function syncDifFobToSC3(){
   s2RecalcPago();
   setTimeout(()=>{ if(v('s2_fob')>0||v('s2_flete')>0) calcSab2(); }, 0);
 }
+function _syncDifPago(){
+  var val = parseFloat(document.getElementById('s1_dif_pago')?.value)||0;
+  // Sync to Sababa diff field
+  var sabEl = document.getElementById('sc_dif_pago') || document.getElementById('s2_dif_pago');
+  if(sabEl) sabEl.value = val.toFixed(2);
+  // Trigger recalc
+  if(typeof calc==='function') calc();
+}
+
 function syncDifPagoSC3(){
   const dif=v('s1_dif_pago'); // can be negative
   // Push to standalone SC3 pago — adjust from current suggested pago
@@ -4696,34 +4718,31 @@ document.write(\`
   <div><span style="color:#8b949e">Escenario Elegido:</span> <strong style="color:\${isSC3?'#f08632':'#58a6ff'}">\${el}</strong></div>
 </div>
 
-<!-- 3 CARDS -->
+<!-- 3 CARDS DESEMBOLSO -->
 <div class="cards">
   <div class="card card-sc1">
-    <div class="card-lbl" style="color:#3fb950">Escenario Regular</div>
-    <div class="card-pct g">\${pct(sc1.factor)}</div>
-    <div class="card-sub">% Importación · Landed \${f(sc1.landed1||d1_real)}</div>
-    <div style="margin-top:10px;font-family:monospace;font-size:26px;font-weight:800;color:#3fb950">\${f(d1_real)}</div>
-    <div class="card-sub">Desembolso Total</div>
+    <div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#3fb950;margin-bottom:2px">Esc. Regular · Liq. Aduanal</div>
+    <div style="font-size:10px;color:#8b949e;margin-bottom:6px">\${pct(sc1.factor)} · Landed \${f(sc1.landed1||d1_real)}</div>
+    <div style="font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#8b949e;margin-bottom:4px">DESEMBOLSO</div>
+    <div style="font-family:monospace;font-size:30px;font-weight:800;color:#3fb950;line-height:1">\${f(d1_real)}</div>
   </div>
   <div class="card card-sc2" style="border-color:\${isSC2?'rgba(88,166,255,.7)':'rgba(88,166,255,.2)'}">
     \${isSC2?'<div class="card-badge">ELEGIDO ✓</div>':''}
-    <div class="card-lbl" style="color:#58a6ff">Escenario CIF Express \${!isExon?'(No Exon.)':''}</div>
-    <div class="card-pct b">\${pct(sc2.factor)}</div>
-    <div class="card-sub">% Importación · Landed \${f(sc2.landed1||d2_real)}</div>
-    <div style="margin-top:10px;font-family:monospace;font-size:26px;font-weight:800;color:#58a6ff">\${f(d2_real)}</div>
-    <div class="card-sub">Desembolso Total</div>
-    <div class="card-ahorro" style="color:\${aho12>=0?'#3fb950':'#f85149'}">
+    <div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#58a6ff;margin-bottom:2px">CIF Express\${!isExon?' · No Exon.':''}</div>
+    <div style="font-size:10px;color:#8b949e;margin-bottom:6px">\${pct(sc2.factor)} · Landed \${f(sc2.landed1||d2_real)}</div>
+    <div style="font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#8b949e;margin-bottom:4px">DESEMBOLSO</div>
+    <div style="font-family:monospace;font-size:30px;font-weight:800;color:#58a6ff;line-height:1">\${f(d2_real)}</div>
+    <div style="margin-top:8px;font-size:11px;font-weight:700;color:\${aho12>=0?'#3fb950':'#f85149'}">
       \${aho12>=0?'💰':'⚠️'} Ahorro vs #1: \${aho12>=0?f(aho12):'(−'+f(Math.abs(aho12))+')'}
     </div>
   </div>
   <div class="card card-sc3" style="border-color:\${isSC3?'rgba(240,136,62,.7)':'rgba(240,136,62,.2)'}">
     \${isSC3?'<div class="card-badge">ELEGIDO ✓</div>':''}
-    <div class="card-lbl" style="color:#f08632">Sababa Imports (#3)</div>
-    <div class="card-pct o">\${fCosteo}%</div>
-    <div class="card-sub">% Costeo inventario · Monto a Pagar</div>
-    <div style="margin-top:10px;font-family:monospace;font-size:26px;font-weight:800;color:#f08632">\${f(d3_real)}</div>
-    <div class="card-sub">Desembolso Total</div>
-    <div class="card-ahorro">💰 Ahorro vs #1: \${f(aho13)}</div>
+    <div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#f08632;margin-bottom:2px">Sababa Imports</div>
+    <div style="font-size:10px;color:#8b949e;margin-bottom:6px">\${fCosteo}% costeo inventario</div>
+    <div style="font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#8b949e;margin-bottom:4px">DESEMBOLSO</div>
+    <div style="font-family:monospace;font-size:30px;font-weight:800;color:#f08632;line-height:1">\${f(d3_real)}</div>
+    <div style="margin-top:8px;font-size:11px;font-weight:700;color:#3fb950">💰 Ahorro vs #1: \${f(aho13)}</div>
   </div>
 </div>
 
@@ -8922,37 +8941,48 @@ body:not(.sidebar-pinned) #app-wrapper {
   padding-right: 12px !important;
 }
 
-/* 3. MODAL DRAWER — todas las otras pestañas */
+/* 3. MODAL DRAWER — centrado, todas las otras pestañas */
 #tab-modal-overlay {
   display: none;
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,.55);
+  background: rgba(0,0,0,.6);
   z-index: 8000;
   backdrop-filter: blur(3px);
-  animation: _tmFadeIn .2s ease;
+  align-items: center;
+  justify-content: center;
 }
 #tab-modal-overlay.open {
   display: flex;
-  align-items: flex-start;
-  justify-content: flex-end;
 }
-#tab-modal-drawer {
-  width: min(680px, calc(100vw - 210px));
-  height: 100vh;
+/* Segundo modal (dashboard sobre otro modal) */
+#tab-modal-overlay2 {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.5);
+  z-index: 8100;
+  align-items: center;
+  justify-content: center;
+}
+#tab-modal-overlay2.open {
+  display: flex;
+}
+#tab-modal-drawer, #tab-modal-drawer2 {
+  width: min(720px, calc(100vw - 40px));
+  max-height: 90vh;
   background: var(--bg);
   overflow-y: auto;
   overflow-x: hidden;
-  box-shadow: -8px 0 40px rgba(0,0,0,.5);
-  animation: _tmSlideIn .28s cubic-bezier(.25,.46,.45,.94);
+  box-shadow: 0 24px 80px rgba(0,0,0,.7);
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  animation: _tmPopIn .25s cubic-bezier(.34,1.56,.64,1);
   display: flex;
   flex-direction: column;
 }
-body:not(.sidebar-pinned) #tab-modal-drawer {
-  width: min(780px, 100vw);
-}
-@keyframes _tmFadeIn  { from{opacity:0} to{opacity:1} }
-@keyframes _tmSlideIn { from{transform:translateX(60px);opacity:0} to{transform:none;opacity:1} }
+@keyframes _tmFadeIn { from{opacity:0} to{opacity:1} }
+@keyframes _tmPopIn  { from{opacity:0;transform:scale(.92) translateY(20px)} to{opacity:1;transform:none} }
 
 /* Header del modal */
 #tab-modal-header {
@@ -9004,16 +9034,25 @@ body:not(.sidebar-pinned) #tab-modal-drawer {
 </style><script id="lc-script">
 (function(){
 
-  /* ─── MODAL DRAWER ENGINE ─── */
+  /* ══════════════════════════════════════════
+     MODAL ENGINE v2
+     - Modal 1: tab normal (centrado)
+     - Modal 2: dashboard sobre modal 1
+     - Tabs se CLONAN al modal (no se mueven)
+       → siempre disponibles en el DOM original
+  ══════════════════════════════════════════ */
+
   var MODAL_TABS = ['cifexp','sababa','unico','facturas','comparativo',
                     'aranceles','tendencias','config','histfact','resumen'];
-  var _activeModalTab = null;
 
-  function buildModal(){
+  /* ── Construir estructura de modales ── */
+  function buildModals(){
     if(document.getElementById('tab-modal-overlay')) return;
-    var overlay = document.createElement('div');
-    overlay.id = 'tab-modal-overlay';
-    overlay.innerHTML =
+
+    // Modal 1 — tab normal
+    var o1 = document.createElement('div');
+    o1.id = 'tab-modal-overlay';
+    o1.innerHTML =
       '<div id="tab-modal-drawer">' +
         '<div id="tab-modal-header">' +
           '<div id="tab-modal-title">📋 Módulo</div>' +
@@ -9021,104 +9060,170 @@ body:not(.sidebar-pinned) #tab-modal-drawer {
         '</div>' +
         '<div id="tab-modal-body"></div>' +
       '</div>';
-    overlay.addEventListener('click', function(e){
-      if(e.target === overlay) closeTabModal();
-    });
-    document.body.appendChild(overlay);
+    o1.addEventListener('click', function(e){ if(e.target===o1) closeTabModal(); });
+    document.body.appendChild(o1);
+
+    // Modal 2 — dashboard / segundo nivel
+    var o2 = document.createElement('div');
+    o2.id = 'tab-modal-overlay2';
+    o2.innerHTML =
+      '<div id="tab-modal-drawer2">' +
+        '<div id="tab-modal-header2" style="position:sticky;top:0;z-index:10;background:var(--s1);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:10px 16px;flex-shrink:0">' +
+          '<div id="tab-modal-title2" style="font-size:13px;font-weight:700;color:var(--text)">📊 Dashboard</div>' +
+          '<button onclick="closeTabModal2()" style="background:rgba(218,54,51,.12);border:1px solid rgba(218,54,51,.25);color:var(--red-l);border-radius:7px;padding:5px 14px;font-size:12px;font-weight:600;cursor:pointer">✕ Cerrar</button>' +
+        '</div>' +
+        '<div id="tab-modal-body2"></div>' +
+      '</div>';
+    o2.addEventListener('click', function(e){ if(e.target===o2) closeTabModal2(); });
+    document.body.appendChild(o2);
   }
 
+  /* ── Abrir Modal 1 (CLONA el contenido — no lo mueve) ── */
   window.openTabModal = function(tabId, label){
-    buildModal();
-    _activeModalTab = tabId;
+    buildModals();
     var overlay = document.getElementById('tab-modal-overlay');
     var body    = document.getElementById('tab-modal-body');
     var title   = document.getElementById('tab-modal-title');
     var pane    = document.getElementById('tab-' + tabId);
 
-    if(!pane){ body.innerHTML = '<div style="padding:24px;color:var(--muted)">Módulo no disponible.</div>'; }
-    else {
-      // Move pane content into modal
+    if(!pane){
+      body.innerHTML = '<div style="padding:32px 24px;color:var(--muted);text-align:center"><div style="font-size:32px;margin-bottom:12px">⚠️</div><div>Este módulo no tiene contenido aún.</div></div>';
+    } else {
+      // CLONAR — el original permanece en el DOM siempre
+      var clone = pane.cloneNode(true);
+      clone.style.display = 'block';
+      clone.id = 'tab-' + tabId + '-clone';
       body.innerHTML = '';
-      body.appendChild(pane);
-      pane.style.display = 'block';
+      body.appendChild(clone);
     }
+
     title.textContent = label || tabId;
+    overlay.setAttribute('data-tab', tabId);
     overlay.classList.add('open');
     document.body.style.overflow = 'hidden';
 
-    // Trigger any render functions needed
-    if(tabId==='config'     && typeof renderConfig==='function')    renderConfig();
-    if(tabId==='tendencias' && typeof renderTend==='function')      setTimeout(function(){ renderTend(); renderDashboardKPIs(); }, 80);
-    if(tabId==='facturas'   && typeof renderInvLines==='function')  renderInvLines();
-    if(tabId==='cifexp'     && typeof updateCifExpDisplays==='function') updateCifExpDisplays();
-    if(tabId==='unico'){
-      var fd=document.getElementById('unico_fecha');
-      if(fd && !fd.value) fd.value = new Date().toISOString().slice(0,10);
-    }
+    // Disparar renders en el clon
+    setTimeout(function(){
+      if(tabId==='config'     && typeof renderConfig==='function')    renderConfig();
+      if(tabId==='tendencias' && typeof renderTend==='function'){     renderTend(); if(typeof renderDashboardKPIs==='function') renderDashboardKPIs(); }
+      if(tabId==='facturas'   && typeof renderInvLines==='function')  renderInvLines();
+      if(tabId==='cifexp'     && typeof updateCifExpDisplays==='function') updateCifExpDisplays();
+      if(tabId==='sababa'     && typeof calcSab2==='function')        calcSab2();
+      if(tabId==='unico'){
+        var fd=document.getElementById('unico_fecha-clone')||document.getElementById('unico_fecha');
+        if(fd && !fd.value) fd.value = new Date().toISOString().slice(0,10);
+      }
+    }, 80);
   };
 
+  /* ── Cerrar Modal 1 ── */
   window.closeTabModal = function(){
     var overlay = document.getElementById('tab-modal-overlay');
     var body    = document.getElementById('tab-modal-body');
     if(!overlay) return;
-
-    // Return pane to original position in DOM (after app-wrapper)
-    if(_activeModalTab){
-      var pane = document.getElementById('tab-' + _activeModalTab);
-      if(pane){
-        pane.style.display = '';
-        var aw = document.getElementById('app-wrapper');
-        if(aw) aw.parentNode.insertBefore(pane, aw.nextSibling);
-      }
-    }
     body.innerHTML = '';
     overlay.classList.remove('open');
+    overlay.removeAttribute('data-tab');
     document.body.style.overflow = '';
-    _activeModalTab = null;
   };
 
-  /* ─── PATCH switchTab to use modal for non-sim tabs ─── */
+  /* ── Abrir Modal 2 (dashboard sobre modal 1) ── */
+  window.openTabModal2 = function(content, label){
+    buildModals();
+    var overlay2 = document.getElementById('tab-modal-overlay2');
+    var body2    = document.getElementById('tab-modal-body2');
+    var title2   = document.getElementById('tab-modal-title2');
+    // Ocultar modal 1 sin cerrarlo
+    var o1 = document.getElementById('tab-modal-overlay');
+    if(o1) o1.style.visibility = 'hidden';
+    body2.innerHTML = typeof content === 'string' ? content : '';
+    if(content && content.nodeType) { body2.innerHTML=''; body2.appendChild(content); }
+    if(title2 && label) title2.textContent = label;
+    overlay2.classList.add('open');
+  };
+
+  /* ── Cerrar Modal 2 — restaura modal 1 ── */
+  window.closeTabModal2 = function(){
+    var overlay2 = document.getElementById('tab-modal-overlay2');
+    var body2    = document.getElementById('tab-modal-body2');
+    if(!overlay2) return;
+    body2.innerHTML = '';
+    overlay2.classList.remove('open');
+    // Restaurar modal 1
+    var o1 = document.getElementById('tab-modal-overlay');
+    if(o1 && o1.classList.contains('open')) o1.style.visibility = '';
+    document.body.style.overflow = 'hidden';
+  };
+
+  /* ── PATCH switchTab ── */
   document.addEventListener('DOMContentLoaded', function(){
     var tabLabels = {
       'cifexp'     : '⚡ CIF Express',
       'sababa'     : '🤝 Sababa Imports',
-      'unico'      : '🔒 Escenario Único',
+      'unico'      : '🔒 Escenario Unico',
       'facturas'   : '🧾 Proveedores',
       'comparativo': '📊 Comparativo',
-      'aranceles'  : '📦 Aranceles por Ítem',
+      'aranceles'  : '📦 Aranceles por Item',
       'tendencias' : '📈 Tendencias',
-      'config'     : '⚙ Configuración'
+      'config'     : 'Configuracion'
     };
 
     var _origSwitch = window.switchTab;
     window.switchTab = function(id, el){
       if(MODAL_TABS.indexOf(id) !== -1){
-        // Open in modal instead
-        if(typeof closeTabModal === 'function') closeTabModal();
-        setTimeout(function(){ openTabModal(id, tabLabels[id] || id); }, 50);
-        // Keep tab highlight on nav
+        openTabModal(id, tabLabels[id] || id);
         document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('on'); });
         if(el) el.classList.add('on');
         return;
       }
-      // sim tab: close modal if open, show normally
       closeTabModal();
       if(_origSwitch) _origSwitch.apply(this, arguments);
     };
 
-    // Also patch abrirModuloComparativo
+    // Patch calcAndShow / calcSab2AndShow to open dashboard in Modal 2
+    var patchDash = function(fnName, label){
+      var orig = window[fnName];
+      if(typeof orig !== 'function') return;
+      window[fnName] = function(){
+        var r = orig.apply(this, arguments);
+        // After calc, open result in modal 2
+        setTimeout(function(){
+          var dashEl = document.getElementById('dash-result') ||
+                       document.getElementById('res-comparativo') ||
+                       document.getElementById('dash-block');
+          if(dashEl){
+            openTabModal2(dashEl.cloneNode(true), label||'📊 Dashboard');
+          } else {
+            // Fallback: scroll to result in modal 1
+            var m1body = document.getElementById('tab-modal-body');
+            if(m1body){
+              var res = m1body.querySelector('.landed-primary, .result-block, [id*="result"]');
+              if(res) res.scrollIntoView({behavior:'smooth',block:'start'});
+            }
+          }
+        }, 300);
+        return r;
+      };
+    };
+    patchDash('calcAndShow',    '📊 Dashboard — Resultado');
+    patchDash('calcSab2AndShow','📊 Dashboard Sababa');
+
+    // Patch abrirModuloComparativo
     var _origComp = window.abrirModuloComparativo;
     window.abrirModuloComparativo = function(){
       openTabModal('comparativo', '📊 Comparativo');
       if(_origComp) setTimeout(function(){ _origComp.apply(this, arguments); }, 100);
     };
 
-    buildModal();
+    buildModals();
   });
 
-  /* ─── ESC key closes modal ─── */
+  /* ── ESC: cierra modal 2 primero, luego modal 1 ── */
   document.addEventListener('keydown', function(e){
-    if(e.key === 'Escape') closeTabModal();
+    if(e.key !== 'Escape') return;
+    var o2 = document.getElementById('tab-modal-overlay2');
+    if(o2 && o2.classList.contains('open')){ closeTabModal2(); return; }
+    closeTabModal();
   });
 
 })();
