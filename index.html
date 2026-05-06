@@ -7095,8 +7095,8 @@ function applyInvToForm(){
   }, 350);
 }
 function downloadInvTemplate(fmt){
-  // Columnas: PROVEEDOR | DEPARTAMENTO | No.FACTURA | MONTO_CIF_FOB | ORDEN_COMPRA | BULTOS | TRASPASO
-  // Filas especiales (col A): FLETE, SEGURO, PAGO_REALIZADO — monto en col D
+  // A=PROVEEDOR | B=DEPARTAMENTO | C=No.FACTURA | D=MONTO_CIF_FOB | E=ORDEN_COMPRA | F=BULTOS | G=TRASPASO
+  // Filas especiales (col A): FLETE, SEGURO, PAGO_REALIZADO — monto en col D, resto vacío
   const headers=['PROVEEDOR','DEPARTAMENTO','No.FACTURA','MONTO_CIF_FOB','ORDEN_COMPRA','BULTOS','TRASPASO'];
   const sample=[
     ['C&B CORP','Ropa Dama','CB-1446',72326.50,'219701',48,0],
@@ -7108,13 +7108,13 @@ function downloadInvTemplate(fmt){
     ['','','','','','',''],
     ['FLETE','','',2950.00,'','',''],
     ['SEGURO','','',1444.67,'','',''],
-    ['PAGO_REALIZADO','','',148000.00,'','',''],
+    ['PAGO_REALIZADO','','','','','',''],
   ];
 
   if(fmt==='csv'){
     const rows=[headers,...sample.map(r=>r.map(String)),
       [''],
-      ['# NOTA: FLETE, SEGURO y PAGO_REALIZADO van en col A con monto en col D. BULTOS en col F. TRASPASO en col G (descuento ZL). PAGO_REALIZADO = valor total pagado al proveedor/agente, genera diferencia automatica.']
+      ['# NOTA: FLETE/SEGURO/PAGO_REALIZADO van en col A con monto en col D. BULTOS en col F (entero). TRASPASO en col G (descuento ZL en $).']
     ];
     const csv=rows.map(r=>r.map(c=>{
       const s=String(c);
@@ -7127,60 +7127,65 @@ function downloadInvTemplate(fmt){
     return;
   }
 
-  // ── XLSX REAL usando SheetJS ──
-  if(typeof XLSX === 'undefined'){
+  if(typeof XLSX==='undefined'){
     alert('Cargando librería Excel... intenta de nuevo en 3 segundos.');
     return;
   }
-  // Build worksheet data as array of arrays
-  const wsData = [headers, ...sample];
-  const ws = XLSX.utils.aoa_to_sheet(wsData);
 
-  // Column widths
-  ws['!cols'] = [
-    {wch:28},{wch:18},{wch:14},{wch:14},{wch:14},{wch:8},{wch:10}
-  ];
+  const wsData=[headers,...sample];
+  const ws=XLSX.utils.aoa_to_sheet(wsData);
 
-  // Style header row (row 0) — blue fill, white bold text
-  const headerFill = {fgColor:{rgb:'2D5986'}};
-  const headerFont = {bold:true, color:{rgb:'FFFFFF'}};
+  // Anchos de columna
+  ws['!cols']=[{wch:28},{wch:18},{wch:14},{wch:14},{wch:14},{wch:8},{wch:10}];
+
+  // Encabezado — fondo rojo oscuro, texto blanco negrita (igual a la foto)
+  const hFill={fgColor:{rgb:'8B1A1A'}};
+  const hFont={bold:true,color:{rgb:'FFFFFF'}};
   headers.forEach((_,ci)=>{
-    const cellRef = XLSX.utils.encode_cell({r:0,c:ci});
-    if(!ws[cellRef]) ws[cellRef]={v:headers[ci],t:'s'};
-    ws[cellRef].s = {fill:{patternType:'solid',...headerFill}, font:headerFont, alignment:{horizontal:'center'}};
+    const ref=XLSX.utils.encode_cell({r:0,c:ci});
+    if(!ws[ref]) ws[ref]={v:headers[ci],t:'s'};
+    ws[ref].s={fill:{patternType:'solid',...hFill},font:hFont,alignment:{horizontal:'center'}};
   });
 
-  // Style FLETE / SEGURO / PAGO_REALIZADO rows
+  // Filas de datos — fondo rosa alternado (como la foto)
   wsData.forEach((row,ri)=>{
     if(ri===0) return;
     const label=String(row[0]||'').toUpperCase();
-    if(label==='FLETE'||label==='SEGURO'){
-      row.forEach((_,ci)=>{
-        const cellRef=XLSX.utils.encode_cell({r:ri,c:ci});
-        if(ws[cellRef]) ws[cellRef].s={fill:{patternType:'solid',fgColor:{rgb:'FFF9C4'}},font:{bold:true,color:{rgb:'E65100'}}};
-      });
-    }
-    if(label==='PAGO_REALIZADO'||label==='PAGO REALIZADO'){
-      row.forEach((_,ci)=>{
-        const cellRef=XLSX.utils.encode_cell({r:ri,c:ci});
-        if(ws[cellRef]) ws[cellRef].s={fill:{patternType:'solid',fgColor:{rgb:'E8F5E9'}},font:{bold:true,color:{rgb:'1B5E20'}}};
-      });
-    }
-    // Monto column (col 3) — red bold
+    const isFlete  = label==='FLETE'||label.startsWith('FLETE');
+    const isSeguro = label==='SEGURO'||label.startsWith('SEGURO');
+    const isPago   = label==='PAGO_REALIZADO'||label==='PAGO REALIZADO';
+    const isSpecial= isFlete||isSeguro||isPago;
+
+    row.forEach((_,ci)=>{
+      const ref=XLSX.utils.encode_cell({r:ri,c:ci});
+      if(!ws[ref]) return;
+      if(isSpecial){
+        const color = isPago ? {rgb:'E8F5E9'} : {rgb:'FFF9C4'};
+        const fcolor= isPago ? {rgb:'1B5E20'} : {rgb:'E65100'};
+        ws[ref].s={fill:{patternType:'solid',fgColor:color},font:{bold:true,color:fcolor}};
+      } else {
+        // alternating pink rows
+        const bg = ri%2===0 ? {rgb:'F8CCCC'} : {rgb:'FDEAEA'};
+        ws[ref].s={fill:{patternType:'solid',fgColor:bg}};
+      }
+    });
+    // Monto col D siempre en negrita rojo oscuro
     const montoRef=XLSX.utils.encode_cell({r:ri,c:3});
-    if(ws[montoRef]&&ws[montoRef].v) ws[montoRef].s={font:{bold:true,color:{rgb:'C62828'}}};
+    if(ws[montoRef]&&ws[montoRef].v&&!isSpecial)
+      ws[montoRef].s={fill:{patternType:'solid',fgColor:{rgb:ri%2===0?'F8CCCC':'FDEAEA'}},font:{bold:true,color:{rgb:'8B1A1A'}}};
   });
 
   // Instrucción al final
-  const instrRow = wsData.length;
-  XLSX.utils.sheet_add_aoa(ws,[['INSTRUCCION: FLETE y SEGURO van en col A con monto en col D (número). BULTOS en col G (entero). TRASPASO en col H (descuento ZL en $).']], {origin:{r:instrRow,c:0}});
+  const instrRow=wsData.length+1;
+  XLSX.utils.sheet_add_aoa(ws,[['INSTRUCCION: FLETE, SEGURO y PAGO_REALIZADO van en col A con monto en col D. BULTOS en col F. TRASPASO en col G (descuento ZL).']], {origin:{r:instrRow,c:0}});
   const instrRef=XLSX.utils.encode_cell({r:instrRow,c:0});
   if(ws[instrRef]) ws[instrRef].s={font:{italic:true,color:{rgb:'1B5E20'}},fill:{patternType:'solid',fgColor:{rgb:'E8F5E9'}}};
 
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Facturas');
-  XLSX.writeFile(wb, 'plantilla_facturas_embarque.xlsx');
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Facturas');
+  XLSX.writeFile(wb,'plantilla_facturas_embarque.xlsx');
 }
+
 
 function loadInvFile(input){
   const file=input.files[0]; if(!file) return;
@@ -7195,14 +7200,15 @@ function loadInvFile(input){
     const mc=montoCol>=0?montoCol:3; // fallback col D
     const deptCol=header.findIndex(h=>h.includes('DEPARTAMENTO')||h.includes('DEPT'));
     // Columnas: PROVEEDOR(0) | DEPT(1) | NFAC(2) | MONTO(3) | OC(4) | BULTOS(5) | TRASPASO(6)
-    const ocCol    =header.findIndex(h=>h.includes('ORDEN')||h.includes('OC')||h.includes('PURCHASE'));
-    const oc2      =ocCol>=0?ocCol:4;      // fallback col E (index 4)
-    const bultosCol=header.findIndex(h=>h.includes('BULTO')||h.includes('CAJA')||h.includes('CARTON'));
-    const bc       =bultosCol>=0?bultosCol:5; // fallback col F (index 5)
+    // A=PROVEEDOR(0) | B=DEPT(1) | C=NFAC(2) | D=MONTO(3) | E=OC(4) | F=BULTOS(5) | G=TRASPASO(6)
+    const nfacCol    =header.findIndex(h=>h.includes('FACTURA')||h.includes('INVOICE')||h.includes('FACT'));
+    const nfc        =nfacCol>=0?nfacCol:2;
+    const ocCol      =header.findIndex(h=>h.includes('ORDEN')||h.includes('OC')||h.includes('PURCHASE'));
+    const oc2        =ocCol>=0?ocCol:4;
+    const bultosCol  =header.findIndex(h=>h.includes('BULTO')||h.includes('CAJA')||h.includes('CARTON'));
+    const bc         =bultosCol>=0?bultosCol:5;
     const traspasoCol=header.findIndex(h=>h.includes('TRASPASO')||h.includes('DESCUENTO')||h.includes('TRANSFER'));
-    const tc       =traspasoCol>=0?traspasoCol:6; // fallback col G (index 6)
-    const nfacCol  =header.findIndex(h=>h.includes('FACTURA')||h.includes('INVOICE')||h.includes('FACT'));
-    const nfc      =nfacCol>=0?nfacCol:2;  // fallback col C (index 2)
+    const tc         =traspasoCol>=0?traspasoCol:6;
 
     invLines=[];
     let fleteDetectado=0, seguroDetectado=0, pagoRealizadoDetectado=0;
