@@ -50,7 +50,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 
 /* LAYOUT — ancho unificado en toda la app */
 :root { --content-max: 900px; }
-.page{max-width:var(--content-max);margin:0 auto;padding:16px 12px;}
+.page{max-width:var(--content-max) !important;margin-left:auto !important;margin-right:auto !important;padding:16px 12px;width:100%;}
 @media(min-width:600px){.page{padding:16px 20px;}}
 @media(min-width:1200px){.page{padding:20px 24px;}}
 @media(min-width:1800px){.page{padding:24px 32px;}}
@@ -597,6 +597,18 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
 .ar-lbl{color:var(--muted);}
 .ar-val{font-family:'IBM Plex Mono',monospace;}
 </style>
+<!-- OVERRIDE FINAL — max-width forzado en todo -->
+<style>
+.page, div.page, #tab-sim .page, #tab-tendencias .page,
+#tab-config .page, #tab-aranceles .page, #tab-unico .page,
+#tab-cifexp .page, #tab-sababa .page, #tab-facturas .page {
+  max-width: 900px !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+</style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
 </head>
@@ -972,6 +984,18 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
         </div>
         <div class="field"><label>Cantidad de Cartones</label>
           <input type="number" id="s1_cartones" placeholder="0" step="1" min="0">
+        </div>
+      </div>
+      <!-- NOTAS + ESTATUS -->
+      <div class="r2" style="margin-top:4px">
+        <div class="field"><label>📝 Notas <span style="font-size:10px;color:var(--muted2);font-weight:400">N° contenedor, observaciones…</span></label>
+          <input type="text" id="s1_notas" placeholder="Ej: TCKU3456789 — llegada semana 22">
+        </div>
+        <div class="field"><label>📌 Estatus</label>
+          <div id="s1_estatus_badge" style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:600;color:var(--muted)">
+            <span id="s1_estatus_dot" style="width:8px;height:8px;border-radius:50%;background:var(--muted);flex-shrink:0"></span>
+            <span id="s1_estatus_txt">Nuevo</span>
+          </div>
         </div>
       </div>
     </div>
@@ -1599,6 +1623,35 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
 
 <div id="tab-comparativo" style="display:none" class="tab-pane">
 <!-- Redirected to new module -->
+</div>
+
+<!-- ============================= -->
+<!-- TAB: ARANCELES POR ÍTEM      -->
+<!-- ============================= -->
+<div id="tab-aranceles" class="tab-pane">
+<div class="page">
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-hd"><div class="dot o"></div><h3>📦 Aranceles por Ítem — Factor Ponderado</h3></div>
+    <div class="card-bd">
+      <p class="note" style="margin-bottom:12px">Carga un Excel con los artículos del embarque para calcular el factor arancelario ponderado real.</p>
+      <div class="upzone" id="upZone" style="margin-bottom:12px">
+        <input type="file" accept=".xlsx,.xls,.csv" onchange="handleFile(event)">
+        <div class="up-icon">📂</div>
+        <div class="up-txt">Arrastra o selecciona tu archivo Excel / CSV</div>
+        <div class="fname" id="fname"></div>
+      </div>
+      <div class="r2" style="margin-bottom:12px">
+        <div class="field"><label>CIF Total (USD) — override</label>
+          <input type="number" id="ar_cif_override" placeholder="Automático desde formulario" step="0.01" oninput="calcAranceles()">
+        </div>
+        <div class="field" style="display:flex;align-items:flex-end">
+          <button class="btn btn-green btn-sm" onclick="calcAranceles()">⚡ Calcular Factor</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="res-ar"></div>
+</div>
 </div>
 
 <!-- ============================= -->
@@ -2690,28 +2743,31 @@ function calc(){
   // Update display fields
   const sd=(id,val)=>{const el=document.getElementById(id);if(el)el.value=val.toFixed(2);};
   sd('disp_honMin',honMin); sd('disp_coord',coord);
-  sd('disp_form1',form1); sd('disp_form1b',form1);   sd('disp_reng',rengExt);
-  sd('disp_hon1',window._soloMode?(window._soloHonorario||0):sc1_hon);  sd('disp_hon2',sc2_hon);
+  sd('disp_form1',form1); sd('disp_form1b',form1); sd('disp_reng',rengExt);
+  sd('disp_hon1',window._soloMode?(window._soloHonorario||0):sc1_hon); sd('disp_hon2',sc2_hon);
   sd('sc2_hon_g_display',sc2_hon_g);
   sd('sc2_itbms_hon_display',sc2_itbms_hon);
-  // ITBMS editable fields — only set if not manually overridden
-  const itbmsArEl = document.getElementById('disp_itbms_ar');
-  const itbmsTasaEl = document.getElementById('disp_itbms_tasa');
-  if(itbmsArEl && !window._itbmsArManual) itbmsArEl.value = Math.round((CIF+sc1_arancel)*itbPct*100)/100;
-  if(itbmsTasaEl && !window._itbmsTasaManual) itbmsTasaEl.value = Math.round(tasa*itbPct*100)/100;
 
-  // ESCENARIO #1 — sin Master Value
-  const sc1_arancel = CIF*arPct;
-  // Update arancel result display fields
+  // ESCENARIO #1 — calcular PRIMERO, luego mostrar
+  const sc1_arancel = CIF * arPct;
   sd('disp_ar_pago', Math.round(sc1_arancel*100)/100);
-  // Use manually edited ITBMS values if available
-  const _itbmsArAuto = Math.round((CIF+sc1_arancel)*itbPct*100)/100;
+
+  // ITBMS: calcular valores automáticos
+  const _itbmsArAuto   = Math.round((CIF+sc1_arancel)*itbPct*100)/100;
   const _itbmsTasaAuto = Math.round(tasa*itbPct*100)/100;
+
+  // Actualizar campos ITBMS editables solo si NO están en modo manual
+  const itbmsArEl   = document.getElementById('disp_itbms_ar');
+  const itbmsTasaEl = document.getElementById('disp_itbms_tasa');
+  if(itbmsArEl   && !window._itbmsArManual)   itbmsArEl.value   = _itbmsArAuto;
+  if(itbmsTasaEl && !window._itbmsTasaManual) itbmsTasaEl.value = _itbmsTasaAuto;
+
+  // Valores finales ITBMS (manual override o automático)
   const sc1_itbms_display = window._itbmsArManual
-    ? (parseFloat(document.getElementById('disp_itbms_ar')?.value)||_itbmsArAuto)
+    ? (parseFloat(itbmsArEl?.value)||_itbmsArAuto)
     : _itbmsArAuto;
   const itbmsTasaFinal = window._itbmsTasaManual
-    ? (parseFloat(document.getElementById('disp_itbms_tasa')?.value)||_itbmsTasaAuto)
+    ? (parseFloat(itbmsTasaEl?.value)||_itbmsTasaAuto)
     : _itbmsTasaAuto;
   const sc1_granTot = sc1_arancel + sc1_hon + tasa + form1;
   const sc1_flete_nm= (termino==='FOB'&&tipo==='EXT') ? flete : 0;
@@ -4012,8 +4068,10 @@ async function buscarDesconocidos(){
   document.getElementById('spin').classList.remove('on');
   renderArRows();
 }
+function calcAranceles(){ calcAr(); }
 function calcAr(){
-  const cifTotal=v('ar_cif'),flete=v('ar_flete');
+  const cifOverride = parseFloat(document.getElementById('ar_cif_override')?.value)||0;
+  const cifTotal = cifOverride || window._lastCIF || v('s1_cif');
   const valid=arItems.filter(i=>i.costo>0);
   if(!valid.length||!cifTotal)return;
   const totalFOB=valid.reduce((s,i)=>s+i.piezas*i.costo,0);
@@ -4975,7 +5033,8 @@ function _marcarPendienteYCerrar(){
       tendData[idx].status = 'pendiente';
       saveTendData();
       renderTend();
-      _showToast('🟡 Embarque marcado como Pendiente. Puedes reabrirlo desde el historial.', 'orange', 4000);
+      _updateEstatusBadge('pendiente');
+  _showToast('🟡 Embarque marcado como Pendiente. Puedes reabrirlo desde el historial.', 'orange', 4000);
     }
   }
   document.getElementById('_procOverlay')?.remove();
@@ -4983,6 +5042,34 @@ function _marcarPendienteYCerrar(){
 }
 
 // ── REABRIR: carga un embarque pendiente al formulario para edición ──
+function _updateEstatusBadge(estado){
+  const dot = document.getElementById('s1_estatus_dot');
+  const txt = document.getElementById('s1_estatus_txt');
+  if(!dot||!txt) return;
+  const map = {
+    'nuevo'     : {color:'var(--muted)',   label:'Nuevo'},
+    'editando'  : {color:'var(--blue-l)',  label:'En edicion'},
+    'reabierto' : {color:'var(--orange-l)',label:'Reabierto'},
+    'procesado' : {color:'var(--green-l)', label:'✅ Procesado'},
+    'pendiente' : {color:'var(--orange-l)',label:'⏳ Pendiente'},
+  };
+  const s = map[estado] || map['nuevo'];
+  dot.style.background = s.color;
+  txt.textContent = s.label;
+  txt.style.color = s.color;
+}
+
+// Auto-update estatus when fields change
+document.addEventListener('DOMContentLoaded', function(){
+  ['s1_cif','s1_fob','s1_nro_emb'].forEach(function(id){
+    const el = document.getElementById(id);
+    if(el) el.addEventListener('input', function(){
+      const cur = document.getElementById('s1_estatus_txt')?.textContent||'';
+      if(cur==='Nuevo'||cur==='') _updateEstatusBadge('editando');
+    });
+  });
+});
+
 function reabrirEmbarquePendiente(idx){
   const d = tendData[idx];
   if(!d) return;
@@ -5076,11 +5163,15 @@ function reabrirEmbarquePendiente(idx){
   // ── 9. Marcar índice para que procesarEmbarque reemplace en vez de duplicar ──
   window._pendienteUpdateIdx = idx;
 
-  // ── 10. Navegar al formulario ──
+  // ── 10. Navegar al formulario — cierra cualquier modal abierto ──
+  if(typeof closeTabModal === 'function') closeTabModal();
   const tabEl = document.querySelector('[onclick*="switchTab"][onclick*="sim"]') || document.querySelector('.tab');
   if(typeof switchTab === 'function') switchTab('sim', tabEl);
 
-  _showToast(`✏️ Embarque ${d.nro} restaurado — verifica, edita y confirma.`, 'orange', 5000);
+  // ── 11. Update estatus badge to "Reabierto" ──
+  _updateEstatusBadge('reabierto');
+
+  _showToast('✏️ Embarque ' + d.nro + ' restaurado — verifica, edita y confirma.', 'orange', 5000);
 }
 
 function _clearFormSilent(){
@@ -6951,12 +7042,33 @@ function _autoSumBultos(){
 function applyInvToForm(){
   const total=invLines.reduce((s,l)=>s+(l.costo||0),0);
   if(total<=0){ alert('Agrega al menos una factura con monto.'); return; }
-  // Apply bultos sum to s1_cartones always
-  const totalBultos=invLines.reduce((s,l)=>s+(l.bultos||0),0);
+  const fmt=n=>'$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+  // ── Verificar término y tipo configurados ──
+  const terminoLabel = termino==='FOB' ? 'FOB (Importación)' : 'CIF';
+  const tipoLabel    = tipo==='ZL'     ? 'Zona Libre'        : 'Importación / Exterior';
+  const totalBultos  = invLines.reduce((s,l)=>s+(l.bultos||0),0);
+  const totalTrasp   = invLines.reduce((s,l)=>s+(l.traspaso||0),0);
+  const fleteVal     = v('s1_flete_fob')||0;
+
+  // Build confirmation message
+  var nl='\n',sep='-------------------------'+nl;
+  var msg='CONFIRMAR MAPEO'+nl+sep;
+  msg+='Termino:   '+terminoLabel+nl;
+  msg+='Proveedor: '+tipoLabel+nl+sep;
+  msg+='Total '+(termino==='FOB'?'FOB':'CIF')+': '+fmt(total)+nl;
+  if(fleteVal>0)   msg+='Flete:    '+fmt(fleteVal)+nl;
+  if(totalTrasp>0) msg+='Traspaso: '+fmt(totalTrasp)+nl;
+  if(totalBultos>0)msg+='Bultos:   '+totalBultos+nl;
+  msg+=sep+'Aplicar al formulario?';
+
+  if(!confirm(msg)) return;
+
+  // ── Aplicar valores ──
   const cartEl=document.getElementById('s1_cartones');
-  if(cartEl && totalBultos>0){ cartEl.value=totalBultos; }
-  // Apply traspaso sum always
+  if(cartEl && totalBultos>0) cartEl.value=totalBultos;
   _autoSumTraspaso();
+
   if(termino==='FOB'){
     const el=document.getElementById('s1_fob');
     if(el){ el.value=total.toFixed(2); calcFOB(); }
@@ -6964,26 +7076,36 @@ function applyInvToForm(){
     const el=document.getElementById('s1_cif');
     if(el){ el.value=total.toFixed(2); syncSC3fromSC1(); calc(); }
   }
-  // Show success toast then auto-navigate to Escenario Regular
-  const btn=event&&event.target;
-  const fmt=n=>'$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-  _showToast(`✅ ${fmt(total)} aplicado → Escenario Regular`, 'green', 2200);
-  // After short delay, jump to Escenario Regular tab and scroll to CIF field
+
+  // ── Mapear diferencia Sababa si existe pago realizado en facturas ──
+  const pagoReal = invLines.reduce((s,l)=>s+(l.pagoRealizado||0),0);
+  if(pagoReal>0){
+    // Diferencia = CIF - pagoRealizado → campo dif_pago
+    const difCalc = total - pagoReal;
+    const difEl = document.getElementById('s1_dif_pago');
+    if(difEl){ difEl.value=difCalc.toFixed(2); syncDifPagoSC3(); }
+    // También campo Sababa diferencia
+    const difSabEl = document.getElementById('sc_dif_pago');
+    if(difSabEl) difSabEl.value = difCalc.toFixed(2);
+  }
+
+  _showToast('✅ ' + fmt(total) + ' aplicado → Escenario Regular', 'green', 2200);
   setTimeout(()=>{
-    const simTab = document.querySelector('.tab');
+    const simTab=document.querySelector('.tab');
+    if(typeof closeTabModal==='function') closeTabModal();
     switchTab('sim', simTab);
-    const cifEl = document.getElementById(termino==='FOB'?'s1_fob':'s1_cif');
+    const cifEl=document.getElementById(termino==='FOB'?'s1_fob':'s1_cif');
     if(cifEl){
-      cifEl.style.transition = 'box-shadow .3s, border-color .3s';
-      cifEl.style.borderColor = 'var(--green-l)';
-      cifEl.style.boxShadow = '0 0 0 3px rgba(63,185,80,.25)';
+      cifEl.style.transition='box-shadow .3s, border-color .3s';
+      cifEl.style.borderColor='var(--green-l)';
+      cifEl.style.boxShadow='0 0 0 3px rgba(63,185,80,.25)';
       cifEl.scrollIntoView({behavior:'smooth', block:'center'});
-      setTimeout(()=>{ cifEl.style.borderColor=''; cifEl.style.boxShadow=''; }, 2000);
+      setTimeout(()=>{ cifEl.style.borderColor=''; cifEl.style.boxShadow=''; },2000);
     }
-  }, 400);
+  }, 350);
 }
 function downloadInvTemplate(fmt){
-  const headers=['PROVEEDOR','DEPARTAMENTO','No.FACTURA','MONTO_CIF_FOB','CANTIDAD','ORDEN_COMPRA','BULTOS','TRASPASO'];
+  const headers=['PROVEEDOR','DEPARTAMENTO','No.FACTURA','MONTO_CIF_FOB','CANTIDAD','ORDEN_COMPRA','BULTOS','TRASPASO','PAGO_REALIZADO'];
   const sample=[
     ['C&B CORP','Ropa Dama','CB-1446',72326.50,226,'219701',48,0],
     ['C&B CORP','Ropa Dama','CB-1461',2891.25,'','219704',6,0],
@@ -7000,7 +7122,7 @@ function downloadInvTemplate(fmt){
     // CSV con BOM UTF-8 — compatible con Google Sheets directamente
     const rows=[headers,...sample.map(r=>r.map(String)),
       [''],
-      ['# NOTA: FLETE y SEGURO van en col A con monto en col D. BULTOS en col G (entero). TRASPASO en col H (descuento ZL).']
+      ['# NOTA: FLETE y SEGURO van en col A con monto en col D. BULTOS en col G. TRASPASO en col H. PAGO_REALIZADO en col I (valor pagado, genera diferencia automática).']
     ];
     const csv=rows.map(r=>r.map(c=>{
       const s=String(c);
@@ -7079,6 +7201,8 @@ function loadInvFile(input){
     const bc=bultosCol>=0?bultosCol:6; // fallback col G (index 6)
     const traspasoCol=header.findIndex(h=>h.includes('TRASPASO')||h.includes('DESCUENTO')||h.includes('TRANSFER'));
     const tc=traspasoCol>=0?traspasoCol:7; // fallback col H (index 7)
+    const pagoCol=header.findIndex(h=>h.includes('PAGO')||h.includes('REALIZADO')||h.includes('PAGADO'));
+    const pc=pagoCol>=0?pagoCol:8; // fallback col I (index 8)
     const ocCol=header.findIndex(h=>h.includes('ORDEN')||h.includes('OC')||h.includes('PURCHASE'));
     const oc2=ocCol>=0?ocCol:5; // fallback col F (index 5)
     const nfacCol=header.findIndex(h=>h.includes('FACTURA')||h.includes('INVOICE')||h.includes('FACT'));
@@ -7112,7 +7236,9 @@ function loadInvFile(input){
       const traspaso=traspasoRaw?Math.round(parseFloat(traspasoRaw)*100)/100:0;
       const ocVal=(r[oc2]||'').trim();
       const nfacVal=(r[nfc]||'').trim();
-      const line={prov:provRaw, deptCat:deptRaw, costo, bultos, traspaso, oc:ocVal, nfac:nfacVal};
+      const pagoRealRaw=(r[pc]||'').replace(/[^0-9.-]/g,'');
+      const pagoRealizado=pagoRealRaw?Math.round(parseFloat(pagoRealRaw)*100)/100:0;
+      const line={prov:provRaw, deptCat:deptRaw, costo, bultos, traspaso, pagoRealizado, oc:ocVal, nfac:nfacVal};
       if(provRaw) line._match=provMatch(provRaw);
       if(provRaw||costo>0) invLines.push(line);
     });
@@ -8739,7 +8865,239 @@ function _endProgress() {
   setTimeout(() => { bar.classList.add('done'); }, 200);
   setTimeout(() => { bar.style.width = '0%'; bar.classList.remove('done'); }, 700);
 }
-// ── End of script ──
+</script>
+
+<!-- ╔══════════════════════════════════════════════════════╗
+     ║  LAYOUT CONTROLLER v1 — prevalece sobre todo        ║
+     ╚══════════════════════════════════════════════════════╝ -->
+<style id="lc-style">
+/* ═══ LAYOUT CONTROLLER ═══ */
+
+/* 1. Layout principal: sidebar fijo + contenido al lado */
+body.sidebar-pinned #app-wrapper {
+  margin-left: 200px !important;
+  width: calc(100% - 200px) !important;
+}
+body:not(.sidebar-pinned) #app-wrapper {
+  margin-left: 0 !important;
+  width: 100% !important;
+}
+.sidebar {
+  width: 200px !important;
+  z-index: 400 !important;
+}
+
+/* 2. Tab principal (Liq. Aduanal) — centrado normal */
+#tab-sim > div, #tab-sim .page {
+  max-width: 900px !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  padding-left: 12px !important;
+  padding-right: 12px !important;
+}
+
+/* 3. MODAL DRAWER — todas las otras pestañas */
+#tab-modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.55);
+  z-index: 8000;
+  backdrop-filter: blur(3px);
+  animation: _tmFadeIn .2s ease;
+}
+#tab-modal-overlay.open {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+}
+#tab-modal-drawer {
+  width: min(680px, calc(100vw - 210px));
+  height: 100vh;
+  background: var(--bg);
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-shadow: -8px 0 40px rgba(0,0,0,.5);
+  animation: _tmSlideIn .28s cubic-bezier(.25,.46,.45,.94);
+  display: flex;
+  flex-direction: column;
+}
+body:not(.sidebar-pinned) #tab-modal-drawer {
+  width: min(780px, 100vw);
+}
+@keyframes _tmFadeIn  { from{opacity:0} to{opacity:1} }
+@keyframes _tmSlideIn { from{transform:translateX(60px);opacity:0} to{transform:none;opacity:1} }
+
+/* Header del modal */
+#tab-modal-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--s1);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  flex-shrink: 0;
+}
+#tab-modal-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+#tab-modal-close {
+  background: rgba(218,54,51,.12);
+  border: 1px solid rgba(218,54,51,.25);
+  color: var(--red-l);
+  border-radius: 7px;
+  padding: 5px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s;
+}
+#tab-modal-close:hover { background: rgba(218,54,51,.25); }
+
+/* Contenido dentro del modal */
+#tab-modal-body {
+  flex: 1;
+  padding: 0;
+  overflow-x: hidden;
+}
+#tab-modal-body .page,
+#tab-modal-body > div {
+  max-width: 100% !important;
+  padding-left: 16px !important;
+  padding-right: 16px !important;
+  margin: 0 !important;
+}
+</style><script id="lc-script">
+(function(){
+
+  /* ─── MODAL DRAWER ENGINE ─── */
+  var MODAL_TABS = ['cifexp','sababa','unico','facturas','comparativo',
+                    'aranceles','tendencias','config','histfact','resumen'];
+  var _activeModalTab = null;
+
+  function buildModal(){
+    if(document.getElementById('tab-modal-overlay')) return;
+    var overlay = document.createElement('div');
+    overlay.id = 'tab-modal-overlay';
+    overlay.innerHTML =
+      '<div id="tab-modal-drawer">' +
+        '<div id="tab-modal-header">' +
+          '<div id="tab-modal-title">📋 Módulo</div>' +
+          '<button id="tab-modal-close" onclick="closeTabModal()">✕ Cerrar</button>' +
+        '</div>' +
+        '<div id="tab-modal-body"></div>' +
+      '</div>';
+    overlay.addEventListener('click', function(e){
+      if(e.target === overlay) closeTabModal();
+    });
+    document.body.appendChild(overlay);
+  }
+
+  window.openTabModal = function(tabId, label){
+    buildModal();
+    _activeModalTab = tabId;
+    var overlay = document.getElementById('tab-modal-overlay');
+    var body    = document.getElementById('tab-modal-body');
+    var title   = document.getElementById('tab-modal-title');
+    var pane    = document.getElementById('tab-' + tabId);
+
+    if(!pane){ body.innerHTML = '<div style="padding:24px;color:var(--muted)">Módulo no disponible.</div>'; }
+    else {
+      // Move pane content into modal
+      body.innerHTML = '';
+      body.appendChild(pane);
+      pane.style.display = 'block';
+    }
+    title.textContent = label || tabId;
+    overlay.classList.add('open');
+    document.body.style.overflow = 'hidden';
+
+    // Trigger any render functions needed
+    if(tabId==='config'     && typeof renderConfig==='function')    renderConfig();
+    if(tabId==='tendencias' && typeof renderTend==='function')      setTimeout(function(){ renderTend(); renderDashboardKPIs(); }, 80);
+    if(tabId==='facturas'   && typeof renderInvLines==='function')  renderInvLines();
+    if(tabId==='cifexp'     && typeof updateCifExpDisplays==='function') updateCifExpDisplays();
+    if(tabId==='unico'){
+      var fd=document.getElementById('unico_fecha');
+      if(fd && !fd.value) fd.value = new Date().toISOString().slice(0,10);
+    }
+  };
+
+  window.closeTabModal = function(){
+    var overlay = document.getElementById('tab-modal-overlay');
+    var body    = document.getElementById('tab-modal-body');
+    if(!overlay) return;
+
+    // Return pane to original position in DOM (after app-wrapper)
+    if(_activeModalTab){
+      var pane = document.getElementById('tab-' + _activeModalTab);
+      if(pane){
+        pane.style.display = '';
+        var aw = document.getElementById('app-wrapper');
+        if(aw) aw.parentNode.insertBefore(pane, aw.nextSibling);
+      }
+    }
+    body.innerHTML = '';
+    overlay.classList.remove('open');
+    document.body.style.overflow = '';
+    _activeModalTab = null;
+  };
+
+  /* ─── PATCH switchTab to use modal for non-sim tabs ─── */
+  document.addEventListener('DOMContentLoaded', function(){
+    var tabLabels = {
+      'cifexp'     : '⚡ CIF Express',
+      'sababa'     : '🤝 Sababa Imports',
+      'unico'      : '🔒 Escenario Único',
+      'facturas'   : '🧾 Proveedores',
+      'comparativo': '📊 Comparativo',
+      'aranceles'  : '📦 Aranceles por Ítem',
+      'tendencias' : '📈 Tendencias',
+      'config'     : '⚙ Configuración'
+    };
+
+    var _origSwitch = window.switchTab;
+    window.switchTab = function(id, el){
+      if(MODAL_TABS.indexOf(id) !== -1){
+        // Open in modal instead
+        if(typeof closeTabModal === 'function') closeTabModal();
+        setTimeout(function(){ openTabModal(id, tabLabels[id] || id); }, 50);
+        // Keep tab highlight on nav
+        document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('on'); });
+        if(el) el.classList.add('on');
+        return;
+      }
+      // sim tab: close modal if open, show normally
+      closeTabModal();
+      if(_origSwitch) _origSwitch.apply(this, arguments);
+    };
+
+    // Also patch abrirModuloComparativo
+    var _origComp = window.abrirModuloComparativo;
+    window.abrirModuloComparativo = function(){
+      openTabModal('comparativo', '📊 Comparativo');
+      if(_origComp) setTimeout(function(){ _origComp.apply(this, arguments); }, 100);
+    };
+
+    buildModal();
+  });
+
+  /* ─── ESC key closes modal ─── */
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape') closeTabModal();
+  });
+
+})();
 </script>
 </div><!-- /app-wrapper -->
 </body>
