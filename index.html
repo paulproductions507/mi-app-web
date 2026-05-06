@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Simulador Aduanal — Panamá v7.3.3</title>
+<title>Simulador Aduanal — Panamá v7.4.0</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -445,10 +445,18 @@ body[style*="color-scheme: light"] #portal-content tr td[style*="background:#1c2
 #app-wrapper.visible{opacity:1;transform:translateX(0);}
 
 /* SIDEBAR PANEL — Wide vertical nav */
-.sidebar{position:fixed;left:0;top:0;bottom:0;width:300px;background:var(--s1);border-right:1px solid var(--border);z-index:300;transform:translateX(-100%);transition:transform .3s cubic-bezier(.25,.46,.45,.94);overflow-y:auto;padding:0;display:flex;flex-direction:column;}
+.sidebar{position:fixed;left:0;top:0;bottom:0;width:270px;background:var(--s1);border-right:1px solid var(--border);z-index:300;transform:translateX(-100%);transition:transform .3s cubic-bezier(.25,.46,.45,.94);overflow-y:auto;padding:0;display:flex;flex-direction:column;}
 .sidebar.open{transform:translateX(0);}
+.sidebar.pinned{transform:translateX(0)!important;}
 .sidebar-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:299;display:none;backdrop-filter:blur(2px);}
 .sidebar-overlay.open{display:block;}
+.sidebar-overlay.pinned{display:none!important;}
+/* When sidebar is pinned, shift app content */
+body.sidebar-pinned #app-wrapper{margin-left:270px;transition:margin-left .3s cubic-bezier(.25,.46,.45,.94);}
+body:not(.sidebar-pinned) #app-wrapper{margin-left:0;transition:margin-left .3s cubic-bezier(.25,.46,.45,.94);}
+.pin-btn{background:none;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;transition:all .15s;white-space:nowrap;}
+.pin-btn:hover{background:rgba(255,255,255,.06);color:var(--text);}
+.pin-btn.on{background:rgba(63,185,80,.12);border-color:rgba(63,185,80,.35);color:var(--green-l);}
 .sidebar-hdr{padding:20px 20px 16px;border-bottom:1px solid var(--border);background:linear-gradient(135deg,var(--s2),var(--s1));display:flex;justify-content:space-between;align-items:center;flex-shrink:0;}
 .sidebar-brand{font-size:15px;font-weight:800;color:var(--text);letter-spacing:-.01em;}
 .sidebar-brand span{color:var(--green-l);}
@@ -613,7 +621,7 @@ body[style*="color-scheme: light"] #portal-content tr td[style*="background:#1c2
   <div id="splash-hero" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;width:100%;position:absolute;transition:opacity .4s,transform .4s;">
     <div class="splash-icon">🛃</div>
     <div class="splash-title">Simulador de Costos<br>de Embarques</div>
-    <div class="splash-sub">Zona Libre de Colón · Panamá · v7.3.3</div>
+    <div class="splash-sub">Zona Libre de Colón · Panamá · v7.4.0</div>
     <button class="splash-btn" onclick="showSplashNav()">▶ &nbsp; Ingresar al Sistema</button>
     <div class="splash-ver">Escenarios · Tendencias · Estadísticas</div>
   </div>
@@ -742,7 +750,10 @@ body[style*="color-scheme: light"] #portal-content tr td[style*="background:#1c2
       <div class="sidebar-brand">SIMULA<span>DOR</span></div>
       <div style="font-size:10px;color:var(--muted);margin-top:2px">Zona Libre · Panamá</div>
     </div>
-    <button class="sidebar-close" onclick="closeSidebar()">×</button>
+    <div style="display:flex;align-items:center;gap:6px">
+      <button class="pin-btn" id="sidebar-pin-btn" onclick="toggleSidebarPin()" title="Fijar panel">📌 Fijar</button>
+      <button class="sidebar-close" onclick="closeSidebar()">×</button>
+    </div>
   </div>
 
   <!-- EMBARQUES Nav -->
@@ -834,7 +845,7 @@ body[style*="color-scheme: light"] #portal-content tr td[style*="background:#1c2
         <button onclick="guardarSesionNube();closeSidebar()" style="flex:1;background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.25);color:var(--green-l);border-radius:8px;padding:8px;font-size:11px;font-weight:600;cursor:pointer">☁️ Guardar Nube</button>
         <button onclick="cargarSesionNube();closeSidebar()" style="flex:1;background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);color:var(--blue-l);border-radius:8px;padding:8px;font-size:11px;font-weight:600;cursor:pointer">📥 Cargar Nube</button>
       </div>
-      <div style="text-align:center;font-size:10px;color:var(--muted2)">Simulador Aduanal v7.3.3 · ZLC Panamá</div>
+      <div style="text-align:center;font-size:10px;color:var(--muted2)">Simulador Aduanal v7.4.0 · ZLC Panamá</div>
     </div>
   </div>
 </div>
@@ -847,8 +858,14 @@ body[style*="color-scheme: light"] #portal-content tr td[style*="background:#1c2
       <div class="hdr-icon">🛃</div>
       <div>
         <div class="hdr-name">Simulador Aduanal</div>
-        <div class="hdr-sub">ZLC · Panamá · v7.3.3</div>
+        <div class="hdr-sub">ZLC · Panamá · v7.4.0</div>
       </div>
+    </div>
+    <!-- ACTIVITY STATUS BAR -->
+    <div id="activity-bar" style="flex:1;max-width:320px;margin:0 12px;display:flex;align-items:center;gap:8px;background:rgba(88,166,255,.06);border:1px solid rgba(88,166,255,.15);border-radius:20px;padding:4px 12px;font-size:10px;color:var(--muted);overflow:hidden">
+      <span id="activity-dot" style="width:6px;height:6px;border-radius:50%;background:var(--green-l);flex-shrink:0;transition:background .3s"></span>
+      <span id="activity-msg" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Sistema listo</span>
+      <span id="activity-time" style="margin-left:auto;flex-shrink:0;color:var(--muted2);font-size:9px"></span>
     </div>
     <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
       <button class="btn-inicio" onclick="volverInicio()">⌂ Inicio</button>
@@ -958,7 +975,7 @@ body[style*="color-scheme: light"] #portal-content tr td[style*="background:#1c2
       <div id="blk-cif">
         <div class="field">
           <label>Monto CIF Total (USD) <span style="font-size:10px;color:var(--green-l)">← desde facturas o manual</span></label>
-          <input type="number" id="s1_cif" value="" placeholder="Ej: 148,862.32" step="0.01" oninput="syncSC3fromSC1();calc()">
+          <input type="number" id="s1_cif" value="" placeholder="Ej: 148,862.32" step="0.01" oninput="syncSC3fromSC1();if(window._soloMode)calcSoloExtra();calc()">
         </div>
         <div id="blk-s1-traspaso" class="field">
           <label>Descuento / Traspaso ZL (USD)</label>
@@ -1017,13 +1034,15 @@ body[style*="color-scheme: light"] #portal-content tr td[style*="background:#1c2
         <div class="field"><label>ITBMS % sobre Arancel</label>
           <input type="number" id="s1_itbms" value="7" step="0.01" oninput="calc()">
         </div>
-        <div class="field"><label>ITBMS Arancel (USD)</label>
-          <input type="number" id="disp_itbms_ar" readonly style="background:var(--bg);color:var(--orange-l);font-weight:600" placeholder="0.00">
+        <div class="field"><label>ITBMS Arancel (USD) <span style="font-size:9px;color:var(--blue-l);font-weight:400">✏️ editable</span></label>
+          <input type="number" id="disp_itbms_ar" step="0.01" placeholder="0.00" oninput="_itbmsArManual=true;calc()" style="border-color:rgba(88,166,255,.4);color:var(--orange-l);font-weight:600" title="Puedes editar manualmente — el sistema recalcula todo con este valor">
         </div>
       </div>
       <div class="r2">
         <div class="field"><label>Tasa Aduana (USD)</label><input type="number" id="s1_tasa" value="100" step="0.01" oninput="calc()"></div>
-        <div class="field"><label>ITBMS s/Tasa (auto)</label><input type="number" id="disp_itbms_tasa" readonly style="background:var(--bg)" placeholder="7.00"></div>
+        <div class="field"><label>ITBMS s/Tasa <span style="font-size:9px;color:var(--blue-l);font-weight:400">✏️ editable</span></label>
+          <input type="number" id="disp_itbms_tasa" step="0.01" placeholder="7.00" oninput="_itbmsTasaManual=true;calc()" style="border-color:rgba(88,166,255,.3)" title="Puedes editar manualmente — se refleja en comparativos">
+        </div>
       </div>
       <div class="r2">
         <div class="field"><label>Uso de Sistema (USD)</label>
@@ -1128,13 +1147,67 @@ body[style*="color-scheme: light"] #portal-content tr td[style*="background:#1c2
   <div class="card" style="margin-bottom:12px">
     <div class="card-hd"><div class="dot b"></div><h3>5 · Comparativo</h3></div>
     <div class="card-bd">
-      <div style="background:rgba(63,185,80,.05);border:1px solid rgba(63,185,80,.15);border-radius:8px;padding:10px 14px;margin-bottom:12px">
+      <div style="background:rgba(163,113,247,.07);border:1px solid rgba(163,113,247,.3);border-radius:8px;padding:10px 14px;margin-bottom:12px">
         <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:12px;font-weight:600;color:var(--text)">
-          <input type="checkbox" id="chk-solo-mode" onchange="toggleSoloMode()" style="width:16px;height:16px;accent-color:#3fb950">
+          <input type="checkbox" id="chk-solo-mode" onchange="toggleSoloMode()" style="width:16px;height:16px;accent-color:#a371f7">
           Escenario único — sin alternativa de comparación
         </label>
-        <p class="note" style="margin-top:4px">El sistema sigue calculando el Costo Landed. Solo se omite la comparativa.</p>
+        <p class="note" style="margin-top:4px">El sistema sigue calculando el Costo Landed. Solo se omite la comparativa. <strong style="color:rgba(163,113,247,.9)">Acarreo, DMCE y honorarios automáticos quedan excluidos.</strong></p>
       </div>
+
+      <!-- BLOQUE SOLO MODE — campos extras cuando se activa el check -->
+      <div id="blk-solo-extra" style="display:none;background:rgba(163,113,247,.05);border:1px solid rgba(163,113,247,.2);border-radius:8px;padding:12px 14px;margin-bottom:12px">
+        <div style="font-size:10px;font-weight:700;color:#a371f7;letter-spacing:.07em;text-transform:uppercase;margin-bottom:10px">🔒 Modo Único — Desglose de Honorarios Corredor</div>
+
+        <!-- Selección corredor -->
+        <div class="field">
+          <label>Corredor / Agente Aduanal</label>
+          <select id="solo_corredor" onchange="calcSoloExtra()" style="background:var(--s2);border:1px solid rgba(163,113,247,.4);color:var(--text)">
+            <option value="custom">✏️ Nombre personalizado</option>
+            <option value="cifexp">⚡ CIF Express</option>
+            <option value="sababa">🤝 Sababa Imports</option>
+          </select>
+        </div>
+        <div class="field" id="solo_nombre_field">
+          <label>Nombre del Corredor</label>
+          <input type="text" id="solo_nombre" placeholder="Ej: Agencia García & Asociados" oninput="calcSoloExtra()">
+        </div>
+
+        <!-- Honorarios -->
+        <div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:6px;margin-top:4px">Honorarios del Corredor</div>
+        <div class="r2">
+          <div class="field">
+            <label>Factor % (sobre CIF)</label>
+            <input type="number" id="solo_hon_pct" value="1" step="0.01" min="0" oninput="calcSoloExtra()" style="border-color:rgba(163,113,247,.4)">
+          </div>
+          <div class="field">
+            <label>Honorario Calculado (USD)</label>
+            <input type="number" id="solo_hon_calc" readonly style="background:var(--bg);color:#a371f7;font-weight:700">
+          </div>
+        </div>
+
+        <!-- Otros Servicios -->
+        <div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:6px;margin-top:4px">Otros Servicios / Gastos del Corredor</div>
+        <div class="r2">
+          <div class="field">
+            <label>Otro Servicio 1 (USD)</label>
+            <input type="number" id="solo_otros1" value="0" step="0.01" placeholder="0.00" oninput="calcSoloExtra()">
+          </div>
+          <div class="field">
+            <label>Otro Servicio 2 (USD)</label>
+            <input type="number" id="solo_otros2" value="0" step="0.01" placeholder="0.00" oninput="calcSoloExtra()">
+          </div>
+        </div>
+
+        <!-- Total factura corredor -->
+        <div class="field" style="margin-top:4px">
+          <label style="font-weight:700;color:#a371f7">Total Factura Corredor (USD)</label>
+          <input type="number" id="solo_total_corredor" readonly style="background:var(--bg);color:#a371f7;font-weight:800;border-color:rgba(163,113,247,.5);font-size:14px">
+        </div>
+
+        <p class="note" style="margin-top:6px;color:rgba(163,113,247,.7)">⚠️ En Modo Único: Acarreo, DMCE ($60) y honorarios automáticos del sistema quedan excluidos del cálculo. Solo permanece flete, impuestos y los honorarios aquí definidos.</p>
+      </div>
+
       <div id="blk-solo-comp">
         <div class="field"><label>Comparar contra</label>
           <div class="seg">
@@ -2209,20 +2282,80 @@ function drawSplashChart(){
 }
 
 // ── EMBARQUE SIN COMPARAR ──
+// Global flags for ITBMS manual override
+window._itbmsArManual = false;
+window._itbmsTasaManual = false;
+
 function toggleSoloMode(){
   const isOn=document.getElementById('chk-solo-mode')?.checked;
-  // Only hide the comparison block — keep all cost/honorarios/landed calculations
+  // Toggle comparison block
   const blkComp=document.getElementById('blk-solo-comp');
   if(blkComp) blkComp.style.display=isOn?'none':'';
-  // When solo: show ahorro as 0, hide vs comparison in dashboard
+  // Toggle extra solo fields
+  const blkExtra=document.getElementById('blk-solo-extra');
+  if(blkExtra) blkExtra.style.display=isOn?'block':'none';
+
   if(isOn){
     window._soloMode=true;
-    // Mark comparativo elements hidden
+    // Hide comparison elements
     document.querySelectorAll('.cmp-vs-block').forEach(el=>el.style.display='none');
+    // Visually dim acarreo and DMCE fields to indicate they are excluded
+    const ac=document.getElementById('s1_acarreo');
+    const ac2=document.getElementById('s1_equipos');
+    const dm=document.getElementById('s1_dmce');
+    [ac,ac2,dm].forEach(el=>{
+      if(el){el.style.opacity='.35';el.style.pointerEvents='none';el.title='Excluido en Modo Único';}
+    });
+    // Show notice
+    _showActivityMsg('🔒 Modo Único activado — Acarreo y DMCE excluidos','#a371f7');
+    calcSoloExtra();
   } else {
     window._soloMode=false;
     document.querySelectorAll('.cmp-vs-block').forEach(el=>el.style.display='');
+    // Restore acarreo/DMCE
+    const ac=document.getElementById('s1_acarreo');
+    const ac2=document.getElementById('s1_equipos');
+    const dm=document.getElementById('s1_dmce');
+    [ac,ac2,dm].forEach(el=>{
+      if(el){el.style.opacity='';el.style.pointerEvents='';el.title='';}
+    });
+    _showActivityMsg('Modo comparativo restaurado','var(--green-l)');
   }
+  calc();
+}
+
+function _getSoloCorredorName(){
+  const sel = document.getElementById('solo_corredor')?.value||'custom';
+  if(sel==='cifexp') return 'CIF Express';
+  if(sel==='sababa') return 'Sababa Imports';
+  return document.getElementById('solo_nombre')?.value || 'Personalizado';
+}
+
+function calcSoloExtra(){
+  const corredor = document.getElementById('solo_corredor')?.value||'custom';
+  // Show/hide nombre field
+  const nf = document.getElementById('solo_nombre_field');
+  if(nf) nf.style.display = corredor==='custom'?'block':'none';
+  // Set default pct based on corredor
+  const honPctEl = document.getElementById('solo_hon_pct');
+  if(honPctEl && corredor==='cifexp' && !honPctEl._userEdited) honPctEl.value='3';
+  if(honPctEl && corredor==='sababa' && !honPctEl._userEdited) honPctEl.value='10';
+  honPctEl.addEventListener('input',()=>{ honPctEl._userEdited=true; }, {once:true});
+
+  const CIF = parseFloat(document.getElementById('s1_cif')?.value)||0;
+  const honPct = (parseFloat(document.getElementById('solo_hon_pct')?.value)||1)/100;
+  const otros1 = parseFloat(document.getElementById('solo_otros1')?.value)||0;
+  const otros2 = parseFloat(document.getElementById('solo_otros2')?.value)||0;
+  const hon = CIF * honPct;
+  const total = hon + otros1 + otros2;
+
+  const honEl = document.getElementById('solo_hon_calc');
+  if(honEl) honEl.value = hon>0?hon.toFixed(2):'';
+  const totEl = document.getElementById('solo_total_corredor');
+  if(totEl) totEl.value = total>0?total.toFixed(2):'';
+
+  // Store for calc() to use
+  window._soloHonorario = total;
   calc();
 }
 
@@ -2514,8 +2647,9 @@ function calc(){
   const tasa   = v('s1_tasa');
   const itbmsTasa = tasa * itbPct;
   const gzlc   = v('s1_gzlc');
-  const acarreo= v('s1_acarreo')*v('s1_equipos');
-  const dmce   = v('s1_dmce');
+  // Solo mode: exclude acarreo and DMCE
+  const acarreo= window._soloMode ? 0 : v('s1_acarreo')*v('s1_equipos');
+  const dmce   = window._soloMode ? 0 : v('s1_dmce');
   const agente = v('s1_agente');
   const renglones = Math.max(1, v('s1_reng'));
 
@@ -2532,7 +2666,10 @@ function calc(){
   const form2   = v('s2_form');
   const coord   = CIF*0.005;
   const rengExt = renglones<=1 ? 0 : (renglones-1)*5;
-  const sc1_hon = honMin + form1 + gzlc + coord + rengExt;
+  // Solo mode uses custom honorario from blk-solo-extra
+  const sc1_hon = window._soloMode
+    ? (window._soloHonorario||0)
+    : (honMin + form1 + gzlc + coord + rengExt);
   const sc2_hon = CIF*0.03;   // CIF Express = CIF*3% total
 
   // SC2 desglose No Gravado / Gravado
@@ -2544,24 +2681,37 @@ function calc(){
   const sd=(id,val)=>{const el=document.getElementById(id);if(el)el.value=val.toFixed(2);};
   sd('disp_honMin',honMin); sd('disp_coord',coord);
   sd('disp_form1',form1); sd('disp_form1b',form1);   sd('disp_reng',rengExt);
-  sd('disp_hon1',sc1_hon);  sd('disp_hon2',sc2_hon);
+  sd('disp_hon1',window._soloMode?(window._soloHonorario||0):sc1_hon);  sd('disp_hon2',sc2_hon);
   sd('sc2_hon_g_display',sc2_hon_g);
   sd('sc2_itbms_hon_display',sc2_itbms_hon);
+  // ITBMS editable fields — only set if not manually overridden
+  const itbmsArEl = document.getElementById('disp_itbms_ar');
+  const itbmsTasaEl = document.getElementById('disp_itbms_tasa');
+  if(itbmsArEl && !window._itbmsArManual) itbmsArEl.value = Math.round((CIF+sc1_arancel)*itbPct*100)/100;
+  if(itbmsTasaEl && !window._itbmsTasaManual) itbmsTasaEl.value = Math.round(tasa*itbPct*100)/100;
 
   // ESCENARIO #1 — sin Master Value
   const sc1_arancel = CIF*arPct;
   // Update arancel result display fields
   sd('disp_ar_pago', Math.round(sc1_arancel*100)/100);
-  sd('disp_itbms_ar', Math.round((CIF+sc1_arancel)*itbPct*100)/100);
-  sd('disp_itbms_tasa', Math.round(tasa*itbPct*100)/100);
+  // Use manually edited ITBMS values if available
+  const _itbmsArAuto = Math.round((CIF+sc1_arancel)*itbPct*100)/100;
+  const _itbmsTasaAuto = Math.round(tasa*itbPct*100)/100;
+  const sc1_itbms_display = window._itbmsArManual
+    ? (parseFloat(document.getElementById('disp_itbms_ar')?.value)||_itbmsArAuto)
+    : _itbmsArAuto;
+  const itbmsTasaFinal = window._itbmsTasaManual
+    ? (parseFloat(document.getElementById('disp_itbms_tasa')?.value)||_itbmsTasaAuto)
+    : _itbmsTasaAuto;
   const sc1_granTot = sc1_arancel + sc1_hon + tasa + form1;
   const sc1_flete_nm= (termino==='FOB'&&tipo==='EXT') ? flete : 0;
   const sc1_noMerc  = sc1_granTot + sc1_flete_nm + acarreo + dmce + agente;
-  const sc1_itbms   = (CIF+sc1_arancel)*itbPct;
+  // Use manual ITBMS if user overrode it
+  const sc1_itbms   = window._itbmsArManual ? sc1_itbms_display : (CIF+sc1_arancel)*itbPct;
   const sc1_base    = termino==='FOB' ? FOB : CIF;
   const sc1_landed1 = sc1_base + sc1_noMerc;
   const sc1_factor  = sc1_base>0 ? sc1_landed1/sc1_base : 0;
-  const sc1_landedG = sc1_landed1 + sc1_itbms + itbmsTasa;
+  const sc1_landedG = sc1_landed1 + sc1_itbms + itbmsTasaFinal;
   window._sc1_landed1 = sc1_landed1; // Store globally for Sababa tab
   window._sc1_factor  = sc1_factor;  // Store for SC3 comparison display
   window._sc1_base    = sc1_base;    // Store base for factor display
@@ -2586,15 +2736,15 @@ function calc(){
   const sc2_factor  = sc2_base>0 ? sc2_landed1/sc2_base : 0;
   // SC2 Landed Global: para que sea comparable con SC1, se incluye el ITBMS equivalente
   // El ahorro real está en que SC1 paga ITBMS sobre (CIF+Arancel), SC2 solo sobre CIF
-  const sc2_itbms_total = sc2_itbms + itbmsTasa + sc2_itbms_hon;
-  const sc1_itbms_total = sc1_itbms + itbmsTasa;
+  const sc2_itbms_total = sc2_itbms + itbmsTasaFinal + sc2_itbms_hon;
+  const sc1_itbms_total = sc1_itbms + itbmsTasaFinal;
   const itbms_diff = sc1_itbms_total - sc2_itbms_total;
   const sc2_landedG = sc2_landed1 + sc2_itbms_total;
   // AHORRO SC2 = desembolso_SC1 - desembolso_SC2 (fórmula exacta del Excel)
   // SC1: CIF + Arancel + ITBMS(CIF+Aran) + Tasa + ITBMSTasa + Uso + Honorarios + Acarreo + DMCE + Agente
   // SC2: CIF + ITBMS(CIF) + Tasa + ITBMSTasa + Uso + Honorarios(3%) + ITBMSgravado + Agente
-  const _d1_desemb = sc1_base + sc1_arancel + sc1_itbms + sc1_hon + tasa + form1 + itbmsTasa + sc1_flete_nm + acarreo + dmce + agente;
-  const _d2_desemb = sc2_base + (exon ? sc2_itbms : (sc2_base+sc2_arancel)*itbPct) + sc2_hon + sc2_itbms_hon + tasa + form2 + itbmsTasa + agente + sc2_flete_nm;
+  const _d1_desemb = sc1_base + sc1_arancel + sc1_itbms + sc1_hon + tasa + form1 + itbmsTasaFinal + sc1_flete_nm + acarreo + dmce + agente;
+  const _d2_desemb = sc2_base + (exon ? sc2_itbms : (sc2_base+sc2_arancel)*itbPct) + sc2_hon + sc2_itbms_hon + tasa + form2 + itbmsTasaFinal + agente + sc2_flete_nm;
   const sc2_ahorroNeto = exon ? (_d1_desemb - _d2_desemb) : -((sc2_hon + sc2_itbms_hon) - sc1_hon);
   window._lastAhorroNeto = compar==='cifexp' ? sc2_ahorroNeto : sc1_arancel;
   // Note: _lastAhorroNeto for SC3 will be overridden below after SC3 is calculated
@@ -2662,7 +2812,7 @@ function calc(){
 
   // ── Actualizar _lastAhorroNeto con valor real de SC3 si aplica ──
   if(compar==='sababa' && sc3_comision>0){
-    window._lastAhorroNeto = (sc1_base+sc1_arancel+sc1_itbms+itbmsTasa+sc1_hon+tasa+form1+sc1_flete_nm+acarreo+dmce+agente)
+    window._lastAhorroNeto = (sc1_base+sc1_arancel+sc1_itbms+itbmsTasaFinal+sc1_hon+tasa+form1+sc1_flete_nm+acarreo+dmce+agente)
                            - (sc1_base+sc3_comision+sc3_flete+sc3_gastos);
   }
 
@@ -2673,10 +2823,10 @@ function calc(){
     trasp: v('s1_traspaso')||0,
     sc3ComPct: sc3_comPct,  // guardamos el % de comisión para recálculos on-the-fly
     sc1:{base:sc1_base, arancel:sc1_arancel, hon:sc1_hon, tasa, form1, acarreo, dmce, agente,
-         itbms:sc1_itbms, itbmsTasa, noMerc:sc1_noMerc, landed1:sc1_landed1, landedG:sc1_landedG, factor:sc1_factor},
+         itbms:sc1_itbms, itbmsTasaFinal:itbmsTasaFinal, noMerc:sc1_noMerc, landed1:sc1_landed1, landedG:sc1_landedG, factor:sc1_factor},
     sc2:{base:sc2_base, arancel:sc2_arancel, hon:sc2_hon, honNg:sc2_hon_ng, honG:sc2_hon_g,
          itbmsHon:sc2_itbms_hon, tasa, form2, mv:sc2_mv, mvPct:sc2_mvPct,
-         itbms:sc2_itbms, itbmsTasa, noMerc:sc2_noMerc, landed1:sc2_landed1, landedG:sc2_landedG, factor:sc2_factor,
+         itbms:sc2_itbms, itbmsTasaFinal:itbmsTasaFinal, noMerc:sc2_noMerc, landed1:sc2_landed1, landedG:sc2_landedG, factor:sc2_factor,
          exon, ahorroNeto: sc2_ahorroNeto},
     sc3:{base:sc3_base, mercHomol:sc3_mercHomol, itbmsHomol:sc3_itbmsHomol,
          baseAjustada:sc3_baseAjustada, difPago:sc3_difPago||0, sc_pago:v('sc_pago')||0,
@@ -2691,7 +2841,7 @@ function calc(){
            ? sc1_base + sc3_comision + sc3_flete + sc3_gastos
            : 0,
          ahorroNeto: sc3_comision>0
-           ? ((sc1_base+sc1_arancel+sc1_itbms+sc1_hon+tasa+form1+itbmsTasa+sc1_flete_nm+acarreo+dmce+agente)
+           ? ((sc1_base+sc1_arancel+sc1_itbms+sc1_hon+tasa+form1+itbmsTasaFinal+sc1_flete_nm+acarreo+dmce+agente)
               - (sc1_base+sc3_comision+sc3_flete+sc3_gastos))
            : 0}
   };
@@ -2746,7 +2896,10 @@ function calc(){
       // Costo No Mercancía (Costo Landed)
       {lbl:'── COSTO NO MERCANCÍA (Costo Landed) ──', val:null, color:'var(--muted)', header:true},
       {lbl:'Arancel ('+((arPct)*100).toFixed(4)+'%)', val:sc1_arancel, color:'var(--red-l)'},
-      {lbl:'Honorarios Corredor', val:sc1_hon, color:''},
+      {lbl: window._soloMode
+        ? '🔒 Honorarios '+(_getSoloCorredorName())+' (Modo Único)'
+        : 'Honorarios Corredor',
+        val:sc1_hon, color: window._soloMode ? '#a371f7' : ''},
       {lbl:'Tasa Aduana + Sistema', val:tasa+form1, color:''},
       sc1_flete_nm>0 ? {lbl:'Flete (No Mercancía)', val:sc1_flete_nm, color:''} : null,
       acarreo>0 ? {lbl:'Acarreo ('+v('s1_equipos')+'×$'+v('s1_acarreo').toFixed(0)+')', val:acarreo, color:''} : null,
@@ -2796,8 +2949,8 @@ function calc(){
 
       <!-- DESEMBOLSOS: 2 col + AHORRO ABAJO -->
       ${(()=>{
-        const d1 = sc1_base + sc1_arancel + sc1_itbms + sc1_hon + tasa + form1 + itbmsTasa + sc1_flete_nm + acarreo + dmce + agente;
-        const d2 = sc2_base + sc2_itbms + sc2_hon + sc2_itbms_hon + tasa + form2 + itbmsTasa + agente;
+        const d1 = sc1_base + sc1_arancel + sc1_itbms + sc1_hon + tasa + form1 + itbmsTasaFinal + sc1_flete_nm + acarreo + dmce + agente;
+        const d2 = sc2_base + sc2_itbms + sc2_hon + sc2_itbms_hon + tasa + form2 + itbmsTasaFinal + agente;
         // SC3 desembolso: always compute inline from available values
         // = CIF + comision_total (comision includes ITBMS + honorario neto) + flete + gastos
         // SC3: use live computed variables from this calc() run
@@ -2918,7 +3071,7 @@ function calc(){
               <span style="color:var(--red-l)"> −${fmt(sc2_hon+sc2_itbms_hon-sc1_hon)}</span> hon.extra
             </div>`:`
             <div style="font-size:9px;color:var(--muted);margin-bottom:4px">Esc.#1 − Desembolso Sababa</div>
-            <div style="font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:700;color:var(--green-l)">${fmt(sc3_comision>0 ? (sc1_base+sc1_arancel+sc1_itbms+sc1_hon+tasa+form1+itbmsTasa+sc1_flete_nm+acarreo+dmce+agente) - (sc1_base+sc3_comision+sc3_flete+sc3_gastos) : sc1_arancel)}</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:700;color:var(--green-l)">${fmt(sc3_comision>0 ? (sc1_base+sc1_arancel+sc1_itbms+sc1_hon+tasa+form1+itbmsTasaFinal+sc1_flete_nm+acarreo+dmce+agente) - (sc1_base+sc3_comision+sc3_flete+sc3_gastos) : sc1_arancel)}</div>
             <div style="font-size:10px;color:var(--muted);margin-top:2px">Desembolso total comparado</div>`}
           </div>
         </div>
@@ -3003,7 +3156,7 @@ function calc(){
       <div class="dash-acc-hd" onclick="this.parentElement.classList.toggle('open')">
         <div class="dash-acc-title">💡 Ahorro Real de Bolsillo — Esc.#1 vs ${sc2labelFull}
           <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--green-l);margin-left:8px">${compar==='cifexp'
-            ? fmt(sc1_arancel-sc2_arancel+((sc1_itbms+itbmsTasa)-altItbms))
+            ? fmt(sc1_arancel-sc2_arancel+((sc1_itbms+itbmsTasaFinal)-altItbms))
             : fmt(sc1_arancel)}</span>
         </div>
         <div style="display:flex;align-items:center;gap:10px">
@@ -3020,14 +3173,14 @@ function calc(){
       <div class="ar-row"><span class="ar-lbl">Arancel Esc.#1</span><span class="ar-val" style="color:var(--red-l)">${fmt(sc1_arancel)}</span></div>
       <div class="ar-row"><span class="ar-lbl">Arancel ${sc2label} (exonerado)</span><span class="ar-val" style="color:var(--muted2)">${fmt(compar==='cifexp'?sc2_arancel:0)}</span></div>
       <div class="ar-row"><span class="ar-lbl">→ Ahorro Arancel</span><span class="ar-val" style="color:var(--green-l)">${fmt(sc1_arancel-(compar==='cifexp'?sc2_arancel:0))}</span></div>
-      <div class="ar-row"><span class="ar-lbl">ITBMS Esc.#1</span><span class="ar-val" style="color:var(--muted)">${fmt(sc1_itbms+itbmsTasa)}</span></div>
+      <div class="ar-row"><span class="ar-lbl">ITBMS Esc.#1</span><span class="ar-val" style="color:var(--muted)">${fmt(sc1_itbms+itbmsTasaFinal)}</span></div>
       <div class="ar-row"><span class="ar-lbl">ITBMS ${sc2label}</span><span class="ar-val" style="color:var(--muted)">${compar==='cifexp'?fmt(altItbms):'Incluido en comisión Sababa'}</span></div>
-      <div class="ar-row"><span class="ar-lbl">→ Diferencia ITBMS</span><span class="ar-val" style="color:var(--green-l)">${compar==='cifexp'?fmt((sc1_itbms+itbmsTasa)-altItbms):'— (no aplica)'}</span></div>
+      <div class="ar-row"><span class="ar-lbl">→ Diferencia ITBMS</span><span class="ar-val" style="color:var(--green-l)">${compar==='cifexp'?fmt((sc1_itbms+itbmsTasaFinal)-altItbms):'— (no aplica)'}</span></div>
       <div class="ar-row"><span class="ar-lbl">Master Value (proveedor interno, no pagado)</span><span class="ar-val" style="color:var(--blue-l)">${fmt(altMV)}</span></div>
       <div class="ar-row" style="border-top:2px solid rgba(63,185,80,.3);padding-top:10px;margin-top:4px">
         <span class="ar-lbl" style="color:var(--green-l);font-weight:700">AHORRO TOTAL (Arancel + ITBMS diff)</span>
         <span class="ar-val" style="color:var(--green-l);font-size:16px">${compar==='cifexp'
-          ? fmt(sc1_arancel-sc2_arancel+((sc1_itbms+itbmsTasa)-altItbms))
+          ? fmt(sc1_arancel-sc2_arancel+((sc1_itbms+itbmsTasaFinal)-altItbms))
           : fmt(sc1_arancel)}</span>
       </div>
         </div><!-- /ahorro-panel -->
@@ -3076,7 +3229,7 @@ function calc(){
           <div class="paid-wrap" style="background:var(--s2)"><span class="paid-lbl" style="font-weight:700">TOTAL NO MERCANCÍA</span><span style="font-family:'IBM Plex Mono',monospace;font-weight:700;color:var(--green-l)">${fmt(sc1_noMerc)}</span></div>
           <div class="res-hd">Otros Gastos (fuera del factor)</div>
           ${paidRow('ITBMS (CIF+Aran.)×'+((itbPct*100).toFixed(0))+'%', sc1_itbms,'sc1-itbms','var(--muted)')}
-          ${paidRow('ITBMS Tasa', itbmsTasa,'sc1-itbms-tasa','var(--muted)')}
+          ${paidRow('ITBMS Tasa', itbmsTasaFinal,'sc1-itbms-tasa','var(--muted)')}
           <div class="landed-blk">
             <div class="landed-tag">Costo Landed — Base del Factor</div>
             <div class="landed-primary g">${fmt(sc1_landed1)}</div>
@@ -3125,7 +3278,7 @@ function calc(){
           </div>
           <div class="paid-wrap" style="background:var(--s2)"><span class="paid-lbl" style="font-weight:700">TOTAL NO MERCANCÍA</span><span style="font-family:'IBM Plex Mono',monospace;font-weight:700;color:var(--blue-l)">${fmt(sc2_noMerc)}</span></div>
           <div class="res-hd">Otros Gastos (ITBMS)</div>
-          ${paidRow('ITBMS sobre CIF ('+((itbPct*100).toFixed(0))+'%)', sc2_itbms+itbmsTasa,'sc2-itbms','var(--muted)')}
+          ${paidRow('ITBMS sobre CIF ('+((itbPct*100).toFixed(0))+'%)', sc2_itbms+itbmsTasaFinal,'sc2-itbms','var(--muted)')}
 
           <!-- PANEL AHORRO NETO — aparece cuando se marcan pagados -->
           <div id="ahorro-neto-sc2" style="display:none;margin-top:10px;background:linear-gradient(135deg,rgba(63,185,80,.08),rgba(88,166,255,.06));border:1px solid rgba(63,185,80,.25);border-radius:8px;padding:12px 14px;">
@@ -3212,7 +3365,7 @@ function calc(){
             </div>
             <div class="ar-row" style="border-top:2px solid rgba(63,185,80,.4);padding-top:8px;margin-top:4px">
               <span class="ar-lbl" style="color:var(--green-l);font-weight:700;font-size:13px">AHORRO NETO REAL</span>
-              <span class="ar-val" style="color:var(--green-l);font-size:16px;font-weight:700">${fmt((sc1_base+sc1_arancel+sc1_itbms+sc1_hon+tasa+form1+itbmsTasa+sc1_flete_nm+acarreo+dmce+agente)-(sc1_base+sc3_comision+sc3_flete+sc3_gastos))}</span>
+              <span class="ar-val" style="color:var(--green-l);font-size:16px;font-weight:700">${fmt((sc1_base+sc1_arancel+sc1_itbms+sc1_hon+tasa+form1+itbmsTasaFinal+sc1_flete_nm+acarreo+dmce+agente)-(sc1_base+sc3_comision+sc3_flete+sc3_gastos))}</span>
             </div>
             <div style="font-size:10px;color:var(--muted);margin-top:6px;text-align:right">= Desembolso Esc.#1 − Desembolso Sababa</div>
           </div>
@@ -3255,7 +3408,7 @@ function calc(){
 
     <!-- FOOTER TOPE dashboard -->
     <div style="margin-top:24px;padding:14px 16px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-      <div style="font-size:10px;color:var(--muted2)">Simulador Aduanal · Panamá v7.3.3</div>
+      <div style="font-size:10px;color:var(--muted2)">Simulador Aduanal · Panamá v7.4.0</div>
       <button class="btn-back" onclick="closePortal()" style="font-size:11px;padding:6px 16px">← Volver a Parámetros</button>
     </div>
   `;
@@ -3751,7 +3904,7 @@ function calcSab2(){
         ${esc1L>0?(()=>{
           const snap1 = window._lastSnap?.sc1||{};
           const _s1itbms = snap1.itbms||((snap1.base||0)+(snap1.arancel||0))*((window._lastSnap?.itbPct)||0.07);
-          const _s1itbmsTasa = snap1.itbmsTasa||((snap1.tasa||0)*((window._lastSnap?.itbPct)||0.07));
+          const _s1itbmsTasa = snap1.itbmsTasaFinal||((snap1.tasa||0)*((window._lastSnap?.itbPct)||0.07));
           const sc1desemb = (snap1.base||0)+(snap1.arancel||0)+_s1itbms+(snap1.hon||0)+(snap1.tasa||0)+_s1itbmsTasa+(snap1.form1||0)
                           +(snap1.acarreo||0)+(snap1.dmce||0)+(snap1.agente||0)
                           +((window._lastSnap?.termino==='FOB'&&window._lastSnap?.tipo==='EXT')?(window._lastSnap?.flete||0):0);
@@ -3971,7 +4124,7 @@ function exportCSV(){
       ['Flete',f(sc1.noMerc-sc1.arancel-sc1.hon-(sc1.tasa||0)-(sc1.form1||0)-sc1.acarreo-sc1.dmce-sc1.agente),f(0),f(sc3.flete)],
       ['Master Value (no pagado)','—',f(sc2.mv),f(sc3.mv)],
       ['Total No Mercancía',f(sc1.noMerc),f(sc2.noMerc),f(sc3.noMerc)],
-      ['ITBMS',f((sc1.itbms||0)+(sc1.itbmsTasa||0)),f((sc2.itbms||0)+(sc2.itbmsTasa||0)),'Incluido en comisión'],
+      ['ITBMS',f((sc1.itbms||0)+(sc1.itbmsTasaFinal||0)),f((sc2.itbms||0)+(sc2.itbmsTasaFinal||0)),'Incluido en comisión'],
       ['Costo Landed',f(sc1.landed1),f(sc2.landed1),f(sc3.landed1)],
       ['% Importación',pct(sc1.factor),pct(sc2.factor),pct(sc3.factor)],
       ['Ahorro Neto vs Esc.#1','—',f(sc2.ahorroNeto||0),f(sc3.ahorroNeto||0)],
@@ -4137,7 +4290,7 @@ function renderComparativo(data){
   const _CIF=sc1.base||0;
   const _ar=sc1.arancel||0;
   const _tasa=sc1.tasa||0;
-  const _itbTasa=sc1.itbmsTasa||(_tasa*_itbPct);
+  const _itbTasa=sc1.itbmsTasaFinal||(_tasa*_itbPct);
   const _uso1=sc1.form1||0;
   const _hon1=sc1.hon||0;
   const _ac=sc1.acarreo||0;
@@ -4242,7 +4395,7 @@ function renderComparativo(data){
             <tr style="background:rgba(88,166,255,.04)"><td class="tm" style="color:var(--blue-l)">Master Value (no pagado)</td><td class="tr" style="color:var(--muted2)">—</td><td class="tr" style="color:var(--blue-l)">${f(sc2.mv)}</td><td class="tr" style="color:var(--blue-l)">${f(sc3.mv)}</td></tr>
             ${row('TOTAL NO MERCANCÍA',f(sc1.noMerc),f(sc2.noMerc),f(sc3.noMerc),true,'var(--green-l)','var(--blue-l)','var(--orange-l)')}
             <tr><td colspan="4" style="background:var(--s2);font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;padding:6px 14px">Otros Gastos (ITBMS)</td></tr>
-            ${row('ITBMS',f((sc1.itbms||0)+(sc1.itbmsTasa||0)),f((sc2.itbms||0)+(sc2.itbmsTasa||0)),'Incluido en comisión')}
+            ${row('ITBMS',f((sc1.itbms||0)+(sc1.itbmsTasaFinal||0)),f((sc2.itbms||0)+(sc2.itbmsTasaFinal||0)),'Incluido en comisión')}
             ${row('Costo Landed (base factor)',f(sc1.landed1),f(sc2.landed1),f(sc3.landed1),true,'var(--green-l)','var(--blue-l)','var(--orange-l)')}
             ${row('% Importación',pct(sc1.factor),pct(sc2.factor),pct(sc3.factor),false,'var(--orange-l)','var(--orange-l)','var(--orange-l)')}
             ${row('Landed Global',f(sc1.landedG),f(sc2.landedG),f(sc3.landedG))}
@@ -4394,7 +4547,7 @@ const _itbPctEx    = s.itbPct||0.07;
 const d1_itbms     = d1_ar>0?((sc1.base||0)+d1_ar)*_itbPctEx:(sc1.itbms||((sc1.base||0)*_itbPctEx));
 const d1_tasa      = sc1.tasa||0;
 const d1_uso       = sc1.form1||0;
-const d1_itbmsTasa = sc1.itbmsTasa||(d1_tasa*_itbPctEx);
+const d1_itbmsTasa = sc1.itbmsTasaFinal||(d1_tasa*_itbPctEx);
 const d1_hon       = sc1.hon||0;
 const d1_ac        = sc1.acarreo||0;
 const d1_dmce      = sc1.dmce||0;
@@ -4410,7 +4563,7 @@ const d2_ar        = isExon?0:d1_ar;
 const d2_itbms     = isExon?((sc2.base||sc1.base||0)*_itbPctEx):(((sc2.base||sc1.base||0)+d2_ar)*_itbPctEx);
 const d2_tasa      = sc2.tasa||d1_tasa;
 const d2_uso       = sc2.form2||d1_uso;
-const d2_itbmsTasa = sc2.itbmsTasa||(d2_tasa*_itbPctEx);
+const d2_itbmsTasa = sc2.itbmsTasaFinal||(d2_tasa*_itbPctEx);
 const d2_hon       = sc2.hon||((sc1.base||0)*0.03);
 const d2_itbmsH    = sc2.itbmsHon>0?sc2.itbmsHon:(()=>{const ng=sc2.honNg||0;const g=Math.max(0,d2_hon-ng);return g*_itbPctEx;})();
 // Exonerado: sin acarreo, sin DMCE
@@ -4823,44 +4976,101 @@ function _marcarPendienteYCerrar(){
 function reabrirEmbarquePendiente(idx){
   const d = tendData[idx];
   if(!d) return;
-  if(!confirm(`¿Reabrir el embarque "${d.nro}" para editar y reconfirmar?\n\nLos datos se cargarán en el formulario. Al procesar nuevamente quedará como confirmado.`)) return;
+  if(!confirm(`¿Reabrir el embarque "${d.nro}" para editar y reconfirmar?\n\nTodos los datos se restaurarán en el formulario tal como quedaron.`)) return;
 
   const s = d.snap || {};
-  // Rellenar campos principales del formulario
-  const _set = (id, val) => { const el=document.getElementById(id); if(el && val!==undefined && val!==null) el.value=val; };
+  const _set = (id, val) => {
+    const el=document.getElementById(id);
+    if(!el || val===undefined || val===null) return;
+    el.value = val;
+  };
+  const _setBtn = (attr, val) => {
+    if(!val) return;
+    const btn = document.querySelector(`[onclick*="${attr}('${val}')"]`);
+    if(btn && typeof btn.click === 'function') btn.click();
+  };
 
-  _set('s1_nro_emb', d.nro || '');
-  _set('s1_desc_emb', d.desc || '');
-  _set('s1_origen_emb', s.origen || '');
+  // ── 1. Limpiar form base primero (sin resetear tipo/termino aún) ──
+  _clearFormSilent();
 
-  // CIF / FOB
+  // ── 2. Restaurar modos (tipo ZL/EXT, termino CIF/FOB, escenario) ──
+  if(s.tipo) _setBtn('setTipo', s.tipo);
+  if(s.termino) _setBtn('setTermino', s.termino);
+  if(s.compar) _setBtn('setCompar', s.compar);
+
+  // ── 3. Campos básicos del embarque ──
+  _set('s1_nro_emb',    d.nro   || '');
+  _set('s1_desc_emb',   d.desc  || '');
+  _set('s1_origen_emb', s.origen|| '');
+  _set('s1_destino',    s.destino|| '');
+
+  // ── 4. Equipo / contenedor ──
+  if(s.equipo){
+    const eqEl = document.getElementById('s1_equipo');
+    if(eqEl){ eqEl.value = s.equipo; if(typeof setEquipo==='function') setEquipo(s.equipo); }
+  }
+  if(s.equipos !== undefined) _set('s1_equipos', s.equipos);
+
+  // ── 5. Valores financieros ──
   if(s.termino === 'FOB'){
-    _set('s1_fob', s.CIF || '');
+    _set('s1_fob',       s.FOB   || '');
     _set('s1_flete_fob', s.flete || '');
-    _set('s1_seguro', s.seguro || '');
+    _set('s1_seguro',    s.seguro|| '');
+    if(typeof calcFOB === 'function') calcFOB();
   } else {
     _set('s1_cif', s.CIF || (s.sc1 && s.sc1.base) || '');
   }
   _set('s1_acarreo', s.acarreo || '');
-  _set('s1_dmce', s.dmce || '');
-  _set('s1_agente', s.agente || '');
-  if(s.arPct !== undefined) _set('s1_ar', ((s.arPct||0)*100).toFixed(2));
+  _set('s1_dmce',    s.dmce    || '');
+  _set('s1_agente',  s.agente  || '');
+
+  // ── 6. Tasas / porcentajes ──
+  if(s.arPct  !== undefined) _set('s1_ar',    ((s.arPct ||0)*100).toFixed(2));
   if(s.itbPct !== undefined) _set('s1_itbms', ((s.itbPct||0.07)*100).toFixed(0));
 
-  // Cargar facturas/invLines si existen
-  if(d.invLines && d.invLines.length){
-    window.invLines = JSON.parse(JSON.stringify(d.invLines));
-    if(typeof renderInvLines === 'function') renderInvLines();
+  // Escenario 2 (CIF Express) campos
+  const sc2 = s.sc2||{};
+  if(sc2.com !== undefined) _set('s2_com', (sc2.com||3));
+  if(s.reng  !== undefined) _set('s1_reng', s.reng);
+  if(s.gzlc  !== undefined) _set('s1_gzlc', s.gzlc);
+  if(s.tasa  !== undefined) _set('s1_tasa', s.tasa);
+
+  // Escenario 3 (Sababa) campos
+  const sc3 = s.sc3||{};
+  if(sc3.comPct !== undefined){
+    const scComEl = document.getElementById('sc_com');
+    if(scComEl) scComEl.value = ((s.sc3ComPct||sc3.comPct||0.10)*100).toFixed(1);
+    const s2ComEl = document.getElementById('s2_com');
+    if(s2ComEl) s2ComEl.value = ((s.sc3ComPct||sc3.comPct||0.10)*100).toFixed(1);
+  }
+  if(sc3.flete !== undefined){
+    _set('sc_flete_sab', sc3.flete);
+    _set('s2_flete_sab', sc3.flete);
   }
 
-  // Marcar como reabierto para que procesarEmbarque sepa que puede reemplazarlo
+  // ── 7. Facturas (invLines) ──
+  const linesToLoad = d.invLines || (s.invLines||[]);
+  if(linesToLoad.length){
+    window.invLines = JSON.parse(JSON.stringify(linesToLoad));
+  } else {
+    window.invLines = [];
+  }
+  if(typeof renderInvLines === 'function') renderInvLines();
+
+  // ── 8. Recalcular para que los resultados queden visibles ──
+  setTimeout(()=>{
+    if(typeof syncSC3fromSC1 === 'function') syncSC3fromSC1();
+    if(typeof calc === 'function') calc();
+  }, 120);
+
+  // ── 9. Marcar índice para que procesarEmbarque reemplace en vez de duplicar ──
   window._pendienteUpdateIdx = idx;
 
-  // Ir al formulario principal
-  const tab = document.querySelector('.tab');
-  if(typeof switchTab === 'function') switchTab('sim', tab);
+  // ── 10. Navegar al formulario ──
+  const tabEl = document.querySelector('[onclick*="switchTab"][onclick*="sim"]') || document.querySelector('.tab');
+  if(typeof switchTab === 'function') switchTab('sim', tabEl);
 
-  _showToast(`✏️ Embarque ${d.nro} cargado — edita lo que necesitas y presiona Procesar Embarque.`, 'orange', 5000);
+  _showToast(`✏️ Embarque ${d.nro} restaurado — verifica, edita y confirma.`, 'orange', 5000);
 }
 
 function _clearFormSilent(){
@@ -4875,6 +5085,11 @@ function _clearFormSilent(){
     const defaults={'s1_ar':'10','s1_itbms':'7','s1_reng':'1','s1_gzlc':'133','s1_tasa':'100','s2_form':'6','s1_equipos':'1'};
     el.value=defaults[id]||'';
   });
+  // Reset equipo contenedor al primer option (seleccionar)
+  const eqEl=document.getElementById('s1_equipo');
+  if(eqEl){ eqEl.selectedIndex=0; if(typeof setEquipo==='function') setEquipo(eqEl.value||''); }
+  const tipoEmbEl=document.getElementById('s1_tipo_emb');
+  if(tipoEmbEl) tipoEmbEl.selectedIndex=0;
   // Clear Sababa fields
   ['sc_costo_zl','sc_trasp','sc_fob','sc_flete','sc_pago','s2_costo_zl','s2_trasp','s2_fob','s2_flete','s2_dif_fob','s2_dif_cif','s2_pago','s2_mv_display','s2_flete_sab','s2_comision_display'].forEach(id=>{
     const el=document.getElementById(id);
@@ -4892,12 +5107,16 @@ function _clearFormSilent(){
   // Reset globals
   window._lastCIF=0; window._lastAhorroNeto=0; window._lastSnap=null; window._sc1_landed1=0;
   window.s2_comisionEditada=false; window.sc_comisionEditada=false; window._s1TotalPagoEditado=false;
+  window._pendienteUpdateIdx=-1;
   // Reset tipo/termino
   tipo='ZL'; termino='CIF'; compar='cifexp'; exon=true; sabTipoCmp='ZL'; sab2Tipo='ZL';
   // Reset seg buttons
   document.querySelectorAll('.seg-btn').forEach(b=>b.classList.remove('on','g','b','o','r'));
   const zlBtns=document.querySelectorAll('[onclick*="setTipo(\'ZL\'"]');
   zlBtns.forEach(b=>{b.classList.add('on','g');});
+  // Limpiar portal title
+  const pt=document.getElementById('portal-title');
+  if(pt) pt.textContent='Resultados';
 }
 
 // Ver los 3 escenarios simultáneamente
@@ -4917,7 +5136,7 @@ function verTres3(){
   // ITBMS SC1 = (CIF + Arancel) × 7%
   const d1_itbms= d1_liq>0 ? ((sc1.base||0)+d1_liq)*_itbPct3 : (sc1.itbms||0);
   const d1_tasa = (sc1.tasa||0);
-  const d1_itbmsTasa = sc1.itbmsTasa||(d1_tasa*_itbPct3);
+  const d1_itbmsTasa = sc1.itbmsTasaFinal||(d1_tasa*_itbPct3);
   const d1_uso  = sc1.form1||0;
   const d1_hon  = sc1.hon||0;
   const d1_ac   = sc1.acarreo||0;
@@ -4935,7 +5154,7 @@ function verTres3(){
   const d2_itbms     = isExon ? (sc2.itbms||((sc1.base||0)*_itbPct3)) : ((sc1.base||0)+d2_liq)*_itbPct3;
   const d2_hon       = sc2.hon||((sc1.base||0)*0.03);
   const d2_tasa      = sc2.tasa||d1_tasa;
-  const d2_itbms_t   = sc2.itbmsTasa||(d2_tasa*_itbPct3);
+  const d2_itbms_t   = sc2.itbmsTasaFinal||(d2_tasa*_itbPct3);
   const d2_itbms_hon = sc2.itbmsHon>0?sc2.itbmsHon:(()=>{
     const ng=sc2.honNg||0; const g=Math.max(0,d2_hon-ng); return g*_itbPct3;
   })();
@@ -5050,6 +5269,9 @@ function verTres3(){
         <div style="font-size:9px;font-weight:700;color:#58a6ff;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">⚡ CIF Express</div>
         <div style="font-family:'IBM Plex Mono',monospace;font-size:19px;font-weight:800;color:#58a6ff;line-height:1.1">${f(d2_tot)}</div>
         <div style="font-size:9px;color:#8b949e;margin:3px 0">Desembolso Total</div>
+        <div style="font-size:9px;color:#6b7280;margin-bottom:4px">(Mercancía + Gastos)</div>
+        <div style="display:flex;justify-content:space-between;font-size:9px;color:#6b7280;margin-bottom:1px"><span>└ Costo Mercancía</span><span style="font-family:'IBM Plex Mono',monospace;color:#8b949e">${f(sc2.base||sc1.base||0)}</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:9px;color:#6b7280;margin-bottom:4px"><span>└ Costo No Mercancía</span><span style="font-family:'IBM Plex Mono',monospace;color:#8b949e">${f(d2_gas)}</span></div>
         <div style="font-size:11px;font-weight:700;color:${aho12>=0?'#3fb950':'#f85149'};margin-top:2px">
           ${aho12>=0?'💰 +'+f(aho12):'⚠️ −'+f(Math.abs(aho12))}
         </div>
@@ -5061,6 +5283,9 @@ function verTres3(){
         ${sc3OK?`
           <div style="font-family:'IBM Plex Mono',monospace;font-size:19px;font-weight:800;color:#f08632;line-height:1.1">${f(d3_tot)}</div>
           <div style="font-size:9px;color:#8b949e;margin:3px 0">Desembolso Total</div>
+          <div style="font-size:9px;color:#6b7280;margin-bottom:4px">(Mercancía + Comisión)</div>
+          <div style="display:flex;justify-content:space-between;font-size:9px;color:#6b7280;margin-bottom:1px"><span>└ Costo Mercancía</span><span style="font-family:'IBM Plex Mono',monospace;color:#8b949e">${f(sc1.base||0)}</span></div>
+          <div style="display:flex;justify-content:space-between;font-size:9px;color:#6b7280;margin-bottom:4px"><span>└ Costo No Mercancía</span><span style="font-family:'IBM Plex Mono',monospace;color:#8b949e">${f(d3_gas)}</span></div>
           <div style="font-size:11px;font-weight:700;color:#3fb950;margin-top:2px">💰 +${f(aho13)}</div>
           <div style="font-size:9px;color:#8b949e">vs Regular</div>
         `:`<div style="font-size:18px;color:#8b949e;font-weight:800;margin:8px 0">N/D</div>
@@ -5072,7 +5297,11 @@ function verTres3(){
       <div>
         <div style="font-size:10px;font-weight:700;color:#3fb950;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">📋 Escenario Regular — Base de comparación</div>
         <div style="font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:800;color:#3fb950">${f(d1_tot)}</div>
-        <div style="font-size:11px;color:#8b949e;margin-top:2px">Desembolso Total · ${pct(sc1.factor||1)} importación</div>
+        <div style="font-size:10px;color:#8b949e;margin-top:2px">Desembolso Total · ${pct(sc1.factor||1)} importación</div>
+        <div style="display:flex;gap:14px;margin-top:6px;flex-wrap:wrap">
+          <div style="font-size:9px;color:#6b7280">└ <span style="color:#8b949e">Costo Mercancía:</span> <span style="font-family:'IBM Plex Mono',monospace;color:#3fb950">${f(sc1.base||0)}</span></div>
+          <div style="font-size:9px;color:#6b7280">└ <span style="color:#8b949e">Costo No Mercancía:</span> <span style="font-family:'IBM Plex Mono',monospace;color:#8b949e">${f(sc1.noMerc>0?sc1.noMerc:d1_gas)}</span></div>
+        </div>
       </div>
       <div style="text-align:right">
         <div style="font-size:10px;color:#8b949e;margin-bottom:2px">Gastos No Mercancía</div>
@@ -5118,7 +5347,7 @@ function verTres3(){
               sc3OK?`<div style="font-size:10px;color:#f08632">Incl. en comisión<br><span style="color:#8b949e">(${f(itbmsHom)} en valor homol.)</span></div>`:'<span style="color:#3fb950;font-size:10px">✓ Incl. en comisión</span>')}
             ${secHd('Gastos Fijos')}
             ${tr('Tasa Aduana',f(sc1.tasa||0),f(d2_tasa),dash)}
-            ${tr('ITBMS s/Tasa',f(sc1.itbmsTasa||0),f(d2_itbms_t),dash)}
+            ${tr('ITBMS s/Tasa',f(sc1.itbmsTasaFinal||0),f(d2_itbms_t),dash)}
             ${tr('Uso de Sistema',f(sc1.form1||0),f(d2_uso),dash)}
             ${secHd('Honorarios / Comisión')}
             ${tr('Honorarios Corredor / Comisión Sababa',
@@ -5233,8 +5462,8 @@ function verTres3(){
           <tr><td class="tm">% Importación</td><td class="tr" style="color:#f08632">${pct(sc1.factor||1)}</td><td class="tr" style="color:#f08632">${pct(sc2.factor||1)}</td><td class="tr" style="color:#f08632">${sc3OK?pct(sc3.factor||1):nd}</td></tr>
           <tr>
             <td class="tm">Costo Landed Total (Merc+Gastos+ITBMS)</td>
-            <td class="tr" style="color:#3fb950">${f((sc1.base||0)+(sc1.noMerc||0)+(sc1.itbms||0)+(sc1.itbmsTasa||0))}</td>
-            <td class="tr" style="color:#58a6ff">${f((sc2.base||0)+(sc2.noMerc||0)+(sc2.itbms||0)+(sc2.itbmsTasa||0)+(sc2.itbmsHon||0))}</td>
+            <td class="tr" style="color:#3fb950">${f((sc1.base||0)+(sc1.noMerc||0)+(sc1.itbms||0)+(sc1.itbmsTasaFinal||0))}</td>
+            <td class="tr" style="color:#58a6ff">${f((sc2.base||0)+(sc2.noMerc||0)+(sc2.itbms||0)+(sc2.itbmsTasaFinal||0)+(sc2.itbmsHon||0))}</td>
             <td class="tr" style="color:#f08632">${sc3OK?f((sc3.mercHomol||0)+(sc3.noMerc||0)+(sc3.itbmsHomol||0)):nd}</td>
           </tr>
         </tbody>
@@ -5243,7 +5472,7 @@ function verTres3(){
 
     <!-- FOOTER TOPE — evita área en blanco al final -->
     <div style="margin-top:24px;padding:16px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
-      <div style="font-size:10px;color:var(--muted2)">Simulador Aduanal · Panamá v7.3.3</div>
+      <div style="font-size:10px;color:var(--muted2)">Simulador Aduanal · Panamá v7.4.0</div>
       <button class="btn-back" onclick="closePortal()" style="font-size:11px;padding:6px 16px">← Volver a Parámetros</button>
     </div>
   `;
@@ -5912,7 +6141,7 @@ function showTendDetail_OLD_DISABLED(idx){
     // DESEMBOLSO = CIF_original + Comision + Flete + Gastos
     desembolso = (d.cif||0) + sc3com + sc3Flete + sc3Gastos;
     // SC1 desembolso incluye ITBMS
-    const sc1desemb = (sc1.base||0)+(sc1.arancel||0)+((sc1.itbms||0))+(sc1.hon||0)+(sc1.tasa||0)+(sc1.form1||0)+(sc1.itbmsTasa||0)+(sc1.acarreo||0)+(sc1.dmce||0)+(sc1.agente||0);
+    const sc1desemb = (sc1.base||0)+(sc1.arancel||0)+((sc1.itbms||0))+(sc1.hon||0)+(sc1.tasa||0)+(sc1.form1||0)+(sc1.itbmsTasaFinal||0)+(sc1.acarreo||0)+(sc1.dmce||0)+(sc1.agente||0);
     const ahorroCalc = sc1desemb - desembolso;
     factor     = sc3mercH>0 ? (sc3mercH+sc3noMerc)/sc3mercH : 1;
     honorarios = sc3com;
@@ -5926,7 +6155,7 @@ function showTendDetail_OLD_DISABLED(idx){
     const _d2itbms = isExon?(_CIF_TD*_itbPctTD):((_CIF_TD+_d2ar)*_itbPctTD);
     const _d2hon = sc2.hon||(_CIF_TD*0.03);
     const _d2tasa = sc2.tasa||sc1.tasa||0;
-    const _d2itbTasa = sc2.itbmsTasa||(_d2tasa*_itbPctTD);
+    const _d2itbTasa = sc2.itbmsTasaFinal||(_d2tasa*_itbPctTD);
     const _d2uso = sc2.form2||sc1.form1||0;
     const _d2itbHon = sc2.itbmsHon>0?sc2.itbmsHon:(()=>{const ng=sc2.honNg||0;const g=Math.max(0,_d2hon-ng);return g*_itbPctTD;})();
     const d2g = _d2ar+_d2itbms+_d2tasa+_d2itbTasa+_d2uso+_d2hon+_d2itbHon+(sc1.agente||0)+fl;
@@ -5936,7 +6165,7 @@ function showTendDetail_OLD_DISABLED(idx){
   }
   const ahorroReg = d.ahorro || 0;
   const cif = d.cif || sc2.base || 0;
-  const itbms = (sc2.itbms||0) + (sc2.itbmsTasa||0);
+  const itbms = (sc2.itbms||0) + (sc2.itbmsTasaFinal||0);
   const tipoEmb = s.tipo === 'ZL' ? 'Zona Libre' : (s.tipo === 'EXT' ? 'Importación' : (d.esc || '—'));
   const escLabel = d.esc || '—';
 
@@ -6013,7 +6242,7 @@ function showTendDetail_OLD_DISABLED(idx){
           })() : [
             {lbl:'Valor Compra (Término: '+(s.termino||'CIF')+')', val: cif, color:'#1f2328'},
             {lbl:'Arancel', val: sc1.arancel||0, color:'#dc2626'},
-            {lbl:'ITBMS', val: (sc2.itbms||0)+(sc2.itbmsTasa||0), color:'#1f2328'},
+            {lbl:'ITBMS', val: (sc2.itbms||0)+(sc2.itbmsTasaFinal||0), color:'#1f2328'},
             {lbl:'Honorarios CIF Express', val: sc2.hon||0, color:'#2563eb'},
             {lbl:'Tasa Aduana + Uso', val: (sc2.tasa||0)+(sc2.form2||sc1.form1||0), color:'#1f2328'},
             {lbl:'ITBMS sobre Honorarios', val: sc2.itbmsHon||0, color:'#1f2328'},
@@ -6188,7 +6417,7 @@ function _getTendDetailHTML(idx){
     const _d2itbH = isExon?(_CIF_H*_itbPctTDH):((_CIF_H+_d2arH)*_itbPctTDH);
     const _d2honH = sc2.hon||(_CIF_H*0.03);
     const _d2tasaH = sc2.tasa||sc1.tasa||0;
-    const _d2itbTasaH = sc2.itbmsTasa||(_d2tasaH*_itbPctTDH);
+    const _d2itbTasaH = sc2.itbmsTasaFinal||(_d2tasaH*_itbPctTDH);
     const _d2usoH = sc2.form2||sc1.form1||0;
     const _d2itbHonH = sc2.itbmsHon>0?sc2.itbmsHon:(()=>{const ng=sc2.honNg||0;const g=Math.max(0,_d2honH-ng);return g*_itbPctTDH;})();
     const d2g = _d2arH+_d2itbH+_d2tasaH+_d2itbTasaH+_d2usoH+_d2honH+_d2itbHonH+(sc1.agente||0)+fl;
@@ -6206,7 +6435,7 @@ function _getTendDetailHTML(idx){
   const factorCosteo = mercHomolCalc>0 ? (noMercSab/mercHomolCalc)*100 : 0;
   // FACTOR DESEMBOLSO = montoPagar / CIF_original - 1
   const factorDesembolso = cif>0 ? ((montoPagar/cif)-1)*100 : 0;
-  const montoRegular = (sc1.base||cif) + (sc1.arancel||0) + (sc1.hon||0) + (sc1.tasa||0) + (sc1.itbmsTasa||0) + (sc1.itbms||0) + (sc1.acarreo||0) + (sc1.dmce||0) + (sc1.agente||0) + fl;
+  const montoRegular = (sc1.base||cif) + (sc1.arancel||0) + (sc1.hon||0) + (sc1.tasa||0) + (sc1.itbmsTasaFinal||0) + (sc1.itbms||0) + (sc1.acarreo||0) + (sc1.dmce||0) + (sc1.agente||0) + fl;
   const ahorro = montoRegular - montoPagar;
   const ahorroVsRegPct = montoRegular>0 ? (ahorro/montoRegular*100) : 0;
   const tipoEmb = s.tipo==='ZL'?'Zona Libre':(s.tipo==='EXT'?'Importación':'—');
@@ -7361,13 +7590,13 @@ function _buildEscCard(d){
   var _itbPctD = (d.snap&&d.snap.itbPct)||0.07;
   var _arD = sc1d.arancel||0;
   var _itbD = _arD>0?((sc1d.base||d.cif||0)+_arD)*_itbPctD:(sc1d.itbms||(((sc1d.base||d.cif||0))*_itbPctD));
-  var d1gD = _arD+_itbD+(sc1d.tasa||0)+(sc1d.itbmsTasa||((sc1d.tasa||0)*_itbPctD))+(sc1d.form1||0)+(sc1d.hon||0)+(sc1d.acarreo||0)+(sc1d.dmce||0)+(sc1d.agente||0)+flD;
+  var d1gD = _arD+_itbD+(sc1d.tasa||0)+(sc1d.itbmsTasaFinal||((sc1d.tasa||0)*_itbPctD))+(sc1d.form1||0)+(sc1d.hon||0)+(sc1d.acarreo||0)+(sc1d.dmce||0)+(sc1d.agente||0)+flD;
   var _d2arD = isExonD?0:_arD;
   var _CIF_D = sc2d.base||sc1d.base||d.cif||0;
   var _d2itbD = isExonD?(_CIF_D*_itbPctD):((_CIF_D+_d2arD)*_itbPctD);
   var _d2honD = sc2d.hon||(_CIF_D*0.03);
   var _d2tasaD = sc2d.tasa||sc1d.tasa||0;
-  var _d2itbTasaD = sc2d.itbmsTasa||(_d2tasaD*_itbPctD);
+  var _d2itbTasaD = sc2d.itbmsTasaFinal||(_d2tasaD*_itbPctD);
   var _d2usoD = sc2d.form2||sc1d.form1||0;
   var _d2itbHonD = sc2d.itbmsHon>0?sc2d.itbmsHon:(function(){var ng=sc2d.honNg||0;var g=Math.max(0,_d2honD-ng);return g*_itbPctD;})();
   // Exonerado: sin acarreo, sin DMCE
@@ -7792,7 +8021,7 @@ function _calcEngine(snap) {
   // ── SC1: ITBMS = (CIF + Arancel) × 7% ──
   const i1 = (_CIF_full + ar) * itb;
   const ta = s1.tasa || 0;
-  const iT = s1.itbmsTasa || (ta * itb);
+  const iT = s1.itbmsTasaFinal || (ta * itb);
   const u1 = s1.form1 || 0;
   const h1 = s1.hon || 0;
   const ac = s1.acarreo || 0;
@@ -7809,7 +8038,7 @@ function _calcEngine(snap) {
   const ng2 = s2.honNg || 0;
   const iH2 = s2.itbmsHon > 0 ? s2.itbmsHon : Math.max(0, h2 - ng2) * itb;
   const ta2 = s2.tasa || ta;
-  const iT2 = s2.itbmsTasa || (ta2 * itb);
+  const iT2 = s2.itbmsTasaFinal || (ta2 * itb);
   const u2 = s2.form2 || u1;
   // For FOB term: mercancía base = FOB (C), flete added separately (no double count)
   // For CIF term: mercancía base = CIF (C2 = C), flete = 0
@@ -8343,8 +8572,146 @@ body.theme-dark, body:not(.theme-light) {
 
 
 
-// ── Loading progress indicator ──
+// ── ACTIVITY BAR ──
+let _activityTimer = null;
+function _showActivityMsg(msg, color, duration){
+  color = color||'var(--muted)'; duration = duration||4000;
+  const msgEl = document.getElementById('activity-msg');
+  const dotEl = document.getElementById('activity-dot');
+  const timeEl = document.getElementById('activity-time');
+  if(!msgEl) return;
+  msgEl.textContent = msg;
+  if(dotEl) dotEl.style.background = color;
+  const now = new Date();
+  if(timeEl) timeEl.textContent = now.toLocaleTimeString('es-PA',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  clearTimeout(_activityTimer);
+  _activityTimer = setTimeout(function(){
+    if(msgEl) msgEl.textContent = 'Sistema listo';
+    if(dotEl) dotEl.style.background = 'var(--green-l)';
+  }, duration);
+}
+
+// Auto-save every 2 minutes
+setInterval(function(){
+  try{
+    const hasData = document.getElementById('s1_cif')?.value;
+    if(hasData && typeof guardarSesion==='function'){
+      _showActivityMsg('💾 Guardado automático...','var(--green-l)',2500);
+      guardarSesion();
+    }
+  }catch(e){}
+}, 120000);
+
+// ── SIDEBAR PIN ──
+let _sidebarPinned = false;
+function toggleSidebarPin(){
+  _sidebarPinned = !_sidebarPinned;
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebar-overlay');
+  const btn = document.getElementById('sidebar-pin-btn');
+  if(_sidebarPinned){
+    sidebar.classList.add('pinned');
+    document.body.classList.add('sidebar-pinned');
+    if(overlay){ overlay.classList.remove('open'); }
+    if(btn){ btn.classList.add('on'); btn.textContent='📌 Fijado'; }
+    _showActivityMsg('📌 Panel fijado — pantalla compartida','#a371f7',3000);
+  } else {
+    sidebar.classList.remove('pinned');
+    document.body.classList.remove('sidebar-pinned');
+    if(btn){ btn.classList.remove('on'); btn.textContent='📌 Fijar'; }
+    _showActivityMsg('Panel liberado','var(--muted)',2000);
+  }
+  try{ localStorage.setItem('sim_sidebar_pinned', _sidebarPinned?'1':'0'); }catch(e){}
+}
+
+// Override closeSidebar to respect pin — done after DOMContentLoaded
+document.addEventListener('DOMContentLoaded', function(){
+  // Restore sidebar pin state
+  try{
+    if(localStorage.getItem('sim_sidebar_pinned')==='1'){
+      setTimeout(function(){
+        const sidebar=document.getElementById('sidebar');
+        if(sidebar){ openSidebar(); setTimeout(toggleSidebarPin,100); }
+      }, 600);
+    }
+  }catch(e){}
+
+  // Initial activity timestamp
+  const timeEl = document.getElementById('activity-time');
+  if(timeEl){ const n=new Date(); timeEl.textContent=n.toLocaleTimeString('es-PA',{hour:'2-digit',minute:'2-digit',second:'2-digit'}); }
+
+  // Patch closeSidebar to respect pin
+  const _origClose = window.closeSidebar;
+  window.closeSidebar = function(){
+    if(_sidebarPinned) return;
+    if(typeof _origClose==='function') _origClose.apply(this,arguments);
+  };
+
+  // Patch calc to show activity message
+  const _oc = window.calc;
+  if(typeof _oc==='function'){
+    window.calc = function(){
+      try{
+        const cif = parseFloat(document.getElementById('s1_cif')?.value)||0;
+        const soloOn = document.getElementById('chk-solo-mode')?.checked;
+        if(cif>0) _showActivityMsg(soloOn?'🔒 Calculando Modo Único...':'⚙️ Calculando...','var(--blue-l)',1200);
+      }catch(e){}
+      return _oc.apply(this,arguments);
+    };
+  }
+
+  // ITBMS reset buttons — inject ↺ button next to editable ITBMS fields
+  ['disp_itbms_ar','disp_itbms_tasa'].forEach(function(id){
+    const el = document.getElementById(id);
+    if(!el) return;
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText='position:relative;display:block;';
+    el.parentNode.insertBefore(wrapper, el);
+    wrapper.appendChild(el);
+    const resetBtn = document.createElement('button');
+    resetBtn.textContent='↺';
+    resetBtn.title='Restablecer al valor automático';
+    resetBtn.type='button';
+    resetBtn.style.cssText='position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--blue-l);font-size:13px;cursor:pointer;padding:2px 4px;line-height:1;opacity:.7;z-index:1;';
+    resetBtn.onmouseenter=function(){ resetBtn.style.opacity='1'; };
+    resetBtn.onmouseleave=function(){ resetBtn.style.opacity='.7'; };
+    resetBtn.onclick=function(e){
+      e.preventDefault(); e.stopPropagation();
+      if(id==='disp_itbms_ar') window._itbmsArManual=false;
+      if(id==='disp_itbms_tasa') window._itbmsTasaManual=false;
+      if(typeof calc==='function') calc();
+      _showActivityMsg('↺ ITBMS restablecido al automático','var(--green-l)',2500);
+    };
+    wrapper.appendChild(resetBtn);
+  });
+
+  // Patch key functions to show activity bar messages
+  const _actPatch=[
+    {fn:'guardarSesionNube',  msg:'☁️ Guardando en la nube...',   color:'var(--blue-l)'},
+    {fn:'cargarSesionNube',   msg:'📥 Cargando sesión...',         color:'var(--blue-l)'},
+    {fn:'procesarEmbarque',   msg:'✅ Procesando embarque...',      color:'var(--green-l)'},
+    {fn:'guardarSesion',      msg:'💾 Sesión guardada',             color:'var(--green-l)'},
+    {fn:'calcAndShow',        msg:'⚡ Calculando dashboard...',     color:'var(--orange-l)'},
+    {fn:'calcSab2AndShow',    msg:'⚡ Calculando Sababa...',         color:'var(--orange-l)'},
+    {fn:'exportCSV',          msg:'📊 Exportando CSV...',           color:'var(--muted)'},
+  ];
+  _actPatch.forEach(function(p){
+    const orig = window[p.fn];
+    if(typeof orig==='function'){
+      window[p.fn]=function(){
+        _showActivityMsg(p.msg, p.color, 4000);
+        const r=orig.apply(this,arguments);
+        if(r&&typeof r.then==='function') r.finally(function(){_showActivityMsg('✅ Listo','var(--green-l)',3000);});
+        else setTimeout(function(){_showActivityMsg('✅ Listo','var(--green-l)',3000);},600);
+        return r;
+      };
+    }
+  });
+});
+
+
 function _startProgress() {
+  _showActivityMsg('⏳ Procesando...','var(--orange-l)',5000);
   const bar = document.getElementById('_progress-bar');
   if (!bar) return;
   bar.classList.remove('done');
@@ -8356,6 +8723,7 @@ function _startProgress() {
   setTimeout(() => { bar.style.width = '90%'; }, 700);
 }
 function _endProgress() {
+  _showActivityMsg('✅ Listo','var(--green-l)',3000);
   const bar = document.getElementById('_progress-bar');
   if (!bar) return;
   bar.style.transition = 'width .15s ease';
@@ -8363,36 +8731,7 @@ function _endProgress() {
   setTimeout(() => { bar.classList.add('done'); }, 200);
   setTimeout(() => { bar.style.width = '0%'; bar.classList.remove('done'); }, 700);
 }
-// Wrap key action buttons automatically
-(function _wrapProgressBtns() {
-  const origCalc = window.calc;
-  const origCalcSab2 = window.calcSab2;
-  // We patch these after DOM ready
-  document.addEventListener('DOMContentLoaded', function() {
-    // Patch all onclick buttons that trigger heavy operations
-    ['calcAndShow','calcSab2AndShow','procesarEmbarque','registrarAhorro','guardarEnSupabase',
-     'cargarDeSupabase','guardarSesionNube','cargarSesionNubeIdx'].forEach(fnName => {
-      const orig = window[fnName];
-      if (typeof orig === 'function') {
-        window[fnName] = function() {
-          _startProgress();
-          try {
-            const result = orig.apply(this, arguments);
-            if (result && typeof result.then === 'function') {
-              result.finally(_endProgress);
-            } else {
-              setTimeout(_endProgress, 500);
-            }
-            return result;
-          } catch(e) {
-            _endProgress();
-            throw e;
-          }
-        };
-      }
-    });
-  });
-})();
+// ── End of script ──
 </script>
 </div><!-- /app-wrapper -->
 </body>
