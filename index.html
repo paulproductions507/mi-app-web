@@ -6100,9 +6100,90 @@ function renderDashboardKPIs(data){
         <div class="kpi-sub">Líneas de factura totales</div>
       </div>
     </div>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:4px">
+      <button onclick="exportDashboardExcel()" style="background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:8px;padding:6px 16px;font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px">
+        &#x1F4CA; Descargar Excel
+      </button>
+    </div>
     ${_renderGroupSections(all)}
     ${_renderDeptChart(all)}`;
 }
+
+// ═══════════════════════════════════════════════════════════
+//  exportDashboardExcel — genera .xlsx con todo el historial
+// ═══════════════════════════════════════════════════════════
+function exportDashboardExcel(){
+  if(typeof XLSX === 'undefined'){
+    alert('Cargando librería Excel... espera 3 segundos e intenta de nuevo.'); return;
+  }
+  var fmt2 = function(n){ return Number(n||0).toFixed(2); };
+  var wb = XLSX.utils.book_new();
+
+  // ── Hoja 1: Resumen por Embarque ──
+  var resumenRows = [
+    ['N° Embarque','Descripción','Fecha','Escenario','Tipo','CIF Total','Ahorro Neto','% Ahorro/CIF','N° Facturas']
+  ];
+  tendData.forEach(function(d){
+    var invL = (d.snap && d.snap.invLines) ? d.snap.invLines : (d.invLines||[]);
+    var tipo = ((d.snap && d.snap.tipo)||d.tipo||'ZL') === 'EXT' ? 'Importación' : 'Zona Libre';
+    var pct  = d.cif>0 ? (d.ahorro/d.cif*100).toFixed(2)+'%' : '—';
+    resumenRows.push([
+      d.nro||'—', d.desc||'—', d.fecha||'—', d.esc||'—', tipo,
+      Number(fmt2(d.cif)), Number(fmt2(d.ahorro)), pct, invL.length
+    ]);
+  });
+  var ws1 = XLSX.utils.aoa_to_sheet(resumenRows);
+  ws1['!cols'] = [12,28,12,20,14,14,14,12,10].map(function(w){ return {wch:w}; });
+  XLSX.utils.book_append_sheet(wb, ws1, 'Resumen Embarques');
+
+  // ── Hoja 2: Detalle Facturas ──
+  var factRows = [
+    ['N° Embarque','Descripción','Fecha','Escenario','Tipo Embarque','Proveedor','Departamento','OC / N° Factura','Monto CIF','Arancel %','Monto Arancel']
+  ];
+  tendData.forEach(function(d){
+    var invL = (d.snap && d.snap.invLines) ? d.snap.invLines : (d.invLines||[]);
+    var tipo = ((d.snap && d.snap.tipo)||d.tipo||'ZL') === 'EXT' ? 'Importación' : 'Zona Libre';
+    invL.forEach(function(l){
+      var arRate = l.arPct||l.si||0;
+      var arAmt  = l.ar||(l.costo*arRate)||0;
+      factRows.push([
+        d.nro||'—', d.desc||'—', d.fecha||'—', d.esc||'—', tipo,
+        l.prov||l.dept||'—', l.deptCat||l.dept||'—', l.oc||'—',
+        Number(fmt2(l.costo)), arRate>0?(arRate*100).toFixed(4)+'%':'0%',
+        Number(fmt2(arAmt))
+      ]);
+    });
+  });
+  var ws2 = XLSX.utils.aoa_to_sheet(factRows);
+  ws2['!cols'] = [12,24,12,20,14,24,18,16,14,10,14].map(function(w){ return {wch:w}; });
+  XLSX.utils.book_append_sheet(wb, ws2, 'Detalle Facturas');
+
+  // ── Hoja 3: Por Departamento ──
+  var deptMap = {};
+  tendData.forEach(function(d){
+    var invL = (d.snap && d.snap.invLines) ? d.snap.invLines : (d.invLines||[]);
+    var tipo = ((d.snap && d.snap.tipo)||d.tipo||'ZL') === 'EXT' ? 'Importación' : 'Zona Libre';
+    invL.forEach(function(l){
+      var dept = l.deptCat||l.dept||'Sin Categoría';
+      if(!deptMap[dept]) deptMap[dept]={totalZL:0,totalEXT:0,countZL:0,countEXT:0};
+      if(tipo==='Importación'){ deptMap[dept].totalEXT+=l.costo||0; deptMap[dept].countEXT++; }
+      else                    { deptMap[dept].totalZL +=l.costo||0; deptMap[dept].countZL++;  }
+    });
+  });
+  var deptRows = [['Departamento','Total ZL','Facturas ZL','Total Importación','Facturas Imp.','Total General']];
+  Object.keys(deptMap).sort().forEach(function(k){
+    var v = deptMap[k];
+    deptRows.push([k, Number(fmt2(v.totalZL)), v.countZL, Number(fmt2(v.totalEXT)), v.countEXT, Number(fmt2(v.totalZL+v.totalEXT))]);
+  });
+  var ws3 = XLSX.utils.aoa_to_sheet(deptRows);
+  ws3['!cols'] = [22,14,12,16,12,14].map(function(w){ return {wch:w}; });
+  XLSX.utils.book_append_sheet(wb, ws3, 'Por Departamento');
+
+  var fecha = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, 'Dashboard_Simulador_'+fecha+'.xlsx');
+  _showToast('&#x1F4CA; Excel descargado','green',2000);
+}
+
 
 function _renderDeptChart(all){
   if(!all.length) return '';
@@ -6174,108 +6255,258 @@ function _renderDeptChart(all){
 }
 
 // ── AGRUPACIONES COLAPSABLES ─────────────────────────
+// ═══════════════════════════════════════════════════════════
+//  _renderGroupSections  —  v7.5.3
+//  Por Departamento: ZL vs EXT expandible + proveedores
+//  Por Escenario: igual que antes
+// ═══════════════════════════════════════════════════════════
 function _renderGroupSections(data){
   if(!data.length) return '';
-  const fmtK=n=>{ if(n>=1000000)return'$'+(n/1000000).toFixed(2)+'M'; if(n>=1000)return'$'+(n/1000).toFixed(1)+'k'; return'$'+Number(n).toFixed(0); };
 
-  // Group BY DEPARTMENT (desc category)
-  const byDept={};
-  data.forEach(d=>{
-    const invL=d.snap?.invLines||d.invLines||[];
-    invL.forEach(l=>{
-      const k=l.deptCat||l.dept||'Sin Categoría';
-      if(!byDept[k]) byDept[k]={ahorro:0,cif:0,count:0,items:[]};
-      byDept[k].ahorro+=d.ahorro||0; byDept[k].cif+=d.cif||0;
-      if(!byDept[k].items.includes(d)){ byDept[k].count++; byDept[k].items.push(d); }
+  var fmt2 = function(n){ return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
+  var fmtK = function(n){ if(n>=1000000)return'$'+(n/1000000).toFixed(2)+'M'; if(n>=1000)return'$'+(n/1000).toFixed(1)+'k'; return'$'+Number(n||0).toFixed(0); };
+
+  // ── Acumular facturas por departamento separando ZL / EXT ──
+  var byDept = {};
+  data.forEach(function(d){
+    var invL = (d.snap && d.snap.invLines) ? d.snap.invLines : (d.invLines||[]);
+    var tipoEmb = ((d.snap && d.snap.tipo) || d.tipo || 'ZL');
+    var dIdx = tendData.indexOf(d);
+    invL.forEach(function(l){
+      var k = l.deptCat || l.dept || 'Sin Categoría';
+      if(!byDept[k]) byDept[k] = {totalCosto:0, totalZL:0, totalEXT:0, facZL:[], facEXT:[]};
+      var fac = {prov: l.prov||l.dept||'—', oc: l.oc||'—', costo: l.costo||0,
+                 embarqueNro: d.nro||'—', embarqueIdx: dIdx, esc: d.esc||'—'};
+      byDept[k].totalCosto += l.costo||0;
+      if(tipoEmb === 'EXT'){ byDept[k].facEXT.push(fac); byDept[k].totalEXT += l.costo||0; }
+      else                 { byDept[k].facZL.push(fac);  byDept[k].totalZL  += l.costo||0; }
     });
     if(!invL.length){
-      const k='Sin Facturas'; if(!byDept[k]) byDept[k]={ahorro:0,cif:0,count:0,items:[]};
-      byDept[k].ahorro+=d.ahorro||0; byDept[k].cif+=d.cif||0; byDept[k].count++; byDept[k].items.push(d);
+      var k = 'Sin Facturas';
+      if(!byDept[k]) byDept[k] = {totalCosto:0, totalZL:0, totalEXT:0, facZL:[], facEXT:[]};
     }
   });
 
-  // Group BY ESCENARIO
-  const byEsc={};
-  data.forEach(d=>{
-    const k=d.esc||'Sin Escenario';
-    if(!byEsc[k]) byEsc[k]={ahorro:0,cif:0,count:0,items:[]};
-    byEsc[k].ahorro+=d.ahorro||0; byEsc[k].cif+=d.cif||0; byEsc[k].count++; byEsc[k].items.push(d);
+  // ── Acumular por escenario ──
+  var byEsc = {};
+  data.forEach(function(d){
+    var k = d.esc||'Sin Escenario';
+    if(!byEsc[k]) byEsc[k] = {ahorro:0, cif:0, count:0, items:[]};
+    byEsc[k].ahorro += d.ahorro||0; byEsc[k].cif += d.cif||0;
+    byEsc[k].count++; byEsc[k].items.push(d);
   });
 
-  // Rows builder
-  const buildRows=(items,grpKey)=>items.map(d=>{
-    const idx=tendData.indexOf(d);
-    const pct=d.cif>0?(d.ahorro/d.cif*100).toFixed(1)+'%':'—';
-    return `<div class="grp-row" onclick="abrirModuloComparativo_idx(${idx})">
-      <div class="grp-row-left">
-        <div class="grp-row-nro">${d.nro||'—'}</div>
-        <div class="grp-row-desc">${d.desc||'—'}</div>
-        <div class="grp-row-meta">${d.fecha||''} · ${d.esc||''}</div>
-      </div>
-      <div class="grp-row-right">
-        <div class="grp-row-cif">${fmtK(d.cif||0)}</div>
-        <div class="grp-row-ahorro">+${fmtK(d.ahorro||0)}</div>
-        <div class="grp-row-pct">${pct}</div>
-      </div>
-    </div>`;
-  }).join('');
+  // ── Helper: fila de proveedor ──
+  function buildProvRows(facs){
+    if(!facs.length) return '<div style="padding:12px 16px;color:var(--muted);font-size:11px">Sin proveedores en esta categoría.</div>';
+    return facs.map(function(f){
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 16px;'
+        +'border-bottom:1px solid rgba(48,54,61,.4);cursor:pointer;transition:background .12s" '
+        +'onmouseover="this.style.background=\'rgba(255,255,255,.03)\'" '
+        +'onmouseout="this.style.background=\'\'" '
+        +'onclick="abrirModuloComparativo_idx('+f.embarqueIdx+')">'
+        +'<div style="flex:1;min-width:0">'
+        +'<div style="font-size:12px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+f.prov+'</div>'
+        +'<div style="font-size:10px;color:var(--muted);margin-top:1px">OC: '+f.oc+' &nbsp;|&nbsp; '+f.esc+'</div>'
+        +'</div>'
+        +'<div style="text-align:right;flex-shrink:0;margin-left:12px">'
+        +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:var(--text)">'+fmt2(f.costo)+'</div>'
+        +'<div style="font-size:10px;color:var(--blue-l);margin-top:1px">&#x1F4E6; '+f.embarqueNro+' &rarr;</div>'
+        +'</div>'
+        +'</div>';
+    }).join('');
+  }
 
-  const deptColors={'ROPA':'rgba(88,166,255,.15)','CALZADO':'rgba(240,136,62,.15)','JUGUETES':'rgba(168,85,247,.15)','ELECTRÓNICA':'rgba(34,211,238,.15)','Sin Categoría':'rgba(139,148,158,.12)','Sin Facturas':'rgba(139,148,158,.12)'};
-  const deptIcons={'ROPA':'👗','CALZADO':'👟','JUGUETES':'🧸','ELECTRÓNICA':'📱','Sin Categoría':'📦','Sin Facturas':'📋'};
+  // ── Helper: sub-bloque ZL o EXT colapsable ──
+  function buildTipoBlock(uid, label, color, bgColor, emoji, facs, subtotal){
+    var bodyId = uid+'-body';
+    var chevId = uid+'-chev';
+    return '<div>'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 16px;'
+      +'background:'+bgColor+';cursor:pointer;border-bottom:1px solid var(--border)" '
+      +'onclick="_grpToggleSub(\''+bodyId+'\',\''+chevId+'\')">'
+      +'<div style="display:flex;align-items:center;gap:8px">'
+      +'<span style="font-size:13px">'+emoji+'</span>'
+      +'<div>'
+      +'<div style="font-size:11px;font-weight:700;color:'+color+'">'+label+'</div>'
+      +'<div style="font-size:10px;color:var(--muted)">'+facs.length+' proveedor'+(facs.length!==1?'es':'')+'</div>'
+      +'</div></div>'
+      +'<div style="display:flex;align-items:center;gap:10px">'
+      +'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:'+color+'">'+fmt2(subtotal)+'</span>'
+      +'<span id="'+chevId+'" style="font-size:11px;color:var(--muted2);transition:transform .2s">&#9660;</span>'
+      +'</div></div>'
+      +'<div id="'+bodyId+'" style="display:none">'+buildProvRows(facs)
+      +'<div style="display:flex;justify-content:space-between;padding:7px 16px;background:rgba(0,0,0,.08);font-size:11px;font-weight:700;border-top:1px solid var(--border)">'
+      +'<span style="color:var(--muted)">Subtotal '+label+'</span>'
+      +'<span style="color:'+color+'">'+fmt2(subtotal)+'</span></div>'
+      +'</div>'
+      +'</div>';
+  }
 
-  let html='<div style="margin-top:4px">';
-  html+=`<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:14px 0 8px;display:flex;align-items:center;gap:6px"><span>📂</span> Por Departamento / Categoría</div>`;
-  Object.entries(byDept).sort((a,b)=>b[1].ahorro-a[1].ahorro).forEach(([k,v],gi)=>{
-    const uid=`grp-dept-${gi}`;
-    const bgCol=deptColors[k.toUpperCase()]||'rgba(63,185,80,.1)';
-    const ico=deptIcons[k.toUpperCase()]||'📦';
-    const pct=v.cif>0?(v.ahorro/v.cif*100).toFixed(1)+'%':'—';
-    html+=`<div class="grp-section">
-      <div class="grp-hdr" onclick="_toggleGrp('${uid}')">
-        <div class="grp-hdr-left">
-          <div class="grp-hdr-icon" style="background:${bgCol}">${ico}</div>
-          <div><div class="grp-hdr-title">${k}</div><div class="grp-hdr-sub">${v.count} embarque${v.count!==1?'s':''} · ${pct} ahorro/CIF</div></div>
-        </div>
-        <div style="display:flex;align-items:center;gap:12px">
-          <div class="grp-badge" style="color:var(--green-l)">+${fmtK(v.ahorro)}</div>
-          <span class="grp-chevron" id="${uid}-chev">▼</span>
-        </div>
-      </div>
-      <div class="grp-body" id="${uid}">${buildRows(v.items,k)}</div>
-    </div>`;
+  var deptColors = {'ROPA':'rgba(88,166,255,.15)','CALZADO':'rgba(240,136,62,.15)','JUGUETES':'rgba(168,85,247,.15)','ELECTRÓNICA':'rgba(34,211,238,.15)','Sin Categoría':'rgba(139,148,158,.12)','Sin Facturas':'rgba(139,148,158,.12)'};
+  var deptIcons  = {'ROPA':'👗','CALZADO':'👟','JUGUETES':'🧸','ELECTRÓNICA':'📱','Sin Categoría':'📦','Sin Facturas':'📋'};
+
+  var html = '<div style="margin-top:4px">';
+  html += '<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:14px 0 8px;display:flex;align-items:center;gap:6px">&#x1F4C2; Por Departamento / Categoría</div>';
+
+  var deptEntries = Object.keys(byDept).map(function(k){ return [k, byDept[k]]; });
+  deptEntries.sort(function(a,b){ return b[1].totalCosto - a[1].totalCosto; });
+
+  deptEntries.forEach(function(entry, gi){
+    var k = entry[0], v = entry[1];
+    var uid    = 'gd-'+gi;
+    var allId  = uid+'-all';   // panel con TODOS los proveedores
+    var desgId = uid+'-desg';  // panel con ZL / EXT separados
+    var arrId  = uid+'-arr';   // flecha
+
+    var bgCol = deptColors[k.toUpperCase()] || 'rgba(63,185,80,.1)';
+    var ico   = deptIcons[k.toUpperCase()]  || '&#x1F4E6;';
+    var hasZL = v.facZL.length > 0;
+    var hasEXT= v.facEXT.length > 0;
+    var totalFacs = v.facZL.length + v.facEXT.length;
+    var tipoTag = hasZL && hasEXT ? 'ZL + Importación' : hasZL ? 'Zona Libre' : hasEXT ? 'Importación' : '—';
+
+    // Todos los proveedores (ZL + EXT juntos)
+    var allFacs = v.facZL.concat(v.facEXT);
+    allFacs.sort(function(a,b){ return b.costo - a.costo; });
+    var allPanel = '<div id="'+allId+'" style="display:none;border-top:1px solid var(--border)">'
+      + buildProvRows(allFacs)
+      +'<div style="display:flex;justify-content:space-between;padding:8px 16px;background:rgba(63,185,80,.05);font-size:11px;font-weight:700;border-top:1px solid var(--border)">'
+      +'<span style="color:var(--muted)">Total '+k+'</span>'
+      +'<span style="color:var(--green-l)">'+fmt2(v.totalCosto)+'</span></div>'
+      +'</div>';
+
+    // Panel desglosado ZL / EXT
+    var desgInner = '';
+    if(hasZL)  desgInner += buildTipoBlock(uid+'-zl','Zona Libre','var(--blue-l)','rgba(88,166,255,.06)','&#x1F3D9;',v.facZL,v.totalZL);
+    if(hasEXT) desgInner += buildTipoBlock(uid+'-ext','Importación','var(--orange-l)','rgba(240,136,62,.06)','&#x2708;',v.facEXT,v.totalEXT);
+    if(!hasZL && !hasEXT) desgInner = '<div style="padding:14px 16px;color:var(--muted);font-size:11px">Sin facturas.</div>';
+    var desgPanel = '<div id="'+desgId+'" style="display:none;border-top:1px solid var(--border)">'+desgInner+'</div>';
+
+    html += '<div class="grp-section" style="margin-bottom:10px;overflow:visible">'
+
+    // ── Cabecera: título clickeable (=todos) + flecha (=desglosar) ──
+      +'<div style="display:flex;align-items:stretch;border-radius:12px 12px 0 0;overflow:hidden">'
+
+        // Título (click = panel todos)
+        +'<div style="display:flex;align-items:center;gap:10px;flex:1;padding:12px 14px;'
+        +'background:var(--s2);cursor:pointer;user-select:none" '
+        +'onclick="_grpToggleDept(\''+uid+'\')" title="Ver todos los proveedores de '+k+'">'
+        +'<div style="width:32px;height:32px;border-radius:8px;background:'+bgCol+';display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0">'+ico+'</div>'
+        +'<div style="flex:1;min-width:0">'
+        +'<div style="font-size:13px;font-weight:700;color:var(--text)">'+k+'</div>'
+        +'<div style="font-size:10px;color:var(--muted);margin-top:1px">'+totalFacs+' factura'+(totalFacs!==1?'s':'')+' &middot; '+tipoTag+'</div>'
+        +'</div>'
+        +'<div style="text-align:right;flex-shrink:0">'
+        +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:14px;font-weight:800;color:var(--text)">'+fmtK(v.totalCosto)+'</div>'
+        +(hasZL  ? '<div style="font-size:9px;color:var(--blue-l)">ZL '+fmtK(v.totalZL)+'</div>' : '')
+        +(hasEXT ? '<div style="font-size:9px;color:var(--orange-l)">IMP '+fmtK(v.totalEXT)+'</div>' : '')
+        +'</div>'
+        +'</div>'
+
+        // Flecha (click = panel desglosado ZL/EXT)
+        +'<div id="'+arrId+'" style="width:44px;display:flex;align-items:center;justify-content:center;'
+        +'background:var(--s2);border-left:1px solid var(--border);cursor:pointer;font-size:14px;'
+        +'color:var(--muted);flex-shrink:0;transition:background .15s" '
+        +'onmouseover="this.style.background=\'rgba(255,255,255,.06)\'" '
+        +'onmouseout="this.style.background=\'var(--s2)\'" '
+        +'onclick="_grpToggleDesg(\''+uid+'\')" title="Desglosar por tipo de proveedor">&#9660;</div>'
+
+      +'</div>'
+      // Panels
+      + allPanel
+      + desgPanel
+      +'</div>';
   });
 
-  html+=`<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:16px 0 8px;display:flex;align-items:center;gap:6px"><span>🔀</span> Por Escenario Utilizado</div>`;
-  const escColors={'Escenario Regular':'rgba(63,185,80,.12)','CIF Express':'rgba(88,166,255,.12)','Sababa Imports (#3)':'rgba(240,136,62,.12)'};
-  const escIcons={'Escenario Regular':'📋','CIF Express':'⚡','Sababa Imports (#3)':'🤝'};
-  Object.entries(byEsc).sort((a,b)=>b[1].count-a[1].count).forEach(([k,v],gi)=>{
-    const uid=`grp-esc-${gi}`;
-    const bgCol=escColors[k]||'rgba(139,148,158,.12)';
-    const ico=escIcons[k]||'📊';
-    const pct=v.cif>0?(v.ahorro/v.cif*100).toFixed(1)+'%':'—';
-    html+=`<div class="grp-section">
-      <div class="grp-hdr" onclick="_toggleGrp('${uid}')">
-        <div class="grp-hdr-left">
-          <div class="grp-hdr-icon" style="background:${bgCol}">${ico}</div>
-          <div><div class="grp-hdr-title">${k}</div><div class="grp-hdr-sub">${v.count} embarque${v.count!==1?'s':''} · ${pct} ahorro/CIF</div></div>
-        </div>
-        <div style="display:flex;align-items:center;gap:12px">
-          <div class="grp-badge" style="color:var(--blue-l)">${v.count} emb.</div>
-          <span class="grp-chevron" id="${uid}-chev">▼</span>
-        </div>
-      </div>
-      <div class="grp-body" id="${uid}">${buildRows(v.items,k)}</div>
-    </div>`;
+  // ── Por Escenario ──
+  html += '<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:16px 0 8px;display:flex;align-items:center;gap:6px">&#x1F500; Por Escenario Utilizado</div>';
+  var escColors = {'Escenario Regular':'rgba(63,185,80,.12)','CIF Express':'rgba(88,166,255,.12)','Sababa Imports (#3)':'rgba(240,136,62,.12)'};
+  var escIcons  = {'Escenario Regular':'📋','CIF Express':'⚡','Sababa Imports (#3)':'🤝'};
+
+  var escEntries = Object.keys(byEsc).map(function(k){ return [k, byEsc[k]]; });
+  escEntries.sort(function(a,b){ return b[1].count - a[1].count; });
+
+  escEntries.forEach(function(entry, gi){
+    var k = entry[0], v = entry[1];
+    var uid  = 'ge-'+gi;
+    var bgCol = escColors[k] || 'rgba(139,148,158,.12)';
+    var ico   = escIcons[k]  || '📊';
+    var pct   = v.cif>0?(v.ahorro/v.cif*100).toFixed(1)+'%':'—';
+    var rowsHtml = v.items.map(function(d){
+      var idx = tendData.indexOf(d);
+      var dp  = d.cif>0?(d.ahorro/d.cif*100).toFixed(1)+'%':'—';
+      return '<div class="grp-row" onclick="abrirModuloComparativo_idx('+idx+')">'
+        +'<div class="grp-row-left">'
+        +'<div class="grp-row-nro">'+(d.nro||'—')+'</div>'
+        +'<div class="grp-row-desc">'+(d.desc||'—')+'</div>'
+        +'<div class="grp-row-meta">'+(d.fecha||'')+' &middot; '+(d.esc||'')+'</div>'
+        +'</div>'
+        +'<div class="grp-row-right">'
+        +'<div class="grp-row-cif">'+fmtK(d.cif||0)+'</div>'
+        +'<div class="grp-row-ahorro">+'+fmtK(d.ahorro||0)+'</div>'
+        +'<div class="grp-row-pct">'+dp+'</div>'
+        +'</div></div>';
+    }).join('');
+    html += '<div class="grp-section">'
+      +'<div class="grp-hdr" onclick="_toggleGrp(\''+uid+'\')">'
+      +'<div class="grp-hdr-left">'
+      +'<div class="grp-hdr-icon" style="background:'+bgCol+'">'+ico+'</div>'
+      +'<div><div class="grp-hdr-title">'+k+'</div>'
+      +'<div class="grp-hdr-sub">'+v.count+' embarque'+(v.count!==1?'s':'')+' &middot; '+pct+' ahorro/CIF</div></div>'
+      +'</div>'
+      +'<div style="display:flex;align-items:center;gap:12px">'
+      +'<div class="grp-badge" style="color:var(--blue-l)">'+v.count+' emb.</div>'
+      +'<span class="grp-chevron" id="'+uid+'-chev">&#9660;</span>'
+      +'</div></div>'
+      +'<div class="grp-body" id="'+uid+'">'+rowsHtml+'</div>'
+      +'</div>';
   });
-  html+='</div>';
+
+  html += '</div>';
   return html;
 }
 
-function _toggleGrp(uid){
-  const body=document.getElementById(uid);
-  const chev=document.getElementById(uid+'-chev');
+// ── Toggle: clic en título = panel TODOS ──
+function _grpToggleDept(uid){
+  var panAll  = document.getElementById(uid+'-all');
+  var panDesg = document.getElementById(uid+'-desg');
+  var arr     = document.getElementById(uid+'-arr');
+  if(!panAll) return;
+  var opening = panAll.style.display === 'none';
+  panAll.style.display  = opening ? 'block' : 'none';
+  if(panDesg && opening) panDesg.style.display = 'none';   // cerrar desglose si estaba abierto
+  if(arr) arr.style.color = opening ? 'var(--green-l)' : 'var(--muted)';
+}
+
+// ── Toggle: clic en flecha = panel DESGLOSADO ZL/EXT ──
+function _grpToggleDesg(uid){
+  var panDesg = document.getElementById(uid+'-desg');
+  var panAll  = document.getElementById(uid+'-all');
+  var arr     = document.getElementById(uid+'-arr');
+  if(!panDesg) return;
+  var opening = panDesg.style.display === 'none';
+  panDesg.style.display = opening ? 'block' : 'none';
+  if(panAll && opening) panAll.style.display = 'none';
+  if(arr) arr.innerHTML = opening ? '&#9650;' : '&#9660;';
+}
+
+// ── Toggle sub-bloque ZL/EXT (colapsable interno) ──
+function _grpToggleSub(bodyId, chevId){
+  var body = document.getElementById(bodyId);
+  var chev = document.getElementById(chevId);
   if(!body) return;
-  const open=body.classList.toggle('open');
+  var open = body.style.display === 'none';
+  body.style.display = open ? 'block' : 'none';
+  if(chev) chev.style.transform = open ? 'rotate(180deg)' : '';
+}
+
+// ── Toggle escenarios (original) ──
+function _toggleGrp(uid){
+  var body = document.getElementById(uid);
+  var chev = document.getElementById(uid+'-chev');
+  if(!body) return;
+  var open = body.classList.toggle('open');
   if(chev) chev.classList.toggle('open',open);
 }
 
