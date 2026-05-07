@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Simulador Aduanal — Panamá v8.1</title>
+<title>Simulador Aduanal — Panamá v8.2</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -2185,6 +2185,11 @@ function updateCifExpDisplays(){
   sd('sc2_tasa_display', tasa);
   sd('sc2_itbms_tasa_display', Math.round(tasa*itbPct*100)/100);
   sd('sc2_hon_display', sc2.hon||0);
+  // Auto-restore Valor Exento from snap if field is empty
+  const honNgEl = document.getElementById('sc2_hon_ng');
+  if(honNgEl && (!honNgEl.value || parseFloat(honNgEl.value)===0) && sc2.honNg > 0){
+    honNgEl.value = sc2.honNg.toFixed(2);
+  }
   // FIX: Master Value = diferencia Esc.#1 vs Esc.#2
   const mv = sc2.mv || 0;
   sd('sc_costo_zl', mv);
@@ -5309,6 +5314,8 @@ function reabrirEmbarquePendiente(idx){
   if(s.reng  !== undefined) _set('s1_reng', s.reng);
   if(s.gzlc  !== undefined) _set('s1_gzlc', s.gzlc);
   if(s.tasa  !== undefined) _set('s1_tasa', s.tasa);
+  // Restore CIF Express Valor Exento
+  if(sc2.honNg !== undefined && sc2.honNg > 0) _set('sc2_hon_ng', sc2.honNg.toFixed(2));
 
   // Escenario 3 (Sababa) campos
   const sc3 = s.sc3||{};
@@ -5946,7 +5953,7 @@ function renderTend(){
         <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--green-l);font-weight:700;white-space:nowrap">$${(d.ahorro/1000).toFixed(2)}k</div>
         <div style="font-size:11px;color:var(--orange-l);white-space:nowrap">${pct}</div>
         <div style="display:flex;gap:4px;align-items:center">
-          ${isPend?`<button class="btn-reabrir" onclick="event.stopPropagation();reabrirEmbarquePendiente(${idx})">✏️ Reabrir</button>`:''}
+          <button class="btn-reabrir" onclick="event.stopPropagation();reabrirEmbarquePendiente(${idx})" style="${isPend?'':'background:rgba(88,166,255,.1);border-color:rgba(88,166,255,.3);color:var(--blue-l)'}">✏️ ${isPend?'Reabrir':'Editar'}</button>
           <button class="del-btn" onclick="event.stopPropagation();deleteTend(${idx})" style="font-size:10px;padding:2px 6px;height:22px;flex-shrink:0">×</button>
         </div>
       </div>`;
@@ -6075,7 +6082,7 @@ function renderTend(){
       <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--green-l);font-weight:700;white-space:nowrap">$${(d.ahorro/1000).toFixed(2)}k</div>
       <div style="font-size:11px;color:var(--orange-l);white-space:nowrap">${pct}</div>
       <div style="display:flex;gap:4px;align-items:center">
-        ${isPend?`<button class="btn-reabrir" onclick="event.stopPropagation();reabrirEmbarquePendiente(${idx})">✏️ Reabrir</button>`:''}
+        <button class="btn-reabrir" onclick="event.stopPropagation();reabrirEmbarquePendiente(${idx})" style="${isPend?'':'background:rgba(88,166,255,.1);border-color:rgba(88,166,255,.3);color:var(--blue-l)'}">✏️ ${isPend?'Reabrir':'Editar'}</button>
         <button class="del-btn" onclick="event.stopPropagation();deleteTend(${idx})" style="font-size:10px;padding:2px 6px;height:22px;flex-shrink:0">×</button>
       </div>
     </div>`;
@@ -6381,7 +6388,8 @@ function _renderGroupSections(data){
       var k = l.deptCat || l.dept || 'Sin Categoría';
       if(!byDept[k]) byDept[k] = {totalCosto:0, totalZL:0, totalEXT:0, facZL:[], facEXT:[]};
       var fac = {prov: l.prov||l.dept||'—', oc: l.oc||'—', costo: l.costo||0,
-                 embarqueNro: d.nro||'—', embarqueIdx: dIdx, esc: d.esc||'—'};
+                 embarqueNro: d.nro||'—', embarqueIdx: dIdx, esc: d.esc||'—',
+                 tipo: tipoEmb};
       byDept[k].totalCosto += l.costo||0;
       if(tipoEmb === 'EXT'){ byDept[k].facEXT.push(fac); byDept[k].totalEXT += l.costo||0; }
       else                 { byDept[k].facZL.push(fac);  byDept[k].totalZL  += l.costo||0; }
@@ -6405,6 +6413,9 @@ function _renderGroupSections(data){
   function buildProvRows(facs){
     if(!facs.length) return '<div style="padding:12px 16px;color:var(--muted);font-size:11px">Sin proveedores en esta categoría.</div>';
     return facs.map(function(f){
+      var tipoBadge = f.tipo==='EXT'
+        ? '<span style="background:rgba(240,136,62,.15);border:1px solid rgba(240,136,62,.3);color:var(--orange-l);border-radius:3px;padding:1px 5px;font-size:9px;font-weight:700;white-space:nowrap">✈️ IMP</span>'
+        : '<span style="background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:3px;padding:1px 5px;font-size:9px;font-weight:700;white-space:nowrap">🏙️ ZL</span>';
       return '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 16px;'
         +'border-bottom:1px solid rgba(48,54,61,.4);cursor:pointer;transition:background .12s" '
         +'onmouseover="this.style.background=\'rgba(255,255,255,.03)\'" '
@@ -6412,7 +6423,10 @@ function _renderGroupSections(data){
         +'onclick="abrirModuloComparativo_idx('+f.embarqueIdx+')">'
         +'<div style="flex:1;min-width:0">'
         +'<div style="font-size:12px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+f.prov+'</div>'
-        +'<div style="font-size:10px;color:var(--muted);margin-top:1px">OC: '+f.oc+' &nbsp;|&nbsp; '+f.esc+'</div>'
+        +'<div style="font-size:10px;color:var(--muted);margin-top:2px;display:flex;align-items:center;gap:5px">'
+        +tipoBadge
+        +' OC: '+f.oc+' &nbsp;|&nbsp; '+f.esc
+        +'</div>'
         +'</div>'
         +'<div style="text-align:right;flex-shrink:0;margin-left:12px">'
         +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:var(--text)">'+fmt2(f.costo)+'</div>'
@@ -7560,7 +7574,9 @@ function _initProvDatalist(){
 }
 
 function renderInvLines(){
-  const c=document.getElementById('inv-lines');
+  // Target all visible inv-lines containers (original tab + modal clone)
+  const containers = Array.from(document.querySelectorAll('[id="inv-lines"]'));
+  const c = containers.length ? containers[containers.length - 1] : null; // prefer last (modal clone)
   if(!c) return;
   _initProvDatalist();
   const isSababa=compar==='sababa';
@@ -7989,6 +8005,11 @@ function loadInvFile(input){
 
     alert(msg);
     calc();
+    // Re-render in modal clone if facturas modal is open
+    const modalOverlay = document.getElementById('tab-modal-overlay');
+    if(modalOverlay && modalOverlay.classList.contains('open') && modalOverlay.getAttribute('data-tab')==='facturas'){
+      renderInvLines();
+    }
   } // end parseRows
 
   if(isXlsx){
