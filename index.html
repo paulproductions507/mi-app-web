@@ -679,7 +679,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
         <div style="font-size:12px;font-weight:700;color:#3fb950">Calcular Costo</div>
         <div style="font-size:10px;color:var(--muted)">3 escenarios aduanales</div>
       </button>
-      <button onclick="iniciarApp('tendencias')"
+      <button onclick="iniciarApp('dashboard')"
         style="background:linear-gradient(135deg,rgba(88,166,255,.12),rgba(88,166,255,.05));border:1px solid rgba(88,166,255,.3);border-radius:14px;padding:14px;text-align:left;cursor:pointer;transition:transform .15s,box-shadow .15s;display:flex;flex-direction:column;gap:3px"
         onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(88,166,255,.2)'"
         onmouseout="this.style.transform='';this.style.boxShadow=''">
@@ -1353,7 +1353,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
     <button class="btn btn-ghost" style="flex:1;background:rgba(63,185,80,.08);border-color:rgba(63,185,80,.25);color:var(--green-l)" onclick="_startProgress();procesarEmbarque()">
       ✅ Marcar como Procesado
     </button>
-    <button id="btn-aplicar-cambios" class="btn" style="flex:1;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.25);color:#f97316;opacity:.45;pointer-events:none;transition:all .25s" onclick="calc();this.style.cssText='flex:1;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.25);color:#f97316;opacity:.45;pointer-events:none;transition:all .25s';_showToast('✅ Cambios aplicados','green',1500)">✓ Aplicar</button>
+    <button id="btn-aplicar-cambios" class="btn" style="flex:1;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.25);color:#f97316;opacity:.45;pointer-events:none;transition:all .25s" onclick="calc();_showToast('✅ Cambios aplicados','green',1500)">✓ Aplicar</button>
     <button class="btn btn-green" style="display:none;flex:2" onclick="_startProgress();calcAndShow()">⚡ Calcular — Ver Dashboard →</button>
   </div>
 
@@ -1535,7 +1535,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
         <input type="number" id="sc_costo_zl" readonly style="background:var(--bg);color:var(--blue-l);font-weight:700">
       </div>
       <div style="display:flex;gap:8px;margin-top:12px">
-        <button id="btn-aplicar-cif" class="btn" style="flex:1;background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);color:var(--blue-l);opacity:.45;pointer-events:none;transition:all .25s" onclick="calc();this.style.cssText='flex:1;background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);color:var(--blue-l);opacity:.45;pointer-events:none;transition:all .25s';_showToast('✅ Cambios aplicados','green',1500)">✓ Aplicar</button>
+        <button id="btn-aplicar-cif" class="btn" style="flex:1;background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);color:var(--blue-l);opacity:.45;pointer-events:none;transition:all .25s" onclick="calc();_showToast('✅ Cambios aplicados','green',1500)">✓ Aplicar</button>
         <button class="btn btn-blue" style="flex:2" onclick="calcAndShow('cifexp')">⚡ Calcular — Ver Dashboard →</button>
       </div>
     </div>
@@ -1639,7 +1639,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       </div>
 
       <div style="display:flex;gap:8px;margin-top:8px">
-        <button id="btn-aplicar-sab" class="btn" style="flex:1;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.25);color:#f97316;opacity:.45;pointer-events:none;transition:all .25s" onclick="calcSab2();this.style.cssText='flex:1;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.25);color:#f97316;opacity:.45;pointer-events:none;transition:all .25s';_showToast('✅ Cambios aplicados','green',1500)">✓ Aplicar</button>
+        <button id="btn-aplicar-sab" class="btn" style="flex:1;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.25);color:#f97316;opacity:.45;pointer-events:none;transition:all .25s" onclick="calcSab2();_showToast('✅ Cambios aplicados','green',1500)">✓ Aplicar</button>
         <button class="btn btn-orange" style="flex:2" onclick="_startProgress();calcSab2AndShow()">⚡ Calcular — Ver Dashboard →</button>
       </div>
     </div>
@@ -2700,6 +2700,7 @@ function iniciarApp(tab){
   const splash=document.getElementById('splash');
   const app=document.getElementById('app-wrapper');
   // Special routing for new tabs
+  if(tab==='dashboard'){ tab='tendencias'; setTimeout(()=>{ renderDashboardKPIs(); if(typeof renderTopProvs==='function') renderTopProvs(); switchTab('tendencias', document.querySelector('.tab')); }, 200); }
   if(tab==='histfact'){ tab='tendencias'; setTimeout(()=>{ renderHistFact(); switchTab('tendencias', document.querySelector('.tab')); }, 200); }
   if(tab==='resumen'){  tab='tendencias'; setTimeout(()=>{ renderResumenRapido(); switchTab('tendencias', document.querySelector('.tab')); }, 200); }
   // Route comparativo to new module
@@ -6175,37 +6176,25 @@ function _renderDeptChart(all){
 // ── AGRUPACIONES COLAPSABLES ─────────────────────────
 function _renderGroupSections(data){
   if(!data.length) return '';
-  const fmt2=n=>'$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
   const fmtK=n=>{ if(n>=1000000)return'$'+(n/1000000).toFixed(2)+'M'; if(n>=1000)return'$'+(n/1000).toFixed(1)+'k'; return'$'+Number(n).toFixed(0); };
 
-  // ── Acumular facturas por departamento, separando ZL vs EXT ──
-  // byDept[deptName] = { totalCosto, facturasZL:[], facturasEXT:[] }
-  // Cada factura lleva { prov, oc, costo, embarqueNro, embarqueIdx }
+  // Group BY DEPARTMENT (desc category)
   const byDept={};
   data.forEach(d=>{
     const invL=d.snap?.invLines||d.invLines||[];
-    const tipoEmb=(d.snap?.tipo||d.tipo||'ZL');  // 'ZL' o 'EXT'
-    const idx=tendData.indexOf(d);
     invL.forEach(l=>{
       const k=l.deptCat||l.dept||'Sin Categoría';
-      if(!byDept[k]) byDept[k]={totalCosto:0,totalZL:0,totalEXT:0,facturasZL:[],facturasEXT:[]};
-      const fac={prov:l.prov||l.dept||'—', oc:l.oc||'—', costo:l.costo||0, embarqueNro:d.nro||'—', embarqueIdx:idx};
-      byDept[k].totalCosto+=l.costo||0;
-      if(tipoEmb==='EXT'){
-        byDept[k].facturasEXT.push(fac);
-        byDept[k].totalEXT+=l.costo||0;
-      } else {
-        byDept[k].facturasZL.push(fac);
-        byDept[k].totalZL+=l.costo||0;
-      }
+      if(!byDept[k]) byDept[k]={ahorro:0,cif:0,count:0,items:[]};
+      byDept[k].ahorro+=d.ahorro||0; byDept[k].cif+=d.cif||0;
+      if(!byDept[k].items.includes(d)){ byDept[k].count++; byDept[k].items.push(d); }
     });
     if(!invL.length){
-      const k='Sin Facturas';
-      if(!byDept[k]) byDept[k]={totalCosto:0,totalZL:0,totalEXT:0,facturasZL:[],facturasEXT:[]};
+      const k='Sin Facturas'; if(!byDept[k]) byDept[k]={ahorro:0,cif:0,count:0,items:[]};
+      byDept[k].ahorro+=d.ahorro||0; byDept[k].cif+=d.cif||0; byDept[k].count++; byDept[k].items.push(d);
     }
   });
 
-  // ── Group BY ESCENARIO (sin cambios) ──
+  // Group BY ESCENARIO
   const byEsc={};
   data.forEach(d=>{
     const k=d.esc||'Sin Escenario';
@@ -6213,120 +6202,8 @@ function _renderGroupSections(data){
     byEsc[k].ahorro+=d.ahorro||0; byEsc[k].cif+=d.cif||0; byEsc[k].count++; byEsc[k].items.push(d);
   });
 
-  // ── Construye filas de facturas individuales ──
-  const buildFactRows=(facturas)=>{
-    if(!facturas.length) return '<div style="padding:10px 14px;color:var(--muted);font-size:11px">Sin facturas en esta categoría.</div>';
-    return facturas.map(f=>{
-      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 14px;border-bottom:1px solid rgba(48,54,61,.5);cursor:pointer;transition:background .12s" onmouseover="this.style.background='rgba(255,255,255,.03)'" onmouseout="this.style.background=''" onclick="abrirModuloComparativo_idx(${f.embarqueIdx})">
-        <div style="flex:1;min-width:0">
-          <div style="font-size:12px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.prov}</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:1px">OC: ${f.oc}</div>
-        </div>
-        <div style="text-align:right;flex-shrink:0;margin-left:10px">
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:var(--text)">${fmt2(f.costo)}</div>
-          <div style="font-size:10px;color:var(--blue-l);margin-top:1px;cursor:pointer" title="Ir al embarque ${f.embarqueNro}">📦 ${f.embarqueNro} →</div>
-        </div>
-      </div>`;
-    }).join('');
-  };
-
-  // ── Construye el panel completo de un departamento (todas las facturas) ──
-  const buildDeptAllRows=(deptKey)=>{
-    const v=byDept[deptKey];
-    const todas=[...v.facturasZL,...v.facturasEXT].sort((a,b)=>b.costo-a.costo);
-    if(!todas.length) return '<div style="padding:14px;color:var(--muted);font-size:11px;text-align:center">Sin facturas registradas.</div>';
-    let h=buildFactRows(todas);
-    h+=`<div style="display:flex;justify-content:space-between;padding:10px 14px;background:rgba(63,185,80,.05);font-weight:700;font-size:12px;border-top:1px solid var(--border)"><span style="color:var(--muted)">Total ${deptKey}</span><span style="color:var(--green-l)">${fmt2(v.totalCosto)}</span></div>`;
-    return h;
-  };
-
-  const deptColors={'ROPA':'rgba(88,166,255,.15)','CALZADO':'rgba(240,136,62,.15)','JUGUETES':'rgba(168,85,247,.15)','ELECTRÓNICA':'rgba(34,211,238,.15)','Sin Categoría':'rgba(139,148,158,.12)','Sin Facturas':'rgba(139,148,158,.12)'};
-  const deptIcons={'ROPA':'👗','CALZADO':'👟','JUGUETES':'🧸','ELECTRÓNICA':'📱','Sin Categoría':'📦','Sin Facturas':'📋'};
-
-  let html='<div style="margin-top:4px">';
-  html+=`<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:14px 0 8px;display:flex;align-items:center;gap:6px"><span>📂</span> Por Departamento / Categoría</div>`;
-
-  Object.entries(byDept).sort((a,b)=>b[1].totalCosto-a[1].totalCosto).forEach(([k,v],gi)=>{
-    const uid=`grp-dept-${gi}`;
-    const uidZL=`grp-dept-zl-${gi}`;
-    const uidEXT=`grp-dept-ext-${gi}`;
-    const bgCol=deptColors[k.toUpperCase()]||'rgba(63,185,80,.1)';
-    const ico=deptIcons[k.toUpperCase()]||'📦';
-    const totalFacts=v.facturasZL.length+v.facturasEXT.length;
-    const hasZL=v.facturasZL.length>0;
-    const hasEXT=v.facturasEXT.length>0;
-    // Escapar el nombre del dept para usarlo en onclick
-    const kEsc=k.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-
-    html+=`<div class="grp-section" style="margin-bottom:10px">
-      <div style="display:flex;align-items:center;background:var(--s2);border:1px solid var(--border);border-radius:8px 8px 0 0;overflow:hidden">
-        <!-- Título clickeable → abre TODAS las facturas del dept -->
-        <div style="display:flex;align-items:center;flex:1;padding:10px 14px;cursor:pointer;user-select:none;gap:10px" onclick="_deptToggleAll('${uid}','${kEsc}')" title="Ver todas las facturas de ${k}">
-          <div style="width:28px;height:28px;border-radius:6px;background:${bgCol};display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">${ico}</div>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:12px;font-weight:700;color:var(--text)">${k}</div>
-            <div style="font-size:10px;color:var(--muted);margin-top:1px">${totalFacts} factura${totalFacts!==1?'s':''} · ${hasZL&&hasEXT?'ZL + Importación':hasZL?'Zona Libre':'Importación'}</div>
-          </div>
-          <div style="text-align:right;flex-shrink:0">
-            <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:800;color:var(--text)">${fmtK(v.totalCosto)}</div>
-            ${hasZL?`<div style="font-size:9px;color:#58a6ff;margin-top:1px">ZL ${fmtK(v.totalZL)}</div>`:''}
-            ${hasEXT?`<div style="font-size:9px;color:#f08632;margin-top:1px">IMP ${fmtK(v.totalEXT)}</div>`:''}
-          </div>
-        </div>
-        <!-- Flecha → desglose ZL / Importación por separado -->
-        <div style="width:38px;height:100%;display:flex;align-items:center;justify-content:center;border-left:1px solid var(--border);cursor:pointer;font-size:13px;color:var(--muted);flex-shrink:0;align-self:stretch" onclick="_deptToggleDesg('${uid}')" title="Desglosar por tipo">
-          <span id="${uid}-arrow">▼</span>
-        </div>
-      </div>
-
-      <!-- Panel todas las facturas (se abre al tocar el título) -->
-      <div id="${uid}-all" style="display:none;background:var(--s1);border:1px solid var(--border);border-top:none;border-radius:0 0 8px 8px">
-        ${buildDeptAllRows(k)}
-      </div>
-
-      <!-- Panel desglosado ZL / EXT (se abre al tocar la flecha) -->
-      <div id="${uid}-desg" style="display:none;background:var(--s1);border:1px solid var(--border);border-top:none;border-radius:0 0 8px 8px">
-        ${hasZL?`
-        <div>
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:rgba(88,166,255,.06);cursor:pointer;border-bottom:1px solid var(--border)" onclick="_toggleGrp('${uidZL}')">
-            <div style="display:flex;align-items:center;gap:8px">
-              <span style="font-size:11px">🏙️</span>
-              <div>
-                <div style="font-size:11px;font-weight:700;color:var(--blue-l)">Zona Libre</div>
-                <div style="font-size:10px;color:var(--muted)">${v.facturasZL.length} proveedor${v.facturasZL.length!==1?'es':''}</div>
-              </div>
-            </div>
-            <div style="display:flex;align-items:center;gap:10px">
-              <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:var(--blue-l)">${fmt2(v.totalZL)}</span>
-              <span class="grp-chevron" id="${uidZL}-chev">▼</span>
-            </div>
-          </div>
-          <div class="grp-body" id="${uidZL}">${buildFactRows(v.facturasZL)}<div style="display:flex;justify-content:space-between;padding:8px 14px;background:rgba(88,166,255,.04);font-size:11px;font-weight:700;border-top:1px solid var(--border)"><span style="color:var(--muted)">Subtotal ZL</span><span style="color:var(--blue-l)">${fmt2(v.totalZL)}</span></div></div>
-        </div>`:''}
-        ${hasEXT?`
-        <div>
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:rgba(240,136,62,.06);cursor:pointer;border-bottom:1px solid var(--border)${hasZL?';border-top:1px solid var(--border)':''}" onclick="_toggleGrp('${uidEXT}')">
-            <div style="display:flex;align-items:center;gap:8px">
-              <span style="font-size:11px">✈️</span>
-              <div>
-                <div style="font-size:11px;font-weight:700;color:var(--orange-l)">Importación</div>
-                <div style="font-size:10px;color:var(--muted)">${v.facturasEXT.length} proveedor${v.facturasEXT.length!==1?'es':''}</div>
-              </div>
-            </div>
-            <div style="display:flex;align-items:center;gap:10px">
-              <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:var(--orange-l)">${fmt2(v.totalEXT)}</span>
-              <span class="grp-chevron" id="${uidEXT}-chev">▼</span>
-            </div>
-          </div>
-          <div class="grp-body" id="${uidEXT}">${buildFactRows(v.facturasEXT)}<div style="display:flex;justify-content:space-between;padding:8px 14px;background:rgba(240,136,62,.04);font-size:11px;font-weight:700;border-top:1px solid var(--border)"><span style="color:var(--muted)">Subtotal Importación</span><span style="color:var(--orange-l)">${fmt2(v.totalEXT)}</span></div></div>
-        </div>`:''}
-        ${!hasZL&&!hasEXT?'<div style="padding:14px;color:var(--muted);font-size:11px;text-align:center">Sin facturas registradas.</div>':''}
-      </div>
-    </div>`;
-  });
-
-  // ── Por Escenario Utilizado (sin cambios funcionales) ──
-  const buildEscRows=(items)=>items.map(d=>{
+  // Rows builder
+  const buildRows=(items,grpKey)=>items.map(d=>{
     const idx=tendData.indexOf(d);
     const pct=d.cif>0?(d.ahorro/d.cif*100).toFixed(1)+'%':'—';
     return `<div class="grp-row" onclick="abrirModuloComparativo_idx(${idx})">
@@ -6342,6 +6219,31 @@ function _renderGroupSections(data){
       </div>
     </div>`;
   }).join('');
+
+  const deptColors={'ROPA':'rgba(88,166,255,.15)','CALZADO':'rgba(240,136,62,.15)','JUGUETES':'rgba(168,85,247,.15)','ELECTRÓNICA':'rgba(34,211,238,.15)','Sin Categoría':'rgba(139,148,158,.12)','Sin Facturas':'rgba(139,148,158,.12)'};
+  const deptIcons={'ROPA':'👗','CALZADO':'👟','JUGUETES':'🧸','ELECTRÓNICA':'📱','Sin Categoría':'📦','Sin Facturas':'📋'};
+
+  let html='<div style="margin-top:4px">';
+  html+=`<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:14px 0 8px;display:flex;align-items:center;gap:6px"><span>📂</span> Por Departamento / Categoría</div>`;
+  Object.entries(byDept).sort((a,b)=>b[1].ahorro-a[1].ahorro).forEach(([k,v],gi)=>{
+    const uid=`grp-dept-${gi}`;
+    const bgCol=deptColors[k.toUpperCase()]||'rgba(63,185,80,.1)';
+    const ico=deptIcons[k.toUpperCase()]||'📦';
+    const pct=v.cif>0?(v.ahorro/v.cif*100).toFixed(1)+'%':'—';
+    html+=`<div class="grp-section">
+      <div class="grp-hdr" onclick="_toggleGrp('${uid}')">
+        <div class="grp-hdr-left">
+          <div class="grp-hdr-icon" style="background:${bgCol}">${ico}</div>
+          <div><div class="grp-hdr-title">${k}</div><div class="grp-hdr-sub">${v.count} embarque${v.count!==1?'s':''} · ${pct} ahorro/CIF</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <div class="grp-badge" style="color:var(--green-l)">+${fmtK(v.ahorro)}</div>
+          <span class="grp-chevron" id="${uid}-chev">▼</span>
+        </div>
+      </div>
+      <div class="grp-body" id="${uid}">${buildRows(v.items,k)}</div>
+    </div>`;
+  });
 
   html+=`<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:16px 0 8px;display:flex;align-items:center;gap:6px"><span>🔀</span> Por Escenario Utilizado</div>`;
   const escColors={'Escenario Regular':'rgba(63,185,80,.12)','CIF Express':'rgba(88,166,255,.12)','Sababa Imports (#3)':'rgba(240,136,62,.12)'};
@@ -6362,33 +6264,11 @@ function _renderGroupSections(data){
           <span class="grp-chevron" id="${uid}-chev">▼</span>
         </div>
       </div>
-      <div class="grp-body" id="${uid}">${buildEscRows(v.items)}</div>
+      <div class="grp-body" id="${uid}">${buildRows(v.items,k)}</div>
     </div>`;
   });
   html+='</div>';
   return html;
-}
-
-// ── Toggle: título del dept → abre panel "todas las facturas" ──
-function _deptToggleAll(uid, deptKey){
-  const panAll=document.getElementById(uid+'-all');
-  const panDesg=document.getElementById(uid+'-desg');
-  if(!panAll) return;
-  const opening=panAll.style.display==='none';
-  panAll.style.display=opening?'block':'none';
-  if(opening && panDesg) panDesg.style.display='none'; // cerrar desglose si estaba abierto
-}
-
-// ── Toggle: flecha → abre panel desglosado ZL/EXT ──
-function _deptToggleDesg(uid){
-  const panDesg=document.getElementById(uid+'-desg');
-  const panAll=document.getElementById(uid+'-all');
-  const arrow=document.getElementById(uid+'-arrow');
-  if(!panDesg) return;
-  const opening=panDesg.style.display==='none';
-  panDesg.style.display=opening?'block':'none';
-  if(opening && panAll) panAll.style.display='none'; // cerrar panel global si estaba abierto
-  if(arrow) arrow.textContent=opening?'▲':'▼';
 }
 
 function _toggleGrp(uid){
@@ -6436,51 +6316,90 @@ function _setVistaResumen(vista){
 
 // ── HISTORIAL DE FACTURAS (sección dedicada) ─────────
 function renderHistFact(){
-  const el=document.getElementById('dash-kpi-block');
+  var el=document.getElementById('dash-kpi-block');
   if(!el) return;
-  const fmt=n=>'$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-  const data=[...tendData].reverse();
+  var fmt=function(n){ return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
+  var data=tendData.slice().reverse();
   if(!data.length){ el.innerHTML='<div style="text-align:center;padding:32px;color:var(--muted)">Sin embarques registrados.</div>'; return; }
 
-  let html=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-    <div style="font-size:14px;font-weight:800;color:var(--text)">🧾 Historial de Facturas por Embarque</div>
-    <button onclick="renderDashboardKPIs()" style="background:none;border:1px solid var(--border);border-radius:8px;padding:4px 12px;font-size:11px;color:var(--muted);cursor:pointer">← Dashboard</button>
-  </div>`;
+  var html='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">'
+    +'<div style="font-size:14px;font-weight:800;color:var(--text)">&#x1F9FE; Historial de Facturas por Embarque</div>'
+    +'<button onclick="renderDashboardKPIs()" style="background:none;border:1px solid var(--border);border-radius:8px;padding:4px 12px;font-size:11px;color:var(--muted);cursor:pointer">&larr; Dashboard</button>'
+    +'</div>';
 
-  data.forEach((d,i)=>{
-    const idx=tendData.indexOf(d);
-    const invL=d.snap?.invLines||d.invLines||[];
-    const total=invL.reduce((s,l)=>s+(l.costo||0),0);
-    const uid=`hf-${i}`;
-    html+=`<div class="hfact-card">
-      <div class="hfact-hdr" onclick="_toggleHF('${uid}')">
-        <div>
-          <div class="hfact-nro">${d.nro||'—'} · ${d.fecha||'—'} · ${d.esc||'—'}</div>
-          <div class="hfact-desc">${d.desc||'Sin descripción'}</div>
-        </div>
-        <div style="text-align:right">
-          <div class="hfact-total">${invL.length?fmt(total):'Sin facturas'}</div>
-          <div class="hfact-count">${invL.length} factura${invL.length!==1?'s':''} · <span style="cursor:pointer;color:var(--blue-l)" onclick="event.stopPropagation();abrirModuloComparativo_idx(${idx})">Ver detalle →</span></div>
-        </div>
-      </div>
-      <div class="hfact-body" id="${uid}">
-        ${invL.length?invL.map(l=>{
-          const _arRate = l.arPct||l.si||0;
-          const _arAmt = l.ar||(l.costo*_arRate)||0;
-          return `<div class="hfact-inv-row" style="flex-direction:column;gap:2px">
-            <div style="display:flex;justify-content:space-between;align-items:center">
-              <div><div class="hfact-inv-prov">${l.prov||l.dept||'—'} · ${l.deptCat||''}</div>
-              <div class="hfact-inv-oc">OC: ${l.oc||'—'}${_arRate>0?' · Arancel: '+(_arRate*100).toFixed(2)+'%':''}</div></div>
-              <div style="text-align:right">
-                <div class="hfact-inv-val">${fmt(l.costo||0)}</div>
-                ${_arAmt>0?`<div style="font-size:10px;color:#f85149">Ar: ${fmt(_arAmt)}</div>`:''}
-              </div>
-            </div>
-          </div>`;
-        }).join('')+'<div style="display:flex;justify-content:space-between;padding:10px 14px;background:rgba(63,185,80,.05);font-weight:700;font-size:12px"><span>Total Facturas</span><span style="color:var(--green-l)">${fmt(total)}</span></div>'
-        :'<div style="padding:12px 14px;color:var(--muted);font-size:11px">Sin facturas registradas en este embarque.</div>'}
-      </div>
-    </div>`;
+  data.forEach(function(d,i){
+    var idx=tendData.indexOf(d);
+    var invL=(d.snap&&d.snap.invLines)?d.snap.invLines:(d.invLines||[]);
+    var total=invL.reduce(function(s,l){ return s+(l.costo||0); },0);
+    var uid='hf-'+i;
+    var tipoEmb=((d.snap&&d.snap.tipo)||d.tipo||'ZL')==='EXT'?'Importaci&oacute;n':'Zona Libre';
+    var totalStr=invL.length ? fmt(total) : 'Sin facturas';
+
+    var byDept={};
+    invL.forEach(function(l){
+      var k=l.deptCat||l.dept||'Sin Categor&iacute;a';
+      if(!byDept[k]) byDept[k]={lines:[],subtotal:0};
+      byDept[k].lines.push(l);
+      byDept[k].subtotal+=l.costo||0;
+    });
+    var deptKeys=Object.keys(byDept).sort();
+
+    var deptHtml='';
+    if(!deptKeys.length){
+      deptHtml='<div style="padding:12px 14px;color:var(--muted);font-size:11px">Sin facturas registradas en este embarque.</div>';
+    } else {
+      deptKeys.forEach(function(dk,di){
+        var dv=byDept[dk];
+        var duid=uid+'-d'+di;
+        var provHtml='';
+        dv.lines.forEach(function(l){
+          var arRate=l.arPct||l.si||0;
+          var arAmt=l.ar||(l.costo*arRate)||0;
+          provHtml+='<div class="hfact-inv-row" style="flex-direction:column;gap:2px;padding-left:28px">'
+            +'<div style="display:flex;justify-content:space-between;align-items:center">'
+            +'<div><div class="hfact-inv-prov">'+(l.prov||l.dept||'&mdash;')+'</div>'
+            +'<div class="hfact-inv-oc">OC: '+(l.oc||'&mdash;')+(arRate>0?' &middot; Arancel: '+(arRate*100).toFixed(2)+'%':'')+'</div></div>'
+            +'<div style="text-align:right"><div class="hfact-inv-val">'+fmt(l.costo||0)+'</div>'
+            +(arAmt>0?'<div style="font-size:10px;color:#f85149">Ar: '+fmt(arAmt)+'</div>':'')
+            +'</div></div></div>';
+        });
+        provHtml+='<div style="display:flex;justify-content:space-between;padding:6px 14px 6px 28px;background:rgba(88,166,255,.04);font-size:11px;font-weight:700;border-top:1px solid var(--border)">'
+          +'<span style="color:var(--muted)">Subtotal '+dk+'</span>'
+          +'<span style="color:var(--blue-l)">'+fmt(dv.subtotal)+'</span></div>';
+
+        var toggleFn='(function(t){var b=document.getElementById("'+duid+'");if(b){var o=b.style.display==="none";b.style.display=o?"block":"none";t.querySelector(".hf-dc").textContent=o?"&#9660;":"&#9658;";}}).call(this,this)';
+        deptHtml+='<div>'
+          +'<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:rgba(255,255,255,.03);cursor:pointer;border-bottom:1px solid rgba(48,54,61,.3)" onclick="'+toggleFn+'">'
+          +'<div style="display:flex;align-items:center;gap:8px">'
+          +'<span class="hf-dc" style="font-size:10px;color:var(--muted)">&#9658;</span>'
+          +'<span style="font-size:11px;font-weight:700;color:var(--text)">&#x1F4C2; '+dk+'</span>'
+          +'<span style="font-size:10px;color:var(--muted)">'+dv.lines.length+' factura'+(dv.lines.length!==1?'s':'')+'</span>'
+          +'</div>'
+          +'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:11px;font-weight:700;color:var(--text)">'+fmt(dv.subtotal)+'</span>'
+          +'</div>'
+          +'<div id="'+duid+'" style="display:none">'+provHtml+'</div>'
+          +'</div>';
+      });
+      deptHtml+='<div style="display:flex;justify-content:space-between;padding:10px 14px;background:rgba(63,185,80,.05);font-weight:700;font-size:12px;border-top:1px solid var(--border)">'
+        +'<span>Total Facturas</span>'
+        +'<span style="color:var(--green-l)">'+totalStr+'</span>'
+        +'</div>';
+    }
+
+    html+='<div class="hfact-card">'
+      +'<div class="hfact-hdr" onclick="_toggleHF(\''+uid+'\')">'
+      +'<div>'
+      +'<div class="hfact-nro">'+(d.nro||'&mdash;')+' &middot; '+(d.fecha||'&mdash;')+' &middot; '+(d.esc||'&mdash;')+'</div>'
+      +'<div class="hfact-desc">'+(d.desc||'Sin descripci&oacute;n')+'</div>'
+      +'<div style="font-size:10px;color:var(--muted);margin-top:2px">'+tipoEmb+' &middot; '+deptKeys.length+' depto'+(deptKeys.length!==1?'s':'')+'</div>'
+      +'</div>'
+      +'<div style="text-align:right">'
+      +'<div class="hfact-total">'+totalStr+'</div>'
+      +'<div class="hfact-count">'+invL.length+' factura'+(invL.length!==1?'s':'')+'</div>'
+      +'</div>'
+      +'</div>'
+      +'<div class="hfact-body" id="'+uid+'">'+deptHtml+'</div>'
+      +'</div>';
   });
   el.innerHTML=html;
 }
@@ -7621,6 +7540,12 @@ function loadInvFile(input){
     renderInvLines();
     _autoSumTraspaso();
     _autoSumBultos();
+    // Trigger full recalc and enable apply buttons after template load
+    if(typeof calc==='function') calc();
+    ['btn-aplicar-cambios','btn-aplicar-cif','btn-aplicar-sab'].forEach(function(id){
+      var b=document.getElementById(id);
+      if(b){ b.style.opacity='1'; b.style.pointerEvents='auto'; b.style.background='rgba(249,115,22,.85)'; b.style.color='#fff'; b.style.borderColor='#f97316'; }
+    });
 
     const totalBultos   = invLines.reduce((s,l)=>s+(l.bultos||0),0);
     const totalTraspaso = invLines.reduce((s,l)=>s+(l.traspaso||0),0);
@@ -9321,7 +9246,7 @@ body:not(.sidebar-pinned) #app-wrapper {
   display: flex;
 }
 #tab-modal-drawer, #tab-modal-drawer2 {
-  width: min(720px, calc(100vw - 24px));
+  width: min(940px, calc(100vw - 16px));
   max-height: 92vh;
   background: var(--bg);
   overflow-y: auto;
@@ -9485,13 +9410,15 @@ body:not(.sidebar-pinned) #app-wrapper {
     var overlay2 = document.getElementById('tab-modal-overlay2');
     var body2    = document.getElementById('tab-modal-body2');
     var title2   = document.getElementById('tab-modal-title2');
-    // Ocultar modal 1 sin cerrarlo
+    // Modal 2 gets higher z-index and stays fully visible OVER modal 1 (don't hide modal 1)
     var o1 = document.getElementById('tab-modal-overlay');
-    if(o1) o1.style.visibility = 'hidden';
+    if(o1) { o1.style.zIndex = '8000'; o1.style.visibility = 'visible'; }
+    overlay2.style.zIndex = '8200';
     body2.innerHTML = typeof content === 'string' ? content : '';
     if(content && content.nodeType) { body2.innerHTML=''; body2.appendChild(content); }
     if(title2 && label) title2.textContent = label;
     overlay2.classList.add('open');
+    document.body.style.overflow = 'hidden';
   };
 
   /* ── Cerrar Modal 2 — restaura modal 1 ── */
@@ -9501,9 +9428,9 @@ body:not(.sidebar-pinned) #app-wrapper {
     if(!overlay2) return;
     body2.innerHTML = '';
     overlay2.classList.remove('open');
-    // Restaurar modal 1
+    // Restore modal 1 visibility
     var o1 = document.getElementById('tab-modal-overlay');
-    if(o1 && o1.classList.contains('open')) o1.style.visibility = '';
+    if(o1 && o1.classList.contains('open')){ o1.style.visibility = 'visible'; o1.style.zIndex = '8000'; }
     document.body.style.overflow = 'hidden';
   };
 
