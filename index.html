@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Simulador Aduanal — Panamá v7.5.0</title>
+<title>Simulador Aduanal — Panamá v7.5.4</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -2341,6 +2341,7 @@ function calcAndShow(forceCompar){
     document.getElementById('portal-title').textContent=
       compar==='cifexp' ? 'Dashboard Comparativo — Esc. #1 vs Esc. #2 CIF Express'
                         : 'Dashboard Comparativo — Esc. #1 vs Esc. #3 Sababa';
+    _ensurePortalAtBody();
     document.getElementById('results-portal').classList.add('open');
     window._portalOpen=true;
     if(btn){ btn.style.opacity=''; btn.style.transform=''; }
@@ -2364,6 +2365,7 @@ function calcSab2AndShow(){
     const portal = document.getElementById('portal-content');
     if(sab && portal && sab.innerHTML.trim()) portal.innerHTML = sab.innerHTML;
     document.getElementById('portal-title').textContent='Dashboard — Escenario #3 Sababa';
+    _ensurePortalAtBody();
     document.getElementById('results-portal').classList.add('open');
     window._portalOpen = true;
     if(btn){ btn.style.opacity=''; btn.style.transform=''; }
@@ -2372,8 +2374,25 @@ function calcSab2AndShow(){
   }, 120);
 }
 function closePortal(){
-  document.getElementById('results-portal').classList.remove('open');
+  var portal = document.getElementById('results-portal');
+  if(!portal) return;
+  portal.classList.remove('open');
+  // Si el portal fue movido al body, devolverlo a su lugar original
+  if(portal._movedToBody && portal._originalParent){
+    try{ portal._originalParent.appendChild(portal); }catch(e){}
+    portal._movedToBody = false;
+  }
   window._portalOpen=false;
+}
+// ── Asegurar que results-portal esté al nivel del body para z-index correcto ──
+function _ensurePortalAtBody(){
+  var portal = document.getElementById('results-portal');
+  if(!portal) return;
+  if(portal.parentElement !== document.body){
+    portal._originalParent = portal.parentElement;
+    document.body.appendChild(portal);
+    portal._movedToBody = true;
+  }
 }
 // ── FACTURAS ACCORDION ──
 let _facturasOpen = true;
@@ -5723,6 +5742,7 @@ function verTres3(){
       <button class="btn-back" onclick="closePortal()" style="font-size:11px;padding:6px 16px">← Volver a Parámetros</button>
     </div>
   `;
+  _ensurePortalAtBody();
   document.getElementById('results-portal').classList.add('open');
   // Draw dept bar chart in the dedicated canvas
   setTimeout(()=>drawDeptBarsInPortal(), 60);
@@ -6121,19 +6141,31 @@ function exportDashboardExcel(){
 
   // ── Hoja 1: Resumen por Embarque ──
   var resumenRows = [
-    ['N° Embarque','Descripción','Fecha','Escenario','Tipo','CIF Total','Ahorro Neto','% Ahorro/CIF','N° Facturas']
+    ['N° Embarque','Descripción','Resumen Departamentos','Fecha','Escenario','Tipo','CIF Total','Ahorro Neto','% Ahorro/CIF','N° Facturas']
   ];
   tendData.forEach(function(d){
     var invL = (d.snap && d.snap.invLines) ? d.snap.invLines : (d.invLines||[]);
     var tipo = ((d.snap && d.snap.tipo)||d.tipo||'ZL') === 'EXT' ? 'Importación' : 'Zona Libre';
     var pct  = d.cif>0 ? (d.ahorro/d.cif*100).toFixed(2)+'%' : '—';
+    // Construir resumen de departamentos con porcentaje
+    var deptSums = {};
+    var totalCIF_emb = invL.reduce(function(s,l){ return s+(l.costo||0); }, 0);
+    invL.forEach(function(l){
+      var k = l.deptCat||l.dept||'Sin Categoría';
+      if(!deptSums[k]) deptSums[k] = 0;
+      deptSums[k] += l.costo||0;
+    });
+    var deptDesc = Object.keys(deptSums).sort(function(a,b){ return deptSums[b]-deptSums[a]; }).map(function(k){
+      var pctDept = totalCIF_emb > 0 ? (deptSums[k]/totalCIF_emb*100).toFixed(0) : 0;
+      return k + ' ' + pctDept + '%';
+    }).join(' | ');
     resumenRows.push([
-      d.nro||'—', d.desc||'—', d.fecha||'—', d.esc||'—', tipo,
+      d.nro||'—', d.desc||'—', deptDesc||'Sin facturas', d.fecha||'—', d.esc||'—', tipo,
       Number(fmt2(d.cif)), Number(fmt2(d.ahorro)), pct, invL.length
     ]);
   });
   var ws1 = XLSX.utils.aoa_to_sheet(resumenRows);
-  ws1['!cols'] = [12,28,12,20,14,14,14,12,10].map(function(w){ return {wch:w}; });
+  ws1['!cols'] = [12,28,38,12,20,14,14,14,12,10].map(function(w){ return {wch:w}; });
   XLSX.utils.book_append_sheet(wb, ws1, 'Resumen Embarques');
 
   // ── Hoja 2: Detalle Facturas ──
@@ -6324,7 +6356,7 @@ function _renderGroupSections(data){
     return '<div>'
       +'<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 16px;'
       +'background:'+bgColor+';cursor:pointer;border-bottom:1px solid var(--border)" '
-      +'onclick="_grpToggleSub(\''+bodyId+'\',\''+chevId+'\')">'
+      +'onclick="_grpToggleSub(\''+bodyId+'\',\''+chevId+'\',this)">'
       +'<div style="display:flex;align-items:center;gap:8px">'
       +'<span style="font-size:13px">'+emoji+'</span>'
       +'<div>'
@@ -6391,7 +6423,7 @@ function _renderGroupSections(data){
         // Título (click = panel todos)
         +'<div style="display:flex;align-items:center;gap:10px;flex:1;padding:12px 14px;'
         +'background:var(--s2);cursor:pointer;user-select:none" '
-        +'onclick="_grpToggleDept(\''+uid+'\')" title="Ver todos los proveedores de '+k+'">'
+        +'onclick="_grpToggleDept(\''+uid+'\',this)" title="Ver todos los proveedores de '+k+'">'
         +'<div style="width:32px;height:32px;border-radius:8px;background:'+bgCol+';display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0">'+ico+'</div>'
         +'<div style="flex:1;min-width:0">'
         +'<div style="font-size:13px;font-weight:700;color:var(--text)">'+k+'</div>'
@@ -6410,7 +6442,7 @@ function _renderGroupSections(data){
         +'color:var(--muted);flex-shrink:0;transition:background .15s" '
         +'onmouseover="this.style.background=\'rgba(255,255,255,.06)\'" '
         +'onmouseout="this.style.background=\'var(--s2)\'" '
-        +'onclick="_grpToggleDesg(\''+uid+'\')" title="Desglosar por tipo de proveedor">&#9660;</div>'
+        +'onclick="_grpToggleDesg(\''+uid+'\',this)" title="Desglosar por tipo de proveedor">&#9660;</div>'
 
       +'</div>'
       // Panels
@@ -6449,7 +6481,7 @@ function _renderGroupSections(data){
         +'</div></div>';
     }).join('');
     html += '<div class="grp-section">'
-      +'<div class="grp-hdr" onclick="_toggleGrp(\''+uid+'\')">'
+      +'<div class="grp-hdr" onclick="_toggleGrp(\''+uid+'\',this)">'
       +'<div class="grp-hdr-left">'
       +'<div class="grp-hdr-icon" style="background:'+bgCol+'">'+ico+'</div>'
       +'<div><div class="grp-hdr-title">'+k+'</div>'
@@ -6467,23 +6499,56 @@ function _renderGroupSections(data){
   return html;
 }
 
+// ── Helper: buscar elemento por ID priorizando el contexto del clon activo ──
+function _findEl(id, clickedEl){
+  // Si viene de un click, buscamos primero dentro del modal activo o del contenedor padre
+  if(clickedEl){
+    var modalBody = document.getElementById('tab-modal-body');
+    if(modalBody && modalBody.contains(clickedEl)){
+      var found = modalBody.querySelector('#'+id);
+      if(found) return found;
+    }
+  }
+  // Buscar TODOS los elementos con ese ID y devolver el visible/en-modal
+  var all = document.querySelectorAll('#'+id+',[id="'+id+'"]');
+  if(all.length === 1) return all[0];
+  // Preferir el que esté dentro del modal abierto
+  var modalB = document.getElementById('tab-modal-body');
+  for(var i=0;i<all.length;i++){
+    if(modalB && modalB.contains(all[i])) return all[i];
+  }
+  return all[0] || null;
+}
+
 // ── Toggle: clic en título = panel TODOS ──
-function _grpToggleDept(uid){
-  var panAll  = document.getElementById(uid+'-all');
-  var panDesg = document.getElementById(uid+'-desg');
-  var arr     = document.getElementById(uid+'-arr');
+function _grpToggleDept(uid, clickedEl){
+  if(!clickedEl && window.event) clickedEl = window.event.target;
+  var ctx = clickedEl ? (function(){
+    var mb=document.getElementById('tab-modal-body');
+    return (mb && mb.contains(clickedEl)) ? mb : document;
+  })() : document;
+  var panAll  = ctx.querySelector ? ctx.querySelector('[id="'+uid+'-all"]') : document.getElementById(uid+'-all');
+  var panDesg = ctx.querySelector ? ctx.querySelector('[id="'+uid+'-desg"]') : document.getElementById(uid+'-desg');
+  var arr     = ctx.querySelector ? ctx.querySelector('[id="'+uid+'-arr"]') : document.getElementById(uid+'-arr');
+  if(!panAll) { panAll=document.getElementById(uid+'-all'); panDesg=document.getElementById(uid+'-desg'); arr=document.getElementById(uid+'-arr'); }
   if(!panAll) return;
   var opening = panAll.style.display === 'none';
   panAll.style.display  = opening ? 'block' : 'none';
-  if(panDesg && opening) panDesg.style.display = 'none';   // cerrar desglose si estaba abierto
+  if(panDesg && opening) panDesg.style.display = 'none';
   if(arr) arr.style.color = opening ? 'var(--green-l)' : 'var(--muted)';
 }
 
 // ── Toggle: clic en flecha = panel DESGLOSADO ZL/EXT ──
-function _grpToggleDesg(uid){
-  var panDesg = document.getElementById(uid+'-desg');
-  var panAll  = document.getElementById(uid+'-all');
-  var arr     = document.getElementById(uid+'-arr');
+function _grpToggleDesg(uid, clickedEl){
+  if(!clickedEl && window.event) clickedEl = window.event.target;
+  var ctx = clickedEl ? (function(){
+    var mb=document.getElementById('tab-modal-body');
+    return (mb && mb.contains(clickedEl)) ? mb : document;
+  })() : document;
+  var panDesg = ctx.querySelector ? ctx.querySelector('[id="'+uid+'-desg"]') : document.getElementById(uid+'-desg');
+  var panAll  = ctx.querySelector ? ctx.querySelector('[id="'+uid+'-all"]') : document.getElementById(uid+'-all');
+  var arr     = ctx.querySelector ? ctx.querySelector('[id="'+uid+'-arr"]') : document.getElementById(uid+'-arr');
+  if(!panDesg){ panDesg=document.getElementById(uid+'-desg'); panAll=document.getElementById(uid+'-all'); arr=document.getElementById(uid+'-arr'); }
   if(!panDesg) return;
   var opening = panDesg.style.display === 'none';
   panDesg.style.display = opening ? 'block' : 'none';
@@ -6492,9 +6557,15 @@ function _grpToggleDesg(uid){
 }
 
 // ── Toggle sub-bloque ZL/EXT (colapsable interno) ──
-function _grpToggleSub(bodyId, chevId){
-  var body = document.getElementById(bodyId);
-  var chev = document.getElementById(chevId);
+function _grpToggleSub(bodyId, chevId, clickedEl){
+  if(!clickedEl && window.event) clickedEl = window.event.target;
+  var ctx = clickedEl ? (function(){
+    var mb=document.getElementById('tab-modal-body');
+    return (mb && mb.contains(clickedEl)) ? mb : document;
+  })() : document;
+  var body = ctx.querySelector ? ctx.querySelector('[id="'+bodyId+'"]') : document.getElementById(bodyId);
+  var chev = ctx.querySelector ? ctx.querySelector('[id="'+chevId+'"]') : document.getElementById(chevId);
+  if(!body){ body=document.getElementById(bodyId); chev=document.getElementById(chevId); }
   if(!body) return;
   var open = body.style.display === 'none';
   body.style.display = open ? 'block' : 'none';
@@ -6502,9 +6573,15 @@ function _grpToggleSub(bodyId, chevId){
 }
 
 // ── Toggle escenarios (original) ──
-function _toggleGrp(uid){
-  var body = document.getElementById(uid);
-  var chev = document.getElementById(uid+'-chev');
+function _toggleGrp(uid, clickedEl){
+  if(!clickedEl && window.event) clickedEl = window.event.target;
+  var ctx = clickedEl ? (function(){
+    var mb=document.getElementById('tab-modal-body');
+    return (mb && mb.contains(clickedEl)) ? mb : document;
+  })() : document;
+  var body = ctx.querySelector ? ctx.querySelector('[id="'+uid+'"]') : document.getElementById(uid);
+  var chev = ctx.querySelector ? ctx.querySelector('[id="'+uid+'-chev"]') : document.getElementById(uid+'-chev');
+  if(!body){ body=document.getElementById(uid); chev=document.getElementById(uid+'-chev'); }
   if(!body) return;
   var open = body.classList.toggle('open');
   if(chev) chev.classList.toggle('open',open);
@@ -9594,6 +9671,15 @@ body:not(.sidebar-pinned) #app-wrapper {
     var title   = document.getElementById('tab-modal-title');
     var pane    = document.getElementById('tab-' + tabId);
 
+    // Mostrar loading inmediato
+    body.innerHTML = '<div style="padding:40px 24px;text-align:center;color:var(--muted)"><div style="font-size:28px;margin-bottom:12px;animation:rot 1s linear infinite;display:inline-block">⚙️</div><div style="font-size:12px;margin-top:4px">Cargando módulo...</div></div>';
+    title.textContent = label || tabId;
+    overlay.setAttribute('data-tab', tabId);
+    overlay.classList.add('open');
+    document.body.style.overflow = 'hidden';
+
+    // Renderizar contenido después de un frame (permite que el modal aparezca primero)
+    setTimeout(function(){
     if(!pane){
       body.innerHTML = '<div style="padding:32px 24px;color:var(--muted);text-align:center"><div style="font-size:32px;margin-bottom:12px">⚠️</div><div>Este módulo no tiene contenido aún.</div></div>';
     } else {
@@ -9604,11 +9690,6 @@ body:not(.sidebar-pinned) #app-wrapper {
       body.innerHTML = '';
       body.appendChild(clone);
     }
-
-    title.textContent = label || tabId;
-    overlay.setAttribute('data-tab', tabId);
-    overlay.classList.add('open');
-    document.body.style.overflow = 'hidden';
 
     // Disparar renders en el clon
     setTimeout(function(){
@@ -9622,6 +9703,7 @@ body:not(.sidebar-pinned) #app-wrapper {
         if(fd && !fd.value) fd.value = new Date().toISOString().slice(0,10);
       }
     }, 80);
+    }, 30); // cierra el setTimeout de carga inicial
   };
 
   /* ── Cerrar Modal 1 ── */
