@@ -6175,25 +6175,37 @@ function _renderDeptChart(all){
 // ── AGRUPACIONES COLAPSABLES ─────────────────────────
 function _renderGroupSections(data){
   if(!data.length) return '';
+  const fmt2=n=>'$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
   const fmtK=n=>{ if(n>=1000000)return'$'+(n/1000000).toFixed(2)+'M'; if(n>=1000)return'$'+(n/1000).toFixed(1)+'k'; return'$'+Number(n).toFixed(0); };
 
-  // Group BY DEPARTMENT (desc category)
+  // ── Acumular facturas por departamento, separando ZL vs EXT ──
+  // byDept[deptName] = { totalCosto, facturasZL:[], facturasEXT:[] }
+  // Cada factura lleva { prov, oc, costo, embarqueNro, embarqueIdx }
   const byDept={};
   data.forEach(d=>{
     const invL=d.snap?.invLines||d.invLines||[];
+    const tipoEmb=(d.snap?.tipo||d.tipo||'ZL');  // 'ZL' o 'EXT'
+    const idx=tendData.indexOf(d);
     invL.forEach(l=>{
       const k=l.deptCat||l.dept||'Sin Categoría';
-      if(!byDept[k]) byDept[k]={ahorro:0,cif:0,count:0,items:[]};
-      byDept[k].ahorro+=d.ahorro||0; byDept[k].cif+=d.cif||0;
-      if(!byDept[k].items.includes(d)){ byDept[k].count++; byDept[k].items.push(d); }
+      if(!byDept[k]) byDept[k]={totalCosto:0,totalZL:0,totalEXT:0,facturasZL:[],facturasEXT:[]};
+      const fac={prov:l.prov||l.dept||'—', oc:l.oc||'—', costo:l.costo||0, embarqueNro:d.nro||'—', embarqueIdx:idx};
+      byDept[k].totalCosto+=l.costo||0;
+      if(tipoEmb==='EXT'){
+        byDept[k].facturasEXT.push(fac);
+        byDept[k].totalEXT+=l.costo||0;
+      } else {
+        byDept[k].facturasZL.push(fac);
+        byDept[k].totalZL+=l.costo||0;
+      }
     });
     if(!invL.length){
-      const k='Sin Facturas'; if(!byDept[k]) byDept[k]={ahorro:0,cif:0,count:0,items:[]};
-      byDept[k].ahorro+=d.ahorro||0; byDept[k].cif+=d.cif||0; byDept[k].count++; byDept[k].items.push(d);
+      const k='Sin Facturas';
+      if(!byDept[k]) byDept[k]={totalCosto:0,totalZL:0,totalEXT:0,facturasZL:[],facturasEXT:[]};
     }
   });
 
-  // Group BY ESCENARIO
+  // ── Group BY ESCENARIO (sin cambios) ──
   const byEsc={};
   data.forEach(d=>{
     const k=d.esc||'Sin Escenario';
@@ -6201,8 +6213,120 @@ function _renderGroupSections(data){
     byEsc[k].ahorro+=d.ahorro||0; byEsc[k].cif+=d.cif||0; byEsc[k].count++; byEsc[k].items.push(d);
   });
 
-  // Rows builder
-  const buildRows=(items,grpKey)=>items.map(d=>{
+  // ── Construye filas de facturas individuales ──
+  const buildFactRows=(facturas)=>{
+    if(!facturas.length) return '<div style="padding:10px 14px;color:var(--muted);font-size:11px">Sin facturas en esta categoría.</div>';
+    return facturas.map(f=>{
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 14px;border-bottom:1px solid rgba(48,54,61,.5);cursor:pointer;transition:background .12s" onmouseover="this.style.background='rgba(255,255,255,.03)'" onmouseout="this.style.background=''" onclick="abrirModuloComparativo_idx(${f.embarqueIdx})">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.prov}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:1px">OC: ${f.oc}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;margin-left:10px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:var(--text)">${fmt2(f.costo)}</div>
+          <div style="font-size:10px;color:var(--blue-l);margin-top:1px;cursor:pointer" title="Ir al embarque ${f.embarqueNro}">📦 ${f.embarqueNro} →</div>
+        </div>
+      </div>`;
+    }).join('');
+  };
+
+  // ── Construye el panel completo de un departamento (todas las facturas) ──
+  const buildDeptAllRows=(deptKey)=>{
+    const v=byDept[deptKey];
+    const todas=[...v.facturasZL,...v.facturasEXT].sort((a,b)=>b.costo-a.costo);
+    if(!todas.length) return '<div style="padding:14px;color:var(--muted);font-size:11px;text-align:center">Sin facturas registradas.</div>';
+    let h=buildFactRows(todas);
+    h+=`<div style="display:flex;justify-content:space-between;padding:10px 14px;background:rgba(63,185,80,.05);font-weight:700;font-size:12px;border-top:1px solid var(--border)"><span style="color:var(--muted)">Total ${deptKey}</span><span style="color:var(--green-l)">${fmt2(v.totalCosto)}</span></div>`;
+    return h;
+  };
+
+  const deptColors={'ROPA':'rgba(88,166,255,.15)','CALZADO':'rgba(240,136,62,.15)','JUGUETES':'rgba(168,85,247,.15)','ELECTRÓNICA':'rgba(34,211,238,.15)','Sin Categoría':'rgba(139,148,158,.12)','Sin Facturas':'rgba(139,148,158,.12)'};
+  const deptIcons={'ROPA':'👗','CALZADO':'👟','JUGUETES':'🧸','ELECTRÓNICA':'📱','Sin Categoría':'📦','Sin Facturas':'📋'};
+
+  let html='<div style="margin-top:4px">';
+  html+=`<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:14px 0 8px;display:flex;align-items:center;gap:6px"><span>📂</span> Por Departamento / Categoría</div>`;
+
+  Object.entries(byDept).sort((a,b)=>b[1].totalCosto-a[1].totalCosto).forEach(([k,v],gi)=>{
+    const uid=`grp-dept-${gi}`;
+    const uidZL=`grp-dept-zl-${gi}`;
+    const uidEXT=`grp-dept-ext-${gi}`;
+    const bgCol=deptColors[k.toUpperCase()]||'rgba(63,185,80,.1)';
+    const ico=deptIcons[k.toUpperCase()]||'📦';
+    const totalFacts=v.facturasZL.length+v.facturasEXT.length;
+    const hasZL=v.facturasZL.length>0;
+    const hasEXT=v.facturasEXT.length>0;
+    // Escapar el nombre del dept para usarlo en onclick
+    const kEsc=k.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+
+    html+=`<div class="grp-section" style="margin-bottom:10px">
+      <div style="display:flex;align-items:center;background:var(--s2);border:1px solid var(--border);border-radius:8px 8px 0 0;overflow:hidden">
+        <!-- Título clickeable → abre TODAS las facturas del dept -->
+        <div style="display:flex;align-items:center;flex:1;padding:10px 14px;cursor:pointer;user-select:none;gap:10px" onclick="_deptToggleAll('${uid}','${kEsc}')" title="Ver todas las facturas de ${k}">
+          <div style="width:28px;height:28px;border-radius:6px;background:${bgCol};display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">${ico}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;font-weight:700;color:var(--text)">${k}</div>
+            <div style="font-size:10px;color:var(--muted);margin-top:1px">${totalFacts} factura${totalFacts!==1?'s':''} · ${hasZL&&hasEXT?'ZL + Importación':hasZL?'Zona Libre':'Importación'}</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:800;color:var(--text)">${fmtK(v.totalCosto)}</div>
+            ${hasZL?`<div style="font-size:9px;color:#58a6ff;margin-top:1px">ZL ${fmtK(v.totalZL)}</div>`:''}
+            ${hasEXT?`<div style="font-size:9px;color:#f08632;margin-top:1px">IMP ${fmtK(v.totalEXT)}</div>`:''}
+          </div>
+        </div>
+        <!-- Flecha → desglose ZL / Importación por separado -->
+        <div style="width:38px;height:100%;display:flex;align-items:center;justify-content:center;border-left:1px solid var(--border);cursor:pointer;font-size:13px;color:var(--muted);flex-shrink:0;align-self:stretch" onclick="_deptToggleDesg('${uid}')" title="Desglosar por tipo">
+          <span id="${uid}-arrow">▼</span>
+        </div>
+      </div>
+
+      <!-- Panel todas las facturas (se abre al tocar el título) -->
+      <div id="${uid}-all" style="display:none;background:var(--s1);border:1px solid var(--border);border-top:none;border-radius:0 0 8px 8px">
+        ${buildDeptAllRows(k)}
+      </div>
+
+      <!-- Panel desglosado ZL / EXT (se abre al tocar la flecha) -->
+      <div id="${uid}-desg" style="display:none;background:var(--s1);border:1px solid var(--border);border-top:none;border-radius:0 0 8px 8px">
+        ${hasZL?`
+        <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:rgba(88,166,255,.06);cursor:pointer;border-bottom:1px solid var(--border)" onclick="_toggleGrp('${uidZL}')">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:11px">🏙️</span>
+              <div>
+                <div style="font-size:11px;font-weight:700;color:var(--blue-l)">Zona Libre</div>
+                <div style="font-size:10px;color:var(--muted)">${v.facturasZL.length} proveedor${v.facturasZL.length!==1?'es':''}</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:var(--blue-l)">${fmt2(v.totalZL)}</span>
+              <span class="grp-chevron" id="${uidZL}-chev">▼</span>
+            </div>
+          </div>
+          <div class="grp-body" id="${uidZL}">${buildFactRows(v.facturasZL)}<div style="display:flex;justify-content:space-between;padding:8px 14px;background:rgba(88,166,255,.04);font-size:11px;font-weight:700;border-top:1px solid var(--border)"><span style="color:var(--muted)">Subtotal ZL</span><span style="color:var(--blue-l)">${fmt2(v.totalZL)}</span></div></div>
+        </div>`:''}
+        ${hasEXT?`
+        <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:rgba(240,136,62,.06);cursor:pointer;border-bottom:1px solid var(--border)${hasZL?';border-top:1px solid var(--border)':''}" onclick="_toggleGrp('${uidEXT}')">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:11px">✈️</span>
+              <div>
+                <div style="font-size:11px;font-weight:700;color:var(--orange-l)">Importación</div>
+                <div style="font-size:10px;color:var(--muted)">${v.facturasEXT.length} proveedor${v.facturasEXT.length!==1?'es':''}</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:var(--orange-l)">${fmt2(v.totalEXT)}</span>
+              <span class="grp-chevron" id="${uidEXT}-chev">▼</span>
+            </div>
+          </div>
+          <div class="grp-body" id="${uidEXT}">${buildFactRows(v.facturasEXT)}<div style="display:flex;justify-content:space-between;padding:8px 14px;background:rgba(240,136,62,.04);font-size:11px;font-weight:700;border-top:1px solid var(--border)"><span style="color:var(--muted)">Subtotal Importación</span><span style="color:var(--orange-l)">${fmt2(v.totalEXT)}</span></div></div>
+        </div>`:''}
+        ${!hasZL&&!hasEXT?'<div style="padding:14px;color:var(--muted);font-size:11px;text-align:center">Sin facturas registradas.</div>':''}
+      </div>
+    </div>`;
+  });
+
+  // ── Por Escenario Utilizado (sin cambios funcionales) ──
+  const buildEscRows=(items)=>items.map(d=>{
     const idx=tendData.indexOf(d);
     const pct=d.cif>0?(d.ahorro/d.cif*100).toFixed(1)+'%':'—';
     return `<div class="grp-row" onclick="abrirModuloComparativo_idx(${idx})">
@@ -6218,31 +6342,6 @@ function _renderGroupSections(data){
       </div>
     </div>`;
   }).join('');
-
-  const deptColors={'ROPA':'rgba(88,166,255,.15)','CALZADO':'rgba(240,136,62,.15)','JUGUETES':'rgba(168,85,247,.15)','ELECTRÓNICA':'rgba(34,211,238,.15)','Sin Categoría':'rgba(139,148,158,.12)','Sin Facturas':'rgba(139,148,158,.12)'};
-  const deptIcons={'ROPA':'👗','CALZADO':'👟','JUGUETES':'🧸','ELECTRÓNICA':'📱','Sin Categoría':'📦','Sin Facturas':'📋'};
-
-  let html='<div style="margin-top:4px">';
-  html+=`<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:14px 0 8px;display:flex;align-items:center;gap:6px"><span>📂</span> Por Departamento / Categoría</div>`;
-  Object.entries(byDept).sort((a,b)=>b[1].ahorro-a[1].ahorro).forEach(([k,v],gi)=>{
-    const uid=`grp-dept-${gi}`;
-    const bgCol=deptColors[k.toUpperCase()]||'rgba(63,185,80,.1)';
-    const ico=deptIcons[k.toUpperCase()]||'📦';
-    const pct=v.cif>0?(v.ahorro/v.cif*100).toFixed(1)+'%':'—';
-    html+=`<div class="grp-section">
-      <div class="grp-hdr" onclick="_toggleGrp('${uid}')">
-        <div class="grp-hdr-left">
-          <div class="grp-hdr-icon" style="background:${bgCol}">${ico}</div>
-          <div><div class="grp-hdr-title">${k}</div><div class="grp-hdr-sub">${v.count} embarque${v.count!==1?'s':''} · ${pct} ahorro/CIF</div></div>
-        </div>
-        <div style="display:flex;align-items:center;gap:12px">
-          <div class="grp-badge" style="color:var(--green-l)">+${fmtK(v.ahorro)}</div>
-          <span class="grp-chevron" id="${uid}-chev">▼</span>
-        </div>
-      </div>
-      <div class="grp-body" id="${uid}">${buildRows(v.items,k)}</div>
-    </div>`;
-  });
 
   html+=`<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:16px 0 8px;display:flex;align-items:center;gap:6px"><span>🔀</span> Por Escenario Utilizado</div>`;
   const escColors={'Escenario Regular':'rgba(63,185,80,.12)','CIF Express':'rgba(88,166,255,.12)','Sababa Imports (#3)':'rgba(240,136,62,.12)'};
@@ -6263,11 +6362,33 @@ function _renderGroupSections(data){
           <span class="grp-chevron" id="${uid}-chev">▼</span>
         </div>
       </div>
-      <div class="grp-body" id="${uid}">${buildRows(v.items,k)}</div>
+      <div class="grp-body" id="${uid}">${buildEscRows(v.items)}</div>
     </div>`;
   });
   html+='</div>';
   return html;
+}
+
+// ── Toggle: título del dept → abre panel "todas las facturas" ──
+function _deptToggleAll(uid, deptKey){
+  const panAll=document.getElementById(uid+'-all');
+  const panDesg=document.getElementById(uid+'-desg');
+  if(!panAll) return;
+  const opening=panAll.style.display==='none';
+  panAll.style.display=opening?'block':'none';
+  if(opening && panDesg) panDesg.style.display='none'; // cerrar desglose si estaba abierto
+}
+
+// ── Toggle: flecha → abre panel desglosado ZL/EXT ──
+function _deptToggleDesg(uid){
+  const panDesg=document.getElementById(uid+'-desg');
+  const panAll=document.getElementById(uid+'-all');
+  const arrow=document.getElementById(uid+'-arrow');
+  if(!panDesg) return;
+  const opening=panDesg.style.display==='none';
+  panDesg.style.display=opening?'block':'none';
+  if(opening && panAll) panAll.style.display='none'; // cerrar panel global si estaba abierto
+  if(arrow) arrow.textContent=opening?'▲':'▼';
 }
 
 function _toggleGrp(uid){
