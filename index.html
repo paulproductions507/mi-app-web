@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Simulador Aduanal — Panamá v8.0</title>
+<title>Simulador Aduanal — Panamá v8.1</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -3692,12 +3692,19 @@ function syncDifFobToSC3(){
   setTimeout(()=>{ if(v('s2_fob')>0||v('s2_flete')>0) calcSab2(); }, 0);
 }
 function _syncDifPago(){
-  var val = parseFloat(document.getElementById('s1_dif_pago')?.value)||0;
-  // Sync to Sababa diff field
-  var sabEl = document.getElementById('sc_dif_pago') || document.getElementById('s2_dif_pago');
-  if(sabEl) sabEl.value = val.toFixed(2);
+  var raw = document.getElementById('s1_dif_pago')?.value;
+  // Allow negative — parseFloat handles '-' prefix
+  var val = (raw===''||raw===null||raw===undefined) ? 0 : (parseFloat(raw)||0);
+  // Sync to Sababa CIF diff field (s2_dif_cif for ZL/CIF mode, s2_dif_fob for FOB mode)
+  var sabCifEl = document.getElementById('s2_dif_cif');
+  var sabFobEl = document.getElementById('s2_dif_fob');
+  var sabPagoEl = document.getElementById('s2_dif_pago') || document.getElementById('sc_dif_pago');
+  if(sabCifEl && sabCifEl.dataset.userSet !== 'manual') sabCifEl.value = val !== 0 ? val.toFixed(2) : '';
+  if(sabFobEl && sabFobEl.dataset.userSet !== 'manual') sabFobEl.value = val !== 0 ? val.toFixed(2) : '';
+  if(sabPagoEl) sabPagoEl.value = val !== 0 ? val.toFixed(2) : '';
   // Trigger recalc
   if(typeof calc==='function') calc();
+  if(typeof calcSab2==='function') calcSab2();
 }
 
 function syncDifPagoSC3(){
@@ -3955,8 +3962,14 @@ function calcSab2(){
   }
 
   if(!montoBase||montoBase<=0){
-    document.getElementById('res-sab2').innerHTML=`<div class="ph"><div class="ph-icon">🧾</div><div class="ph-txt">Ingresa el valor ${isFOB?'FOB + Flete':'CIF'} para calcular.</div></div>`;
-    return;
+    // Only block if the raw input (before diferencia) is also missing
+    const rawBase = isFOB ? (v('s2_fob')+v('s2_flete')) : (v('s2_costo_zl'));
+    if(!rawBase || rawBase <= 0){
+      document.getElementById('res-sab2').innerHTML=`<div class="ph"><div class="ph-icon">🧾</div><div class="ph-txt">Ingresa el valor ${isFOB?'FOB + Flete':'CIF'} para calcular.</div></div>`;
+      return;
+    }
+    // montoBase may be negative due to diferencia — allow calculation with adjusted base
+    // This handles cases like negative diferencia making montoBase very small or negative
   }
 
   // Diferencia con signo entre pago real y base
@@ -5862,11 +5875,16 @@ function renderTend(){
   const maxV=Math.max(...values,1);
   const avg=values.reduce((s,v)=>s+v,0)/(values.length||1);
 
-  // canvas.offsetWidth is 0 if tab is hidden or inside modal — force layout then measure
+  // canvas.offsetWidth is 0 if tab is hidden or inside modal — retry after paint
   const dpr=window.devicePixelRatio||1;
-  // Force reflow to get real width inside modal
   canvas.style.width='100%';
-  const W=canvas.getBoundingClientRect().width||canvas.offsetWidth||Math.max(300,(window.innerWidth||400)-48);
+  let W = canvas.getBoundingClientRect().width || canvas.offsetWidth;
+  if(!W || W < 10){
+    // Schedule retry — modal hasn't finished painting
+    setTimeout(function(){ renderTend(); }, 120);
+    return;
+  }
+  W = Math.max(W, 280);
   const H=220;
   canvas.width=W*dpr; canvas.height=H*dpr;
   canvas.style.height=H+'px';
@@ -6482,12 +6500,14 @@ function _renderGroupSections(data){
         +'<div style="width:32px;height:32px;border-radius:8px;background:'+bgCol+';display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0">'+ico+'</div>'
         +'<div style="flex:1;min-width:0">'
         +'<div style="font-size:13px;font-weight:700;color:var(--text)">'+k+'</div>'
-        +'<div style="font-size:10px;color:var(--muted);margin-top:1px">'+totalFacs+' factura'+(totalFacs!==1?'s':'')+' &middot; '+tipoTag+'</div>'
+        +'<div style="font-size:10px;color:var(--muted);margin-top:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
+        +totalFacs+' factura'+(totalFacs!==1?'s':'')
+        +(hasZL  ? ' &nbsp;<span style="background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:4px;padding:1px 6px;font-size:9px;font-weight:700;white-space:nowrap">&#x1F3D9; ZL '+fmtK(v.totalZL)+'</span>' : '')
+        +(hasEXT ? ' &nbsp;<span style="background:rgba(240,136,62,.15);border:1px solid rgba(240,136,62,.3);color:var(--orange-l);border-radius:4px;padding:1px 6px;font-size:9px;font-weight:700;white-space:nowrap">&#x2708; IMP '+fmtK(v.totalEXT)+'</span>' : '')
+        +'</div>'
         +'</div>'
         +'<div style="text-align:right;flex-shrink:0">'
         +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:14px;font-weight:800;color:var(--text)">'+fmtK(v.totalCosto)+'</div>'
-        +(hasZL  ? '<div style="font-size:9px;color:var(--blue-l)">ZL '+fmtK(v.totalZL)+'</div>' : '')
-        +(hasEXT ? '<div style="font-size:9px;color:var(--orange-l)">IMP '+fmtK(v.totalEXT)+'</div>' : '')
         +'</div>'
         +'</div>'
 
@@ -7714,6 +7734,23 @@ function applyInvToForm(){
   if(cartEl && totalBultos>0) cartEl.value=totalBultos;
   _autoSumTraspaso();
 
+  // ── Auto-fill Descripción con departamentos + porcentajes ──
+  const descEl = document.getElementById('s1_desc_emb');
+  if(descEl && (!descEl.value || descEl.value.trim()==='')) {
+    // Only auto-fill if description is empty (don't override user-entered desc)
+    const deptSums = {};
+    const mercLines = invLines.filter(l => (l.tipoFac||'mercancia') === 'mercancia');
+    const totalMercDesc = mercLines.reduce((s,l)=>s+(l.costo||0),0);
+    mercLines.forEach(l=>{
+      const k = (l.deptCat||l.dept||'').trim();
+      if(k){ if(!deptSums[k]) deptSums[k]=0; deptSums[k]+=(l.costo||0); }
+    });
+    const deptParts = Object.entries(deptSums)
+      .sort((a,b)=>b[1]-a[1])
+      .map(([k,v])=>{ const pct=totalMercDesc>0?(v/totalMercDesc*100).toFixed(0):0; return k+' '+pct+'%'; });
+    if(deptParts.length) descEl.value = deptParts.join(', ');
+  }
+
   if(termino==='FOB'){
     const el=document.getElementById('s1_fob');
     if(el){ el.value=total.toFixed(2); calcFOB(); }
@@ -7895,8 +7932,20 @@ function loadInvFile(input){
     renderInvLines();
     _autoSumTraspaso();
     _autoSumBultos();
-    // Trigger full recalc and enable apply buttons after template load
+    // Show results immediately — don't require Esc1 to be configured first
     if(typeof calc==='function') calc();
+
+    // ── Auto-fill descripción con departamentos al subir plantilla ──
+    const _descAutoEl = document.getElementById('s1_desc_emb');
+    if(_descAutoEl && (!_descAutoEl.value || _descAutoEl.value.trim()==='')) {
+      const _deptSumsAuto = {};
+      const _mercLinesAuto = invLines.filter(l=>(l.tipoFac||'mercancia')==='mercancia');
+      const _totalMercAuto = _mercLinesAuto.reduce((s,l)=>s+(l.costo||0),0);
+      _mercLinesAuto.forEach(l=>{ const k=(l.deptCat||l.dept||'').trim(); if(k){if(!_deptSumsAuto[k])_deptSumsAuto[k]=0;_deptSumsAuto[k]+=(l.costo||0);} });
+      const _dptParts = Object.entries(_deptSumsAuto).sort((a,b)=>b[1]-a[1])
+        .map(([k,v])=>{ const p=_totalMercAuto>0?(v/_totalMercAuto*100).toFixed(0):0; return k+' '+p+'%'; });
+      if(_dptParts.length) _descAutoEl.value = _dptParts.join(', ');
+    }
     ['btn-aplicar-cambios','btn-aplicar-cif','btn-aplicar-sab'].forEach(function(id){
       var b=document.getElementById(id);
       if(b){ b.style.opacity='1'; b.style.pointerEvents='auto'; b.style.background='rgba(249,115,22,.85)'; b.style.color='#fff'; b.style.borderColor='#f97316'; }
@@ -9740,7 +9789,14 @@ body:not(.sidebar-pinned) #app-wrapper {
       // Disparar renders en el clon
       setTimeout(function(){
         if(tabId==='config'     && typeof renderConfig==='function')    renderConfig();
-        if(tabId==='tendencias' && typeof renderTend==='function'){ renderTend(); if(typeof renderDashboardKPIs==='function') renderDashboardKPIs(); if(typeof cargarPendientes==='function') cargarPendientes(); if(typeof renderTopProvs==='function') renderTopProvs(); }
+        if(tabId==='tendencias' && typeof renderTend==='function'){
+          renderTend();
+          if(typeof renderDashboardKPIs==='function') renderDashboardKPIs();
+          if(typeof cargarPendientes==='function') cargarPendientes();
+          if(typeof renderTopProvs==='function') renderTopProvs();
+          // Extra pass for canvas — waits for modal paint
+          setTimeout(function(){ if(typeof renderTend==='function') renderTend(); }, 200);
+        }
         if(tabId==='facturas'   && typeof renderInvLines==='function')  renderInvLines();
         if(tabId==='cifexp'     && typeof updateCifExpDisplays==='function') updateCifExpDisplays();
         if(tabId==='sababa'     && typeof calcSab2==='function')        calcSab2();
