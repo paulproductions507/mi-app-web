@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Simulador Aduanal — Panamá v7.5.4</title>
+<title>Simulador Aduanal — Panamá v8.0</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -2341,8 +2341,7 @@ function calcAndShow(forceCompar){
     document.getElementById('portal-title').textContent=
       compar==='cifexp' ? 'Dashboard Comparativo — Esc. #1 vs Esc. #2 CIF Express'
                         : 'Dashboard Comparativo — Esc. #1 vs Esc. #3 Sababa';
-    _ensurePortalAtBody();
-    document.getElementById('results-portal').classList.add('open');
+    _openPortal();
     window._portalOpen=true;
     if(btn){ btn.style.opacity=''; btn.style.transform=''; }
     const portal=document.getElementById('results-portal');
@@ -2365,34 +2364,35 @@ function calcSab2AndShow(){
     const portal = document.getElementById('portal-content');
     if(sab && portal && sab.innerHTML.trim()) portal.innerHTML = sab.innerHTML;
     document.getElementById('portal-title').textContent='Dashboard — Escenario #3 Sababa';
-    _ensurePortalAtBody();
-    document.getElementById('results-portal').classList.add('open');
+    _openPortal();
     window._portalOpen = true;
     if(btn){ btn.style.opacity=''; btn.style.transform=''; }
     const portalEl=document.getElementById('results-portal');
     if(portalEl) portalEl.scrollTop=0;
   }, 120);
 }
+function _openPortal(){
+  // Move portal to body level so z-index works above any modal
+  var p = document.getElementById('results-portal');
+  if(!p) return;
+  if(p.parentElement !== document.body){
+    p._origParent = p.parentElement;
+    document.body.appendChild(p);
+  }
+  p.classList.add('open');
+  p.scrollTop = 0;
+  window._portalOpen = true;
+}
 function closePortal(){
-  var portal = document.getElementById('results-portal');
-  if(!portal) return;
-  portal.classList.remove('open');
-  // Si el portal fue movido al body, devolverlo a su lugar original
-  if(portal._movedToBody && portal._originalParent){
-    try{ portal._originalParent.appendChild(portal); }catch(e){}
-    portal._movedToBody = false;
+  var p = document.getElementById('results-portal');
+  if(!p) return;
+  p.classList.remove('open');
+  // Restore to original position
+  if(p._origParent){
+    try{ p._origParent.appendChild(p); }catch(e){}
+    p._origParent = null;
   }
   window._portalOpen=false;
-}
-// ── Asegurar que results-portal esté al nivel del body para z-index correcto ──
-function _ensurePortalAtBody(){
-  var portal = document.getElementById('results-portal');
-  if(!portal) return;
-  if(portal.parentElement !== document.body){
-    portal._originalParent = portal.parentElement;
-    document.body.appendChild(portal);
-    portal._movedToBody = true;
-  }
 }
 // ── FACTURAS ACCORDION ──
 let _facturasOpen = true;
@@ -5742,8 +5742,7 @@ function verTres3(){
       <button class="btn-back" onclick="closePortal()" style="font-size:11px;padding:6px 16px">← Volver a Parámetros</button>
     </div>
   `;
-  _ensurePortalAtBody();
-  document.getElementById('results-portal').classList.add('open');
+  _openPortal();
   // Draw dept bar chart in the dedicated canvas
   setTimeout(()=>drawDeptBarsInPortal(), 60);
 }
@@ -5863,10 +5862,11 @@ function renderTend(){
   const maxV=Math.max(...values,1);
   const avg=values.reduce((s,v)=>s+v,0)/(values.length||1);
 
-  // Draw KPI curve chart
+  // canvas.offsetWidth is 0 if tab is hidden or inside modal — force layout then measure
   const dpr=window.devicePixelRatio||1;
-  // canvas.offsetWidth is 0 if tab is hidden — use window width minus padding as fallback
-  const W=canvas.offsetWidth||Math.max(300, (window.innerWidth||360)-32);
+  // Force reflow to get real width inside modal
+  canvas.style.width='100%';
+  const W=canvas.getBoundingClientRect().width||canvas.offsetWidth||Math.max(300,(window.innerWidth||400)-48);
   const H=220;
   canvas.width=W*dpr; canvas.height=H*dpr;
   canvas.style.height=H+'px';
@@ -6120,6 +6120,7 @@ function renderDashboardKPIs(data){
         <div class="kpi-sub">Líneas de factura totales</div>
       </div>
     </div>
+    ${_renderGastosNoMerc(all)}
     <div style="display:flex;justify-content:flex-end;margin-bottom:4px">
       <button onclick="exportDashboardExcel()" style="background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:8px;padding:6px 16px;font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px">
         &#x1F4CA; Descargar Excel
@@ -6132,6 +6133,72 @@ function renderDashboardKPIs(data){
 // ═══════════════════════════════════════════════════════════
 //  exportDashboardExcel — genera .xlsx con todo el historial
 // ═══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════
+//  _renderGastosNoMerc — Panel Costos No Mercancía
+//  Muestra liquidación, ITBMS, flete, acarreo, honorarios
+//  acumulados de TODAS las facturas de gastos
+// ═══════════════════════════════════════════════════
+function _renderGastosNoMerc(all){
+  const fmtK=n=>{ if(n>=1000000)return'$'+(n/1000000).toFixed(2)+'M'; if(n>=1000)return'$'+(n/1000).toFixed(1)+'k'; return'$'+Number(n||0).toFixed(0); };
+  const fmt2=n=>'$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const RUBROS = [
+    {key:'liquidacion', label:'Liquidación (Arancel)', icon:'🏛️', color:'var(--red-l)'},
+    {key:'itbms',       label:'ITBMS',                 icon:'🧾', color:'var(--blue-l)'},
+    {key:'flete',       label:'Flete',                 icon:'🚢', color:'var(--orange-l)'},
+    {key:'acarreo',     label:'Acarreo',               icon:'🚛', color:'var(--orange-l)'},
+    {key:'honorarios',  label:'Honorarios',            icon:'👔', color:'#a855f7'},
+    {key:'gastos',      label:'Otros Gastos',          icon:'📋', color:'var(--muted)'},
+  ];
+  const totals = {};
+  RUBROS.forEach(r=>{ totals[r.key]=0; });
+  let totalGastos = 0;
+  all.forEach(function(d){
+    var invL = (d.snap && d.snap.invLines) ? d.snap.invLines : (d.invLines||[]);
+    invL.forEach(function(l){
+      var tf = l.tipoFac||'mercancia';
+      if(tf !== 'mercancia' && totals[tf] !== undefined){
+        totals[tf] += l.costo||0;
+        totalGastos += l.costo||0;
+      }
+    });
+  });
+  // Always show panel (zeros are useful)
+  var rows = RUBROS.map(r=>`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;border-bottom:1px solid rgba(48,54,61,.3)">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:13px">${r.icon}</span>
+        <span style="font-size:12px;color:var(--text)">${r.label}</span>
+      </div>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:${totals[r.key]>0?r.color:'var(--muted2)'}">
+        ${totals[r.key]>0?fmt2(totals[r.key]):'—'}
+      </span>
+    </div>`).join('');
+  return `
+  <div style="background:var(--s1);border:1px solid var(--border);border-radius:12px;margin-bottom:14px;overflow:hidden">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:var(--s2);cursor:pointer;user-select:none"
+         onclick="var b=this.nextElementSibling;b.style.display=b.style.display==='none'?'block':'none';this.querySelector('.nm-chev').textContent=b.style.display==='none'?'▶':'▼'">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:15px">💸</span>
+        <div>
+          <div style="font-size:12px;font-weight:700;color:var(--text)">Costos No Mercancía — Acumulado</div>
+          <div style="font-size:10px;color:var(--muted)">Gastos registrados como: Liquidación · ITBMS · Flete · Acarreo · Honorarios</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:800;color:var(--orange-l)">${fmtK(totalGastos)}</span>
+        <span class="nm-chev" style="font-size:11px;color:var(--muted)">▼</span>
+      </div>
+    </div>
+    <div>
+      ${rows}
+      <div style="display:flex;justify-content:space-between;padding:10px 14px;background:rgba(240,136,62,.04);border-top:1px solid var(--border)">
+        <span style="font-size:12px;font-weight:700;color:var(--text)">Total Costos No Mercancía</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:800;color:var(--orange-l)">${fmt2(totalGastos)}</span>
+      </div>
+    </div>
+  </div>`;
+}
+
 function exportDashboardExcel(){
   if(typeof XLSX === 'undefined'){
     alert('Cargando librería Excel... espera 3 segundos e intenta de nuevo.'); return;
@@ -6141,31 +6208,19 @@ function exportDashboardExcel(){
 
   // ── Hoja 1: Resumen por Embarque ──
   var resumenRows = [
-    ['N° Embarque','Descripción','Resumen Departamentos','Fecha','Escenario','Tipo','CIF Total','Ahorro Neto','% Ahorro/CIF','N° Facturas']
+    ['N° Embarque','Descripción','Fecha','Escenario','Tipo','CIF Total','Ahorro Neto','% Ahorro/CIF','N° Facturas']
   ];
   tendData.forEach(function(d){
     var invL = (d.snap && d.snap.invLines) ? d.snap.invLines : (d.invLines||[]);
     var tipo = ((d.snap && d.snap.tipo)||d.tipo||'ZL') === 'EXT' ? 'Importación' : 'Zona Libre';
     var pct  = d.cif>0 ? (d.ahorro/d.cif*100).toFixed(2)+'%' : '—';
-    // Construir resumen de departamentos con porcentaje
-    var deptSums = {};
-    var totalCIF_emb = invL.reduce(function(s,l){ return s+(l.costo||0); }, 0);
-    invL.forEach(function(l){
-      var k = l.deptCat||l.dept||'Sin Categoría';
-      if(!deptSums[k]) deptSums[k] = 0;
-      deptSums[k] += l.costo||0;
-    });
-    var deptDesc = Object.keys(deptSums).sort(function(a,b){ return deptSums[b]-deptSums[a]; }).map(function(k){
-      var pctDept = totalCIF_emb > 0 ? (deptSums[k]/totalCIF_emb*100).toFixed(0) : 0;
-      return k + ' ' + pctDept + '%';
-    }).join(' | ');
     resumenRows.push([
-      d.nro||'—', d.desc||'—', deptDesc||'Sin facturas', d.fecha||'—', d.esc||'—', tipo,
+      d.nro||'—', d.desc||'—', d.fecha||'—', d.esc||'—', tipo,
       Number(fmt2(d.cif)), Number(fmt2(d.ahorro)), pct, invL.length
     ]);
   });
   var ws1 = XLSX.utils.aoa_to_sheet(resumenRows);
-  ws1['!cols'] = [12,28,38,12,20,14,14,14,12,10].map(function(w){ return {wch:w}; });
+  ws1['!cols'] = [12,28,12,20,14,14,14,12,10].map(function(w){ return {wch:w}; });
   XLSX.utils.book_append_sheet(wb, ws1, 'Resumen Embarques');
 
   // ── Hoja 2: Detalle Facturas ──
@@ -6499,38 +6554,24 @@ function _renderGroupSections(data){
   return html;
 }
 
-// ── Helper: buscar elemento por ID priorizando el contexto del clon activo ──
-function _findEl(id, clickedEl){
-  // Si viene de un click, buscamos primero dentro del modal activo o del contenedor padre
-  if(clickedEl){
-    var modalBody = document.getElementById('tab-modal-body');
-    if(modalBody && modalBody.contains(clickedEl)){
-      var found = modalBody.querySelector('#'+id);
-      if(found) return found;
-    }
+// ── Helper: find element preferring inside active modal ──
+function _ctxFind(id, el){
+  var mb=document.getElementById('tab-modal-body');
+  if(mb && el && mb.contains(el)){
+    var f=mb.querySelector('[id="'+id+'"]'); if(f) return f;
   }
-  // Buscar TODOS los elementos con ese ID y devolver el visible/en-modal
-  var all = document.querySelectorAll('#'+id+',[id="'+id+'"]');
-  if(all.length === 1) return all[0];
-  // Preferir el que esté dentro del modal abierto
-  var modalB = document.getElementById('tab-modal-body');
-  for(var i=0;i<all.length;i++){
-    if(modalB && modalB.contains(all[i])) return all[i];
-  }
-  return all[0] || null;
+  var all=document.querySelectorAll('[id="'+id+'"]');
+  if(all.length===1) return all[0];
+  var mb2=document.getElementById('tab-modal-body');
+  for(var i=0;i<all.length;i++){ if(mb2&&mb2.contains(all[i])) return all[i]; }
+  return all[0]||null;
 }
 
 // ── Toggle: clic en título = panel TODOS ──
-function _grpToggleDept(uid, clickedEl){
-  if(!clickedEl && window.event) clickedEl = window.event.target;
-  var ctx = clickedEl ? (function(){
-    var mb=document.getElementById('tab-modal-body');
-    return (mb && mb.contains(clickedEl)) ? mb : document;
-  })() : document;
-  var panAll  = ctx.querySelector ? ctx.querySelector('[id="'+uid+'-all"]') : document.getElementById(uid+'-all');
-  var panDesg = ctx.querySelector ? ctx.querySelector('[id="'+uid+'-desg"]') : document.getElementById(uid+'-desg');
-  var arr     = ctx.querySelector ? ctx.querySelector('[id="'+uid+'-arr"]') : document.getElementById(uid+'-arr');
-  if(!panAll) { panAll=document.getElementById(uid+'-all'); panDesg=document.getElementById(uid+'-desg'); arr=document.getElementById(uid+'-arr'); }
+function _grpToggleDept(uid, caller){
+  var panAll  = _ctxFind(uid+'-all', caller||window.event&&window.event.target);
+  var panDesg = _ctxFind(uid+'-desg', caller||window.event&&window.event.target);
+  var arr     = _ctxFind(uid+'-arr', caller||window.event&&window.event.target);
   if(!panAll) return;
   var opening = panAll.style.display === 'none';
   panAll.style.display  = opening ? 'block' : 'none';
@@ -6539,16 +6580,10 @@ function _grpToggleDept(uid, clickedEl){
 }
 
 // ── Toggle: clic en flecha = panel DESGLOSADO ZL/EXT ──
-function _grpToggleDesg(uid, clickedEl){
-  if(!clickedEl && window.event) clickedEl = window.event.target;
-  var ctx = clickedEl ? (function(){
-    var mb=document.getElementById('tab-modal-body');
-    return (mb && mb.contains(clickedEl)) ? mb : document;
-  })() : document;
-  var panDesg = ctx.querySelector ? ctx.querySelector('[id="'+uid+'-desg"]') : document.getElementById(uid+'-desg');
-  var panAll  = ctx.querySelector ? ctx.querySelector('[id="'+uid+'-all"]') : document.getElementById(uid+'-all');
-  var arr     = ctx.querySelector ? ctx.querySelector('[id="'+uid+'-arr"]') : document.getElementById(uid+'-arr');
-  if(!panDesg){ panDesg=document.getElementById(uid+'-desg'); panAll=document.getElementById(uid+'-all'); arr=document.getElementById(uid+'-arr'); }
+function _grpToggleDesg(uid, caller){
+  var panDesg = _ctxFind(uid+'-desg', caller||window.event&&window.event.target);
+  var panAll  = _ctxFind(uid+'-all', caller||window.event&&window.event.target);
+  var arr     = _ctxFind(uid+'-arr', caller||window.event&&window.event.target);
   if(!panDesg) return;
   var opening = panDesg.style.display === 'none';
   panDesg.style.display = opening ? 'block' : 'none';
@@ -6557,15 +6592,9 @@ function _grpToggleDesg(uid, clickedEl){
 }
 
 // ── Toggle sub-bloque ZL/EXT (colapsable interno) ──
-function _grpToggleSub(bodyId, chevId, clickedEl){
-  if(!clickedEl && window.event) clickedEl = window.event.target;
-  var ctx = clickedEl ? (function(){
-    var mb=document.getElementById('tab-modal-body');
-    return (mb && mb.contains(clickedEl)) ? mb : document;
-  })() : document;
-  var body = ctx.querySelector ? ctx.querySelector('[id="'+bodyId+'"]') : document.getElementById(bodyId);
-  var chev = ctx.querySelector ? ctx.querySelector('[id="'+chevId+'"]') : document.getElementById(chevId);
-  if(!body){ body=document.getElementById(bodyId); chev=document.getElementById(chevId); }
+function _grpToggleSub(bodyId, chevId, caller){
+  var body = _ctxFind(bodyId, caller||window.event&&window.event.target);
+  var chev = _ctxFind(chevId, caller||window.event&&window.event.target);
   if(!body) return;
   var open = body.style.display === 'none';
   body.style.display = open ? 'block' : 'none';
@@ -6573,15 +6602,9 @@ function _grpToggleSub(bodyId, chevId, clickedEl){
 }
 
 // ── Toggle escenarios (original) ──
-function _toggleGrp(uid, clickedEl){
-  if(!clickedEl && window.event) clickedEl = window.event.target;
-  var ctx = clickedEl ? (function(){
-    var mb=document.getElementById('tab-modal-body');
-    return (mb && mb.contains(clickedEl)) ? mb : document;
-  })() : document;
-  var body = ctx.querySelector ? ctx.querySelector('[id="'+uid+'"]') : document.getElementById(uid);
-  var chev = ctx.querySelector ? ctx.querySelector('[id="'+uid+'-chev"]') : document.getElementById(uid+'-chev');
-  if(!body){ body=document.getElementById(uid); chev=document.getElementById(uid+'-chev'); }
+function _toggleGrp(uid, caller){
+  var body = _ctxFind(uid, caller||window.event&&window.event.target);
+  var chev = _ctxFind(uid+'-chev', caller||window.event&&window.event.target);
   if(!body) return;
   var open = body.classList.toggle('open');
   if(chev) chev.classList.toggle('open',open);
@@ -7491,7 +7514,7 @@ let invLines=[];
 const INV_COLORS=['#3fb950','#58a6ff','#f08632','#f85149','#d29922','#8b949e','#58d68d','#7fb3d3'];
 
 function addInvLine(){
-  invLines.push({dept:'',costo:0});
+  invLines.push({dept:'',costo:0,tipoFac:'mercancia'});
   renderInvLines();
 }
 function removeInvLine(idx){
@@ -7537,22 +7560,45 @@ function renderInvLines(){
           ${isSababa&&m.si?`<button onclick="acceptSuggest(${i},'${(m.si||'').replace(/'/g,"\\\'")}')" style="margin-left:3px;background:rgba(240,136,62,.15);border:1px solid rgba(240,136,62,.3);color:#f08632;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer">→ S.I.</button>`:''}`;
       }
     }
-    return `<div data-prov="${l.prov||''}" data-dept="${l.deptCat||''}" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px">
+    const tf = l.tipoFac||'mercancia';
+    const tipoColors = {mercancia:'rgba(63,185,80,.15)',liquidacion:'rgba(248,81,73,.15)',itbms:'rgba(88,166,255,.15)',flete:'rgba(240,136,62,.15)',acarreo:'rgba(210,153,34,.15)',honorarios:'rgba(168,85,247,.15)',gastos:'rgba(139,148,158,.15)'};
+    const tipoIcons  = {mercancia:'📦',liquidacion:'🏛️',itbms:'🧾',flete:'🚢',acarreo:'🚛',honorarios:'👔',gastos:'📋'};
+    const tipoLabels = {mercancia:'Mercancía',liquidacion:'Liquidación (Arancel)',itbms:'ITBMS',flete:'Flete',acarreo:'Acarreo',honorarios:'Honorarios',gastos:'Otros Gastos'};
+    const tfColor = tipoColors[tf]||tipoColors.gastos;
+    const tfIcon  = tipoIcons[tf]||'📋';
+    const isGasto = tf !== 'mercancia';
+    return `<div data-prov="${l.prov||''}" data-dept="${l.deptCat||''}" style="background:var(--bg);border:1px solid ${isGasto?'rgba(240,136,62,.3)':'var(--border)'};border-radius:8px;padding:10px;margin-bottom:8px">
+      <!-- ROW 0: Tipo de Factura (PRIMERO) -->
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;padding-bottom:7px;border-bottom:1px solid rgba(48,54,61,.4)">
+        <span style="font-size:14px">${tfIcon}</span>
+        <select onchange="invLines[${i}].tipoFac=this.value;renderInvLines()"
+          style="flex:1;background:${tfColor};border:1px solid rgba(255,255,255,.08);border-radius:6px;padding:5px 8px;color:var(--text);font-size:12px;font-weight:700;cursor:pointer">
+          <option value="mercancia"  ${tf==='mercancia'?'selected':''}>📦 Mercancía</option>
+          <option value="liquidacion"${tf==='liquidacion'?'selected':''}>🏛️ Liquidación (Arancel)</option>
+          <option value="itbms"      ${tf==='itbms'?'selected':''}>🧾 ITBMS</option>
+          <option value="flete"      ${tf==='flete'?'selected':''}>🚢 Flete</option>
+          <option value="acarreo"    ${tf==='acarreo'?'selected':''}>🚛 Acarreo</option>
+          <option value="honorarios" ${tf==='honorarios'?'selected':''}>👔 Honorarios</option>
+          <option value="gastos"     ${tf==='gastos'?'selected':''}>📋 Otros Gastos</option>
+        </select>
+        ${isGasto?`<span style="font-size:9px;background:rgba(240,136,62,.15);border:1px solid rgba(240,136,62,.3);color:var(--orange-l);border-radius:4px;padding:2px 6px;white-space:nowrap;font-weight:700">GASTO</span>`:''}
+      </div>
       <!-- ROW 1: Departamento + Monto + Borrar -->
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
         <select onchange="invLines[${i}].deptCat=this.value;calcInvTotals()"
-          style="flex:1;background:var(--s2);border:1px solid rgba(63,185,80,.3);border-radius:6px;padding:8px 10px;color:var(--text);font-size:13px;font-weight:600;min-width:0">
+          style="flex:1;background:var(--s2);border:1px solid rgba(63,185,80,.3);border-radius:6px;padding:8px 10px;color:var(--text);font-size:13px;font-weight:600;min-width:0${isGasto?';display:none':''}">
           <option value="">— Departamento —</option>
           ${getDeptList().map(d=>`<option value="${d}" ${l.deptCat===d?'selected':''}>${d}</option>`).join('')}
         </select>
+        ${isGasto?`<span style="flex:1;font-size:12px;color:var(--orange-l);font-weight:600;padding:0 4px">${tipoLabels[tf]||'Gasto'}</span>`:''}
         <input type="number" value="${l.costo||''}" placeholder="0.00" step="0.01"
           oninput="invLines[${i}].costo=parseFloat(this.value)||0;calcInvTotals()"
           style="width:110px;flex-shrink:0;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:13px;font-family:'IBM Plex Mono',monospace;text-align:right;font-weight:600">
         <button onclick="removeInvLine(${i})"
           style="flex-shrink:0;background:rgba(218,54,51,.1);border:1px solid rgba(218,54,51,.2);color:var(--red-l);border-radius:6px;width:30px;height:36px;cursor:pointer;font-size:14px">×</button>
       </div>
-      <!-- ROW 1b: Bultos + OC + Traspaso -->
-      <div style="display:flex;gap:6px;margin-bottom:6px">
+      <!-- ROW 1b: Bultos + OC + Traspaso (solo mercancía) -->
+      ${!isGasto?`<div style="display:flex;gap:6px;margin-bottom:6px">
         <div style="flex:1">
           <input type="number" value="${l.bultos||''}" placeholder="Bultos"
             oninput="invLines[${i}].bultos=parseInt(this.value)||0;_autoSumBultos()"
@@ -7568,9 +7614,9 @@ function renderInvLines(){
             oninput="invLines[${i}].traspaso=parseFloat(this.value)||0;_autoSumTraspaso()"
             style="width:100%;background:var(--s2);border:1px solid rgba(63,185,80,.25);border-radius:5px;padding:5px 8px;color:var(--green-l);font-size:11px;font-family:'IBM Plex Mono',monospace" title="Traspaso ZL">
         </div>
-      </div>
-      <!-- ROW 2: Proveedor con autocompletar -->
-      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+      </div>`:'<!-- fila bultos/oc solo para mercancia -->'}
+      <!-- ROW 2: Proveedor con autocompletar (solo mercancía) -->
+      ${!isGasto?`<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
         <div style="flex:1;min-width:0;position:relative">
           <input type="text" value="${(l.prov||'').replace(/"/g,'&quot;')}" placeholder="Escribe proveedor para buscar..."
             list="prov-datalist"
@@ -7579,8 +7625,9 @@ function renderInvLines(){
             style="width:100%;background:var(--s2);border:1px solid ${provBorder};border-radius:6px;padding:6px 10px;color:var(--text);font-size:12px;transition:border-color .2s;box-sizing:border-box">
         </div>
         ${provHint?`<div style="width:100%;margin-top:3px">${provHint}</div>`:''}
-      </div>
-      ${l.deptCat?`<div style="font-size:10px;color:var(--green-l);margin-top:4px">✓ ${l.deptCat}</div>`:''}
+      </div>`:
+      `<div style="font-size:11px;color:var(--muted);padding:2px 0">Nota / Referencia: <input type="text" value="${l.oc||''}" placeholder="Número de factura, referencia..." oninput="invLines[${i}].oc=this.value" style="background:transparent;border:none;border-bottom:1px solid var(--border);color:var(--text);font-size:11px;padding:2px 4px;width:60%"></div>`}
+      ${l.deptCat&&!isGasto?`<div style="font-size:10px;color:var(--green-l);margin-top:4px">✓ ${l.deptCat}</div>`:''}
     </div>`;
   }).join('');
   calcInvTotals();
@@ -9669,41 +9716,40 @@ body:not(.sidebar-pinned) #app-wrapper {
     var overlay = document.getElementById('tab-modal-overlay');
     var body    = document.getElementById('tab-modal-body');
     var title   = document.getElementById('tab-modal-title');
-    var pane    = document.getElementById('tab-' + tabId);
 
-    // Mostrar loading inmediato
-    body.innerHTML = '<div style="padding:40px 24px;text-align:center;color:var(--muted)"><div style="font-size:28px;margin-bottom:12px;animation:rot 1s linear infinite;display:inline-block">⚙️</div><div style="font-size:12px;margin-top:4px">Cargando módulo...</div></div>';
+    // Show immediately with spinner
+    body.innerHTML = '<div style="padding:48px 24px;text-align:center;color:var(--muted)"><div style="font-size:30px;margin-bottom:12px;display:inline-block;animation:rot 1s linear infinite">⚙️</div><div style="font-size:12px;margin-top:6px">Cargando módulo...</div></div>';
     title.textContent = label || tabId;
     overlay.setAttribute('data-tab', tabId);
     overlay.classList.add('open');
     document.body.style.overflow = 'hidden';
 
-    // Renderizar contenido después de un frame (permite que el modal aparezca primero)
+    // Clone + render after modal is visible (2 frames for paint)
     setTimeout(function(){
-    if(!pane){
-      body.innerHTML = '<div style="padding:32px 24px;color:var(--muted);text-align:center"><div style="font-size:32px;margin-bottom:12px">⚠️</div><div>Este módulo no tiene contenido aún.</div></div>';
-    } else {
-      // CLONAR — el original permanece en el DOM siempre
-      var clone = pane.cloneNode(true);
-      clone.style.display = 'block';
-      clone.id = 'tab-' + tabId + '-clone';
-      body.innerHTML = '';
-      body.appendChild(clone);
-    }
-
-    // Disparar renders en el clon
-    setTimeout(function(){
-      if(tabId==='config'     && typeof renderConfig==='function')    renderConfig();
-      if(tabId==='tendencias' && typeof renderTend==='function'){ renderTend(); if(typeof renderDashboardKPIs==='function') renderDashboardKPIs(); if(typeof cargarPendientes==='function') cargarPendientes(); if(typeof renderTopProvs==='function') renderTopProvs(); }
-      if(tabId==='facturas'   && typeof renderInvLines==='function')  renderInvLines();
-      if(tabId==='cifexp'     && typeof updateCifExpDisplays==='function') updateCifExpDisplays();
-      if(tabId==='sababa'     && typeof calcSab2==='function')        calcSab2();
-      if(tabId==='unico'){
-        var fd=document.getElementById('unico_fecha-clone')||document.getElementById('unico_fecha');
-        if(fd && !fd.value) fd.value = new Date().toISOString().slice(0,10);
+      var pane = document.getElementById('tab-' + tabId);
+      if(!pane){
+        body.innerHTML = '<div style="padding:32px 24px;color:var(--muted);text-align:center"><div style="font-size:32px;margin-bottom:12px">⚠️</div><div>Este módulo no tiene contenido aún.</div></div>';
+      } else {
+        // CLONAR — el original permanece en el DOM siempre
+        var clone = pane.cloneNode(true);
+        clone.style.display = 'block';
+        clone.id = 'tab-' + tabId + '-clone';
+        body.innerHTML = '';
+        body.appendChild(clone);
       }
-    }, 80);
-    }, 30); // cierra el setTimeout de carga inicial
+      // Disparar renders en el clon
+      setTimeout(function(){
+        if(tabId==='config'     && typeof renderConfig==='function')    renderConfig();
+        if(tabId==='tendencias' && typeof renderTend==='function'){ renderTend(); if(typeof renderDashboardKPIs==='function') renderDashboardKPIs(); if(typeof cargarPendientes==='function') cargarPendientes(); if(typeof renderTopProvs==='function') renderTopProvs(); }
+        if(tabId==='facturas'   && typeof renderInvLines==='function')  renderInvLines();
+        if(tabId==='cifexp'     && typeof updateCifExpDisplays==='function') updateCifExpDisplays();
+        if(tabId==='sababa'     && typeof calcSab2==='function')        calcSab2();
+        if(tabId==='unico'){
+          var fd=document.getElementById('unico_fecha-clone')||document.getElementById('unico_fecha');
+          if(fd && !fd.value) fd.value = new Date().toISOString().slice(0,10);
+        }
+      }, 60);
+    }, 40);
   };
 
   /* ── Cerrar Modal 1 ── */
