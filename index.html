@@ -6469,7 +6469,7 @@ function _renderGastosNoMerc(all){
     mv:          { label:'Master Value',              icon:'🔑', color:'var(--green-l)',  total:0 },
     otros:       { label:'Otros Gastos',              icon:'📋', color:'var(--muted2)',   total:0 },
   };
-  // ITBMS SIEMPRE SEPARADO — no forma parte del costo costeable
+  // ITBMS siempre en cuadro propio — nunca dentro de No Mercancía
   let totalItbms = 0;
 
   // ── Acumular ahorro por rubro (comparando SC1 vs SC elegido) ──
@@ -6498,7 +6498,6 @@ function _renderGastosNoMerc(all){
       rubros.gastos_orig.total += sc2.gastos||0;
       rubros.honorarios.total  += sc2.hon||0;
       rubros.mv.total          += sc2.mv||0;
-      // ITBMS CIF Express: sobre mercancía + sobre tasa + sobre honorarios gravados
       totalItbms               += (sc2.itbms||0) + (sc2.itbmsTasaFinal||0) + (sc2.itbmsHon||0);
       totalNoMerc              += sc2.noMerc||0;
     } else if(isSab){
@@ -6506,7 +6505,6 @@ function _renderGastosNoMerc(all){
       rubros.gastos_orig.total += sc3.gastos||0;
       rubros.honorarios.total  += sc3.comision||0;
       rubros.mv.total          += sc3.mv||0;
-      // ITBMS Sababa: incluido en itbmsHomol
       totalItbms               += sc3.itbmsHomol||0;
       totalNoMerc              += sc3.noMerc||0;
     }
@@ -6518,7 +6516,7 @@ function _renderGastosNoMerc(all){
         case 'acarreo':    rubros.gastos_orig.total+=l.costo||0; break;
         case 'honorarios': rubros.honorarios.total+=l.costo||0; break;
         case 'gastos':     rubros.otros.total+=l.costo||0; break;
-        case 'itbms':      totalItbms+=l.costo||0; break; // ITBMS siempre al cuadro propio
+        case 'itbms':      totalItbms+=l.costo||0; break;
       }
     });
 
@@ -6584,25 +6582,22 @@ function _renderGastosNoMerc(all){
       </div>
     </div>
   </div>
-
-  <!-- CUADRO 2: ITBMS (CIF Express y Sababa solamente) -->
+  <!-- CUADRO 2: ITBMS separado (solo CIF Express y Sababa) -->
   ${totalItbms>0?`
-  <div style="background:var(--s1);border:1px solid rgba(88,166,255,.25);border-radius:12px;margin-bottom:10px;overflow:hidden">
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:rgba(88,166,255,.06)">
+  <div style="background:var(--s1);border:1px solid rgba(88,166,255,.3);border-radius:12px;margin-bottom:10px;overflow:hidden">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:rgba(88,166,255,.07)">
       <div style="display:flex;align-items:center;gap:8px">
         <span style="font-size:15px">🧾</span>
         <div>
           <div style="font-size:12px;font-weight:700;color:var(--blue-l)">ITBMS — CIF Express y Sababa</div>
-          <div style="font-size:10px;color:var(--muted)">ITBMS s/Mercancía · ITBMS s/Tasa · ITBMS s/Honorarios</div>
+          <div style="font-size:10px;color:var(--muted)">ITBMS s/Mercancía · s/Tasa · s/Honorarios</div>
         </div>
       </div>
       <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:800;color:var(--blue-l)">${fmt2(totalItbms)}</span>
     </div>
-  </div>`:''}
-
+  </div>
   <!-- CUADRO 3: LANDED TOTAL (No Merc + ITBMS) -->
-  ${totalItbms>0?`
-  <div style="background:rgba(63,185,80,.06);border:1px solid rgba(63,185,80,.25);border-radius:12px;margin-bottom:14px;overflow:hidden">
+  <div style="background:rgba(63,185,80,.07);border:1px solid rgba(63,185,80,.3);border-radius:12px;margin-bottom:14px;overflow:hidden">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px">
       <div style="display:flex;align-items:center;gap:8px">
         <span style="font-size:15px">📊</span>
@@ -6614,7 +6609,6 @@ function _renderGastosNoMerc(all){
       <span style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:800;color:var(--green-l)">${fmt2(totalNoMerc+totalItbms)}</span>
     </div>
   </div>`:''}
-
   <!-- DESGLOSE DEL AHORRO -->
   ${totalAhorroDetalle>0 ? `
   <div style="background:var(--s1);border:1px solid rgba(63,185,80,.2);border-radius:12px;margin-bottom:14px;overflow:hidden">
@@ -10364,7 +10358,7 @@ body:not(.sidebar-pinned) #app-wrapper {
   ══════════════════════════════════════════ */
 
   var MODAL_TABS = ['cifexp','sababa','unico','facturas','comparativo',
-                    'aranceles','histfact','resumen'];
+                    'aranceles','tendencias','config','histfact','resumen'];
 
   /* ── Construir estructura de modales ── */
   function buildModals(){
