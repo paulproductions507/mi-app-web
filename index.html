@@ -1914,12 +1914,11 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       <div class="dot o"></div>
       <h3>🏆 Top 10 Proveedores — por Facturación</h3>
       <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
-        <div style="font-size:10px;color:var(--muted)">Usa el filtro de tipo arriba ↑</div>
-        <span id="top-prov-chev" style="font-size:14px;color:var(--muted)">▼</span>
+        <span id="top-prov-chev" style="font-size:14px;color:var(--muted)">▲</span>
       </div>
     </div>
-    <div id="top-provs-wrap" style="display:none">
-      <div style="text-align:center;padding:32px;color:var(--muted);font-size:12px">Procesa embarques con facturas para ver estadísticas de proveedores.</div>
+    <div id="top-provs-wrap" style="display:block">
+      <div style="text-align:center;padding:32px;color:var(--muted);font-size:12px">Cargando proveedores...</div>
     </div>
   </div>
 
@@ -6133,6 +6132,7 @@ function renderTend(){
   if(canvas) canvas.style.display='block';
 
   // ── Enriquecer registros sin ahorro — intentar derivar del snap ──
+  let _needsSave = false;
   filteredData.forEach(d=>{
     if((!d.ahorro || d.ahorro===0) && d.snap){
       const sn=d.snap;
@@ -6140,14 +6140,15 @@ function renderTend(){
       const sc3=sn.sc3||{};
       const isSab=(d.esc||'').toLowerCase().includes('sababa')||(d.esc||'').toLowerCase().includes('sab');
       if(isSab && sc3.ahorroNeto>0){
-        d.ahorro = sc3.ahorroNeto;
+        d.ahorro = sc3.ahorroNeto; _needsSave=true;
       } else if(sc2.ahorroNeto>0){
-        d.ahorro = sc2.ahorroNeto;
+        d.ahorro = sc2.ahorroNeto; _needsSave=true;
       } else if(sc2.landedG>0 && sc3.landedG>0){
-        d.ahorro = Math.max(0, sc2.landedG - sc3.landedG);
+        d.ahorro = Math.max(0, sc2.landedG - sc3.landedG); _needsSave=true;
       }
     }
   });
+  if(_needsSave) saveTendData(); // Persistir correcciones de ahorro
 
   // Group by period using filtered data
   const groups={};
@@ -9165,10 +9166,10 @@ function _toggleTopProvs(){
   const wrap = document.getElementById('top-provs-wrap');
   const chev = document.getElementById('top-prov-chev');
   if(!wrap) return;
-  const open = wrap.style.display === 'none';
-  wrap.style.display = open ? 'block' : 'none';
-  if(chev) chev.textContent = open ? '▲' : '▼';
-  if(open) renderTopProvs(); // refresh on open
+  const open = wrap.style.display !== 'none' && wrap.style.display !== '';
+  wrap.style.display = open ? 'none' : 'block';
+  if(chev) chev.textContent = open ? '▼' : '▲';
+  if(!open) renderTopProvs(); // refresh on open
 }
 
 // ── PROCESADO — READ-ONLY VIEW ──
@@ -10368,7 +10369,7 @@ body:not(.sidebar-pinned) #app-wrapper {
   ══════════════════════════════════════════ */
 
   var MODAL_TABS = ['cifexp','sababa','unico','facturas','comparativo',
-                    'aranceles','tendencias','config','histfact','resumen'];
+                    'aranceles','histfact','resumen'];
 
   /* ── Construir estructura de modales ── */
   function buildModals(){
@@ -10462,6 +10463,21 @@ body:not(.sidebar-pinned) #app-wrapper {
     overlay.classList.remove('open');
     overlay.removeAttribute('data-tab');
     document.body.style.overflow = '';
+    // Si la app-wrapper está oculta (venimos del splash), volvemos al panel nav
+    var app = document.getElementById('app-wrapper');
+    if(app && app.classList.contains('hidden')){
+      var splash = document.getElementById('splash');
+      if(splash){
+        splash.style.display='flex';
+        splash.style.opacity='1';
+        splash.style.transform='none';
+        // Mostrar el panel de navegación directamente
+        var nav = document.getElementById('splash-nav');
+        if(nav) nav.style.transform='translateX(-50%) translateY(0)';
+        var hero = document.getElementById('splash-hero');
+        if(hero) hero.style.opacity='0';
+      }
+    }
   };
 
   /* ── Abrir Modal 2 (dashboard sobre modal 1) ── */
