@@ -1139,13 +1139,22 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
   <div class="card" style="margin-bottom:12px">
     <div class="card-hd" style="cursor:pointer;user-select:none" onclick="_toggleSection('card-body-4___transporte_y_gas','card-chev-4___transporte_y_gas',this)"><div class="dot g"></div><h3>4 · Transporte y Gastos</h3><span id="card-chev-4___transporte_y_gas" style="margin-left:auto;font-size:11px;color:var(--muted)">▼</span>
     <div class="card-bd">
-      <div class="field"><label>Tipo de Equipo</label>
-        <select id="s1_equipo" onchange="setEquipo(this.value)">
-          <option value="">— Selecciona tipo de equipo —</option>
-          <option value="Contenedor">🚢 Contenedor</option>
-          <option value="Camion">🚛 Camión</option>
-          <option value="CargaSuelta">📦 Carga Suelta</option>
-        </select>
+      <div class="r2">
+        <div class="field"><label>Tipo de Equipo</label>
+          <select id="s1_equipo" onchange="setEquipo(this.value)">
+            <option value="">— Selecciona tipo de equipo —</option>
+            <option value="Contenedor">🚢 Contenedor</option>
+            <option value="Camion">🚛 Camión</option>
+            <option value="CargaSuelta">📦 Carga Suelta</option>
+          </select>
+        </div>
+        <div class="field"><label>Vía de Transporte</label>
+          <select id="s1_via_transporte" oninput="calc()">
+            <option value="SEA">🚢 SEA — Marítimo</option>
+            <option value="LAND">🚛 LAND — Terrestre</option>
+            <option value="AIR">✈️ AIR — Aéreo</option>
+          </select>
+        </div>
       </div>
       <div class="r2">
         <div class="field"><label>Acarreo por Equipo (USD) <span id="acarreo-note" style="color:var(--muted2);font-weight:400;font-size:10px"></span></label>
@@ -5347,6 +5356,15 @@ function procesarEmbarque(){
     bultos:     invLines.reduce((s,l)=>s+(l.bultos||0),0),
     equipos:    parseInt(document.getElementById('s1_equipos')?.value)||1,
     tipoEquipo: document.getElementById('s1_equipo')?.value||'',
+    viaTransporte: document.getElementById('s1_via_transporte')?.value||'SEA',
+    tramiteTipo: (()=>{
+      // Detectar si es Local (S.I) o Liquidación
+      const lines = invLines||[];
+      const hasSI = lines.some(l=> l.prov && (l.prov.startsWith('S.I') || l.prov.startsWith('S.I -')));
+      const tipo = document.getElementById('s1_tipo')?.value||'';
+      if(tipo==='ZL') return 'Local';
+      return hasSI ? 'Local' : 'Liquidación';
+    })(),
     contenedor: document.getElementById('s1_notas')?.value?.match(/cont[^,\n]*/i)?.[0]||''
   };
   // Si es actualización de un pendiente, reemplazar en lugar de agregar
@@ -5499,6 +5517,11 @@ function reabrirEmbarquePendiente(idx){
     if(eqEl){ eqEl.value = s.equipo; if(typeof setEquipo==='function') setEquipo(s.equipo); }
   }
   if(s.equipos !== undefined) _set('s1_equipos', s.equipos);
+  // Restaurar vía de transporte
+  if(data.viaTransporte){
+    const viaEl = document.getElementById('s1_via_transporte');
+    if(viaEl) viaEl.value = data.viaTransporte;
+  }
 
   // ── 5. Valores financieros ──
   if(s.termino === 'FOB'){
@@ -6079,6 +6102,23 @@ function renderTend(){
   if(emptyEl) emptyEl.style.display='none';
   if(canvas) canvas.style.display='block';
 
+  // ── Enriquecer registros sin ahorro — intentar derivar del snap ──
+  filteredData.forEach(d=>{
+    if((!d.ahorro || d.ahorro===0) && d.snap){
+      const sn=d.snap;
+      const sc2=sn.sc2||{};
+      const sc3=sn.sc3||{};
+      const isSab=(d.esc||'').toLowerCase().includes('sababa')||(d.esc||'').toLowerCase().includes('sab');
+      if(isSab && sc3.ahorroNeto>0){
+        d.ahorro = sc3.ahorroNeto;
+      } else if(sc2.ahorroNeto>0){
+        d.ahorro = sc2.ahorroNeto;
+      } else if(sc2.landedG>0 && sc3.landedG>0){
+        d.ahorro = Math.max(0, sc2.landedG - sc3.landedG);
+      }
+    }
+  });
+
   // Group by period using filtered data
   const groups={};
   const sorted=[...filteredData].sort((a,b)=>a.fecha.localeCompare(b.fecha));
@@ -6171,9 +6211,13 @@ function renderTend(){
       const idx=tendData.indexOf(d);
       const pct=d.cif>0?(d.ahorro/d.cif*100).toFixed(2)+'%':'—';
       const isPend = d.status === 'pendiente';
+      const viaIco = d.viaTransporte==='AIR'?'✈️':d.viaTransporte==='LAND'?'🚛':'🚢';
+      const viaLabel = d.viaTransporte||'SEA';
+      const tramiteColor = d.tramiteTipo==='Local'?'var(--green-l)':'var(--orange-l)';
+      const tramiteBg = d.tramiteTipo==='Local'?'rgba(63,185,80,.12)':'rgba(240,136,62,.12)';
       return `<div style="display:grid;grid-template-columns:auto 1fr auto auto auto;gap:8px;align-items:center;padding:9px 14px;border-bottom:1px solid rgba(48,54,61,.4);cursor:pointer;transition:background .15s${isPend?';border-left:3px solid var(--orange-l)':''}" onclick="if(event.target.classList.contains('del-btn')||event.target.classList.contains('btn-reabrir')){return;}abrirModuloComparativo_idx(${idx})" onmouseover="this.style.background='rgba(255,255,255,.03)'" onmouseout="this.style.background=''">
         <div style="font-size:10px;font-weight:700;color:var(--orange-l);white-space:nowrap">${d.nro||'—'}</div>
-        <div><div style="font-size:12px;font-weight:500;color:var(--text)">${d.desc}${isPend?'&nbsp;<span class="badge-pendiente">🟡 PENDIENTE</span>':''}</div><div style="font-size:10px;color:var(--muted)">${d.fecha} · ${d.esc||''}</div></div>
+        <div><div style="font-size:12px;font-weight:500;color:var(--text)">${d.desc}${isPend?'&nbsp;<span class="badge-pendiente">🟡 PENDIENTE</span>':''}</div><div style="font-size:10px;color:var(--muted);display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-top:2px">${d.fecha} · ${d.esc||''}&nbsp;<span style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:var(--blue-l)">${viaIco} ${viaLabel}</span>${d.tramiteTipo?`<span style="background:${tramiteBg};border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:${tramiteColor}">${d.tramiteTipo}</span>`:''}</div></div>
         <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--green-l);font-weight:700;white-space:nowrap">$${(d.ahorro/1000).toFixed(2)}k</div>
         <div style="font-size:11px;color:var(--orange-l);white-space:nowrap">${pct}</div>
         <div style="display:flex;gap:4px;align-items:center">
@@ -6297,11 +6341,15 @@ function renderTend(){
     const idx=tendData.indexOf(d);
     const pct=d.cif>0?(d.ahorro/d.cif*100).toFixed(2)+'%':'—';
     const isPend = d.status === 'pendiente';
+    const viaIco2 = d.viaTransporte==='AIR'?'✈️':d.viaTransporte==='LAND'?'🚛':'🚢';
+    const viaLabel2 = d.viaTransporte||'SEA';
+    const tramiteColor2 = d.tramiteTipo==='Local'?'var(--green-l)':'var(--orange-l)';
+    const tramiteBg2 = d.tramiteTipo==='Local'?'rgba(63,185,80,.12)':'rgba(240,136,62,.12)';
     return `<div style="display:grid;grid-template-columns:auto 1fr auto auto auto;gap:8px;align-items:center;padding:9px 14px;border-bottom:1px solid rgba(48,54,61,.4);cursor:pointer;transition:background .15s${isPend?';border-left:3px solid var(--orange-l)':''}" onclick="if(event.target.classList.contains('del-btn')||event.target.classList.contains('btn-reabrir')){return;}abrirModuloComparativo_idx(${idx})" onmouseover="this.style.background='rgba(255,255,255,.03)'" onmouseout="this.style.background=''">
       <div style="font-size:10px;font-weight:700;color:var(--orange-l);white-space:nowrap">${d.nro||'—'}</div>
       <div>
         <div style="font-size:12px;font-weight:500;color:var(--text)">${d.desc}${isPend?'&nbsp;<span class="badge-pendiente">🟡 PENDIENTE</span>':''}</div>
-        <div style="font-size:10px;color:var(--muted)">${d.fecha} · ${d.esc||''}</div>
+        <div style="font-size:10px;color:var(--muted);display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-top:2px">${d.fecha} · ${d.esc||''}&nbsp;<span style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:var(--blue-l)">${viaIco2} ${viaLabel2}</span>${d.tramiteTipo?`<span style="background:${tramiteBg2};border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:${tramiteColor2}">${d.tramiteTipo}</span>`:''}</div>
       </div>
       <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--green-l);font-weight:700;white-space:nowrap">$${(d.ahorro/1000).toFixed(2)}k</div>
       <div style="font-size:11px;color:var(--orange-l);white-space:nowrap">${pct}</div>
@@ -6738,7 +6786,7 @@ function _renderGroupSections(data){
     if(!facs.length) return '<div style="padding:12px 16px;color:var(--muted);font-size:11px">Sin proveedores en esta categoría.</div>';
     return facs.map(function(f){
       var tipoBadge = f.tipo==='EXT'
-        ? '<span style="background:rgba(240,136,62,.15);border:1px solid rgba(240,136,62,.3);color:var(--orange-l);border-radius:3px;padding:1px 5px;font-size:9px;font-weight:700;white-space:nowrap">✈️ IMP</span>'
+        ? '<span style="background:rgba(240,136,62,.15);border:1px solid rgba(240,136,62,.3);color:var(--orange-l);border-radius:3px;padding:1px 5px;font-size:9px;font-weight:700;white-space:nowrap">🚢 IMP</span>'
         : '<span style="background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:3px;padding:1px 5px;font-size:9px;font-weight:700;white-space:nowrap">🏙️ ZL</span>';
       return '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 16px;'
         +'border-bottom:1px solid rgba(48,54,61,.4);cursor:pointer;transition:background .12s" '
@@ -6774,7 +6822,9 @@ function _renderGroupSections(data){
     var gastoLines = lines.filter(function(l){ return l.tipoFac && l.tipoFac!=='mercancia'; });
     var totalMerc  = mercLines.reduce(function(s,l){ return s+(l.costo||0); }, 0);
     var totalNoMerc= isSab ? (sc3.noMerc||0) : (sc2.noMerc||0);
+    var totalItbms = isSab ? (sc3.itbmsHomol||0) : ((sc2.itbms||0)+(sc2.itbmsTasaFinal||0)+(sc2.itbmsHon||0));
     var landed     = isSab ? (sc3.landedG||sc3.landed1||0) : (sc2.landedG||sc2.landed1||0);
+    var landedCosteable = totalMerc + totalNoMerc; // Sin ITBMS
     var fobHomol   = isSab ? (sc3.mercHomol||0) : 0; // Solo Sababa tiene FOB homologado
     var fmt2l = function(n){ return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
     var fmtKl = function(n){ return n>=1000?'$'+(n/1000).toFixed(1)+'k':fmt2l(n); };
@@ -6795,12 +6845,12 @@ function _renderGroupSections(data){
       +'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+d.fecha+' · '+(d.esc||'')+'</div>'
       +'</div>'
       +'<div style="text-align:right">'
-      +'<div style="font-size:10px;color:var(--muted)">Landed Cost</div>'
+      +'<div style="font-size:10px;color:var(--muted)">Landed Global (incl. ITBMS)</div>'
       +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:14px;font-weight:800;color:var(--orange-l)">'+fmtKl(landed)+'</div>'
       +'</div>'
       +'</div>'
       // Resumen financiero del embarque
-      +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">'
+      +'<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px">'
       +'<div style="background:var(--bg);border-radius:7px;padding:8px;text-align:center">'
       +'<div style="font-size:9px;color:var(--muted);margin-bottom:3px">CIF/FOB MERC.</div>'
       +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:var(--text)">'+fmtKl(totalMerc)+'</div>'
@@ -6810,8 +6860,12 @@ function _renderGroupSections(data){
       +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:var(--orange-l)">'+fmtKl(totalNoMerc)+'</div>'
       +'</div>'
       +'<div style="background:var(--bg);border-radius:7px;padding:8px;text-align:center">'
-      +'<div style="font-size:9px;color:var(--muted);margin-bottom:3px">'+(isSab?'FOB HOMOL.':'FOB HOMOL.')+'</div>'
-      +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:'+(isSab?'var(--green-l)':'var(--muted2)')+'">'+( isSab ? fmtKl(fobHomol) : '—' )+'</div>'
+      +'<div style="font-size:9px;color:var(--muted);margin-bottom:3px">ITBMS</div>'
+      +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:var(--blue-l)">'+fmtKl(totalItbms)+'</div>'
+      +'</div>'
+      +'<div style="background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.2);border-radius:7px;padding:8px;text-align:center">'
+      +'<div style="font-size:9px;color:var(--green-l);margin-bottom:3px;font-weight:700">LANDED COSTEABLE TOTAL</div>'
+      +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:13px;font-weight:800;color:var(--green-l)">'+fmtKl(landedCosteable)+'</div>'
       +'</div>'
       +'</div>'
       +'</div>'
@@ -6840,8 +6894,8 @@ function _renderGroupSections(data){
           +'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:10px;font-weight:600;color:var(--orange-l)">'+fmt2l(l._noMercPorcion)+'</span>'
           +'</div>'
           +'<div style="display:flex;justify-content:space-between;align-items:center">'
-          +'<span style="font-size:9px;color:var(--muted)">Landed</span>'
-          +'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:10px;font-weight:700;color:var(--orange-l)">'+fmt2l(l._landedPorcion)+'</span>'
+          +'<span style="font-size:9px;color:var(--muted)">Costo Landed Costeable</span>'
+          +'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:10px;font-weight:700;color:var(--green-l)">'+fmt2l(l._landedPorcion)+'</span>'
           +'</div>'
           +'</div>'
           +'</div>';
