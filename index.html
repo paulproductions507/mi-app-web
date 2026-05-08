@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Simulador Aduanal — Panamá v8.5.3</title>
+<title>Simulador Aduanal — Panamá v8.5.4</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -1522,7 +1522,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
         <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:8px">Desglose Honorarios CIF Express</div>
         <div class="r2">
           <div class="field"><label>Valor Exento (factura real, USD)</label>
-            <input type="number" id="sc2_hon_ng" value="" step="0.01" placeholder="0.00" oninput="calc()">
+            <input type="number" id="sc2_hon_ng" value="" step="0.01" placeholder="0.00" oninput="(function(el){var orig=document.querySelectorAll('[id=\'sc2_hon_ng\']')[0];if(orig&&orig!==el)orig.value=el.value;calc();updateCifExpDisplays();})(this)">
           </div>
           <div class="field"><label>Valor Gravado (auto)</label>
             <input type="number" id="sc2_hon_g_display" readonly style="background:var(--bg)">
@@ -2183,39 +2183,59 @@ function switchTab(id,el){
   if(ind) ind.textContent=tabNames[id]||id;
 }
 function updateCifExpDisplays(){
+  // Helper that reads from the FIRST available element (original DOM)
   const vv=id=>{const el=document.getElementById(id);return el?parseFloat(el.value)||0:0;};
-  const sd=(id,v)=>{const el=document.getElementById(id);if(el&&v!==undefined)el.value=Math.round((v||0)*100)/100;};
+  // Helper that writes to ALL instances of an id (original + modal clone)
+  const sd=(id,val)=>{
+    document.querySelectorAll('[id="'+id+'"]').forEach(function(el){
+      el.value=Math.round((val||0)*100)/100;
+    });
+  };
   const CIF=window._lastCIF||vv('s1_cif');
   const tasa=vv('s1_tasa')||100;
   const itbPct=(vv('s1_itbms')||7)/100;
   const s=window._lastSnap||{};
-  const sc1=(s.sc1)||{};
   const sc2=(s.sc2)||{};
+
   sd('sc_cif_display', CIF);
   sd('sc_flete_display', vv('s1_flete_fob'));
   sd('sc_agente_display', vv('s1_agente'));
   sd('sc2_itbms_display', sc2.itbms||0);
   sd('sc2_tasa_display', tasa);
   sd('sc2_itbms_tasa_display', Math.round(tasa*itbPct*100)/100);
-  sd('sc2_hon_display', sc2.hon||0);
-  // Auto-restore Valor Exento from snap if field is empty
-  const honNgEl = document.getElementById('sc2_hon_ng');
-  if(honNgEl && (!honNgEl.value || parseFloat(honNgEl.value)===0) && sc2.honNg > 0){
-    honNgEl.value = sc2.honNg.toFixed(2);
-    // Re-run calc() so sc2_hon_g and sc2_itbms_hon recalculate correctly
-    // using the restored exento value (not 0)
-    setTimeout(function(){ if(typeof calc==='function') calc(); }, 0);
-  }
-  // FIX: Master Value = diferencia Esc.#1 vs Esc.#2
+
+  // Total honorarios CIF Express = CIF * 3%
+  const sc2_hon = sc2.hon || (CIF * 0.03);
+  sd('sc2_hon_display', sc2_hon);
+
+  // ── Restaurar Valor Exento desde snap si el campo está vacío ──
+  // Aplicar a TODOS los elementos con ese id (original + clon)
+  document.querySelectorAll('[id="sc2_hon_ng"]').forEach(function(honNgEl){
+    if((!honNgEl.value || parseFloat(honNgEl.value)===0) && sc2.honNg > 0){
+      honNgEl.value = sc2.honNg.toFixed(2);
+    }
+  });
+
+  // ── SIEMPRE calcular y mostrar Gravado e ITBMS sobre TODOS los elementos ──
+  // Leer el valor exento del primer elemento disponible (ya restaurado arriba)
+  const allNg = document.querySelectorAll('[id="sc2_hon_ng"]');
+  const honNg = Math.min(
+    allNg.length ? (parseFloat(allNg[0].value)||0) : 0,
+    sc2_hon
+  );
+  const honG     = Math.max(0, sc2_hon - honNg);
+  const itbmsHon = honG * itbPct;
+  sd('sc2_hon_g_display',     honG);
+  sd('sc2_itbms_hon_display', itbmsHon);
+
+  // Master Value
   const mv = sc2.mv || 0;
   sd('sc_costo_zl', mv);
-  // Highlight MV field
-  const mvEl = document.getElementById('sc_costo_zl');
-  if(mvEl){
+  document.querySelectorAll('[id="sc_costo_zl"]').forEach(function(mvEl){
     mvEl.style.color = mv>0 ? 'var(--blue-l)' : 'var(--muted)';
     mvEl.style.fontWeight = mv>0 ? '700' : '';
-    if(mv>0) mvEl.title = 'Master Value = diferencia entre Landed Esc.#1 y Esc.#2 (puente interno, no se paga)';
-  }
+    if(mv>0) mvEl.title = 'Master Value = diferencia entre Landed Esc.#1 y Esc.#2';
+  });
 }
 
 function setTipo(val, el){
@@ -2287,6 +2307,8 @@ function setCompar(val,el){
   // Switch providers: SI if sababa, parent if cifexp
   _syncProvSI(val==='sababa');
   calc();
+  // Si cambiamos a CIF Express, actualizar displays del desglose honorarios
+  if(val==='cifexp') setTimeout(updateCifExpDisplays, 20);
 }
 function _syncProvSI(useSI){
   if(!invLines||!invLines.length) return;
@@ -2883,13 +2905,16 @@ function calc(){
 
   // SC2 desglose No Gravado / Gravado
   // sc2_hon_ng = valor exento ingresado por usuario (debe ser ≤ sc2_hon)
-  const sc2_hon_ng_raw = v('sc2_hon_ng');
+  // Leer del clon del modal si está abierto, sino del original
+  const _allHonNg = document.querySelectorAll('[id="sc2_hon_ng"]');
+  const _honNgEl  = _allHonNg.length > 1 ? _allHonNg[_allHonNg.length-1] : _allHonNg[0];
+  const sc2_hon_ng_raw = _honNgEl ? (parseFloat(_honNgEl.value)||0) : 0;
   const sc2_hon_ng   = Math.min(sc2_hon_ng_raw, sc2_hon); // cap: exento no puede superar total
   const sc2_hon_g    = Math.max(0, sc2_hon - sc2_hon_ng); // gravado = total - exento
   const sc2_itbms_hon= sc2_hon_g * itbPct;               // ITBMS SOLO sobre el gravado
 
-  // Update display fields
-  const sd=(id,val)=>{const el=document.getElementById(id);if(el)el.value=val.toFixed(2);};
+  // Update display fields — target ALL instances (original + modal clone)
+  const sd=(id,val)=>{document.querySelectorAll('[id="'+id+'"]').forEach(el=>el.value=val.toFixed(2));};
   sd('disp_honMin',honMin); sd('disp_coord',coord);
   sd('disp_form1',form1); sd('disp_form1b',form1); sd('disp_reng',rengExt);
   sd('disp_hon1',window._soloMode?(window._soloHonorario||0):sc1_hon); sd('disp_hon2',sc2_hon);
