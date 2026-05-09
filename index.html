@@ -1760,40 +1760,66 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
 <div id="tab-tendencias" class="tab-pane">
 <div class="page">
 
-  <!-- PERIOD SELECTOR + FILTER -->
-  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
+  <!-- ENCABEZADO -->
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">
     <div>
-      <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px">📈 Historial de Ahorros</div>
-      <div style="font-size:11px;color:var(--muted)">Embarques procesados guardados en este dispositivo</div>
+      <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:2px">📈 Historial de Embarques</div>
+      <div style="font-size:11px;color:var(--muted)" id="tend-subtitle">☁️ Cargando desde Supabase...</div>
     </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-      <div class="seg" style="width:auto">
-        <div class="seg-btn b" onclick="setTendPeriod('dia',this)">Día</div>
-        <div class="seg-btn b" onclick="setTendPeriod('semana',this)">Semana</div>
-        <div class="seg-btn on b" onclick="setTendPeriod('mes',this)">Mes</div>
-        <div class="seg-btn b" onclick="setTendPeriod('anio',this)">Año</div>
-      </div>
-    </div>
+    <button onclick="_syncManualTend(this)" style="background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:8px;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer;flex-shrink:0">☁️ Sincronizar</button>
   </div>
 
-  <!-- YEAR/MONTH FILTER ROW -->
-  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
-    <div style="font-size:11px;color:var(--muted);font-weight:600">Filtrar:</div>
-    <select id="tend_filter_year" onchange="renderTend()" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:5px 10px;color:var(--text);font-size:12px">
-      <option value="">— Todos los años —</option>
-    </select>
-    <select id="tend_filter_month" onchange="renderTend()" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:5px 10px;color:var(--text);font-size:12px">
-      <option value="">— Todos los meses —</option>
-      <option value="01">Enero</option><option value="02">Febrero</option><option value="03">Marzo</option>
-      <option value="04">Abril</option><option value="05">Mayo</option><option value="06">Junio</option>
-      <option value="07">Julio</option><option value="08">Agosto</option><option value="09">Septiembre</option>
-      <option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option>
-    </select>
-    <select id="tend_filter_tipo" onchange="renderTend();renderTopProvs();renderDashboardKPIs();" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:5px 10px;color:var(--text);font-size:12px">
-      <option value="">Top Proveedores: Global</option>
-      <option value="CIF Express">Solo CIF Express</option>
-      <option value="Sababa">Solo Sababa Imports</option>
-    </select>
+  <!-- PANEL DE FILTROS PROFESIONAL -->
+  <div style="background:var(--s1);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px">
+    <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px">🔍 Filtros de Búsqueda</div>
+
+    <!-- RANGO DE FECHAS -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+      <div>
+        <label style="font-size:10px;color:var(--muted);font-weight:600;display:block;margin-bottom:3px">DESDE</label>
+        <input type="date" id="tf_desde" oninput="_applyTendFilters()" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:7px;padding:6px 8px;color:var(--text);font-size:12px;box-sizing:border-box">
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--muted);font-weight:600;display:block;margin-bottom:3px">HASTA</label>
+        <input type="date" id="tf_hasta" oninput="_applyTendFilters()" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:7px;padding:6px 8px;color:var(--text);font-size:12px;box-sizing:border-box">
+      </div>
+    </div>
+
+    <!-- TIPO + PROVEEDOR -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+      <div>
+        <label style="font-size:10px;color:var(--muted);font-weight:600;display:block;margin-bottom:3px">TIPO DE EMBARQUE</label>
+        <select id="tf_tipo" onchange="_applyTendFilters()" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:7px;padding:6px 8px;color:var(--text);font-size:12px;box-sizing:border-box">
+          <option value="">Todos</option>
+          <option value="liquidacion">Liquidación</option>
+          <option value="zonalibre">Zona Libre</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--muted);font-weight:600;display:block;margin-bottom:3px">PROVEEDOR / ESCENARIO</label>
+        <select id="tf_proveedor" onchange="_applyTendFilters()" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:7px;padding:6px 8px;color:var(--text);font-size:12px;box-sizing:border-box">
+          <option value="">Todos</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- BÚSQUEDA LIBRE -->
+    <div style="margin-bottom:10px">
+      <label style="font-size:10px;color:var(--muted);font-weight:600;display:block;margin-bottom:3px">BUSCAR (Nro. embarque · descripción · origen)</label>
+      <input type="text" id="tf_buscar" placeholder="Ej: 22035   ·   zapatos   ·   China..." oninput="_applyTendFilters()"
+        style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:7px;padding:7px 10px;color:var(--text);font-size:12px;box-sizing:border-box">
+    </div>
+
+    <!-- PERÍODOS RÁPIDOS -->
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+      <span style="font-size:10px;color:var(--muted);font-weight:600;white-space:nowrap">Período rápido:</span>
+      <button onclick="_setPeriodoRapido('hoy',this)"    style="background:var(--s2);border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer" class="_prBtn">Hoy</button>
+      <button onclick="_setPeriodoRapido('semana',this)" style="background:var(--s2);border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer" class="_prBtn">Semana</button>
+      <button onclick="_setPeriodoRapido('mes',this)"    style="background:var(--s2);border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer" class="_prBtn">Mes</button>
+      <button onclick="_setPeriodoRapido('anio',this)"   style="background:var(--s2);border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer" class="_prBtn">Año</button>
+      <button onclick="_setPeriodoRapido('todo',this)"   style="background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.4);color:var(--blue-l);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer" class="_prBtn _prActive">Todo</button>
+      <button onclick="_limpiarFiltrosTend()" style="margin-left:auto;background:none;border:1px solid rgba(218,54,51,.25);color:var(--red-l);border-radius:6px;padding:3px 10px;font-size:10px;font-weight:600;cursor:pointer">✕ Limpiar</button>
+    </div>
   </div>
 
   <!-- QUICK ACCESS BUTTONS -->
@@ -5091,65 +5117,55 @@ ${'<'}/script>
 let tendPeriod='mes';
 let tendData=[];
 
+// ══════════════════════════════════════════════════════════════
+// REGLA DE NEGOCIO — Supabase es la única fuente de verdad.
+// localStorage NO se usa para datos de embarques.
+// Un embarque procesado es inmutable: no se edita desde ningún
+// dispositivo. Para corregir: eliminar de Supabase y reprocesar.
+// ══════════════════════════════════════════════════════════════
+const _TEND_MASTER_KEY = '_TEND_MASTER';
+
 function loadTendData(){
-  try{
-    const s=localStorage.getItem('sim_tend');
-    if(s){
-      tendData=JSON.parse(s)||[];
-      // ── CORRECCIÓN PUNTUAL: embarque 22035 → Sababa ──
-      _corregirEmbarque('22035', 'Sababa');
-      // Migrate históricos locally too
-      let changed = false;
-      tendData.forEach(d => {
-        if(!d._gastosMigrados){ _migrarGastosDesdeSnap(d); changed=true; }
-      });
-      if(changed) localStorage.setItem('sim_tend', JSON.stringify(tendData));
-    }
-  }catch(e){}
+  // No carga localStorage. tendData arranca vacío.
+  // El pull de Supabase en window.onload lo llenará.
+  tendData = [];
 }
 
-// Corrige el escenario de un embarque puntual y resetea la migración de gastos
+// Corrige el escenario de un embarque puntual (solo en memoria, no persiste solo)
 function _corregirEmbarque(nro, nuevoEsc){
   tendData.forEach(d=>{
     if((d.nro||'').toString().trim() === nro.toString().trim()){
       if(d.esc !== nuevoEsc){
         d.esc = nuevoEsc;
-        d._gastosMigrados = false; // forzar re-migración con el escenario correcto
-        localStorage.setItem('sim_tend', JSON.stringify(tendData));
+        d._gastosMigrados = false;
       }
     }
   });
 }
+
+// Guarda tendData en Supabase. Sin localStorage.
 function saveTendData(){
-  try{ localStorage.setItem('sim_tend',JSON.stringify(tendData)); }catch(e){}
-  // Sync to Supabase silently every time tendData changes
   _syncTendToCloud();
 }
 
-// ══════════════════════════════════════════════════════════
-// CLOUD SYNC — tendData vive en Supabase como registro único
-// Tabla: simulador_tend  |  columna: nombre='_TEND_MASTER'
-// Al iniciar: pull de la nube y fusionar con local
-// Al guardar: push a la nube automáticamente
-// ══════════════════════════════════════════════════════════
-const _TEND_MASTER_KEY = '_TEND_MASTER';
-
+// Push a Supabase — siempre reemplaza el maestro con el estado actual de tendData
 async function _syncTendToCloud(){
   if(!_sb) return;
   try {
     const payload = {
       nombre: _TEND_MASTER_KEY,
-      datos: JSON.stringify({ tendData: window.tendData||tendData||[], updated_at: new Date().toISOString() }),
+      datos: JSON.stringify({ tendData: tendData||[], updated_at: new Date().toISOString() }),
       updated_at: new Date().toISOString()
     };
     await _sb.from('simulador_sesiones').upsert(payload, { onConflict: 'nombre' });
   } catch(e){ console.warn('Cloud sync error:', e.message); }
 }
 
+// Pull desde Supabase — reemplaza tendData con lo de la nube. Sin merge con local.
 async function _pullTendFromCloud(){
   if(!_sb) return false;
   try {
-    // Try master record first
+    // 1. Intentar leer el registro maestro
     const { data: masterData, error: masterErr } = await _sb
       .from('simulador_sesiones')
       .select('datos, updated_at')
@@ -5159,11 +5175,13 @@ async function _pullTendFromCloud(){
     let cloudTend = [];
 
     if(!masterErr && masterData){
-      const parsed = JSON.parse(masterData.datos||'{}');
-      cloudTend = parsed.tendData || [];
+      try {
+        const parsed = JSON.parse(masterData.datos||'{}');
+        cloudTend = Array.isArray(parsed.tendData) ? parsed.tendData : [];
+      } catch(e){ cloudTend = []; }
     }
 
-    // If no master yet, rebuild from individual session records
+    // 2. Si no hay maestro aún, reconstruir desde sesiones individuales históricas
     if(!cloudTend.length){
       const { data: sessions, error: sessErr } = await _sb
         .from('simulador_sesiones')
@@ -5176,37 +5194,53 @@ async function _pullTendFromCloud(){
           try {
             const d = JSON.parse(row.datos || '{}');
             if(d.tendData && d.tendData.length){
-              // Merge tendData from individual sessions
               d.tendData.forEach(rec => {
-                const exists = cloudTend.find(c => c.ts===rec.ts || (c.nro&&c.nro===rec.nro));
-                if(!exists) cloudTend.push(rec);
+                const existe = cloudTend.find(c =>
+                  (c.ts && c.ts === rec.ts) ||
+                  (c.nro && rec.nro && c.nro.trim().toUpperCase() === rec.nro.trim().toUpperCase())
+                );
+                if(!existe) cloudTend.push(rec);
               });
             }
           } catch(e){}
         });
+        // Consolidar sesiones individuales en el maestro para próximas veces
+        if(cloudTend.length) {
+          tendData = cloudTend;
+          _syncTendToCloud();
+        }
       }
     }
 
     if(!cloudTend.length) return false;
 
-    // Merge with local
-    const merged = [...cloudTend];
-    (tendData||[]).forEach(local => {
-      const exists = merged.find(c => c.ts === local.ts || (c.nro && c.nro === local.nro));
-      if(!exists) merged.push(local);
-    });
+    // 3. La nube manda — reemplazar tendData directamente. Sin merge con local.
+    tendData = cloudTend;
 
-    // ── CORRECCIÓN PUNTUAL: embarque 22035 → Sababa ──
+    // 4. Correcciones y migraciones en memoria (nunca tocan Supabase a menos que haya cambio real)
     _corregirEmbarque('22035', 'Sababa');
-    // ── MIGRACIÓN: extraer gastos del snap para registros históricos ──
-    merged.forEach(d => _migrarGastosDesdeSnap(d));
-    tendData = merged;
-    localStorage.setItem('sim_tend', JSON.stringify(tendData));
+    tendData.forEach(d => { if(!d._gastosMigrados) _migrarGastosDesdeSnap(d); });
 
-    // Save merged as master for future syncs
-    _syncTendToCloud();
     return true;
   } catch(e){ console.warn('Cloud pull error:', e.message); return false; }
+}
+
+// Sincronización manual — botón "☁️ Sincronizar Nube"
+async function _syncManualTend(btn){
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Cargando...'; }
+  if(!_sb){ initSupabase(); await new Promise(r=>setTimeout(r,500)); }
+  if(!_sb){
+    _showToast('⚠️ Sin conexión a Supabase','red',3000);
+    if(btn){ btn.disabled=false; btn.textContent='☁️ Sincronizar Nube'; }
+    return;
+  }
+  await _pullTendFromCloud();
+  renderTend();
+  if(typeof renderDashboardKPIs==='function') renderDashboardKPIs();
+  if(typeof renderTopProvs==='function') renderTopProvs();
+  updateCmpNroList();
+  _showToast('✅ '+tendData.length+' embarques cargados desde la nube','green',3000);
+  if(btn){ btn.disabled=false; btn.textContent='☁️ Sincronizar Nube'; }
 }
 
 // ══════════════════════════════════════════════════════════
@@ -5257,30 +5291,82 @@ function _migrarGastosDesdeSnap(d){
   else                            d.invLines = gastos;
   d._gastosMigrados = true;
 }
-function setTendPeriod(p,el){
-  tendPeriod=p;
-  el.parentElement.querySelectorAll('.seg-btn').forEach(b=>b.classList.remove('on','b'));
-  el.classList.add('on','b');
-  renderTend();
-}
-function _populateYearFilter(){
-  const sel=document.getElementById('tend_filter_year');
+function setTendPeriod(p,el){ _setPeriodoRapido(p==='dia'?'hoy':p==='semana'?'semana':p==='mes'?'mes':p==='anio'?'anio':'todo', null); }
+function _populateYearFilter(){ _populateProveedorFilter(); }
+
+// ══════════════════════════════════════════════════════════════
+// MOTOR DE FILTROS PROFESIONAL — Tendencias
+// Campos: tf_desde, tf_hasta, tf_tipo, tf_proveedor, tf_buscar
+// ══════════════════════════════════════════════════════════════
+function _populateProveedorFilter(){
+  const sel=document.getElementById('tf_proveedor');
   if(!sel) return;
-  const years=[...new Set(tendData.map(d=>d.fecha?.slice(0,4)).filter(Boolean))].sort().reverse();
   const cur=sel.value;
-  sel.innerHTML='<option value="">— Todos los años —</option>'+years.map(y=>`<option value="${y}" ${y===cur?'selected':''}>${y}</option>`).join('');
+  const provs=[...new Set(tendData.map(d=>(d.esc||'').trim()).filter(Boolean))].sort();
+  sel.innerHTML='<option value="">Todos</option>'+provs.map(p=>`<option value="${p}"${p===cur?' selected':''}>${p}</option>`).join('');
+  if(cur) sel.value=cur;
 }
 function _getFilteredTendData(){
-  const yr=(document.getElementById('tend_filter_year')?.value)||'';
-  const mo=(document.getElementById('tend_filter_month')?.value)||'';
-  const tp=(document.getElementById('tend_filter_tipo')?.value)||'';
+  const desde  = document.getElementById('tf_desde')?.value    || '';
+  const hasta  = document.getElementById('tf_hasta')?.value    || '';
+  const tipo   = (document.getElementById('tf_tipo')?.value    || '').toLowerCase();
+  const prov   = document.getElementById('tf_proveedor')?.value|| '';
+  const buscar = (document.getElementById('tf_buscar')?.value  || '').toLowerCase().trim();
   return tendData.filter(d=>{
-    if(!d.fecha) return true;
-    if(yr && !d.fecha.startsWith(yr)) return false;
-    if(mo && d.fecha.slice(5,7)!==mo) return false;
-    if(tp && !(d.esc||'').toLowerCase().includes(tp.toLowerCase())) return false;
+    if(d.fecha){
+      if(desde && d.fecha < desde) return false;
+      if(hasta && d.fecha > hasta) return false;
+    } else {
+      if(desde||hasta) return false;
+    }
+    if(tipo){
+      const esc=(d.esc||'').toLowerCase();
+      if(tipo==='liquidacion' && !esc.includes('cif')) return false;
+      if(tipo==='zonalibre' && !esc.includes('sababa') && !esc.includes('zona')) return false;
+    }
+    if(prov && (d.esc||'').trim()!==prov) return false;
+    if(buscar){
+      const txt=[(d.nro||''),(d.desc||''),(d.origen||'')].join(' ').toLowerCase();
+      if(!txt.includes(buscar)) return false;
+    }
     return true;
   });
+}
+function _applyTendFilters(){
+  renderTend();
+  if(typeof renderDashboardKPIs==='function') renderDashboardKPIs();
+  if(typeof renderTopProvs==='function') renderTopProvs();
+  _updateTendSubtitle();
+}
+function _updateTendSubtitle(){
+  const sub=document.getElementById('tend-subtitle'); if(!sub) return;
+  const n=_getFilteredTendData().length, tot=tendData.length;
+  const desde=document.getElementById('tf_desde')?.value||'';
+  const hasta=document.getElementById('tf_hasta')?.value||'';
+  let rango='';
+  if(desde&&hasta) rango=' · '+desde+' → '+hasta;
+  else if(desde) rango=' · desde '+desde;
+  else if(hasta) rango=' · hasta '+hasta;
+  sub.textContent='☁️ '+(n!==tot?n+' de '+tot:tot)+' embarque'+(tot!==1?'s':'')+rango;
+}
+function _setPeriodoRapido(p, btn){
+  const hoy=new Date(), fmt=d=>d.toISOString().slice(0,10);
+  let desde='', hasta=fmt(hoy);
+  if(p==='hoy'){ desde=fmt(hoy); hasta=fmt(hoy); }
+  else if(p==='semana'){ const i=new Date(hoy); i.setDate(hoy.getDate()-hoy.getDay()); desde=fmt(i); }
+  else if(p==='mes'){ desde=fmt(new Date(hoy.getFullYear(),hoy.getMonth(),1)); }
+  else if(p==='anio'){ desde=fmt(new Date(hoy.getFullYear(),0,1)); }
+  else { desde=''; hasta=''; }
+  const dEl=document.getElementById('tf_desde'); if(dEl) dEl.value=desde;
+  const hEl=document.getElementById('tf_hasta'); if(hEl) hEl.value=hasta;
+  document.querySelectorAll('._prBtn').forEach(b=>{ b.style.background='var(--s2)'; b.style.borderColor='var(--border)'; b.style.color='var(--muted)'; b.style.fontWeight='600'; });
+  if(btn){ btn.style.background='rgba(88,166,255,.15)'; btn.style.borderColor='rgba(88,166,255,.4)'; btn.style.color='var(--blue-l)'; btn.style.fontWeight='700'; }
+  _applyTendFilters();
+}
+function _limpiarFiltrosTend(){
+  ['tf_desde','tf_hasta','tf_tipo','tf_proveedor','tf_buscar'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
+  document.querySelectorAll('._prBtn').forEach(b=>{ b.style.background='var(--s2)'; b.style.borderColor='var(--border)'; b.style.color='var(--muted)'; b.style.fontWeight='600'; });
+  _applyTendFilters();
 }
 function autoFillTend(){
   const nroEl=document.getElementById('tend_nro');
@@ -6376,7 +6462,8 @@ function renderDashboardKPIs(data){
   if(!el) return;
   const fmt=n=>'$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});
   const fmtK=n=>{ if(n>=1000000)return'$'+(n/1000000).toFixed(2)+'M'; if(n>=1000)return'$'+(n/1000).toFixed(1)+'k'; return fmt(n); };
-  const all = data || _getFilteredTendData();
+  // Siempre usar el filtro activo — los KPIs reflejan el período seleccionado
+  const all = _getFilteredTendData();
   // Recover ahorro from snap if 0, and persist
   let _kpiFixed=false;
   all.forEach(d=>{
@@ -8835,16 +8922,66 @@ async function cargarSesionNube(){
 async function cargarSesionNubeIdx(idx){
   const lista = window._nubeListaCache;
   if(!lista||idx<0||idx>=lista.length) return;
-  const datos = JSON.parse(lista[idx].datos);
-  if(datos.snap) window._lastSnap = datos.snap;
-  if(datos.invLines) { invLines = datos.invLines; renderInvLines(); }
-  if(datos.tendData) { window.tendData = datos.tendData; saveTendData(); }
-  if(datos.tipo) setTipo(datos.tipo, document.querySelector('.seg-btn'));
-  if(datos.termino) setTermino(datos.termino, document.querySelector('#termSeg .seg-btn'));
+
+  let s;
+  try { s = JSON.parse(lista[idx].datos); } catch(e){ alert('Error al leer sesión: '+e.message); return; }
+  if(!s){ alert('Sesión vacía o inválida.'); return; }
+
+  // ── Restaurar variables de estado ──
+  if(s.tipo) tipo=s.tipo;
+  if(s.termino) termino=s.termino;
+  if(s.compar!==undefined) compar=s.compar;
+  if(s.exon!==undefined) exon=s.exon;
+  if(s.sabTipo) sabTipo=s.sabTipo;
+  if(s.sab2Tipo) sab2Tipo=s.sab2Tipo;
+  if(s.sabTipoCmp) sabTipoCmp=s.sabTipoCmp;
+
+  // ── Restaurar campos del formulario ──
+  if(s.campos) Object.entries(s.campos).forEach(([id,val])=>{
+    try{ const el=document.getElementById(id); if(el&&val!==undefined) el.value=val; }catch(e){}
+  });
+
+  // ── Sincronizar campos proxy de Sababa ──
+  const syncPairs=[['s2_trasp','sc_trasp'],['s2_pago','sc_pago'],['s2_costo_zl','sc_costo_zl'],['s1_traspaso','sc_trasp']];
+  syncPairs.forEach(([src,dst])=>{
+    const val=s.campos?.[src]||s.campos?.[dst];
+    if(val){ const el=document.getElementById(dst); if(el&&!el.value) el.value=val; }
+  });
+  if(s.campos?.s2_trasp){ const el=document.getElementById('sc_trasp'); if(el) el.value=s.campos.s2_trasp; }
+  if(s.campos?.s2_pago){  const el=document.getElementById('sc_pago');  if(el) el.value=s.campos.s2_pago; }
+
+  // ── Restaurar snap y líneas de factura ──
+  if(s.snap) window._lastSnap=s.snap;
+  if(s.invLines){ invLines=[...s.invLines]; renderInvLines(); }
+
+  // ── Restaurar botones de UI ──
+  try{
+    document.querySelectorAll('[onclick*="setTipo"]').forEach(b=>{
+      if(b.getAttribute('onclick').includes("'"+tipo+"'")) setTipo(tipo,b);
+    });
+  }catch(e){}
+  setTimeout(()=>{
+    try{
+      document.querySelectorAll('[onclick*="setTermino"]').forEach(b=>{
+        if(b.getAttribute('onclick').includes("'"+termino+"'")) setTermino(termino,b);
+      });
+      document.querySelectorAll('[onclick*="setCompar"]').forEach(b=>{
+        if(b.getAttribute('onclick').includes("'"+compar+"'")) setCompar(compar,b);
+      });
+      const eq=document.getElementById('s1_equipo'); if(eq&&eq.value) setEquipo(eq.value);
+    }catch(e){}
+  },100);
+
+  // ── Recalcular ──
+  if(typeof updateSab2View==='function') updateSab2View();
+  if(typeof syncSC3fromSC1==='function') syncSC3fromSC1();
+  if(typeof calcFOB==='function') calcFOB();
   calc();
-  const modal = document.getElementById('_nubeModal');
+
+  const modal=document.getElementById('_nubeModal');
   if(modal) modal.remove();
-  alert('✅ Sesión cargada: ' + lista[idx].nombre);
+  const nroEmb=s.campos?.s1_nro_emb||s.nro||lista[idx].nombre;
+  alert('✅ Sesión restaurada: '+nroEmb);
 }
 
 async function eliminarSesionNube(nombre, btnEl){
@@ -8980,13 +9117,10 @@ function renderTopProvs(){
   const wraps = Array.from(document.querySelectorAll('[id="top-provs-wrap"]'));
   const wrap = wraps.length ? wraps[wraps.length-1] : null;
   if(!wrap) return;
-  const tipoFiltro = document.getElementById('tend_filter_tipo')?.value || '';
-  // Gather all providers from all processed shipment invLines
+  // Usar el filtro activo — mismo subconjunto que los KPIs
+  const filteredByTipo = _getFilteredTendData();
   const provTotals = {};
   const provCount  = {};
-  const filteredByTipo = tipoFiltro
-    ? tendData.filter(d=>(d.esc||'').toLowerCase().includes(tipoFiltro.toLowerCase()))
-    : tendData;
 
   filteredByTipo.forEach(d=>{
     const lines = d.snap?.invLines || d.invLines || [];
@@ -8999,8 +9133,9 @@ function renderTopProvs(){
       provCount[prov]  = (provCount[prov]||0) + 1;
     });
   });
-  // Also from invLines in current session (if processed) — only if no tipo filter
-  if(!tipoFiltro){
+  // También incluir invLines de la sesión activa si no hay filtro de búsqueda activo
+  const buscarActivo = (document.getElementById('tf_buscar')?.value||'').trim();
+  if(!buscarActivo){
     invLines.forEach(l=>{
       const prov=(l.prov||'').trim();
       if(!prov||!l.costo) return;
@@ -9010,7 +9145,7 @@ function renderTopProvs(){
   }
   const sorted = Object.keys(provTotals).sort((a,b)=>provTotals[b]-provTotals[a]).slice(0,10);
   if(!sorted.length){
-    wrap.innerHTML=`<div style="text-align:center;padding:24px;color:var(--muted);font-size:12px">Sin proveedores registrados${tipoFiltro?' para '+tipoFiltro:''}.</div>`;
+    wrap.innerHTML=`<div style="text-align:center;padding:24px;color:var(--muted);font-size:12px">Sin proveedores para el filtro activo.</div>`;
     return;
   }
   const f=n=>'$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -9356,38 +9491,50 @@ window.onload=function(){
   // Hide app-wrapper and show splash
   const app=document.getElementById('app-wrapper');
   if(app){ app.classList.add('hidden'); }
-  loadTendData();
-  // ── Auto-pull desde Supabase al iniciar ──
-  // Espera a que Supabase esté listo, luego fusiona datos de la nube
+  loadTendData(); // tendData = [] — la nube lo llenará
+  // ── Cargar embarques desde Supabase (única fuente de verdad) ──
   (async function(){
-    await new Promise(r => setTimeout(r, 800)); // esperar init de Supabase
+    await new Promise(r => setTimeout(r, 700));
     if(!_sb){ initSupabase(); await new Promise(r => setTimeout(r, 400)); }
     if(!_sb) return;
-    // Mostrar indicador sutil
     const badge = document.createElement('div');
-    badge.id = '_cloudSyncBadge';
-    badge.style.cssText = 'position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:20px;padding:6px 14px;font-size:11px;font-weight:600;z-index:9999;transition:opacity .4s';
-    badge.textContent = '☁️ Sincronizando con la nube...';
+    badge.style.cssText = 'position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:20px;padding:6px 16px;font-size:11px;font-weight:600;z-index:9999;transition:opacity .4s';
+    badge.textContent = '☁️ Cargando embarques desde la nube...';
     document.body.appendChild(badge);
     const pulled = await _pullTendFromCloud();
-    badge.textContent = pulled ? '✅ Datos sincronizados desde la nube' : '☁️ Sin datos nuevos en la nube';
-    badge.style.background = pulled ? 'rgba(63,185,80,.15)' : badge.style.background;
-    badge.style.borderColor = pulled ? 'rgba(63,185,80,.3)' : badge.style.borderColor;
-    badge.style.color = pulled ? 'var(--green-l)' : badge.style.color;
-    setTimeout(() => { badge.style.opacity='0'; setTimeout(()=>badge.remove(),400); }, 2200);
-    if(pulled){
-      const badge = document.getElementById('cloud-status-badge');
-      if(badge){
-        const t = new Date().toLocaleTimeString('es-PA',{hour:'2-digit',minute:'2-digit'});
-        badge.textContent = '☁️ Sync '+t;
-        badge.style.background = 'rgba(63,185,80,.12)';
-        badge.style.borderColor = 'rgba(63,185,80,.3)';
-        badge.style.color = 'var(--green-l)';
-      }
-      renderTend();
-      renderTopProvs();
-      updateCmpNroList();
+    const total = tendData.length;
+    badge.textContent = pulled
+      ? '✅ '+total+' embarques cargados desde Supabase'
+      : '☁️ Sin embarques en la nube aún';
+    badge.style.background = 'rgba(63,185,80,.15)';
+    badge.style.borderColor = 'rgba(63,185,80,.3)';
+    badge.style.color = 'var(--green-l)';
+    setTimeout(()=>{ badge.style.opacity='0'; setTimeout(()=>badge.remove(),400); }, 2800);
+    // Actualizar badge de estado
+    const cloudBadge = document.getElementById('cloud-status-badge');
+    if(cloudBadge){
+      const t = new Date().toLocaleTimeString('es-PA',{hour:'2-digit',minute:'2-digit'});
+      cloudBadge.textContent = '☁️ '+total+' emb · '+t;
+      cloudBadge.style.background = 'rgba(63,185,80,.12)';
+      cloudBadge.style.borderColor = 'rgba(63,185,80,.3)';
+      cloudBadge.style.color = 'var(--green-l)';
     }
+    // Refrescar toda la UI con los datos reales
+    renderTend();
+    renderTopProvs();
+    if(typeof renderDashboardKPIs==='function') renderDashboardKPIs();
+    if(typeof _populateProveedorFilter==='function') _populateProveedorFilter();
+    if(typeof _updateTendSubtitle==='function') _updateTendSubtitle();
+    updateCmpNroList();
+    // Chips de la splash
+    const fmtK=n=>n>=1000?'$'+(n/1000).toFixed(1)+'k':'$'+Number(n||0).toFixed(0);
+    const skE=document.getElementById('sk-embarques'); if(skE) skE.textContent=total||'0';
+    const totalAhorro=tendData.reduce((s,d)=>s+(d.ahorro||0),0);
+    const totalCIF=tendData.reduce((s,d)=>s+(d.cif||0),0);
+    const totalFact=tendData.reduce((s,d)=>s+(d.snap?.invLines||d.invLines||[]).filter(l=>(l.tipoFac||'mercancia')==='mercancia').length,0);
+    const skA=document.getElementById('sk-ahorro');  if(skA) skA.textContent=fmtK(totalAhorro);
+    const skC=document.getElementById('sk-cif');     if(skC) skC.textContent=fmtK(totalCIF);
+    const skF=document.getElementById('sk-facturas');if(skF) skF.textContent=totalFact||'0';
   })();
   renderTend();
   renderTopProvs();
@@ -10424,12 +10571,15 @@ body:not(.sidebar-pinned) #app-wrapper {
       setTimeout(function(){
         if(tabId==='config'     && typeof renderConfig==='function')    renderConfig();
         if(tabId==='tendencias' && typeof renderTend==='function'){
-          renderTend();
-          if(typeof renderDashboardKPIs==='function') renderDashboardKPIs();
-          if(typeof cargarPendientes==='function') cargarPendientes();
-          if(typeof renderTopProvs==='function') renderTopProvs();
-          // Extra pass for canvas — waits for modal paint
-          setTimeout(function(){ if(typeof renderTend==='function') renderTend(); }, 200);
+          // Cargar desde Supabase cada vez que se abre el módulo
+          (async function(){
+            if(_sb){ await _pullTendFromCloud(); }
+            renderTend();
+            if(typeof renderDashboardKPIs==='function') renderDashboardKPIs();
+            if(typeof cargarPendientes==='function') cargarPendientes();
+            if(typeof renderTopProvs==='function') renderTopProvs();
+            setTimeout(function(){ if(typeof renderTend==='function') renderTend(); }, 200);
+          })();
         }
         if(tabId==='facturas'   && typeof renderInvLines==='function')  renderInvLines();
         if(tabId==='cifexp'     && typeof updateCifExpDisplays==='function') updateCifExpDisplays();
