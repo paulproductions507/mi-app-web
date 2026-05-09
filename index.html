@@ -1766,7 +1766,6 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:2px">📈 Historial de Embarques</div>
       <div style="font-size:11px;color:var(--muted)" id="tend-subtitle">☁️ Cargando desde Supabase...</div>
     </div>
-    <button onclick="_syncManualTend(this)" style="background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:8px;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer;flex-shrink:0">☁️ Sincronizar</button>
   </div>
 
   <!-- PANEL DE FILTROS PROFESIONAL -->
@@ -2205,7 +2204,16 @@ function switchTab(id,el){
   if(id==='config'){ renderConfig(); if(typeof renderDeptConfig==='function') renderDeptConfig(); }
   if(id==='cifexp'){ updateCifExpDisplays(); }
   if(id==='facturas'){ renderInvLines(); }
-  if(id==='tendencias'){ setTimeout(()=>{ renderTend(); renderTopProvs(); renderDashboardKPIs(); }, 50); }
+  if(id==='tendencias'){
+    setTimeout(async ()=>{
+      if(_sb) await _pullTendFromCloud();
+      _populateProveedorFilter();
+      renderTend();
+      renderTopProvs();
+      renderDashboardKPIs();
+      _updateTendSubtitle();
+    }, 50);
+  }
   if(id==='unico'){
     const f=document.getElementById('unico_fecha');
     if(f&&!f.value) f.value=new Date().toISOString().slice(0,10);
@@ -5165,7 +5173,7 @@ async function _syncTendToCloud(){
 async function _pullTendFromCloud(){
   if(!_sb) return false;
   try {
-    // 1. Intentar leer el registro maestro
+    // 1. Leer el registro maestro
     const { data: masterData, error: masterErr } = await _sb
       .from('simulador_sesiones')
       .select('datos, updated_at')
@@ -5181,45 +5189,66 @@ async function _pullTendFromCloud(){
       } catch(e){ cloudTend = []; }
     }
 
-    // 2. Si no hay maestro aún, reconstruir desde sesiones individuales históricas
-    if(!cloudTend.length){
-      const { data: sessions, error: sessErr } = await _sb
-        .from('simulador_sesiones')
-        .select('nombre, datos, updated_at')
-        .neq('nombre', _TEND_MASTER_KEY)
-        .order('updated_at', { ascending: true });
+    // 2. SIEMPRE revisar sesiones individuales — pueden tener embarques más nuevos
+    //    que el maestro aún no tiene (ej: guardados antes de esta lógica, o
+    //    guardados mientras el maestro fallaba por conexión)
+    const { data: sessions, error: sessErr } = await _sb
+      .from('simulador_sesiones')
+      .select('nombre, datos, updated_at')
+      .neq('nombre', _TEND_MASTER_KEY)
+      .order('updated_at', { ascending: true });
 
-      if(!sessErr && sessions && sessions.length){
-        sessions.forEach(row => {
-          try {
-            const d = JSON.parse(row.datos || '{}');
-            if(d.tendData && d.tendData.length){
-              d.tendData.forEach(rec => {
-                const existe = cloudTend.find(c =>
-                  (c.ts && c.ts === rec.ts) ||
-                  (c.nro && rec.nro && c.nro.trim().toUpperCase() === rec.nro.trim().toUpperCase())
-                );
-                if(!existe) cloudTend.push(rec);
-              });
-            }
-          } catch(e){}
-        });
-        // Consolidar sesiones individuales en el maestro para próximas veces
-        if(cloudTend.length) {
-          tendData = cloudTend;
-          _syncTendToCloud();
-        }
-      }
+    let sesionesNuevas = 0;
+    if(!sessErr && sessions && sessions.length){
+      sessions.forEach(row => {
+        try {
+          const d = JSON.parse(row.datos || '{}');
+          // Una sesión individual puede traer su propio tendData (snapshot del momento)
+          // o un registro único del embarque
+          const registros = d.tendData && d.tendData.length ? d.tendData : [];
+          // También intentar reconstruir desde los campos del snap
+          if(d.snap || d.nro){
+            const recSnap = {
+              nro: d.nro || '',
+              desc: d.desc || '',
+              fecha: d.fecha || (d.snap?.fecha) || row.updated_at?.slice(0,10) || '',
+              ahorro: d.snap?.ahorroNeto || 0,
+              cif: d.snap?.cif || 0,
+              esc: d.snap?.esc || (d.compar==='cifexp'?'CIF Express':'Sababa'),
+              ts: d.snap?.ts || new Date(row.updated_at||Date.now()).getTime(),
+              snap: d.snap || null,
+              invLines: d.invLines || [],
+              status: 'completo'
+            };
+            registros.push(recSnap);
+          }
+          registros.forEach(rec => {
+            if(!rec.nro && !rec.ts) return; // registro inválido
+            const existe = cloudTend.find(c =>
+              (c.nro && rec.nro && c.nro.trim().toUpperCase() === rec.nro.trim().toUpperCase()) ||
+              (c.ts && rec.ts && c.ts === rec.ts)
+            );
+            if(!existe){ cloudTend.push(rec); sesionesNuevas++; }
+          });
+        } catch(e){}
+      });
     }
 
     if(!cloudTend.length) return false;
 
-    // 3. La nube manda — reemplazar tendData directamente. Sin merge con local.
+    // 3. La nube manda — reemplazar tendData directamente.
     tendData = cloudTend;
 
-    // 4. Correcciones y migraciones en memoria (nunca tocan Supabase a menos que haya cambio real)
+    // 4. Correcciones y migraciones en memoria
     _corregirEmbarque('22035', 'Sababa');
     tendData.forEach(d => { if(!d._gastosMigrados) _migrarGastosDesdeSnap(d); });
+
+    // 5. Si encontramos embarques nuevos en sesiones individuales,
+    //    actualizar el maestro para que la próxima vez ya estén ahí
+    if(sesionesNuevas > 0){
+      console.log(`☁️ ${sesionesNuevas} embarque(s) nuevos encontrados en sesiones → consolidando en maestro`);
+      _syncTendToCloud();
+    }
 
     return true;
   } catch(e){ console.warn('Cloud pull error:', e.message); return false; }
@@ -5295,23 +5324,43 @@ function setTendPeriod(p,el){ _setPeriodoRapido(p==='dia'?'hoy':p==='semana'?'se
 function _populateYearFilter(){ _populateProveedorFilter(); }
 
 // ══════════════════════════════════════════════════════════════
-// MOTOR DE FILTROS PROFESIONAL — Tendencias
-// Campos: tf_desde, tf_hasta, tf_tipo, tf_proveedor, tf_buscar
+// MOTOR DE FILTROS — Lee del elemento visible (modal o tab)
+// El modal clona el DOM, entonces pueden existir 2 elementos con
+// el mismo ID. Siempre leemos del que está visible en pantalla.
 // ══════════════════════════════════════════════════════════════
+function _tfVal(id){
+  // Buscar en el body del modal si está abierto
+  const modalBody = document.getElementById('tab-modal-body');
+  if(modalBody && modalBody.children.length){
+    const el = modalBody.querySelector('#'+id);
+    if(el) return el.value || '';
+  }
+  // Fallback: elemento original en el DOM
+  const el = document.getElementById(id);
+  return el ? el.value || '' : '';
+}
+function _tfSet(id, val){
+  const modalBody = document.getElementById('tab-modal-body');
+  if(modalBody && modalBody.children.length){
+    const el = modalBody.querySelector('#'+id);
+    if(el){ el.value = val; }
+  }
+  const el = document.getElementById(id);
+  if(el) el.value = val;
+}
+
 function _populateProveedorFilter(){
-  const sel=document.getElementById('tf_proveedor');
-  if(!sel) return;
-  const cur=sel.value;
+  // Poblar en el modal si está abierto, y también en el original
   const provs=[...new Set(tendData.map(d=>(d.esc||'').trim()).filter(Boolean))].sort();
-  sel.innerHTML='<option value="">Todos</option>'+provs.map(p=>`<option value="${p}"${p===cur?' selected':''}>${p}</option>`).join('');
-  if(cur) sel.value=cur;
+  const opts='<option value="">Todos</option>'+provs.map(p=>`<option value="${p}">${p}</option>`).join('');
+  document.querySelectorAll('#tf_proveedor').forEach(sel=>{ const cur=sel.value; sel.innerHTML=opts; if(cur) sel.value=cur; });
 }
 function _getFilteredTendData(){
-  const desde  = document.getElementById('tf_desde')?.value    || '';
-  const hasta  = document.getElementById('tf_hasta')?.value    || '';
-  const tipo   = (document.getElementById('tf_tipo')?.value    || '').toLowerCase();
-  const prov   = document.getElementById('tf_proveedor')?.value|| '';
-  const buscar = (document.getElementById('tf_buscar')?.value  || '').toLowerCase().trim();
+  const desde  = _tfVal('tf_desde');
+  const hasta  = _tfVal('tf_hasta');
+  const tipo   = _tfVal('tf_tipo').toLowerCase();
+  const prov   = _tfVal('tf_proveedor');
+  const buscar = _tfVal('tf_buscar').toLowerCase().trim();
   return tendData.filter(d=>{
     if(d.fecha){
       if(desde && d.fecha < desde) return false;
@@ -5339,15 +5388,20 @@ function _applyTendFilters(){
   _updateTendSubtitle();
 }
 function _updateTendSubtitle(){
-  const sub=document.getElementById('tend-subtitle'); if(!sub) return;
+  // Actualizar en el modal si está abierto
+  const targets = [];
+  const modalBody = document.getElementById('tab-modal-body');
+  if(modalBody) { const el=modalBody.querySelector('#tend-subtitle'); if(el) targets.push(el); }
+  const orig = document.getElementById('tend-subtitle');
+  if(orig && !targets.includes(orig)) targets.push(orig);
   const n=_getFilteredTendData().length, tot=tendData.length;
-  const desde=document.getElementById('tf_desde')?.value||'';
-  const hasta=document.getElementById('tf_hasta')?.value||'';
+  const desde=_tfVal('tf_desde'), hasta=_tfVal('tf_hasta');
   let rango='';
   if(desde&&hasta) rango=' · '+desde+' → '+hasta;
   else if(desde) rango=' · desde '+desde;
   else if(hasta) rango=' · hasta '+hasta;
-  sub.textContent='☁️ '+(n!==tot?n+' de '+tot:tot)+' embarque'+(tot!==1?'s':'')+rango;
+  const txt='☁️ '+(n!==tot?n+' de '+tot:tot)+' embarque'+(tot!==1?'s':'')+rango;
+  targets.forEach(el=>el.textContent=txt);
 }
 function _setPeriodoRapido(p, btn){
   const hoy=new Date(), fmt=d=>d.toISOString().slice(0,10);
@@ -5357,15 +5411,18 @@ function _setPeriodoRapido(p, btn){
   else if(p==='mes'){ desde=fmt(new Date(hoy.getFullYear(),hoy.getMonth(),1)); }
   else if(p==='anio'){ desde=fmt(new Date(hoy.getFullYear(),0,1)); }
   else { desde=''; hasta=''; }
-  const dEl=document.getElementById('tf_desde'); if(dEl) dEl.value=desde;
-  const hEl=document.getElementById('tf_hasta'); if(hEl) hEl.value=hasta;
-  document.querySelectorAll('._prBtn').forEach(b=>{ b.style.background='var(--s2)'; b.style.borderColor='var(--border)'; b.style.color='var(--muted)'; b.style.fontWeight='600'; });
+  _tfSet('tf_desde', desde);
+  _tfSet('tf_hasta', hasta);
+  // Resaltar botón activo dentro del mismo contenedor del botón
+  const container = btn ? (btn.closest('#tab-modal-body') || btn.closest('.tab-pane') || document) : document;
+  container.querySelectorAll('._prBtn').forEach(b=>{ b.style.background='var(--s2)'; b.style.borderColor='var(--border)'; b.style.color='var(--muted)'; b.style.fontWeight='600'; });
   if(btn){ btn.style.background='rgba(88,166,255,.15)'; btn.style.borderColor='rgba(88,166,255,.4)'; btn.style.color='var(--blue-l)'; btn.style.fontWeight='700'; }
   _applyTendFilters();
 }
 function _limpiarFiltrosTend(){
-  ['tf_desde','tf_hasta','tf_tipo','tf_proveedor','tf_buscar'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
-  document.querySelectorAll('._prBtn').forEach(b=>{ b.style.background='var(--s2)'; b.style.borderColor='var(--border)'; b.style.color='var(--muted)'; b.style.fontWeight='600'; });
+  ['tf_desde','tf_hasta','tf_tipo','tf_proveedor','tf_buscar'].forEach(id=>_tfSet(id,''));
+  const container = document.getElementById('tab-modal-body') || document;
+  container.querySelectorAll('._prBtn').forEach(b=>{ b.style.background='var(--s2)'; b.style.borderColor='var(--border)'; b.style.color='var(--muted)'; b.style.fontWeight='600'; });
   _applyTendFilters();
 }
 function autoFillTend(){
@@ -9535,6 +9592,24 @@ window.onload=function(){
     const skA=document.getElementById('sk-ahorro');  if(skA) skA.textContent=fmtK(totalAhorro);
     const skC=document.getElementById('sk-cif');     if(skC) skC.textContent=fmtK(totalCIF);
     const skF=document.getElementById('sk-facturas');if(skF) skF.textContent=totalFact||'0';
+
+    // ── Sincronización automática en segundo plano cada 60 segundos ──
+    // Sin botón, sin intervención del usuario — corre sola tras bastidores
+    setInterval(async function(){
+      if(!_sb) return;
+      const prevCount = tendData.length;
+      const pulled = await _pullTendFromCloud();
+      if(pulled && tendData.length !== prevCount){
+        // Solo refrescar UI si realmente llegaron datos nuevos
+        renderTend();
+        if(typeof renderDashboardKPIs==='function') renderDashboardKPIs();
+        if(typeof renderTopProvs==='function') renderTopProvs();
+        if(typeof _populateProveedorFilter==='function') _populateProveedorFilter();
+        if(typeof _updateTendSubtitle==='function') _updateTendSubtitle();
+        updateCmpNroList();
+        console.log('☁️ Auto-sync: '+tendData.length+' embarques (+'+(tendData.length-prevCount)+' nuevos)');
+      }
+    }, 60000); // cada 60 segundos
   })();
   renderTend();
   renderTopProvs();
@@ -10601,6 +10676,33 @@ body:not(.sidebar-pinned) #app-wrapper {
     overlay.classList.remove('open');
     overlay.removeAttribute('data-tab');
     document.body.style.overflow = '';
+
+    // Al cerrar el modal, asegurar que el tab de fondo activo
+    // esté correctamente renderizado y su botón resaltado
+    var activePaneId = (typeof _lastNonModalTab !== 'undefined' ? _lastNonModalTab : null)
+      || (document.querySelector('.tab-pane.on') ? document.querySelector('.tab-pane.on').id.replace('tab-','') : 'sim');
+
+    // Asegurar que el pane de fondo esté visible
+    document.querySelectorAll('.tab-pane').forEach(function(p){ p.classList.remove('on'); });
+    var bgPane = document.getElementById('tab-'+activePaneId) || document.getElementById('tab-sim');
+    if(bgPane) bgPane.classList.add('on');
+
+    // Sincronizar el botón de tab resaltado
+    document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('on'); });
+    var tabLabelsClose = {
+      'sim':'Liq. Aduanal','cifexp':'CIF Express','sababa':'Sababa',
+      'facturas':'Proveedores','tendencias':'Tendencias','aranceles':'Aranceles',
+      'comparativo':'Comparativo','config':'Config','unico':'Único'
+    };
+    var labelToMatch = tabLabelsClose[activePaneId] || activePaneId;
+    document.querySelectorAll('.tab').forEach(function(t){
+      if(t.textContent.trim().includes(labelToMatch)) t.classList.add('on');
+    });
+
+    // Ejecutar render del tab activo de fondo si es necesario
+    if(activePaneId === 'cifexp' && typeof updateCifExpDisplays==='function') updateCifExpDisplays();
+    if(activePaneId === 'facturas' && typeof renderInvLines==='function') renderInvLines();
+    if(activePaneId === 'config' && typeof renderConfig==='function') renderConfig();
   };
 
   /* ── Abrir Modal 2 (dashboard sobre modal 1) ── */
@@ -10647,6 +10749,7 @@ body:not(.sidebar-pinned) #app-wrapper {
     };
 
     var _origSwitch = window.switchTab;
+    var _lastNonModalTab = 'sim'; // rastrear el último tab normal activo
     window.switchTab = function(id, el){
       if(MODAL_TABS.indexOf(id) !== -1){
         openTabModal(id, tabLabels[id] || id);
@@ -10654,6 +10757,8 @@ body:not(.sidebar-pinned) #app-wrapper {
         if(el) el.classList.add('on');
         return;
       }
+      // Es un tab normal — guardarlo como el tab de fondo activo
+      _lastNonModalTab = id;
       closeTabModal();
       if(_origSwitch) _origSwitch.apply(this, arguments);
     };
