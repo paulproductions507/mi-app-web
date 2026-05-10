@@ -9611,6 +9611,11 @@ function loadInvFile(input){
     const totalTraspaso = invLines.reduce((s,l)=>s+(l.traspaso||0),0);
     const totalMerc     = invLines.filter(l=>(l.tipoFac||'mercancia')==='mercancia').reduce((s,l)=>s+(l.costo||0),0);
 
+    // Si el flete vino como línea de servicio (tipoFac=flete) en vez de fila legacy, tomarlo de ahí
+    if(!fleteDetectado){
+      fleteDetectado = invLines.filter(l=>l.tipoFac==='flete').reduce((s,l)=>s+(l.costo||0),0);
+    }
+
     let msg = invLines.length + ' facturas cargadas.';
     if(totalBultos>0)   msg += '\nBultos: '+totalBultos;
     if(totalTraspaso>0) msg += '\nTraspaso: $'+totalTraspaso.toFixed(2)+' aplicado.';
