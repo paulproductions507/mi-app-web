@@ -1181,7 +1181,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
     <div class="card-bd">
       <div class="r2">
         <div class="field"><label>Tipo de Equipo</label>
-          <select id="s1_equipo" onchange="setEquipo(this.value)">
+          <select id="s1_equipo" onchange="setEquipo(this.value);_renderContenedores()">
             <option value="">— Selecciona tipo de equipo —</option>
             <option value="Contenedor">🚢 Contenedor</option>
             <option value="Camion">🚛 Camión</option>
@@ -1201,7 +1201,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
           <input type="number" id="s1_acarreo" value="" placeholder="Ej: 290.00" step="0.01" oninput="updateAcarreoLabel();calc()">
         </div>
         <div class="field"><label>Cant. Equipos <span id="acarreo-total-label" style="color:var(--orange-l);font-weight:600;font-size:10px"></span></label>
-          <input type="number" id="s1_equipos" value="1" step="1" oninput="updateAcarreoLabel();calc()">
+          <input type="number" id="s1_equipos" value="1" step="1" min="1" oninput="updateAcarreoLabel();calc();_renderContenedores()">
         </div>
       </div>
       <div class="r2">
@@ -1212,6 +1212,22 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
           <input type="number" id="s1_dmce" value="" placeholder="Ej: 60.00" step="0.01" oninput="calc()">
           <p class="note" id="dmce-note">$60.00 fijo (0.00 si carga suelta)</p>
         </div>
+      </div>
+
+      <!-- CHECK: No aplicar DMCE/Acarreo -->
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 0;font-size:12px;color:var(--text);margin-top:4px">
+        <input type="checkbox" id="chk_no_dmce_acarreo" onchange="_toggleNoDmceAcarreo(this.checked);calc()"
+          style="width:16px;height:16px;accent-color:var(--orange-l)">
+        <span>⚠️ No aplicar DMCE ni Acarreo <span style="font-size:10px;color:var(--muted)">(mercancía con tratamiento especial)</span></span>
+      </label>
+
+      <!-- CONTENEDORES MÚLTIPLES — solo aparece si equipo=Contenedor y cant>1 -->
+      <div id="multi-contenedores-wrap" style="display:none;margin-top:10px">
+        <div style="font-size:10px;font-weight:700;color:var(--blue-l);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px">
+          🚢 Contenedores — Número y Fecha de Llegada
+        </div>
+        <div id="multi-contenedores-list"></div>
+        <p class="note" style="margin-top:6px">Asigna las facturas a cada contenedor en la sección de Proveedores.</p>
       </div>
     </div>
   </div>
@@ -1731,7 +1747,25 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       <!-- SECCIÓN 1: FACTURAS DE MERCANCÍA -->
       <div style="background:var(--s2);border-radius:8px;padding:8px 12px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">
         <div style="font-size:10px;font-weight:700;color:var(--green-l);text-transform:uppercase;letter-spacing:.07em">📦 Proveedores de Mercancía</div>
-        <button onclick="addInvLine()" style="background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:6px;padding:3px 10px;font-size:11px;cursor:pointer">+ Agregar</button>
+        <div style="display:flex;gap:6px">
+          <button onclick="document.getElementById('nuevo-prov-panel').style.display=document.getElementById('nuevo-prov-panel').style.display==='none'?'flex':'none'"
+            style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:6px;padding:3px 10px;font-size:11px;cursor:pointer">+ Proveedor</button>
+          <button onclick="addInvLine()" style="background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:6px;padding:3px 10px;font-size:11px;cursor:pointer">+ Factura</button>
+        </div>
+      </div>
+      <!-- Panel para agregar nuevo proveedor permanente -->
+      <div id="nuevo-prov-panel" style="display:none;background:rgba(88,166,255,.06);border:1px solid rgba(88,166,255,.2);border-radius:8px;padding:10px 12px;margin-bottom:8px;flex-direction:column;gap:8px">
+        <div style="font-size:11px;font-weight:700;color:var(--blue-l)">➕ Agregar nuevo proveedor a la lista permanente</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input id="new-prov-input" type="text" placeholder="Nombre del proveedor (ej: NUEVA EMPRESA S.A.)"
+            onkeydown="if(event.key==='Enter')saveNewProv()"
+            style="flex:1;background:var(--s2);border:1px solid rgba(88,166,255,.3);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px">
+          <button onclick="saveNewProv()"
+            style="background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.4);color:var(--blue-l);border-radius:6px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0">
+            Guardar
+          </button>
+        </div>
+        <div style="font-size:10px;color:var(--muted)">Se guarda en este dispositivo y aparece en el autocomplete de todos los embarques.</div>
       </div>
       <div id="inv-lines" style="margin-bottom:10px"></div>
       <datalist id="prov-datalist"></datalist>
@@ -3065,8 +3099,8 @@ function calc(){
   const itbmsTasa = tasa * itbPct;
   const gzlc   = v('s1_gzlc');
   // Solo mode: exclude acarreo and DMCE
-  const acarreo= window._soloMode ? 0 : v('s1_acarreo')*v('s1_equipos');
-  const dmce   = window._soloMode ? 0 : v('s1_dmce');
+  const acarreo= (window._soloMode||window._noDmceAcarreo) ? 0 : v('s1_acarreo')*v('s1_equipos');
+  const dmce   = (window._soloMode||window._noDmceAcarreo) ? 0 : v('s1_dmce');
   const agente = v('s1_agente');
   const renglones = Math.max(1, v('s1_reng'));
 
@@ -3879,7 +3913,107 @@ function calc(){
 }
 
 // ══════════════════════════════════════════════════════════════════
-// AUTO-FILL GASTOS DE SERVICIO — Proveedores de Gastos
+// MULTI-CONTENEDOR — Despacho parcial por equipo
+// ══════════════════════════════════════════════════════════════════
+
+// Estado global de contenedores
+if(!window._contenedores) window._contenedores = []; // [{num:'MSCU123',fecha:'2026-05-08'}]
+
+function _renderContenedores(){
+  const equipo = document.getElementById('s1_equipo')?.value || '';
+  const nEq    = parseInt(document.getElementById('s1_equipos')?.value)||1;
+  const wrap   = document.getElementById('multi-contenedores-wrap');
+  const list   = document.getElementById('multi-contenedores-list');
+  if(!wrap||!list) return;
+
+  // Solo mostrar si es Contenedor y hay más de 1
+  const esContenedor = equipo === 'Contenedor';
+  const esMultiple   = nEq > 1;
+  wrap.style.display = (esContenedor && esMultiple) ? 'block' : 'none';
+  if(!esContenedor || !esMultiple){ window._contenedores=[]; return; }
+
+  // Ajustar array de contenedores al número actual
+  while(window._contenedores.length < nEq) window._contenedores.push({num:'',fecha:''});
+  while(window._contenedores.length > nEq) window._contenedores.pop();
+
+  list.innerHTML = window._contenedores.map((c,i)=>`
+    <div style="background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px">
+      <div style="font-size:10px;font-weight:700;color:var(--blue-l);margin-bottom:6px">
+        🚢 Contenedor ${i+1}
+        ${c.fecha?`<span style="color:var(--green-l);margin-left:8px">✅ Recibido: ${c.fecha}</span>`:'<span style="color:var(--orange-l);margin-left:8px">⏳ Pendiente</span>'}
+      </div>
+      <div style="display:flex;gap:8px">
+        <input type="text" value="${c.num||''}" placeholder="Nº Contenedor (ej: MSCU1234567)"
+          oninput="window._contenedores[${i}].num=this.value"
+          style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text);font-size:12px;font-family:'IBM Plex Mono',monospace">
+        <input type="date" value="${c.fecha||''}"
+          onchange="window._contenedores[${i}].fecha=this.value;_renderContenedores()"
+          style="width:150px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text);font-size:12px">
+      </div>
+    </div>`).join('');
+}
+
+function _toggleNoDmceAcarreo(checked){
+  window._noDmceAcarreo = checked;
+  const acarreoEl = document.getElementById('s1_acarreo');
+  const dmceEl    = document.getElementById('s1_dmce');
+  if(acarreoEl){ acarreoEl.disabled = checked; if(checked) acarreoEl.value='0'; }
+  if(dmceEl){    dmceEl.disabled    = checked; if(checked) dmceEl.value='0'; }
+}
+
+// ── Validación al procesar: facturas asignadas a contenedores ──
+function _validarAsignacionContenedores(){
+  const nEq   = parseInt(document.getElementById('s1_equipos')?.value)||1;
+  const equip = document.getElementById('s1_equipo')?.value||'';
+  if(equip !== 'Contenedor' || nEq <= 1) return {ok:true}; // 1 equipo = sin restricción
+
+  const mercLines = invLines.filter(l=>(l.tipoFac||'mercancia')==='mercancia');
+  if(!mercLines.length) return {ok:true};
+
+  const sinAsignar = mercLines.filter(l=>!l._contenedor);
+  if(!sinAsignar.length) return {ok:true};
+
+  return {
+    ok: false,
+    pendientes: sinAsignar,
+    msg: `⚠️ ${sinAsignar.length} factura(s) sin asignar a contenedor:\n` +
+         sinAsignar.map(l=>`• ${l.prov||'Sin proveedor'} — $${(l.costo||0).toFixed(2)}`).join('\n') +
+         '\n\nAsígnalas en la sección de Proveedores antes de procesar.'
+  };
+}
+
+// ── Detectar si el embarque es parcial ──
+function _esDespachoPartial(){
+  const nEq   = parseInt(document.getElementById('s1_equipos')?.value)||1;
+  const equip = document.getElementById('s1_equipo')?.value||'';
+  if(equip !== 'Contenedor' || nEq <= 1) return false;
+  // Parcial si al menos un contenedor no tiene fecha de llegada
+  return window._contenedores.some(c=>!c.fecha);
+}
+
+// ── Agregar campo de contenedor a cada línea de factura en renderInvLines ──
+// Se llama desde renderInvLines para las líneas de mercancía
+function _getContenedorSelect(lineIdx, currentVal){
+  const nEq   = parseInt(document.getElementById('s1_equipos')?.value)||1;
+  const equip = document.getElementById('s1_equipo')?.value||'';
+  if(equip !== 'Contenedor' || nEq <= 1) return ''; // No mostrar si no aplica
+
+  const opts = Array.from({length:nEq},(_,i)=>
+    `<option value="${i+1}" ${currentVal===(i+1)?'selected':''}>Cont. ${i+1}${window._contenedores[i]?.num?' ('+window._contenedores[i].num+')':''}</option>`
+  ).join('');
+
+  return `<select onchange="invLines[${lineIdx}]._contenedor=parseInt(this.value)||null;_updateContenedorBadge(${lineIdx},this)"
+    style="background:var(--s2);border:1px solid rgba(88,166,255,.3);border-radius:5px;padding:4px 6px;color:var(--blue-l);font-size:10px;font-weight:600;margin-top:4px;width:100%">
+    <option value="">— Asignar contenedor —</option>
+    ${opts}
+  </select>`;
+}
+
+function _updateContenedorBadge(idx, sel){
+  invLines[idx]._contenedor = parseInt(sel.value)||null;
+}
+
+// — Proveedores de Gastos
 // Se llama después de calc() y llena las líneas de gasto en invLines
 // con los proveedores correctos según el escenario activo.
 // El usuario revisa y confirma al presionar Procesar.
@@ -5631,26 +5765,42 @@ function _getFilteredTendData(){
   const tipo   = _tfVal('tf_tipo').toLowerCase();
   const prov   = _tfVal('tf_proveedor');
   const buscar = _tfVal('tf_buscar').toLowerCase().trim();
-  const origen = _tfVal('tf_origen').trim(); // filtro de origen estructurado
+  const origen = _tfVal('tf_origen').trim();
+
   return tendData.filter(d=>{
-    if(d.fecha){
-      if(desde && d.fecha < desde) return false;
-      if(hasta && d.fecha > hasta) return false;
-    } else {
-      if(desde||hasta) return false;
+    // ── Filtro por fecha ──
+    // Para embarques PARCIALES con múltiples contenedores:
+    // se incluye si AL MENOS UN contenedor tiene fecha dentro del rango
+    if(desde||hasta){
+      let fechaMatch = false;
+
+      // Verificar fecha principal del embarque
+      if(d.fecha){
+        if((!desde||d.fecha>=desde) && (!hasta||d.fecha<=hasta)) fechaMatch=true;
+      }
+
+      // Si es parcial con contenedores, verificar fechas de cada contenedor
+      if(!fechaMatch && d.contenedores && d.contenedores.length>0){
+        for(const c of d.contenedores){
+          if(c.fecha && (!desde||c.fecha>=desde) && (!hasta||c.fecha<=hasta)){
+            fechaMatch=true; break;
+          }
+        }
+      }
+
+      if(!fechaMatch) return false;
     }
+
     if(tipo){
       const esc=(d.esc||'').toLowerCase();
       if(tipo==='liquidacion' && !esc.includes('cif')) return false;
       if(tipo==='zonalibre' && !esc.includes('sababa') && !esc.includes('zona')) return false;
     }
     if(prov && (d.esc||'').trim()!==prov) return false;
-    // Búsqueda libre — busca por nro, descripción, tipo de embarque, escenario
     if(buscar){
       const txt=[(d.nro||''),(d.desc||''),(d.esc||''),(d.tramiteTipo||'')].join(' ').toLowerCase();
       if(!txt.includes(buscar)) return false;
     }
-    // Filtro de origen estructurado con sinónimos
     if(origen && typeof _origenMatchFiltro==='function'){
       if(!_origenMatchFiltro(d, origen)) return false;
     }
@@ -5722,27 +5872,52 @@ function procesarEmbarque(){
     return;
   }
 
-  // ── VALIDACIÓN: Master Value negativo — bloquear procesamiento ──
+  // ── Master Value negativo → silencioso, simplemente no se aplica ──
   const _snap = window._lastSnap || {};
   const _isCif2 = compar === 'cifexp';
   const _isSab2 = compar === 'sababa';
   const _mv = _isCif2 ? (_snap.sc2?.mv||0) : (_isSab2 ? (_snap.sc3?.mv||0) : 0);
   if((_isCif2 || _isSab2) && _mv < -0.005){
-    const mvAbs = Math.abs(_mv).toFixed(2);
-    const escLabel = _isCif2 ? 'CIF Express' : 'Sababa';
-    const confirmar = confirm(
-      '⚠️ MASTER VALUE NEGATIVO — $' + mvAbs + '\n\n' +
-      'El Master Value en ' + escLabel + ' es negativo, lo que significa que\n' +
-      'el escenario alternativo cuesta MÁS que la Liquidación Aduanal.\n\n' +
-      'Esto puede ocurrir cuando el valor de mercancía es muy bajo.\n\n' +
-      '¿Deseas procesar el embarque SIN incluir el Master Value?\n' +
-      '(Se excluirá del registro de costos)'
-    );
-    if(!confirmar) return;
-    // Marcar para excluir MV del registro
     window._excluirMasterValue = true;
+    _showToast('ℹ️ Master Value negativo — excluido del costeo automáticamente', 'orange', 3000);
   } else {
     window._excluirMasterValue = false;
+  }
+
+  // ── VALIDACIÓN: Asignación de contenedores múltiples ──
+  const _valCont = _validarAsignacionContenedores();
+  if(!_valCont.ok){
+    // Mostrar diálogo con facturas sin asignar
+    const pendientes = _valCont.pendientes;
+    const listaTxt = pendientes.map((l,i)=>`${i+1}. ${l.prov||'Sin proveedor'} — $${(l.costo||0).toFixed(2)}`).join('\n');
+    const accion = confirm(
+      `⚠️ ${pendientes.length} factura(s) sin asignar a contenedor:\n\n${listaTxt}\n\n` +
+      `¿Deseas marcarlas como "Pendiente / Próximo equipo" y continuar?\n\n` +
+      `• OK → Marcar pendientes y procesar como PARCIAL\n` +
+      `• Cancelar → Volver a asignar en Proveedores`
+    );
+    if(!accion) return;
+    // Marcar como pendientes
+    pendientes.forEach(l=>{ l._contenedor = 0; l._contPendiente = true; });
+  }
+
+  // ── Determinar modo de procesamiento ──
+  const nEq   = parseInt(document.getElementById('s1_equipos')?.value)||1;
+  const equip = document.getElementById('s1_equipo')?.value||'';
+  const esMultiContenedor = equip==='Contenedor' && nEq>1;
+  const esParcialdespues  = esMultiContenedor && _esDespachoPartial();
+
+  // Si es multi-contenedor, preguntar modo de procesamiento
+  let modoProcess = 'completo';
+  if(esParcialdespues){
+    const elegir = confirm(
+      '🚢 DESPACHO PARCIAL\n\n' +
+      'Hay contenedores con fecha de llegada pendiente.\n\n' +
+      '• OK → Guardar como PARCIAL (podrás completar cuando llegue el resto)\n' +
+      '• Cancelar → Cancelar procesamiento'
+    );
+    if(!elegir) return;
+    modoProcess = 'parcial';
   }
   const nro=document.getElementById('s1_nro_emb')?.value?.trim()||'';
   if(!nro){
@@ -5795,7 +5970,7 @@ function procesarEmbarque(){
     ts:     Date.now(),
     snap:   window._lastSnap||null,
     invLines: snapInvLines,
-    status: 'completo',
+    status: modoProcess||'completo',
     // ── Origen estructurado ──
     origen: document.getElementById('s1_origen_emb')?.value || '',
     pais:   document.getElementById('s1_pais_emb')?.value   || '',
@@ -5807,8 +5982,12 @@ function procesarEmbarque(){
     equipos:    parseInt(document.getElementById('s1_equipos')?.value)||1,
     tipoEquipo: document.getElementById('s1_equipo')?.value||'',
     viaTransporte: document.getElementById('s1_via_transporte')?.value||'SEA',
+    // ── Contenedores múltiples ──
+    contenedores: window._contenedores && window._contenedores.length > 1
+      ? JSON.parse(JSON.stringify(window._contenedores))
+      : null,
+    noDmceAcarreo: window._noDmceAcarreo || false,
     tramiteTipo: (()=>{
-      // Detectar si es Local (S.I) o Liquidación
       const lines = invLines||[];
       const hasSI = lines.some(l=> l.prov && (l.prov.startsWith('S.I') || l.prov.startsWith('S.I -')));
       const tipo = document.getElementById('s1_tipo')?.value||'';
@@ -5970,9 +6149,22 @@ function reabrirEmbarquePendiente(idx){
   }
   if(s.equipos !== undefined) _set('s1_equipos', s.equipos);
   // Restaurar vía de transporte
-  if(data.viaTransporte){
+  if(d.viaTransporte){
     const viaEl = document.getElementById('s1_via_transporte');
-    if(viaEl) viaEl.value = data.viaTransporte;
+    if(viaEl) viaEl.value = d.viaTransporte;
+  }
+  // ── Restaurar contenedores múltiples ──
+  if(d.contenedores && d.contenedores.length > 1){
+    window._contenedores = JSON.parse(JSON.stringify(d.contenedores));
+    setTimeout(function(){ if(typeof _renderContenedores==='function') _renderContenedores(); }, 100);
+  } else {
+    window._contenedores = [];
+  }
+  // ── Restaurar check No DMCE/Acarreo ──
+  const chkNoDmce = document.getElementById('chk_no_dmce_acarreo');
+  if(chkNoDmce){
+    chkNoDmce.checked = d.noDmceAcarreo || false;
+    window._noDmceAcarreo = d.noDmceAcarreo || false;
   }
 
   // ── 5. Valores financieros ──
@@ -6718,14 +6910,14 @@ function renderTend(){
     const rows2=[...filteredData].reverse().map((d,ri)=>{
       const idx=tendData.indexOf(d);
       const pct=d.cif>0?(d.ahorro/d.cif*100).toFixed(2)+'%':'—';
-      const isPend = d.status === 'pendiente';
+      const isPend = d.status === 'pendiente'; const isParcial = d.status === 'parcial';
       const viaIco = d.viaTransporte==='AIR'?'✈️':d.viaTransporte==='LAND'?'🚛':'🚢';
       const viaLabel = d.viaTransporte||'SEA';
       const tramiteColor = d.tramiteTipo==='Local'?'var(--green-l)':'var(--orange-l)';
       const tramiteBg = d.tramiteTipo==='Local'?'rgba(63,185,80,.12)':'rgba(240,136,62,.12)';
-      return `<div style="display:grid;grid-template-columns:auto 1fr auto auto auto;gap:8px;align-items:center;padding:9px 14px;border-bottom:1px solid rgba(48,54,61,.4);cursor:pointer;transition:background .15s${isPend?';border-left:3px solid var(--orange-l)':''}" onclick="if(event.target.classList.contains('del-btn')||event.target.classList.contains('btn-reabrir')){return;}abrirModuloComparativo_idx(${idx})" onmouseover="this.style.background='rgba(255,255,255,.03)'" onmouseout="this.style.background=''">
+      return `<div style="display:grid;grid-template-columns:auto 1fr auto auto auto;gap:8px;align-items:center;padding:9px 14px;border-bottom:1px solid rgba(48,54,61,.4);cursor:pointer;transition:background .15s${(isPend||isParcial)?';border-left:3px solid '+(isPend?'var(--orange-l)':'var(--blue-l)'):''}" onclick="if(event.target.classList.contains('del-btn')||event.target.classList.contains('btn-reabrir')){return;}abrirModuloComparativo_idx(${idx})" onmouseover="this.style.background='rgba(255,255,255,.03)'" onmouseout="this.style.background=''">
         <div style="font-size:10px;font-weight:700;color:var(--orange-l);white-space:nowrap">${d.nro||'—'}</div>
-        <div><div style="font-size:12px;font-weight:500;color:var(--text)">${d.desc}${isPend?'&nbsp;<span class="badge-pendiente">🟡 PENDIENTE</span>':''}</div><div style="font-size:10px;color:var(--muted);display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-top:2px">${d.fecha} · ${d.esc||''}&nbsp;<span style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:var(--blue-l)">${viaIco} ${viaLabel}</span>${d.tramiteTipo?`<span style="background:${tramiteBg};border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:${tramiteColor}">${d.tramiteTipo}</span>`:''}</div></div>
+        <div><div style="font-size:12px;font-weight:500;color:var(--text)">${d.desc}${isPend?'&nbsp;<span class="badge-pendiente">🟡 PENDIENTE</span>':''}${d.status==='parcial'?'&nbsp;<span style="background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:3px;padding:1px 5px;font-size:9px;font-weight:700">🚢 PARCIAL</span>':''}</div><div style="font-size:10px;color:var(--muted);display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-top:2px">${d.fecha} · ${d.esc||''}&nbsp;<span style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:var(--blue-l)">${viaIco} ${viaLabel}</span>${d.tramiteTipo?`<span style="background:${tramiteBg};border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:${tramiteColor}">${d.tramiteTipo}</span>`:''}</div></div>
         <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--green-l);font-weight:700;white-space:nowrap">$${(d.ahorro/1000).toFixed(2)}k</div>
         <div style="font-size:11px;color:var(--orange-l);white-space:nowrap">${pct}</div>
         <div style="display:flex;gap:4px;align-items:center">
@@ -6848,15 +7040,15 @@ function renderTend(){
   const rows=[...filteredData].reverse().map((d)=>{
     const idx=tendData.indexOf(d);
     const pct=d.cif>0?(d.ahorro/d.cif*100).toFixed(2)+'%':'—';
-    const isPend = d.status === 'pendiente';
+    const isPend = d.status === 'pendiente'; const isParcial = d.status === 'parcial';
     const viaIco2 = d.viaTransporte==='AIR'?'✈️':d.viaTransporte==='LAND'?'🚛':'🚢';
     const viaLabel2 = d.viaTransporte||'SEA';
     const tramiteColor2 = d.tramiteTipo==='Local'?'var(--green-l)':'var(--orange-l)';
     const tramiteBg2 = d.tramiteTipo==='Local'?'rgba(63,185,80,.12)':'rgba(240,136,62,.12)';
-    return `<div style="display:grid;grid-template-columns:auto 1fr auto auto auto;gap:8px;align-items:center;padding:9px 14px;border-bottom:1px solid rgba(48,54,61,.4);cursor:pointer;transition:background .15s${isPend?';border-left:3px solid var(--orange-l)':''}" onclick="if(event.target.classList.contains('del-btn')||event.target.classList.contains('btn-reabrir')){return;}abrirModuloComparativo_idx(${idx})" onmouseover="this.style.background='rgba(255,255,255,.03)'" onmouseout="this.style.background=''">
+    return `<div style="display:grid;grid-template-columns:auto 1fr auto auto auto;gap:8px;align-items:center;padding:9px 14px;border-bottom:1px solid rgba(48,54,61,.4);cursor:pointer;transition:background .15s${(isPend||isParcial)?';border-left:3px solid '+(isPend?'var(--orange-l)':'var(--blue-l)'):''}" onclick="if(event.target.classList.contains('del-btn')||event.target.classList.contains('btn-reabrir')){return;}abrirModuloComparativo_idx(${idx})" onmouseover="this.style.background='rgba(255,255,255,.03)'" onmouseout="this.style.background=''">
       <div style="font-size:10px;font-weight:700;color:var(--orange-l);white-space:nowrap">${d.nro||'—'}</div>
       <div>
-        <div style="font-size:12px;font-weight:500;color:var(--text)">${d.desc}${isPend?'&nbsp;<span class="badge-pendiente">🟡 PENDIENTE</span>':''}</div>
+        <div style="font-size:12px;font-weight:500;color:var(--text)">${d.desc}${isPend?'&nbsp;<span class="badge-pendiente">🟡 PENDIENTE</span>':''}${d.status==='parcial'?'&nbsp;<span style="background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:3px;padding:1px 5px;font-size:9px;font-weight:700">🚢 PARCIAL</span>':''}</div>
         <div style="font-size:10px;color:var(--muted);display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-top:2px">${d.fecha} · ${d.esc||''}&nbsp;<span style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:var(--blue-l)">${viaIco2} ${viaLabel2}</span>${d.tramiteTipo?`<span style="background:${tramiteBg2};border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:${tramiteColor2}">${d.tramiteTipo}</span>`:''}</div>
       </div>
       <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--green-l);font-weight:700;white-space:nowrap">$${(d.ahorro/1000).toFixed(2)}k</div>
@@ -9010,6 +9202,7 @@ function renderInvLines(){
         +'<div style="flex:1;min-width:0;position:relative"><input type="text" value="'+((l.prov||'').replace(/"/g,'&quot;'))+'" placeholder="Escribe proveedor para buscar..." list="prov-datalist" onchange="onInvProvChange('+i+',this.value)" oninput="invLines['+i+'].prov=this.value" style="width:100%;background:var(--s2);border:1px solid '+provBorder+';border-radius:6px;padding:6px 10px;color:var(--text);font-size:12px;box-sizing:border-box"></div>'
         +(provHint?'<div style="width:100%;margin-top:3px">'+provHint+'</div>':'')
         +(l.deptCat?'<div style="font-size:10px;color:var(--green-l);margin-top:4px">✓ '+l.deptCat+'</div>':'')
+        +(typeof _getContenedorSelect==='function'?'<div style="width:100%;margin-top:4px">'+_getContenedorSelect(i,l._contenedor)+'</div>':'')
         +'</div>'
         +'</div>';
     }).join('') || '<div style="text-align:center;padding:16px;color:var(--muted);font-size:11px">Sin facturas de mercancía. Agrega o carga una plantilla.</div>';
@@ -9033,16 +9226,30 @@ function renderInvLines(){
         const tfLabel = tipoLabels[tf]||'Gasto';
         const isAuto  = l._autoGasto;
         return '<div style="background:var(--bg);border:1px solid rgba(240,136,62,.25);border-radius:8px;padding:10px;margin-bottom:6px'+(isAuto?';border-left:3px solid var(--orange-l)':'')+'">'
-          +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
+          // Header: icono + tipo + badge AUTO + botón eliminar
+          +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
           +'<span style="font-size:13px">'+tfIcon+'</span>'
           +'<span style="flex:1;font-size:12px;font-weight:700;color:var(--orange-l)">'+tfLabel+'</span>'
           +(isAuto?'<span style="font-size:9px;background:rgba(240,136,62,.15);border:1px solid rgba(240,136,62,.3);color:var(--orange-l);border-radius:4px;padding:1px 6px">AUTO</span>':'')
           +'<button onclick="removeInvLine('+i+')" style="background:rgba(218,54,51,.1);border:1px solid rgba(218,54,51,.2);color:var(--red-l);border-radius:5px;width:24px;height:24px;cursor:pointer;font-size:12px;flex-shrink:0">×</button>'
           +'</div>'
-          +'<div style="display:flex;gap:8px;align-items:center">'
-          +'<div style="flex:1;font-size:12px;font-weight:600;color:var(--text)">'+( l.prov||'—' )+'</div>'
-          +'<div style="font-size:11px;color:var(--muted)">'+( l.oc||'' )+'</div>'
-          +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:13px;font-weight:700;color:var(--orange-l);white-space:nowrap">'+fmt(l.costo||0)+'</div>'
+          // Proveedor + Concepto
+          +'<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">'
+          +'<div style="flex:1;font-size:12px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(l.prov||'—')+'</div>'
+          +'<div style="font-size:10px;color:var(--muted);flex-shrink:0">'+(l.oc||'')+'</div>'
+          // Monto — editable (por si Sababa da centavo diferente)
+          +'<input type="number" value="'+(l.costo||0)+'" step="0.01" '
+          +'oninput="invLines['+i+'].costo=parseFloat(this.value)||0;calcInvTotals()" '
+          +'style="width:110px;flex-shrink:0;background:var(--s2);border:1px solid rgba(240,136,62,.3);border-radius:6px;padding:5px 8px;color:var(--orange-l);font-size:12px;font-family:\'IBM Plex Mono\',monospace;text-align:right;font-weight:700" '
+          +'title="Editable — ajusta si hay diferencia de centavos">'
+          +'</div>'
+          // N° Factura — campo editable siempre visible
+          +'<div style="margin-top:4px">'
+          +'<input type="text" value="'+(l.numFact||l.nfac||'')+'" '
+          +'placeholder="N° Factura (ej: SAB-2024-001)" '
+          +'oninput="invLines['+i+'].numFact=this.value;invLines['+i+'].nfac=this.value" '
+          +'style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:5px 10px;color:var(--text);font-size:11px;box-sizing:border-box" '
+          +'>'
           +'</div>'
           +'</div>';
       }).join('');
@@ -9188,26 +9395,30 @@ function applyInvToForm(){
   }, 350);
 }
 function downloadInvTemplate(fmt){
-  // A=PROVEEDOR | B=DEPARTAMENTO | C=No.FACTURA | D=MONTO_CIF_FOB | E=ORDEN_COMPRA | F=BULTOS | G=TRASPASO
-  // Filas especiales (col A): FLETE, SEGURO, PAGO_REALIZADO — monto en col D, resto vacío
-  const headers=['PROVEEDOR','DEPARTAMENTO','No.FACTURA','MONTO_CIF_FOB','ORDEN_COMPRA','BULTOS','TRASPASO','PIEZAS'];
+  // A=PROVEEDOR | B=TIPO | C=RUBRO/DEPARTAMENTO | D=No.FACTURA | E=MONTO_CIF_FOB | F=ORDEN_COMPRA | G=BULTOS | H=TRASPASO | I=PIEZAS
+  // TIPO: mercancia | servicio
+  // RUBRO/DEPARTAMENTO: si mercancia → departamento (DAMAS-NEW, HOGAR, etc.)
+  //                     si servicio  → rubro (flete, gastos_origen, honorarios, itbms, acarreo, dmce)
+  const headers=['PROVEEDOR','TIPO','RUBRO / DEPARTAMENTO','No.FACTURA','MONTO_CIF_FOB','ORDEN_COMPRA','BULTOS','TRASPASO','PIEZAS'];
   const sample=[
-    ['C&B CORP','Ropa Dama','CB-1446',72326.50,'219701',48,0,3840],
-    ['C&B CORP','Ropa Dama','CB-1461',2891.25,'219704',6,0,288],
-    ['CAVALIER','Ropa Caballero','12335',5120.00,'219724',4,0,192],
-    ['FORTUNE DYNAMIC','Calzado','2192326',5824.20,'219703',10,500.00,480],
-    ['GOOD STUFF','Ropa Dama','7912',17348.00,'219691',22,0,1100],
-    ['LOVE POEM','Accesorios','166917',900.00,'219693',2,0,60],
-    ['','','','','','','',''],
-    ['FLETE','','',2950.00,'','','',''],
-    ['SEGURO','','',1444.67,'','','',''],
-    ['PAGO_REALIZADO','','','','','','',''],
+    ['C&B CORP','mercancia','DAMAS-NEW','CB-1446',72326.50,'219701',48,0,3840],
+    ['C&B CORP','mercancia','DAMAS-NEW','CB-1461',2891.25,'219704',6,0,288],
+    ['CAVALIER','mercancia','CABALLEROS','12335',5120.00,'219724',4,0,192],
+    ['FORTUNE DYNAMIC','mercancia','CALZADO','2192326',5824.20,'219703',10,500.00,480],
+    ['GOOD STUFF','mercancia','DAMAS-NEW','7912',17348.00,'219691',22,0,1100],
+    ['','','','','','','','',''],
+    ['ETERNITY FREIGHT','servicio','flete','BL-2024',2950.00,'','','',''],
+    ['ETERNITY FREIGHT','servicio','gastos_origen','BL-2024-G',1444.67,'','','',''],
+    ['','','','','PAGO_REALIZADO','','','',''],
   ];
 
   if(fmt==='csv'){
     const rows=[headers,...sample.map(r=>r.map(String)),
       [''],
-      ['# NOTA: FLETE/SEGURO/PAGO_REALIZADO van en col A con monto en col D. BULTOS en col F. TRASPASO en col G. PIEZAS en col H.']
+      ['# TIPO: mercancia o servicio'],
+      ['# RUBRO (si servicio): flete | gastos_origen | honorarios | itbms | acarreo | dmce'],
+      ['# DEPARTAMENTO (si mercancia): DAMAS-NEW | HOGAR | CABALLEROS | NIÑAS | DEPORTES | etc.'],
+      ['# PAGO_REALIZADO va en col E (MONTO_CIF_FOB), fila aparte sin proveedor']
     ];
     const csv=rows.map(r=>r.map(c=>{
       const s=String(c);
@@ -9229,7 +9440,7 @@ function downloadInvTemplate(fmt){
   const ws=XLSX.utils.aoa_to_sheet(wsData);
 
   // Anchos de columna
-  ws['!cols']=[{wch:28},{wch:18},{wch:14},{wch:14},{wch:14},{wch:8},{wch:10},{wch:10}];
+  ws['!cols']=[{wch:28},{wch:12},{wch:22},{wch:14},{wch:14},{wch:14},{wch:8},{wch:10},{wch:10}];
 
   // Encabezado — fondo rojo oscuro, texto blanco negrita (igual a la foto)
   const hFill={fgColor:{rgb:'8B1A1A'}};
@@ -9287,59 +9498,88 @@ function loadInvFile(input){
   // ── Parse rows from data (shared logic) ──
   function parseRows(rows){
     if(rows.length<2){ alert('Archivo vacío o sin datos.'); return; }
-    const header=rows[0].map(h=>String(h||'').toUpperCase());
-    // Col A = PROVEEDOR, Col D (index 3) = MONTO
-    const montoCol=header.findIndex(h=>h.includes('MONTO')||h.includes('CIF')||h.includes('FOB'));
-    const mc=montoCol>=0?montoCol:3; // fallback col D
-    const deptCol=header.findIndex(h=>h.includes('DEPARTAMENTO')||h.includes('DEPT'));
-    // Columnas: PROVEEDOR(0) | DEPT(1) | NFAC(2) | MONTO(3) | OC(4) | BULTOS(5) | TRASPASO(6)
-    // A=PROVEEDOR(0) | B=DEPT(1) | C=NFAC(2) | D=MONTO(3) | E=OC(4) | F=BULTOS(5) | G=TRASPASO(6)
+    const header=rows[0].map(h=>String(h||'').toUpperCase().trim());
+
+    // ── Detectar columnas por nombre ──
+    const tipoCol    =header.findIndex(h=>h==='TIPO'||h.includes('TIPO'));
+    const rubroCol   =header.findIndex(h=>h.includes('RUBRO')||h.includes('DEPARTAMENTO')||h.includes('DEPT'));
+    const montoCol   =header.findIndex(h=>h.includes('MONTO')||h.includes('CIF')||h.includes('FOB'));
     const nfacCol    =header.findIndex(h=>h.includes('FACTURA')||h.includes('INVOICE')||h.includes('FACT'));
-    const nfc        =nfacCol>=0?nfacCol:2;
     const ocCol      =header.findIndex(h=>h.includes('ORDEN')||h.includes('OC')||h.includes('PURCHASE'));
-    const oc2        =ocCol>=0?ocCol:4;
     const bultosCol  =header.findIndex(h=>h.includes('BULTO')||h.includes('CAJA')||h.includes('CARTON'));
-    const bc         =bultosCol>=0?bultosCol:5;
-    const traspasoCol=header.findIndex(h=>h.includes('TRASPASO')||h.includes('DESCUENTO')||h.includes('TRANSFER'));
-    const tc         =traspasoCol>=0?traspasoCol:6;
-    const piezasCol  =header.findIndex(h=>h.includes('PIEZA')||h.includes('PIEZAS')||h.includes('UNIDAD')||h.includes('QTY')||h.includes('CANTIDAD'));
-    const pc         =piezasCol>=0?piezasCol:7;
+    const traspasoCol=header.findIndex(h=>h.includes('TRASPASO')||h.includes('DESCUENTO'));
+    const piezasCol  =header.findIndex(h=>h.includes('PIEZA')||h.includes('UNIDAD')||h.includes('QTY')||h.includes('CANTIDAD'));
+
+    // Fallback a posiciones fijas si no se encuentran columnas por nombre
+    // Nueva estructura: A=PROVEEDOR | B=TIPO | C=RUBRO/DEPARTAMENTO | D=FACTURA | E=MONTO | F=OC | G=BULTOS | H=TRASPASO | I=PIEZAS
+    // Antigua estructura: A=PROVEEDOR | B=DEPARTAMENTO | C=FACTURA | D=MONTO | E=OC | F=BULTOS | G=TRASPASO | H=PIEZAS
+    const hasNuevaTipoCol = tipoCol >= 0 && tipoCol <= 2;
+    const mc  = montoCol>=0 ? montoCol    : (hasNuevaTipoCol ? 4 : 3);
+    const rc  = rubroCol>=0 ? rubroCol    : (hasNuevaTipoCol ? 2 : 1);
+    const nfc = nfacCol>=0  ? nfacCol     : (hasNuevaTipoCol ? 3 : 2);
+    const oc2 = ocCol>=0    ? ocCol       : (hasNuevaTipoCol ? 5 : 4);
+    const bc  = bultosCol>=0? bultosCol   : (hasNuevaTipoCol ? 6 : 5);
+    const tc  = traspasoCol>=0?traspasoCol: (hasNuevaTipoCol ? 7 : 6);
+    const pc  = piezasCol>=0? piezasCol   : (hasNuevaTipoCol ? 8 : 7);
+
+    // Mapeo de rubros de servicio a tipoFac
+    const _rubroToTipoFac = {
+      'flete':'flete','gastos_origen':'acarreo','gastos_destino':'acarreo',
+      'honorarios':'honorarios','itbms':'itbms','acarreo':'acarreo',
+      'dmce':'liquidacion','comision':'honorarios','gastos':'gastos'
+    };
 
     invLines=[];
     let fleteDetectado=0, seguroDetectado=0, pagoRealizadoDetectado=0;
 
     rows.slice(1).forEach(r=>{
       const provRaw=(r[0]||'').trim();
-      const deptRaw=deptCol>=0?(r[deptCol]||'').trim():'';
+      const tipoRaw=tipoCol>=0?(r[tipoCol]||'').trim().toLowerCase():'';
+      const rubroRaw=rc>=0?(r[rc]||'').trim():'';
       const provUp=provRaw.toUpperCase();
-      const costoStr=(r[mc]||'').replace(/[^0-9.-]/g,'');
+      const costoStr=String(r[mc]||'').replace(/[^0-9.-]/g,'');
       const costo=Math.round(parseFloat(costoStr||'0')*100)/100;
 
       if(!provRaw&&!costo) return;
 
-      // ── Filas especiales globales (como FLETE) ──
-      if(provUp==='FLETE'||provUp.startsWith('FLETE')){
-        if(costo>0) fleteDetectado=costo;
-        return;
+      // ── Filas especiales legacy (FLETE/SEGURO/PAGO_REALIZADO sin columna TIPO) ──
+      if(!tipoRaw){
+        if(provUp==='FLETE'||provUp.startsWith('FLETE')){ if(costo>0) fleteDetectado=costo; return; }
+        if(provUp==='SEGURO'||provUp.startsWith('SEGURO')){ if(costo>0) seguroDetectado=costo; return; }
+        if(provUp==='PAGO_REALIZADO'||provUp==='PAGO REALIZADO'||provUp==='PAGADO'||provUp==='PAGO'){
+          if(costo>0) pagoRealizadoDetectado=costo; return;
+        }
       }
-      if(provUp==='SEGURO'||provUp.startsWith('SEGURO')){
-        if(costo>0) seguroDetectado=costo;
-        return;
-      }
-      if(provUp==='PAGO_REALIZADO'||provUp==='PAGO REALIZADO'||provUp==='PAGADO'||provUp==='PAGO'){
-        if(costo>0) pagoRealizadoDetectado=costo;
-        return;
-      }
-      // ── Línea de proveedor normal ──
-      const bultosRaw=(r[bc]||'').replace(/[^0-9]/g,'');
+
+      // ── PAGO_REALIZADO en columna MONTO (sin proveedor) ──
+      if(!provRaw && rubroRaw.toUpperCase()==='PAGO_REALIZADO'){ if(costo>0) pagoRealizadoDetectado=costo; return; }
+      if(provUp==='PAGO_REALIZADO'||provUp==='PAGO REALIZADO'){ if(costo>0) pagoRealizadoDetectado=costo; return; }
+
+      const bultosRaw=String(r[bc]||'').replace(/[^0-9]/g,'');
       const bultos=bultosRaw?parseInt(bultosRaw)||0:0;
-      const traspasoRaw=(r[tc]||'').replace(/[^0-9.-]/g,'');
+      const traspasoRaw=String(r[tc]||'').replace(/[^0-9.-]/g,'');
       const traspaso=traspasoRaw?Math.round(parseFloat(traspasoRaw)*100)/100:0;
-      const piezasRaw=(r[pc]||'').toString().replace(/[^0-9]/g,'');
+      const piezasRaw=String(r[pc]||'').replace(/[^0-9]/g,'');
       const piezas=piezasRaw?parseInt(piezasRaw)||0:0;
-      const ocVal=(r[oc2]||'').trim();
-      const nfacVal=(r[nfc]||'').trim();
-      const line={prov:provRaw, deptCat:deptRaw, costo, bultos, traspaso, piezas, oc:ocVal, nfac:nfacVal};
+      const ocVal=String(r[oc2]||'').trim();
+      const nfacVal=String(r[nfc]||'').trim();
+
+      // ── Determinar tipoFac ──
+      let tipoFac = 'mercancia';
+      let deptCat = rubroRaw;
+      if(tipoRaw === 'servicio'){
+        const rubroKey = rubroRaw.toLowerCase().replace(/[\s_-]/g,'_');
+        tipoFac = _rubroToTipoFac[rubroKey] || _rubroToTipoFac[rubroRaw.toLowerCase()] || 'gastos';
+        deptCat = 'GASTOS';
+      } else if(tipoRaw === 'mercancia'){
+        tipoFac = 'mercancia';
+      }
+      // Sin columna TIPO (plantilla antigua) — detectar por nombre de proveedor
+      if(!tipoRaw && (provUp.startsWith('ETERNITY')||provUp.startsWith('FLETE')||provUp.startsWith('SEGURO'))){
+        tipoFac = 'flete';
+      }
+
+      const line={prov:provRaw, deptCat, costo, bultos, traspaso, piezas, oc:ocVal, nfac:nfacVal, tipoFac, numFact:nfacVal};
       if(provRaw) line._match=provMatch(provRaw);
       if(provRaw||costo>0) invLines.push(line);
     });
@@ -9647,7 +9887,7 @@ function _tfOrigenPaisCambia(pais){
 function _bigram(a,b){const f=s=>{const r=new Set();for(let i=0;i<s.length-1;i++)r.add(s.slice(i,i+2));return r;};const A=f(a),B=f(b);let n=0;A.forEach(g=>{if(B.has(g))n++;});return 2*n/(A.size+B.size||1);}
 // Find best match. Returns {name,score,si} or null
 function provMatch(q){
-  if(!q||!q.trim())return null;
+  if(!q||!q.trim()) return null;
   const Q=q.trim().toUpperCase();
   let best=null,bScore=0;
   for(const name of _PROV_NAMES){
@@ -9664,6 +9904,35 @@ function provMatch(q){
   if(bScore<0.25)return null;
   const si=_PROV_SI[(best||'').toUpperCase()]||null;
   return {name:best,score:bScore,exact:false,si};
+}
+
+// Load user-added providers from localStorage and merge into _PROV_NAMES
+(function(){
+  try{
+    var custom = JSON.parse(localStorage.getItem('_sim_custom_provs')||'[]');
+    custom.forEach(function(p){ if(p && _PROV_NAMES.indexOf(p)<0) _PROV_NAMES.push(p); });
+  }catch(e){}
+})();
+
+function saveNewProv(){
+  var _mb = document.getElementById('tab-modal-body');
+  var inp = (_mb&&_mb.querySelector('#new-prov-input'))||document.getElementById('new-prov-input');
+  if(!inp) return;
+  var nombre = inp.value.trim().toUpperCase();
+  if(!nombre){ inp.focus(); return; }
+  if(_PROV_NAMES.indexOf(nombre)>=0){
+    _showToast('⚠️ Ya existe: '+nombre,'orange',2500);
+    return;
+  }
+  _PROV_NAMES.push(nombre);
+  try{
+    var custom = JSON.parse(localStorage.getItem('_sim_custom_provs')||'[]');
+    if(custom.indexOf(nombre)<0){ custom.push(nombre); localStorage.setItem('_sim_custom_provs',JSON.stringify(custom)); }
+  }catch(e){}
+  inp.value='';
+  var dl = document.getElementById('prov-datalist');
+  if(dl){ dl.innerHTML=_PROV_NAMES.map(n=>`<option value="${n.replace(/"/g,'&quot;')}">`).join(''); }
+  _showToast('✅ Proveedor agregado: '+nombre,'green',2500);
 }
 // === END PROVEEDORES ===
 // ── VIEW MODE: Mobile / Desktop ──
