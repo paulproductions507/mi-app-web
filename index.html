@@ -9282,19 +9282,21 @@ function acceptSuggest(idx,name){
   renderInvLines();
 }
 function calcInvTotals(){
-  const total=invLines.reduce((s,l)=>s+(l.costo||0),0);
-  const trasTotal=invLines.reduce((s,l)=>s+(l.traspaso||0),0);
+  // Solo suma líneas de MERCANCÍA — flete, gastos, honorarios, etc. NO entran aquí
+  const mercLines = invLines.filter(l=>(l.tipoFac||'mercancia')==='mercancia');
+  const total=mercLines.reduce((s,l)=>s+(l.costo||0),0);
+  const trasTotal=mercLines.reduce((s,l)=>s+(l.traspaso||0),0);
   const f=n=>'$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
   const isFOB=termino==='FOB';
   const el=id=>document.getElementById(id);
-  if(el('inv-count')) el('inv-count').textContent=invLines.length;
+  if(el('inv-count')) el('inv-count').textContent=mercLines.length;
   if(el('inv-total-label')) el('inv-total-label').textContent=f(total);
   if(el('inv-term-label')) el('inv-term-label').textContent=isFOB?'FOB':'CIF';
   if(el('inv-apply-note')) el('inv-apply-note').textContent=`Total se aplicará al campo "${isFOB?'Valor FOB':'Valor CIF'}".`;
   const trEl=el('inv-traspaso-label');
   if(trEl) trEl.textContent=trasTotal>0?'🔄 Traspaso total: '+f(trasTotal):'';
   const pzEl=el('inv-piezas-label');
-  const totalPiezas=invLines.filter(l=>(l.tipoFac||'mercancia')==='mercancia').reduce((s,l)=>s+(l.piezas||0),0);
+  const totalPiezas=mercLines.reduce((s,l)=>s+(l.piezas||0),0);
   if(pzEl) pzEl.textContent=totalPiezas>0?'🔢 '+totalPiezas.toLocaleString()+' piezas':'';
   window._totalPiezas=totalPiezas;
   drawInvPie();
@@ -9328,15 +9330,17 @@ function _autoSumPiezas(){
   calcInvTotals();
 }
 function applyInvToForm(){
-  const total=invLines.reduce((s,l)=>s+(l.costo||0),0);
-  if(total<=0){ alert('Agrega al menos una factura con monto.'); return; }
+  // Solo mercancía va al formulario — flete, gastos, etc. ya están en sus campos
+  const mercLines = invLines.filter(l=>(l.tipoFac||'mercancia')==='mercancia');
+  const total=mercLines.reduce((s,l)=>s+(l.costo||0),0);
+  if(total<=0){ alert('Agrega al menos una factura de mercancía con monto.'); return; }
   const fmt=n=>'$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
 
   // ── Verificar término y tipo configurados ──
   const terminoLabel = termino==='FOB' ? 'FOB (Importación)' : 'CIF';
   const tipoLabel    = tipo==='ZL'     ? 'Zona Libre'        : 'Importación / Exterior';
-  const totalBultos  = invLines.reduce((s,l)=>s+(l.bultos||0),0);
-  const totalTrasp   = invLines.reduce((s,l)=>s+(l.traspaso||0),0);
+  const totalBultos  = mercLines.reduce((s,l)=>s+(l.bultos||0),0);
+  const totalTrasp   = mercLines.reduce((s,l)=>s+(l.traspaso||0),0);
   const fleteVal     = v('s1_flete_fob')||0;
 
   // Build confirmation message
@@ -9619,6 +9623,14 @@ function loadInvFile(input){
     // Si el flete vino como línea de servicio (tipoFac=flete) en vez de fila legacy, tomarlo de ahí
     if(!fleteDetectado){
       fleteDetectado = invLines.filter(l=>l.tipoFac==='flete').reduce((s,l)=>s+(l.costo||0),0);
+    }
+
+    // ── Mapear Gastos Origen/Destino (tipoFac=acarreo) al campo s1_agente ──
+    const gastosOrigenDetectado = invLines.filter(l=>l.tipoFac==='acarreo').reduce((s,l)=>s+(l.costo||0),0);
+    if(gastosOrigenDetectado>0){
+      const agEl = document.getElementById('s1_agente');
+      if(agEl){ agEl.value=gastosOrigenDetectado.toFixed(2); if(typeof mirrorAgente==='function') mirrorAgente(agEl.value); }
+      msg += '\nGastos Origen/Destino: $'+gastosOrigenDetectado.toFixed(2)+' aplicado.';
     }
 
     let msg = invLines.length + ' facturas cargadas.';
