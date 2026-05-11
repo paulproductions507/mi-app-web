@@ -9201,12 +9201,15 @@ function _initProvDatalist(){
 }
 
 function renderInvLines(){
-  // Target all visible inv-lines containers (original tab + modal clone)
-  const containers = Array.from(document.querySelectorAll('[id="inv-lines"]'));
-  const c = containers.length ? containers[containers.length - 1] : null;
-  // Also find gastos container
-  const gastosContainers = Array.from(document.querySelectorAll('[id="inv-gastos-lines"]'));
-  const cGastos = gastosContainers.length ? gastosContainers[gastosContainers.length-1] : null;
+  // Renderizar en TODOS los contenedores visibles (original + modal clone)
+  const allContainers     = Array.from(document.querySelectorAll('[id="inv-lines"]'));
+  const allGastosContainers = Array.from(document.querySelectorAll('[id="inv-gastos-lines"]'));
+  // Preferir el del modal si está abierto; de lo contrario usar todos
+  const modalOpen = document.getElementById('tab-modal-overlay')?.classList.contains('open');
+  const containers     = allContainers.length     ? allContainers     : [];
+  const gastosContainers = allGastosContainers.length ? allGastosContainers : [];
+  const c      = containers.length      ? containers[containers.length - 1]      : null;
+  const cGastos= gastosContainers.length? gastosContainers[gastosContainers.length-1]: null;
 
   _initProvDatalist();
   const isSababa=compar==='sababa';
@@ -9215,9 +9218,8 @@ function renderInvLines(){
   const mercLines  = invLines.filter(l=>(l.tipoFac||'mercancia')==='mercancia');
   const gastoLines = invLines.filter(l=>l.tipoFac && l.tipoFac!=='mercancia');
 
-  // ── Render mercancía lines ──
-  if(c){
-    c.innerHTML=mercLines.map((l,mi)=>{
+  // ── Render mercancía lines — aplicar a TODOS los contenedores (original + clone) ──
+  const mercHTML = mercLines.map((l,mi)=>{
       const i = invLines.indexOf(l); // real index in invLines
       const m=l._match||null;
       let provBorder='var(--border)';
@@ -9261,19 +9263,20 @@ function renderInvLines(){
         +'</div>'
         +'</div>';
     }).join('') || '<div style="text-align:center;padding:16px;color:var(--muted);font-size:11px">Sin facturas de mercancía. Agrega o carga una plantilla.</div>';
-  }
 
-  // ── Render gastos de servicio ──
-  if(cGastos){
-    const fmt=n=>'$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-    const tipoColors={liquidacion:'rgba(248,81,73,.15)',itbms:'rgba(88,166,255,.15)',flete:'rgba(240,136,62,.15)',acarreo:'rgba(210,153,34,.15)',honorarios:'rgba(168,85,247,.15)',gastos:'rgba(139,148,158,.15)'};
-    const tipoIcons={liquidacion:'🏛️',itbms:'🧾',flete:'🚢',acarreo:'🚛',honorarios:'👔',gastos:'📋'};
-    const tipoLabels={liquidacion:'Liquidación / Arancel',itbms:'ITBMS',flete:'Flete',acarreo:'Acarreo / Gastos',honorarios:'Honorarios / Comisión',gastos:'Otros Gastos'};
+  // Aplicar HTML a TODOS los contenedores inv-lines visibles
+  containers.forEach(function(container){ container.innerHTML = mercHTML; });
 
-    if(!gastoLines.length){
-      cGastos.innerHTML='<div style="text-align:center;padding:12px;color:var(--muted);font-size:11px">Calcula un embarque para ver los gastos de servicio auto-mapeados.</div>';
-    } else {
-      cGastos.innerHTML=gastoLines.map((l,gi)=>{
+  // ── Render gastos de servicio — aplicar a TODOS los contenedores ──
+  const fmt=n=>'$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const tipoColors={liquidacion:'rgba(248,81,73,.15)',itbms:'rgba(88,166,255,.15)',flete:'rgba(240,136,62,.15)',acarreo:'rgba(210,153,34,.15)',honorarios:'rgba(168,85,247,.15)',gastos:'rgba(139,148,158,.15)'};
+  const tipoIcons={liquidacion:'🏛️',itbms:'🧾',flete:'🚢',acarreo:'🚛',honorarios:'👔',gastos:'📋'};
+  const tipoLabels={liquidacion:'Liquidación / Arancel',itbms:'ITBMS',flete:'Flete',acarreo:'Acarreo / Gastos',honorarios:'Honorarios / Comisión',gastos:'Otros Gastos'};
+  let gastosHTML;
+  if(!gastoLines.length){
+    gastosHTML = '<div style="text-align:center;padding:12px;color:var(--muted);font-size:11px">Calcula un embarque para ver los gastos de servicio auto-mapeados.</div>';
+  } else {
+    gastosHTML = gastoLines.map((l,gi)=>{
         const i = invLines.indexOf(l);
         const tf = l.tipoFac||'gastos';
         const tfColor = tipoColors[tf]||tipoColors.gastos;
@@ -9313,8 +9316,9 @@ function renderInvLines(){
           +'</div>'
           +'</div>';
       }).join('');
-    }
   }
+  // Aplicar a TODOS los contenedores de gastos
+  gastosContainers.forEach(function(gc){ gc.innerHTML = gastosHTML; });
 
   calcInvTotals();
 }
@@ -9344,17 +9348,20 @@ function calcInvTotals(){
   const trasTotal=mercLines.reduce((s,l)=>s+(l.traspaso||0),0);
   const f=n=>'$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
   const isFOB=termino==='FOB';
-  const el=id=>document.getElementById(id);
-  if(el('inv-count')) el('inv-count').textContent=mercLines.length;
-  if(el('inv-total-label')) el('inv-total-label').textContent=f(total);
-  if(el('inv-term-label')) el('inv-term-label').textContent=isFOB?'FOB':'CIF';
-  if(el('inv-apply-note')) el('inv-apply-note').textContent=`Total se aplicará al campo "${isFOB?'Valor FOB':'Valor CIF'}".`;
-  const trEl=el('inv-traspaso-label');
-  if(trEl) trEl.textContent=trasTotal>0?'🔄 Traspaso total: '+f(trasTotal):'';
-  const pzEl=el('inv-piezas-label');
   const totalPiezas=mercLines.reduce((s,l)=>s+(l.piezas||0),0);
-  if(pzEl) pzEl.textContent=totalPiezas>0?'🔢 '+totalPiezas.toLocaleString()+' piezas':'';
   window._totalPiezas=totalPiezas;
+
+  // Actualizar TODOS los elementos con cada ID (cubre original + modal clone simultáneamente)
+  const _setAll = (id, text) => {
+    document.querySelectorAll('[id="'+id+'"]').forEach(el => { el.textContent = text; });
+  };
+  _setAll('inv-count',       mercLines.length);
+  _setAll('inv-total-label', f(total));
+  _setAll('inv-term-label',  isFOB ? 'FOB' : 'CIF');
+  _setAll('inv-apply-note',  `Total se aplicará al campo "${isFOB?'Valor FOB':'Valor CIF'}".`);
+  _setAll('inv-traspaso-label', trasTotal>0 ? '🔄 Traspaso total: '+f(trasTotal) : '');
+  _setAll('inv-piezas-label',   totalPiezas>0 ? '🔢 '+totalPiezas.toLocaleString()+' piezas' : '');
+
   drawInvPie();
 }
 
@@ -9652,6 +9659,7 @@ function loadInvFile(input){
     });
 
     renderInvLines();
+    calcInvTotals(); // forzar actualización inmediata del total visible
     _autoSumTraspaso();
     _autoSumBultos();
     _autoSumPiezas();
