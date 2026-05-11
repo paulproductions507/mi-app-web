@@ -4120,17 +4120,38 @@ function _autoFillGastosProveedores(){
   if(isSab){
     // SIN Tesoro Nacional en Sababa
 
-    // SABABA IMPORTS, S.A. — Comisión bruta + ITBMS Homologado (separados)
-    const comisionTotal = sc3.comision   || 0;
-    const itbmsHomol    = sc3.itbmsHomol || 0;
-    const comBruta      = sc3.comBruta   || Math.max(0, comisionTotal - itbmsHomol);
+    // PRIORIDAD: usar valores manuales editados por el usuario en el módulo Sababa
+    // Estos son los valores REALES que Sababa facturó — tienen precedencia sobre el snap.
+    // Si no hay edición manual, usar los del snap (calculado automáticamente).
+    const itbPctSab = snap.itbPct || 0.07;
+    const DIV_SAB   = 1 + itbPctSab;
 
-    add('honorarios', 'SABABA IMPORTS, S.A.', 'Comisión Bruta (10% s/Pago Fiscal)', comBruta);
+    // Comisión: manual si fue editada, sino del snap
+    let comisionReal;
+    if(window.s2_comisionEditada && window._comManualValue !== undefined && !isNaN(window._comManualValue)){
+      comisionReal = window._comManualValue;
+    } else {
+      comisionReal = sc3.comision || 0;
+    }
+
+    // ITBMS Homologado = se recalcula desde la baseAjust real
+    // baseAjust viene de calcSab2 — si hay pago manual usarlo, sino snap
+    const baseAjustReal = sc3.baseAjustada || sc3.pagFinal || sc3.base || 0;
+    const itbmsHomolReal = baseAjustReal > 0 ? Math.round((baseAjustReal - baseAjustReal / DIV_SAB) * 100) / 100
+                          : (sc3.itbmsHomol || 0);
+    const comBrutaReal  = Math.max(0, comisionReal - itbmsHomolReal);
+
+    add('honorarios', 'SABABA IMPORTS, S.A.', 'Comisión Bruta (10% s/Pago Fiscal)', comBrutaReal);
     // ITBMS Homologado va como "Otros Gastos" — es un costo que entra al inventario
-    add('itbms',      'SABABA IMPORTS, S.A.', 'ITBMS Homologado (costeo inventario)', itbmsHomol);
+    add('itbms',      'SABABA IMPORTS, S.A.', 'ITBMS Homologado (costeo inventario)', itbmsHomolReal);
 
-    // MASTER VALUE — absorbe diferencia Liq vs Sababa
-    const mv3 = sc3.mv || 0;
+    // Master Value: manual si fue editado, sino del snap
+    let mv3;
+    if(window._mvUserEdited && window._mvManualValue !== undefined && !isNaN(window._mvManualValue)){
+      mv3 = window._mvManualValue;
+    } else {
+      mv3 = sc3.mv || 0;
+    }
     if(mv3 > 0.005){
       add('gastos', 'MASTER VALUE', 'Diferencia Liq. vs Sababa', mv3);
     } else if(mv3 < -0.005){
@@ -4745,6 +4766,22 @@ function calcSab2(){
       </div>
     </div>
   `;
+  // ── PATCH: Actualizar _lastSnap.sc3 con los valores reales de calcSab2 ──
+  // Esto garantiza que _autoFillGastosProveedores() y el procesamiento
+  // usen los valores correctos (incluyendo ediciones manuales del usuario).
+  if(window._lastSnap && window._lastSnap.sc3){
+    window._lastSnap.sc3.comision    = comision;
+    window._lastSnap.sc3.itbmsHomol  = itbmsHomol;
+    window._lastSnap.sc3.comBruta    = Math.max(0, comision - itbmsHomol);
+    window._lastSnap.sc3.mv          = mv;
+    window._lastSnap.sc3.mvPct       = mvPct;
+    window._lastSnap.sc3.mercHomol   = mercHomol;
+    window._lastSnap.sc3.baseAjustada = baseAjust;
+    window._lastSnap.sc3.pagFinal    = pagFinal;
+    window._lastSnap.sc3.landed1     = landed;
+    window._lastSnap.sc3.noMerc      = noMerc;
+    window._lastSnap.sc3.desembolso  = mercHomol + comision + fleteStd + agente;
+  }
 }
 
 
@@ -5797,11 +5834,19 @@ function _migrarGastosDesdeSnap(d){
     if((sc2.mv||0)>0.01)       gastos.push({tipoFac:'gastos',     deptCat:'GASTOS', prov:'Master Value',           costo:Math.round((sc2.mv||0)*100)/100,    oc:'auto-migrado'});
     if((sc2.itbmsHon||0)>0.01) gastos.push({tipoFac:'itbms',      deptCat:'GASTOS', prov:'ITBMS s/Honorarios',    costo:Math.round((sc2.itbmsHon||0)*100)/100, oc:'auto-migrado'});
   } else if(isSab){
-    // Sababa: Flete, Gastos Origen/Destino, Comisión, Master Value
-    if((sc3.flete||0)>0.01)    gastos.push({tipoFac:'flete',      deptCat:'GASTOS', prov:'Flete Sababa',          costo:Math.round((sc3.flete||0)*100)/100,   oc:'auto-migrado'});
-    if((sc3.gastos||0)>0.01)   gastos.push({tipoFac:'acarreo',    deptCat:'GASTOS', prov:'Gastos Origen/Destino', costo:Math.round((sc3.gastos||0)*100)/100,  oc:'auto-migrado'});
-    if((sc3.comision||0)>0.01) gastos.push({tipoFac:'honorarios', deptCat:'GASTOS', prov:'Comisión Sababa',       costo:Math.round((sc3.comision||0)*100)/100, oc:'auto-migrado'});
-    if((sc3.mv||0)>0.01)       gastos.push({tipoFac:'gastos',     deptCat:'GASTOS', prov:'Master Value',          costo:Math.round((sc3.mv||0)*100)/100,      oc:'auto-migrado'});
+    // Sababa: usar comBruta (honorario neto) e itbmsHomol desglosados — NO comision total
+    const itbPctSnap = (d.snap?.itbPct) || 0.07;
+    const DIV_SNAP   = 1 + itbPctSnap;
+    const comisionSab  = sc3.comision   || 0;
+    const itbmsHomolSab = sc3.itbmsHomol || (sc3.baseAjustada ? Math.round((sc3.baseAjustada - sc3.baseAjustada/DIV_SNAP)*100)/100 : 0);
+    const comBrutaSab  = sc3.comBruta   || Math.max(0, comisionSab - itbmsHomolSab);
+    const mv3          = sc3.mv || 0;
+
+    if((sc3.flete||0)>0.01)   gastos.push({tipoFac:'flete',      deptCat:'GASTOS', prov:'Flete Sababa',          costo:Math.round((sc3.flete||0)*100)/100,   oc:'auto-migrado'});
+    if((sc3.gastos||0)>0.01)  gastos.push({tipoFac:'acarreo',    deptCat:'GASTOS', prov:'Gastos Origen/Destino', costo:Math.round((sc3.gastos||0)*100)/100,  oc:'auto-migrado'});
+    if(comBrutaSab>0.01)      gastos.push({tipoFac:'honorarios', deptCat:'GASTOS', prov:'SABABA IMPORTS, S.A.',  costo:Math.round(comBrutaSab*100)/100,       oc:'auto-migrado', _desc:'Comisión Bruta'});
+    if(itbmsHomolSab>0.01)    gastos.push({tipoFac:'itbms',      deptCat:'GASTOS', prov:'SABABA IMPORTS, S.A.',  costo:Math.round(itbmsHomolSab*100)/100,     oc:'auto-migrado', _desc:'ITBMS Homologado'});
+    if(mv3>0.01)              gastos.push({tipoFac:'gastos',      deptCat:'GASTOS', prov:'MASTER VALUE',          costo:Math.round(mv3*100)/100,               oc:'auto-migrado', _desc:'Diferencia Liq. vs Sababa'});
   }
 
   if(!gastos.length) return;
@@ -7266,6 +7311,7 @@ function _buildHistProvRows(){
       rows.push({prov,oc:l.oc||'—',numFact:l.numFact||l.nroFact||l.factura||'—',
         depto:(l.deptCat||l.dept||'Sin categoría').toUpperCase(),
         piezas:l.piezas||0,bultos:l.bultos||0,costo:l.costo||0,
+        desc: l._desc || l.oc || '',
         nro,fecha,esc:escLabel,tipo:prov.toUpperCase().startsWith('S.I')?'ZL':'IMP',homol:isHomol,_dIdx:dIdx});
     });
   });
@@ -7285,7 +7331,7 @@ function _renderHistProvList(){
   var qD=root.querySelector('#hp-depto')?.value||'';
   var rows=_buildHistProvRows();
   var f=rows.filter(function(r){
-    if(qB&&!(r.prov.toLowerCase().includes(qB)||r.oc.toLowerCase().includes(qB)||r.nro.toLowerCase().includes(qB)||r.depto.toLowerCase().includes(qB))) return false;
+    if(qB&&!(r.prov.toLowerCase().includes(qB)||r.oc.toLowerCase().includes(qB)||r.nro.toLowerCase().includes(qB)||r.depto.toLowerCase().includes(qB)||(r.desc||'').toLowerCase().includes(qB))) return false;
     if(qT&&r.tipo!==qT) return false; if(qE&&r.esc!==qE) return false;
     if(qD&&r.depto!==qD) return false;
     if(qH==='si'&&!r.homol) return false; if(qH==='no'&&r.homol) return false;
@@ -7507,14 +7553,16 @@ function _renderGastosNoMerc(all){
 
   // ── Acumular costos No Mercancía de los escenarios elegidos (SC2/SC3) ──
   const rubros = {
-    flete:       { label:'Flete Internacional',       icon:'🚢', color:'var(--orange-l)', total:0 },
-    gastos_orig: { label:'Gastos Origen y Destino',   icon:'🌐', color:'var(--blue-l)',   total:0 },
-    honorarios:  { label:'Honorarios / Comisión',     icon:'👔', color:'#a855f7',         total:0 },
-    mv:          { label:'Master Value',              icon:'🔑', color:'var(--green-l)',  total:0 },
-    otros:       { label:'Otros Gastos',              icon:'📋', color:'var(--muted2)',   total:0 },
+    flete:       { label:'Flete Internacional',           icon:'🚢', color:'var(--orange-l)', total:0 },
+    gastos_orig: { label:'Gastos Origen y Destino',       icon:'🌐', color:'var(--blue-l)',   total:0 },
+    honorarios:  { label:'Honorarios / Comisión',         icon:'👔', color:'#a855f7',         total:0 },
+    honorarios_itbms: { label:'ITBMS Costeable (Sababa)', icon:'🧾', color:'var(--orange-l)', total:0 },
+    mv:          { label:'Master Value',                  icon:'🔑', color:'var(--green-l)',  total:0 },
+    otros:       { label:'Otros Gastos',                  icon:'📋', color:'var(--muted2)',   total:0 },
   };
-  // ITBMS siempre en cuadro propio — nunca dentro de No Mercancía
+  // ITBMS fiscal (Tesoro Nacional) — separado del ITBMS costeable Sababa
   let totalItbms = 0;
+  let totalItbmsCosteable = 0; // ITBMS homologado Sababa — va al costo, no es fiscal
 
   // ── Acumular ahorro por rubro (comparando SC1 vs SC elegido) ──
   const ahorroRubros = {
@@ -7535,34 +7583,64 @@ function _renderGastosNoMerc(all){
     const escElegido = d.esc || '';
     const isCif = escElegido.toLowerCase().includes('cif') || escElegido.toLowerCase().includes('express');
     const isSab = escElegido.toLowerCase().includes('sababa') || escElegido.toLowerCase().includes('sab');
-    const scEl  = isCif ? sc2 : (isSab ? sc3 : {});
 
-    if(isCif){
-      rubros.flete.total       += sc2.flete||0;
-      rubros.gastos_orig.total += sc2.gastos||0;
-      rubros.honorarios.total  += sc2.hon||0;
-      rubros.mv.total          += sc2.mv||0;
-      totalItbms               += (sc2.itbms||0) + (sc2.itbmsTasaFinal||0) + (sc2.itbmsHon||0);
-      totalNoMerc              += sc2.noMerc||0;
-    } else if(isSab){
-      rubros.flete.total       += sc3.flete||0;
-      rubros.gastos_orig.total += sc3.gastos||0;
-      rubros.honorarios.total  += sc3.comision||0;
-      rubros.mv.total          += sc3.mv||0;
-      totalItbms               += sc3.itbmsHomol||0;
-      totalNoMerc              += sc3.noMerc||0;
-    }
-    // ── También acumular desde invLines de gastos (si existen) ──
+    // ── Fuente de verdad: invLines de gastos (valores reales registrados) ──
+    // Si existen líneas de gastos, son la fuente primaria (evita doble conteo con snap).
+    // Si no existen (embarque antiguo sin invLines), caer al snap como fallback.
     const lines = d.invLines || (snap.invLines)||[];
-    lines.filter(l=>l.tipoFac&&l.tipoFac!=='mercancia').forEach(l=>{
-      switch(l.tipoFac){
-        case 'flete':      rubros.flete.total+=l.costo||0; break;
-        case 'acarreo':    rubros.gastos_orig.total+=l.costo||0; break;
-        case 'honorarios': rubros.honorarios.total+=l.costo||0; break;
-        case 'gastos':     rubros.otros.total+=l.costo||0; break;
-        case 'itbms':      totalItbms+=l.costo||0; break;
+    const gastoLines = lines.filter(l=>l.tipoFac&&l.tipoFac!=='mercancia'&&!l._autoGasto);
+    const hasGastos  = gastoLines.length > 0;
+
+    if(hasGastos){
+      // Fuente: invLines — los valores que realmente se registraron
+      gastoLines.forEach(l=>{
+        const provUp = (l.prov||'').toUpperCase();
+        const isSababaLine = provUp.includes('SABABA');
+        const isMasterVal  = provUp.includes('MASTER VALUE') || provUp.includes('MASTER_VALUE');
+        switch(l.tipoFac){
+          case 'flete':      rubros.flete.total       += l.costo||0; break;
+          case 'acarreo':    rubros.gastos_orig.total += l.costo||0; break;
+          case 'honorarios': rubros.honorarios.total  += l.costo||0; break;
+          case 'gastos':
+            if(isMasterVal) rubros.mv.total    += l.costo||0;
+            else            rubros.otros.total += l.costo||0;
+            break;
+          case 'itbms':
+            if(isSababaLine){
+              // ITBMS Sababa = costeable (entra al inventario, NO es fiscal)
+              totalItbmsCosteable           += l.costo||0;
+              rubros.honorarios_itbms.total += l.costo||0;
+            } else {
+              totalItbms += l.costo||0; // ITBMS fiscal (Tesoro, CIF Express)
+            }
+            break;
+        }
+      });
+      // totalNoMerc = gastos no ITBMS fiscal + ITBMS costeable Sababa
+      totalNoMerc += gastoLines.reduce((s,l)=>{
+        if(l.tipoFac==='itbms' && !(l.prov||'').toUpperCase().includes('SABABA')) return s;
+        return s + (l.costo||0);
+      }, 0);
+    } else {
+      // Fallback snap (embarques sin invLines — formato antiguo)
+      if(isCif){
+        rubros.flete.total       += sc2.flete||0;
+        rubros.gastos_orig.total += sc2.gastos||0;
+        rubros.honorarios.total  += sc2.hon||0;
+        rubros.mv.total          += sc2.mv||0;
+        totalItbms               += (sc2.itbms||0) + (sc2.itbmsTasaFinal||0) + (sc2.itbmsHon||0);
+        totalNoMerc              += sc2.noMerc||0;
+      } else if(isSab){
+        const comBrutaFb = sc3.comBruta || Math.max(0,(sc3.comision||0)-(sc3.itbmsHomol||0));
+        rubros.flete.total            += sc3.flete||0;
+        rubros.gastos_orig.total      += sc3.gastos||0;
+        rubros.honorarios.total       += comBrutaFb;
+        rubros.honorarios_itbms.total += sc3.itbmsHomol||0;
+        rubros.mv.total               += sc3.mv||0;
+        totalItbmsCosteable           += sc3.itbmsHomol||0;
+        totalNoMerc                   += sc3.noMerc||0;
       }
-    });
+    }
 
     // ── Ahorro por rubro (SC1 como base de comparación) ──
     const ahorroLiq  = (sc1.arancel||0) - (isCif?(sc2.arancel||0):(isSab?0:0));
@@ -7633,8 +7711,8 @@ function _renderGastosNoMerc(all){
       <div style="display:flex;align-items:center;gap:8px">
         <span style="font-size:14px">🧾</span>
         <div>
-          <div style="font-size:11px;font-weight:700;color:var(--blue-l)">ITBMS — CIF Express y Sababa</div>
-          <div style="font-size:10px;color:var(--muted)">ITBMS s/Mercancía · s/Tasa · s/Honorarios</div>
+          <div style="font-size:11px;font-weight:700;color:var(--blue-l)">ITBMS Fiscal — CIF Express / Liq. Aduanal</div>
+          <div style="font-size:10px;color:var(--muted)">ITBMS s/Mercancía · s/Tasa · s/Honorarios (no entra al costo inventario)</div>
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
@@ -7642,14 +7720,29 @@ function _renderGastosNoMerc(all){
         <span class="itb-chev" style="font-size:11px;color:var(--muted)">▶</span>
       </div>
     </div>
+    ${totalItbmsCosteable>0?`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-top:1px solid rgba(240,136,62,.15);cursor:pointer;user-select:none" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:14px">🧾</span>
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--orange-l)">ITBMS Costeable — Sababa</div>
+          <div style="font-size:10px;color:var(--muted)">ITBMS Homologado · entra al costo inventario · NO es fiscal</div>
+        </div>
+      </div>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:800;color:var(--orange-l)">${fmt2(totalItbmsCosteable)}</span>
+    </div>
+    <div style="display:none;padding:8px 16px 10px;background:rgba(240,136,62,.04);border-top:1px solid rgba(240,136,62,.1)">
+      <div style="font-size:10px;color:var(--muted)">Este ITBMS forma parte de la comisión Sababa y se aplica al costo de inventario. No se paga al Tesoro Nacional. Es la porción del 7% incluida dentro del 10% de comisión total.</div>
+    </div>
+    `:''}
     <div style="display:none;background:rgba(88,166,255,.03)">
-      <!-- Landed Total (No Merc + ITBMS) -->
+      <!-- Landed Total (No Merc + ITBMS fiscal) -->
       <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:rgba(63,185,80,.05);border-top:1px solid rgba(63,185,80,.15)">
         <div style="display:flex;align-items:center;gap:8px">
           <span style="font-size:14px">📊</span>
           <div>
-            <div style="font-size:11px;font-weight:700;color:var(--green-l)">Landed Total (No Merc + ITBMS)</div>
-            <div style="font-size:10px;color:var(--muted)">Costo total de la operación</div>
+            <div style="font-size:11px;font-weight:700;color:var(--green-l)">Landed Total (No Merc + ITBMS fiscal)</div>
+            <div style="font-size:10px;color:var(--muted)">Costo total de la operación (ITBMS costeable ya incluido en No Mercancía)</div>
           </div>
         </div>
         <span style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:800;color:var(--green-l)">${fmt2(totalNoMerc+totalItbms)}</span>
