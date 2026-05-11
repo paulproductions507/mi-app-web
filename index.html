@@ -1639,9 +1639,9 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
         <div id="sab2-trasp-row" class="field"><label>Descuento Traspasos (USD)</label>
           <input type="number" id="s2_trasp" value="" placeholder="0.00" step="0.01" oninput="calcSab2()">
         </div>
-        <!-- Diferencia aplica en EXT CIF -->
+        <!-- Diferencia: aplica en ZL y EXT CIF (viene automáticamente de PAGO_REALIZADO en plantilla) -->
         <div id="sab2-dif-cif-row" class="field" style="display:none"><label>Diferencia Sababa (± USD) <span class="info-btn" onclick="document.getElementById('dif-cif-info').classList.toggle('open')" style="font-style:normal">i</span></label>
-          <div id="dif-cif-info" class="info-box">Centavos de redondeo: se suma/resta al CIF antes de ÷ 1.07 para homologar al inventario de Sababa.</div>
+          <div id="dif-cif-info" class="info-box">Diferencia entre el Total Pago de Sababa y la suma de Costo+Flete. Se aplica <strong>después</strong> de ÷1.07 para ajustar el FOB homologado. Si Sababa facturó de más → positivo (+). Si facturó de menos → negativo (−). Se hereda automáticamente desde el campo PAGO_REALIZADO de la plantilla.</div>
           <input type="number" id="s2_dif_cif" value="" placeholder="0.00" step="0.01" oninput="calcSab2()">
         </div>
       </div>
@@ -1709,7 +1709,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       </div>
 
       <div style="display:flex;gap:8px;margin-top:8px">
-        <button id="btn-aplicar-sab" class="btn" style="flex:1;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.25);color:#f97316;opacity:.45;pointer-events:none;transition:all .25s" onclick="calcSab2();_showToast('✅ Cambios aplicados','green',1500)">✓ Aplicar</button>
+        <button id="btn-aplicar-sab" class="btn" style="flex:1;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.25);color:#f97316;opacity:.45;pointer-events:none;transition:all .25s" onclick="calc();if(typeof syncSC3fromSC1==='function')syncSC3fromSC1();calcSab2();_showToast('✅ Cambios aplicados — Sababa + Liquidación','green',1800)">✓ Aplicar</button>
         <button class="btn btn-orange" style="flex:2" onclick="_startProgress();calcSab2AndShow()">⚡ Calcular — Ver Dashboard →</button>
       </div>
     </div>
@@ -4309,11 +4309,18 @@ function syncSC3fromSC1(){
     // CIF term (any tipo): single value field
     if(cif>0){
       setIfAuto('s2_costo_zl', cif);
-      // Pago = CIF (already the full value)
+      // Pago = CIF (base pura, sin diferencia — la diferencia va por campo separado)
       const p=document.getElementById('s2_pago');
       if(p&&(!p.value||parseFloat(p.value)===0||p.dataset.autoSet==='true')){
         p.value=cif.toFixed(2); p.dataset.autoSet='true';
       }
+    }
+    // Propagar diferencia de pago al campo de Sababa según modo
+    const difVal = v('s1_dif_pago') || 0;
+    const difCifEl = document.getElementById('s2_dif_cif');
+    if(difCifEl && difCifEl.dataset.userSet !== 'manual'){
+      difCifEl.value = difVal !== 0 ? difVal.toFixed(2) : '';
+      difCifEl.dataset.autoSet = 'true';
     }
   }
 
@@ -4331,12 +4338,19 @@ function syncSC3fromSC1(){
       const el1=document.getElementById('s2_trasp'); if(el1&&el1.dataset.autoSet!=='false'){el1.value=tr.toFixed(2);el1.dataset.autoSet='true';}
       const el2=document.getElementById('sc_trasp'); if(el2) el2.value=tr.toFixed(2);
     }
-    // Pago = CIF - traspaso
-    const pago=Math.max(0,cif-tr);
+    // Pago = CIF puro (sin restar traspaso aquí — calcSab2 lo maneja internamente)
+    const pago=cif;
     const scPago=document.getElementById('sc_pago');
     if(scPago&&scPago.dataset.autoSet!=='false'){ scPago.value=pago>0?pago.toFixed(2):''; scPago.dataset.autoSet='true'; }
     const s2Pago=document.getElementById('s2_pago');
     if(s2Pago&&(s2Pago.dataset.autoSet==='true')&&pago>0) s2Pago.value=pago.toFixed(2);
+    // Diferencia ZL → s2_dif_cif (desde plantilla PAGO_REALIZADO)
+    const difZL = v('s1_dif_pago') || 0;
+    const difZLEl = document.getElementById('s2_dif_cif');
+    if(difZLEl && difZLEl.dataset.userSet !== 'manual'){
+      difZLEl.value = difZL !== 0 ? difZL.toFixed(2) : '';
+      difZLEl.dataset.autoSet = 'true';
+    }
   } else {
     setIfAuto('sc_fob', fob);
     if(fl_raw>0) setIfAuto('sc_flete', fl_raw);
@@ -4403,7 +4417,8 @@ function updateSab2View(){
   if(traspRow) traspRow.style.display = (!isFOB && sab2Tipo==='ZL') ? '' : 'none';
   // Diferencia CIF: only for EXT CIF
   const difCifRow = document.getElementById('sab2-dif-cif-row');
-  if(difCifRow) difCifRow.style.display = isExtCIF ? '' : 'none';
+  // Mostrar campo diferencia en todos los modos (ZL, EXT CIF, FOB lo tiene separado)
+  if(difCifRow) difCifRow.style.display = isFOB ? 'none' : '';
 
   if(isFOB){
     if(cifBlk)  cifBlk.style.display='none';
@@ -4448,45 +4463,47 @@ function calcSab2(){
   const itbPct=v('s2_itbms')/100, comPct=v('s2_com')/100, agente=v('s2_agente');
   const DIV=1+itbPct;
   const isFOB = termino==='FOB' && sab2Tipo==='EXT';
-  let montoBase;
+  const traspaso = sab2Tipo==='ZL' ? v('s2_trasp') : 0;
+
+  // ── BASE LIMPIA (Mercancía + Flete, sin diferencia ni traspaso aún) ──
+  // Esta es la base que hereda Liq. Aduanal. Se usará para calcular comisión.
+  let baseLimpia; // = Mercancía + Flete (lo que heredó Liq. Aduanal)
+  let diferencia; // = diferencia de pago (viene desde plantilla vía s1_dif_pago)
+
   if(isFOB){
-    // FOB + Exterior: base = FOB + Flete + Diferencia
-    const fob   = v('s2_fob');
-    const fl    = v('s2_flete');
-    const difFob = v('s2_dif_fob');
-    montoBase = fob + fl + difFob;
-    // Always keep s2_pago in sync when user hasn't overridden it
+    const fob = v('s2_fob');
+    const fl  = v('s2_flete');
+    diferencia = v('s2_dif_fob'); // desde plantilla: PAGO_REALIZADO − (FOB+Flete)
+    baseLimpia = fob + fl;        // base pura heredada de Liq. Aduanal
+    // s2_pago = base pura (sin diferencia) — la diferencia va aparte
     const pagoEl = document.getElementById('s2_pago');
     if(pagoEl && pagoEl.dataset.autoSet !== 'false'){
-      pagoEl.value = montoBase > 0 ? montoBase.toFixed(2) : '';
+      pagoEl.value = baseLimpia > 0 ? baseLimpia.toFixed(2) : '';
       pagoEl.dataset.autoSet = 'true';
     }
   } else {
-    // CIF (any tipo): base = CIF − traspaso (ZL) or CIF + diferencia (EXT)
-    const difCif = sab2Tipo==='EXT' ? v('s2_dif_cif') : 0;
-    montoBase = v('s2_costo_zl') - (sab2Tipo==='ZL' ? v('s2_trasp') : 0) + difCif;
+    const cif = v('s2_costo_zl');
+    diferencia = sab2Tipo==='EXT' ? v('s2_dif_cif') : v('s2_dif_cif'); // desde plantilla
+    // Para ZL: base = CIF − Traspaso. Para EXT/CIF: base = CIF.
+    baseLimpia = cif - traspaso;
   }
 
-  if(!montoBase||montoBase<=0){
-    // Only block if the raw input (before diferencia) is also missing
-    const rawBase = isFOB ? (v('s2_fob')+v('s2_flete')) : (v('s2_costo_zl'));
-    if(!rawBase || rawBase <= 0){
-      document.getElementById('res-sab2').innerHTML=`<div class="ph"><div class="ph-icon">🧾</div><div class="ph-txt">Ingresa el valor ${isFOB?'FOB + Flete':'CIF'} para calcular.</div></div>`;
-      return;
-    }
-    // montoBase may be negative due to diferencia — allow calculation with adjusted base
-    // This handles cases like negative diferencia making montoBase very small or negative
+  const rawCheck = isFOB ? (v('s2_fob')+v('s2_flete')) : v('s2_costo_zl');
+  if(!rawCheck || rawCheck <= 0){
+    document.getElementById('res-sab2').innerHTML=`<div class="ph"><div class="ph-icon">🧾</div><div class="ph-txt">Ingresa el valor ${isFOB?'FOB + Flete':'CIF'} para calcular.</div></div>`;
+    return;
   }
 
-  // Diferencia con signo entre pago real y base
+  // ── BASE AJUSTADA = Base limpia ± Diferencia ──
+  // Regla: si diferencia > 0 → se SUMA, si < 0 → se RESTA
+  const baseAjust = baseLimpia + (diferencia||0);
+  const pagFinal  = baseAjust; // Total Pago Sababa = lo que realmente pagaron
+
+  // ── Para referencia de alerta: diferencia entre pago manual y base calculada ──
   const pagado   = v('s2_pago');
-  const difPago  = pagado>0 ? pagado - montoBase : 0;
+  const difPago  = diferencia || 0; // usamos la diferencia directa de plantilla
   const difAbs   = Math.abs(difPago);
-  // Tolerance: $2 normally, but if traspaso is involved allow up to traspaso+2
-  const traspaso = sab2Tipo==='ZL' ? v('s2_trasp') : 0;
   const tolerancia = Math.max(2, traspaso > 0 ? traspaso + 2 : 2);
-  const baseAjust= montoBase + difPago;
-  const pagFinal = pagado>0 ? pagado : montoBase;
 
   // Homologación: base ajustada ÷ 1.07
   const mercHomol   = baseAjust / DIV;
@@ -4501,14 +4518,29 @@ function calcSab2(){
   }
   const fleteStd = v('s2_flete_sab') || fleteMain;
 
-  // CORRECCIÓN: Comisión = baseAjust × %  (NO sobre pagFinal/CIF bruto)
-  // Excel: Base_Ajustada(46180.30) × 10% = 4618.03
-  const comisionAuto = baseAjust * comPct;
+  // ── COMISIÓN: (Base Liq. Aduanal × comPct) ± Diferencia ──
+  // baseLimpia = lo que heredó Liq. Aduanal (Merc+Flete o CIF−Traspaso), sin diferencia.
+  // Se multiplica por el % y se suma/resta la diferencia de pago por separado.
+  const comisionAuto = Math.round((baseLimpia * comPct + (diferencia||0)) * 100) / 100;
   const comEl = document.getElementById('s2_comision_display');
   if(!window.s2_comisionEditada){
     if(comEl) comEl.value = comisionAuto.toFixed(2);
   }
-  const comision = window.s2_comisionEditada ? (parseFloat(comEl?.value)||comisionAuto) : comisionAuto;
+  // Aceptar corrección manual solo si la diferencia es ≤ $0.02 (centavo de redondeo)
+  let comision;
+  if(window.s2_comisionEditada){
+    const _manualCom = parseFloat(comEl?.value)||comisionAuto;
+    const _diffCom = Math.abs(_manualCom - comisionAuto);
+    if(_diffCom <= 0.02){
+      comision = _manualCom;
+    } else {
+      comision = comisionAuto;
+      window.s2_comisionEditada = false;
+      if(comEl) comEl.value = comisionAuto.toFixed(2);
+    }
+  } else {
+    comision = comisionAuto;
+  }
   if(comEl && !comEl._listenerAdded){
     comEl.addEventListener('input',()=>{ window.s2_comisionEditada=true; });
     comEl._listenerAdded=true;
@@ -4523,10 +4555,19 @@ function calcSab2(){
   const mv_auto = esc1L > 0 ? esc1L - landed_sinMV : 0;
 
   // Si el usuario editó MV manualmente, respetar; sino usar el auto
+  // Centavo de corrección: si la diferencia manual vs auto es ≤ $0.01, se acepta.
   const mvInput = document.getElementById('s2_mv_display');
   let mv_used;
   if(mvInput && mvInput.dataset.userEdited === 'true'){
-    mv_used = parseFloat(mvInput.value) || mv_auto;
+    const _manualMV = parseFloat(mvInput.value) || mv_auto;
+    const _diffMV = Math.abs(_manualMV - mv_auto);
+    if(_diffMV <= 0.015){
+      mv_used = _manualMV; // corrección de centavo: OK
+    } else {
+      mv_used = mv_auto; // diferencia grande: ignorar y resetear
+      mvInput.dataset.userEdited = 'false';
+      if(mvInput) mvInput.value = mv_auto !== 0 ? mv_auto.toFixed(2) : '';
+    }
   } else {
     mv_used = mv_auto;
     if(mvInput) mvInput.value = mv_auto !== 0 ? mv_auto.toFixed(2) : '';
@@ -4570,9 +4611,9 @@ function calcSab2(){
             <div class="cif-row"><span class="lbl">FOB</span><span>${fmt(v('s2_fob'))}</span></div>
             <div class="cif-row"><span class="lbl">+ Flete</span><span>${fmt(v('s2_flete'))}</span></div>
           `}
-          <div class="cif-row"><span class="lbl">= Monto Base (Costo+Flete)</span><span>${fmt(montoBase)}</span></div>
-          ${difPago!==0?`<div class="cif-row"><span class="lbl" style="color:var(--orange-l)">${difPago>0?'+ Diferencia de pago (facturado de más)':'− Diferencia de pago (facturado de menos)'}</span><span style="color:var(--orange-l)">${difPago>0?'+':''}${fmt(Math.abs(difPago))}</span></div>`:''}
-          <div class="cif-row tot"><span class="lbl">= Base Ajustada</span><span style="color:var(--orange-l)">${fmt(baseAjust)}</span></div>
+          <div class="cif-row"><span class="lbl">= Base (heredada de Liq. Aduanal)</span><span style="font-weight:600">${fmt(baseLimpia)}</span></div>
+          ${diferencia!==0?`<div class="cif-row"><span class="lbl" style="color:var(--orange-l)">${diferencia>0?"+ Diferencia Sababa (de más)":"− Diferencia Sababa (de menos)"}</span><span style="color:var(--orange-l)">${diferencia>0?"+":" "}${fmt(Math.abs(diferencia))}</span></div>`:""}
+          <div class="cif-row tot"><span class="lbl">= Base Ajustada (Total Pago Sababa)</span><span style="color:var(--orange-l)">${fmt(baseAjust)}</span></div>
         </div>
         ${esc1L>0
           ?`<div class="itbms-note" style="margin-top:10px">
@@ -6248,6 +6289,7 @@ function reabrirEmbarquePendiente(idx){
   _updateEstatusBadge('reabierto');
 
   _showToast('✏️ Embarque ' + d.nro + ' restaurado — verifica, edita y confirma.', 'orange', 5000);
+  setTimeout(function(){ if(typeof _enableAllApplyBtns==='function') _enableAllApplyBtns(); }, 300);
 }
 
 function _clearFormSilent(){
@@ -9069,6 +9111,7 @@ function cargarSesion(input){
       calc();
 
       alert(`✓ Sesión restaurada: ${s.fecha?.slice(0,10)||''}${s.campos?.s1_nro_emb?' · '+s.campos.s1_nro_emb:''}`);
+      setTimeout(function(){ if(typeof _enableAllApplyBtns==='function') _enableAllApplyBtns(); }, 200);
     } catch(err){
       alert('Error al cargar la sesión: '+err.message);
     }
@@ -9291,6 +9334,7 @@ function onInvProvChange(idx, val){
 function acceptSuggest(idx,name){
   invLines[idx].prov=name;
   invLines[idx]._match=provMatch(name);
+  invLines[idx]._userEditedType=true; // usuario eligió manualmente — no pisar con nube
   renderInvLines();
 }
 function calcInvTotals(){
@@ -9660,14 +9704,14 @@ function loadInvFile(input){
     if(totalMerc > 0){
       if(esFOB){
         const fobEl = document.getElementById('s1_fob');
-        if(fobEl && !parseFloat(fobEl.value)){
+        if(fobEl){
           fobEl.value = totalMerc.toFixed(2);
           msg += '\nMercancía (FOB): $'+totalMerc.toFixed(2)+' → s1_fob';
         }
       } else {
         // SIF / CIF / ZL — valor mercancía va directo al campo CIF
         const cifEl = document.getElementById('s1_cif');
-        if(cifEl && !parseFloat(cifEl.value)){
+        if(cifEl){
           cifEl.value = totalMerc.toFixed(2);
           msg += '\nMercancía (CIF/SIF): $'+totalMerc.toFixed(2)+' → s1_cif';
         }
@@ -10274,12 +10318,18 @@ async function cargarSesionNubeIdx(idx){
   if(s.sabTipoCmp) sabTipoCmp=s.sabTipoCmp;
 
   // ── 2. Restaurar campos del formulario ──
+  // REGLA: El usuario manda sobre la nube.
+  // Si un campo tiene dataset.userEdited='true' o dataset.autoSet='false', NO sobreescribir.
   if(s.campos) {
     Object.entries(s.campos).forEach(([id,val])=>{
       try{
         const el=document.getElementById(id);
         if(el && val !== undefined && val !== null) {
-          el.value = val;
+          // Respetar edición manual del usuario: no pisar campos que el usuario haya tocado
+          const userEdited = el.dataset && (el.dataset.userEdited==='true' || el.dataset.autoSet==='false');
+          if(!userEdited){
+            el.value = val;
+          }
         }
       }catch(e){}
     });
@@ -10305,7 +10355,27 @@ async function cargarSesionNubeIdx(idx){
 
   // ── 5. Restaurar snap y líneas de factura ──
   if(s.snap) window._lastSnap=s.snap;
-  if(s.invLines && s.invLines.length){ invLines=[...s.invLines]; renderInvLines(); }
+  if(s.invLines && s.invLines.length){
+    // REGLA: si el usuario ya tiene invLines con tipos editados manualmente
+    // (marcados con _userEditedType=true), preservar esos cambios.
+    const currentEdited = {};
+    (window.invLines||[]).forEach(function(l,i){
+      if(l._userEditedType) currentEdited[l.prov+'_'+i] = l;
+    });
+    const restored = JSON.parse(JSON.stringify(s.invLines));
+    // Si hay ediciones del usuario, mezclar: mantener tipo del usuario
+    if(Object.keys(currentEdited).length){
+      restored.forEach(function(l,i){
+        const key = l.prov+'_'+i;
+        if(currentEdited[key]){
+          l.tipoFac = currentEdited[key].tipoFac;
+          l._userEditedType = true;
+        }
+      });
+    }
+    invLines = restored;
+    renderInvLines();
+  }
 
   // ── 6. Restaurar tendData (merge, sin duplicar) ──
   if(s.tendData && s.tendData.length){
@@ -10355,6 +10425,8 @@ async function cargarSesionNubeIdx(idx){
 
   const nroEmb = s.campos?.s1_nro_emb || s.nro || lista[idx].nombre;
   _showToast('✅ Sesión restaurada: ' + nroEmb, 'green', 3000);
+  // Habilitar botones Aplicar (la sesión tiene datos listos para usar)
+  setTimeout(function(){ if(typeof _enableAllApplyBtns==='function') _enableAllApplyBtns(); }, 200);
 }
 
 async function eliminarSesionNube(nombre, btnEl){
@@ -10850,6 +10922,19 @@ function calcUnicoFull(){
 }
 
 // ── TOAST NOTIFICATION SYSTEM ──
+
+// ── Habilitar todos los botones Aplicar (DOM principal + modal clone) ──
+// Se llama al cargar plantilla, al cargar nube, y al abrir modal.
+function _enableAllApplyBtns(){
+  document.querySelectorAll('#btn-aplicar-cambios, #btn-aplicar-cif, #btn-aplicar-sab').forEach(function(btn){
+    btn.style.opacity='1';
+    btn.style.pointerEvents='auto';
+    btn.style.background='rgba(249,115,22,.85)';
+    btn.style.color='#fff';
+    btn.style.borderColor='#f97316';
+  });
+}
+
 function _showToast(msg, type='green', duration=2500){
   const colors={green:'rgba(63,185,80,.15)',blue:'rgba(88,166,255,.15)',red:'rgba(218,54,51,.15)',orange:'rgba(240,136,62,.15)'};
   const borders={green:'rgba(63,185,80,.4)',blue:'rgba(88,166,255,.4)',red:'rgba(218,54,51,.4)',orange:'rgba(240,136,62,.4)'};
@@ -12002,6 +12087,8 @@ body:not(.sidebar-pinned) #app-wrapper {
           var fd=document.getElementById('unico_fecha-clone')||document.getElementById('unico_fecha');
           if(fd && !fd.value) fd.value = new Date().toISOString().slice(0,10);
         }
+        // Habilitar botones Aplicar en el clone recién creado
+        if(typeof _enableAllApplyBtns==='function') _enableAllApplyBtns();
       }, 60);
     }, 40);
   };
