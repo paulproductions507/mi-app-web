@@ -1299,10 +1299,11 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       <!-- COSTO ORIGINAL vs COSTO INVENTARIO -->
       <div class="r2" style="margin-bottom:8px">
         <div class="field">
-          <label style="font-weight:700;color:var(--green-l)">🏁 Costo Landed (Original)</label>
+          <label style="font-weight:700;color:var(--green-l)">🏁 Costo Landed Costeable</label>
           <input type="number" id="disp_costo_original" readonly
             style="background:var(--bg);font-weight:800;color:var(--green-l);font-size:14px"
-            title="Valor Mercancía + Costo No Mercancía + ITBMS — lo que realmente se pagó">
+            title="Valor Mercancía + Costo No Mercancía (sin ITBMS) — base para costear inventario">
+          <p class="note" style="margin-top:3px">Merc. + No Merc. sin ITBMS</p>
         </div>
         <div class="field">
           <label style="font-weight:700;color:var(--blue-l)">📘 Costo Inventario (Homologado)</label>
@@ -1311,6 +1312,15 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
             title="Costo homologado = Valor Merc. + Arancel + Comisión. Sin ITBMS ni gastos extras. Para costear inventario.">
           <p class="note" style="margin-top:3px">Para costeo de inventario</p>
         </div>
+      </div>
+
+      <!-- COSTO LANDED GLOBAL (incluye ITBMS) -->
+      <div class="field" style="margin-bottom:8px">
+        <label style="font-weight:700;color:var(--muted)">🏁 Costo Landed Global (incluye ITBMS)</label>
+        <input type="number" id="disp_costo_landed_global" readonly
+          style="background:var(--bg);font-weight:800;color:var(--muted);font-size:14px"
+          title="Valor Mercancía + Costo No Mercancía + ITBMS — desembolso total real">
+        <p class="note" style="margin-top:3px">Merc. + No Merc. + ITBMS</p>
       </div>
 
       <!-- DESGLOSE DETALLADO (colapsable) -->
@@ -3206,8 +3216,8 @@ function calc(){
     sdR('disp_valor_merc',   _vmBase);
     sdR('disp_costo_no_merc', sc1_noMerc);
     sdR('disp_itbms_total',  sc1_itbms + itbmsTasaFinal);
-    sdR('disp_costo_original', sc1_landedG); // same as landed global
-    sdR('disp_costo_original', sc1_landedG);
+    sdR('disp_costo_original', sc1_landed1);       // Costeable = Merc + No Merc (sin ITBMS)
+    sdR('disp_costo_landed_global', sc1_landedG);  // Global = Costeable + ITBMS
     // Costo Inventario = Valor Merc + Arancel + Honorarios (sin ITBMS, sin DMCE, sin acarreo)
     var _costoInv = sc1_base + sc1_arancel + (window._soloMode?(window._soloHonorario||0):sc1_hon);
     sdR('disp_costo_inventario', _costoInv);
@@ -4050,9 +4060,9 @@ function _autoFillGastosProveedores(){
   const userGastos = invLines.filter(l => l.tipoFac && l.tipoFac !== 'mercancia' && !l._autoGasto);
 
   const G = []; // nuevos gastos auto
-  const R = n => Math.round(n * 100) / 100; // redondear a 2 decimales
-  const add = (tipoFac, prov, oc, costo) => {
-    if(costo > 0.005) G.push({tipoFac, deptCat:'GASTOS', prov, oc, costo:R(costo), _autoGasto:true});
+  const R = n => Math.round(n * 100) / 100;
+  const add = (tipoFac, prov, oc, costo, numFact='') => {
+    if(costo > 0.005) G.push({tipoFac, deptCat:'GASTOS', prov, oc, costo:R(costo), _autoGasto:true, numFact, nfac:numFact});
   };
 
   const tasa     = sc1.tasa    || 0;
@@ -4781,6 +4791,22 @@ function calcSab2(){
     window._lastSnap.sc3.landed1     = landed;
     window._lastSnap.sc3.noMerc      = noMerc;
     window._lastSnap.sc3.desembolso  = mercHomol + comision + fleteStd + agente;
+    // Actualizar ahorro real con valores manuales corregidos
+    const _sc1desemb = (window._lastSnap.sc1?.base||0)+(window._lastSnap.sc1?.arancel||0)
+                     +(window._lastSnap.sc1?.itbms||0)+(window._lastSnap.sc1?.itbmsTasaFinal||0)
+                     +(window._lastSnap.sc1?.hon||0)+(window._lastSnap.sc1?.tasa||0)
+                     +(window._lastSnap.sc1?.form1||0)+(window._lastSnap.sc1?.noMerc||0)
+                     -((window._lastSnap.sc1?.noMerc||0)-(window._lastSnap.sc1?.arancel||0)-(window._lastSnap.sc1?.hon||0)-(window._lastSnap.sc1?.tasa||0)-(window._lastSnap.sc1?.form1||0)); // simplify
+    const _sc3desemb = (window._lastSnap.sc1?.base||0) + comision + fleteStd + agente;
+    const _ahorroReal = (window._lastSnap.sc1?.landed1||0) + (window._lastSnap.sc1?.itbms||0)
+                      + (window._lastSnap.sc1?.itbmsTasaFinal||0)
+                      - _sc3desemb + (window._lastSnap.sc1?.arancel||0);
+    window._lastSnap.sc3.ahorroNeto = landed > 0
+      ? Math.round(((window._lastSnap.sc1?.landedG||0) - window._lastSnap.sc3.desembolso) * 100) / 100
+      : 0;
+    if(window._lastSnap.sc3.ahorroNeto > 0){
+      window._lastAhorroNeto = window._lastSnap.sc3.ahorroNeto;
+    }
   }
 }
 
@@ -5764,7 +5790,26 @@ async function _pullTendFromCloud(){
       return !byNro && !byTs;
     });
 
-    // 4. La nube manda — reemplazar tendData directamente.
+    // 4. MERGE: preservar embarques locales que aún no llegaron a la nube
+    // La nube puede estar desactualizada si el auto-save aún no completó.
+    // Regla: si un embarque existe en tendData local pero NO en cloudTend, preservarlo.
+    const localOnly = (window.tendData||[]).filter(local => {
+      if(!local.nro && !local.ts) return false;
+      const inCloud = cloudTend.find(c =>
+        (c.nro && local.nro && c.nro.trim().toUpperCase() === local.nro.trim().toUpperCase()) ||
+        (c.ts && local.ts && c.ts === local.ts)
+      );
+      // Solo preservar si fue procesado recientemente (últimos 5 minutos)
+      const reciente = local.ts && (Date.now() - local.ts) < 5 * 60 * 1000;
+      return !inCloud && reciente;
+    });
+
+    if(localOnly.length > 0){
+      console.log(`☁️ ${localOnly.length} embarque(s) locales recientes → preservando hasta sync`);
+      cloudTend = [...cloudTend, ...localOnly];
+    }
+
+    // Reemplazar tendData con la versión fusionada
     tendData = cloudTend;
 
     // 4. Correcciones y migraciones en memoria
@@ -6149,7 +6194,7 @@ function procesarEmbarque(){
 
   // Show processing overlay
   window._procOverlayNro = nro;
-  _showProcessingOverlay(nro, desc, window._lastCIF||0, window._lastAhorroNeto||0, ()=>{
+  _showProcessingOverlay(nro, desc, window._sc1_base||window._lastCIF||0, window._lastAhorroNeto||0, ()=>{
     // After overlay dismissal: clear all and go to splash
     _clearFormSilent();
     volverInicio();
@@ -8453,89 +8498,179 @@ function renderHistFact(){
   var el=els.length ? els[els.length-1] : null;
   if(!el) return;
   var fmt=function(n){ return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
-  var data=tendData.slice().reverse();
+  var fmtK=function(n){ return n>=1000000?'$'+(n/1000000).toFixed(2)+'M':n>=1000?'$'+(n/1000).toFixed(1)+'k':fmt(n); };
+  var data=tendData.slice().sort(function(a,b){ return (b.fecha||'').localeCompare(a.fecha||''); });
   if(!data.length){ el.innerHTML='<div style="text-align:center;padding:32px;color:var(--muted)">Sin embarques registrados.</div>'; return; }
 
-  var html='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">'
-    +'<div style="font-size:14px;font-weight:800;color:var(--text)">&#x1F9FE; Historial de Facturas por Embarque</div>'
+  // ── Agrupar por Año → Mes ──
+  var MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  var grupos = {}; // { '2026': { '05': [d,...], '04': [d,...] }, '2025': {...} }
+  data.forEach(function(d){
+    var f = d.fecha || '2000-01-01';
+    var parts = f.split('-');
+    var anio = parts[0] || '----';
+    var mes  = parts[1] || '01';
+    if(!grupos[anio]) grupos[anio] = {};
+    if(!grupos[anio][mes]) grupos[anio][mes] = [];
+    grupos[anio][mes].push(d);
+  });
+
+  var anios = Object.keys(grupos).sort(function(a,b){ return b.localeCompare(a); }); // más reciente primero
+
+  var html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">'
+    +'<div style="font-size:14px;font-weight:800;color:var(--text)">🧾 Historial de Facturas por Embarque</div>'
     +'<button onclick="renderDashboardKPIs()" style="background:none;border:1px solid var(--border);border-radius:8px;padding:4px 12px;font-size:11px;color:var(--muted);cursor:pointer">&larr; Dashboard</button>'
     +'</div>';
 
-  data.forEach(function(d,i){
-    var idx=tendData.indexOf(d);
-    var invL=(d.snap&&d.snap.invLines)?d.snap.invLines:(d.invLines||[]);
-    var total=invL.reduce(function(s,l){ return s+(l.costo||0); },0);
-    var uid='hf-'+i;
-    var tipoEmb=((d.snap&&d.snap.tipo)||d.tipo||'ZL')==='EXT'?'Importaci&oacute;n':'Zona Libre';
-    var totalStr=invL.length ? fmt(total) : 'Sin facturas';
-
-    var byDept={};
-    invL.forEach(function(l){
-      var k=l.deptCat||l.dept||'Sin Categor&iacute;a';
-      if(!byDept[k]) byDept[k]={lines:[],subtotal:0};
-      byDept[k].lines.push(l);
-      byDept[k].subtotal+=l.costo||0;
+  anios.forEach(function(anio, ai){
+    var mesesAnio = Object.keys(grupos[anio]).sort(function(a,b){ return b.localeCompare(a); });
+    var totalAnio = 0;
+    var countAnio = 0;
+    mesesAnio.forEach(function(mes){
+      grupos[anio][mes].forEach(function(d){
+        var invL=(d.snap&&d.snap.invLines)?d.snap.invLines:(d.invLines||[]);
+        totalAnio += invL.filter(function(l){ return (l.tipoFac||'mercancia')==='mercancia'; }).reduce(function(s,l){ return s+(l.costo||0); }, 0);
+        countAnio++;
+      });
     });
-    var deptKeys=Object.keys(byDept).sort();
 
-    var deptHtml='';
-    if(!deptKeys.length){
-      deptHtml='<div style="padding:12px 14px;color:var(--muted);font-size:11px">Sin facturas registradas en este embarque.</div>';
-    } else {
-      deptKeys.forEach(function(dk,di){
-        var dv=byDept[dk];
-        var duid=uid+'-d'+di;
-        var provHtml='';
-        dv.lines.forEach(function(l){
-          var arRate=l.arPct||l.si||0;
-          var arAmt=l.ar||(l.costo*arRate)||0;
-          provHtml+='<div class="hfact-inv-row" style="flex-direction:column;gap:2px;padding-left:28px">'
-            +'<div style="display:flex;justify-content:space-between;align-items:center">'
-            +'<div><div class="hfact-inv-prov">'+(l.prov||l.dept||'&mdash;')+'</div>'
-            +'<div class="hfact-inv-oc">OC: '+(l.oc||'&mdash;')+(arRate>0?' &middot; Arancel: '+(arRate*100).toFixed(2)+'%':'')+'</div></div>'
-            +'<div style="text-align:right"><div class="hfact-inv-val">'+fmt(l.costo||0)+'</div>'
-            +(arAmt>0?'<div style="font-size:10px;color:#f85149">Ar: '+fmt(arAmt)+'</div>':'')
-            +'</div></div></div>';
+    var anioId = 'hf-anio-'+anio;
+    var anioBodyId = 'hf-anio-body-'+anio;
+    // Año actual abierto por defecto, años anteriores cerrados
+    var anioOpen = (anio === new Date().getFullYear().toString());
+
+    html += '<div style="margin-bottom:10px;border:1px solid var(--border);border-radius:12px;overflow:hidden">';
+    // Header del año
+    html += '<div id="'+anioId+'" onclick="(function(id,bid){var b=document.getElementById(bid);if(!b)return;var o=b.style.display===\'none\';b.style.display=o?\'block\':\'none\';document.getElementById(id).querySelector(\'.hf-anio-chev\').textContent=o?\'▼\':\'▶\';})(\''+anioId+'\',\''+anioBodyId+'\')" '
+      +'style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:var(--s2);cursor:pointer;user-select:none">'
+      +'<div style="display:flex;align-items:center;gap:10px">'
+      +'<span style="font-size:18px">📅</span>'
+      +'<div>'
+      +'<div style="font-size:14px;font-weight:800;color:var(--text)">'+anio+'</div>'
+      +'<div style="font-size:10px;color:var(--muted)">'+countAnio+' embarque'+(countAnio!==1?'s':'')+' · '+mesesAnio.length+' mes'+(mesesAnio.length!==1?'es':'')+'</div>'
+      +'</div></div>'
+      +'<div style="display:flex;align-items:center;gap:10px">'
+      +'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:13px;font-weight:800;color:var(--green-l)">'+fmtK(totalAnio)+'</span>'
+      +'<span class="hf-anio-chev" style="font-size:12px;color:var(--muted)">'+(anioOpen?'▼':'▶')+'</span>'
+      +'</div></div>';
+
+    html += '<div id="'+anioBodyId+'" style="display:'+(anioOpen?'block':'none')+'">';
+
+    mesesAnio.forEach(function(mes, mi){
+      var embsMes = grupos[anio][mes];
+      var totalMes = 0;
+      embsMes.forEach(function(d){
+        var invL=(d.snap&&d.snap.invLines)?d.snap.invLines:(d.invLines||[]);
+        totalMes += invL.filter(function(l){ return (l.tipoFac||'mercancia')==='mercancia'; }).reduce(function(s,l){ return s+(l.costo||0); }, 0);
+      });
+      var mesNombre = MESES[parseInt(mes,10)-1] || mes;
+      var mesId  = 'hf-mes-'+anio+'-'+mes;
+      var mesBodyId = 'hf-mes-body-'+anio+'-'+mes;
+      // Mes actual abierto, meses anteriores cerrados
+      var mesOpen = anioOpen && (mes === String(new Date().getMonth()+1).padStart(2,'0'));
+
+      // Header del mes
+      html += '<div style="border-top:1px solid var(--border)">';
+      html += '<div id="'+mesId+'" onclick="(function(id,bid){var b=document.getElementById(bid);if(!b)return;var o=b.style.display===\'none\';b.style.display=o?\'block\':\'none\';document.getElementById(id).querySelector(\'.hf-mes-chev\').textContent=o?\'▼\':\'▶\';})(\''+mesId+'\',\''+mesBodyId+'\')" '
+        +'style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:rgba(255,255,255,.02);cursor:pointer;user-select:none">'
+        +'<div style="display:flex;align-items:center;gap:8px">'
+        +'<span style="font-size:14px">📦</span>'
+        +'<div>'
+        +'<div style="font-size:12px;font-weight:700;color:var(--text)">'+mesNombre+' '+anio+'</div>'
+        +'<div style="font-size:10px;color:var(--muted)">'+embsMes.length+' embarque'+(embsMes.length!==1?'s':'')+'</div>'
+        +'</div></div>'
+        +'<div style="display:flex;align-items:center;gap:10px">'
+        +'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:var(--blue-l)">'+fmtK(totalMes)+'</span>'
+        +'<span class="hf-mes-chev" style="font-size:11px;color:var(--muted)">'+(mesOpen?'▼':'▶')+'</span>'
+        +'</div></div>';
+
+      html += '<div id="'+mesBodyId+'" style="display:'+(mesOpen?'block':'none')+';background:var(--bg)">';
+
+      // Embarques del mes
+      embsMes.forEach(function(d, ei){
+        var idx = tendData.indexOf(d);
+        var invL=(d.snap&&d.snap.invLines)?d.snap.invLines:(d.invLines||[]);
+        var mercLines = invL.filter(function(l){ return (l.tipoFac||'mercancia')==='mercancia'; });
+        var total = mercLines.reduce(function(s,l){ return s+(l.costo||0); }, 0);
+        var uid = 'hf-'+anio+mes+ei;
+        var tipoEmb = ((d.snap&&d.snap.tipo)||d.tipo||'ZL')==='EXT'?'Importación':'Zona Libre';
+        var totalStr = invL.length ? fmt(total) : 'Sin facturas';
+        var isPend = d.status==='pendiente';
+        var isParcial = d.status==='parcial';
+        var escColor = (d.esc||'').toLowerCase().includes('sababa') ? '#f08632'
+                     : (d.esc||'').toLowerCase().includes('cif') ? 'var(--blue-l)' : 'var(--green-l)';
+
+        // byDept
+        var byDept={};
+        invL.forEach(function(l){
+          var k=l.deptCat||l.dept||'Sin Categoría';
+          if(!byDept[k]) byDept[k]={lines:[],subtotal:0};
+          byDept[k].lines.push(l); byDept[k].subtotal+=l.costo||0;
         });
-        provHtml+='<div style="display:flex;justify-content:space-between;padding:6px 14px 6px 28px;background:rgba(88,166,255,.04);font-size:11px;font-weight:700;border-top:1px solid var(--border)">'
-          +'<span style="color:var(--muted)">Subtotal '+dk+'</span>'
-          +'<span style="color:var(--blue-l)">'+fmt(dv.subtotal)+'</span></div>';
+        var deptKeys=Object.keys(byDept).sort();
 
-        var toggleFn='(function(t){var b=document.getElementById("'+duid+'");if(b){var o=b.style.display==="none";b.style.display=o?"block":"none";t.querySelector(".hf-dc").textContent=o?"&#9660;":"&#9658;";}}).call(this,this)';
-        deptHtml+='<div>'
-          +'<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:rgba(255,255,255,.03);cursor:pointer;border-bottom:1px solid rgba(48,54,61,.3)" onclick="'+toggleFn+'">'
-          +'<div style="display:flex;align-items:center;gap:8px">'
-          +'<span class="hf-dc" style="font-size:10px;color:var(--muted)">&#9658;</span>'
-          +'<span style="font-size:11px;font-weight:700;color:var(--text)">&#x1F4C2; '+dk+'</span>'
-          +'<span style="font-size:10px;color:var(--muted)">'+dv.lines.length+' factura'+(dv.lines.length!==1?'s':'')+'</span>'
+        var deptHtml='';
+        if(!deptKeys.length){
+          deptHtml='<div style="padding:12px 14px;color:var(--muted);font-size:11px">Sin facturas registradas.</div>';
+        } else {
+          deptKeys.forEach(function(dk,di){
+            var dv=byDept[dk]; var duid='hf-d-'+uid+'-'+di;
+            var provHtml='';
+            dv.lines.forEach(function(l){
+              var arRate=l.arPct||l.ar&&l.costo>0?l.ar/l.costo:0;
+              var arAmt=l.ar||0;
+              var isGasto = l.tipoFac && l.tipoFac !== 'mercancia';
+              var gastoColor = isGasto ? 'color:var(--orange-l)' : '';
+              provHtml+='<div class="hfact-inv-row" style="'+gastoColor+'">'
+                +'<div><div class="hfact-inv-prov">'+(l.prov||dk)+'</div>'
+                +'<div class="hfact-inv-oc">OC: '+(l.oc||'—')+(l.numFact||l.nfac?' · Fact: '+(l.numFact||l.nfac):'')+(arRate>0?' · Ar: '+(arRate*100).toFixed(2)+'%':'')+'</div></div>'
+                +'<div style="text-align:right"><div class="hfact-inv-val">'+fmt(l.costo||0)+'</div>'
+                +(arAmt>0?'<div style="font-size:10px;color:#f85149">Ar: '+fmt(arAmt)+'</div>':'')
+                +'</div></div>';
+            });
+            provHtml+='<div style="display:flex;justify-content:space-between;padding:6px 14px 6px 28px;background:rgba(88,166,255,.04);font-size:11px;font-weight:700;border-top:1px solid var(--border)">'
+              +'<span style="color:var(--muted)">Subtotal '+dk+'</span><span style="color:var(--blue-l)">'+fmt(dv.subtotal)+'</span></div>';
+            var toggleFn='(function(t){var b=document.getElementById("'+duid+'");if(b){var o=b.style.display==="none";b.style.display=o?"block":"none";t.querySelector(".hf-dc").textContent=o?"&#9660;":"&#9658;"}}).call(this,this)';
+            deptHtml+='<div>'
+              +'<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:rgba(255,255,255,.03);cursor:pointer;border-bottom:1px solid rgba(48,54,61,.3)" onclick="'+toggleFn+'">'
+              +'<div style="display:flex;align-items:center;gap:8px"><span class="hf-dc" style="font-size:10px;color:var(--muted)">&#9658;</span>'
+              +'<span style="font-size:11px;font-weight:700;color:var(--text)">📂 '+dk+'</span>'
+              +'<span style="font-size:10px;color:var(--muted)">'+dv.lines.length+' factura'+(dv.lines.length!==1?'s':'')+'</span>'
+              +'</div><span style="font-family:\'IBM Plex Mono\',monospace;font-size:11px;font-weight:700;color:var(--text)">'+fmt(dv.subtotal)+'</span></div>'
+              +'<div id="'+duid+'" style="display:none">'+provHtml+'</div>'
+              +'</div>';
+          });
+          deptHtml+='<div style="display:flex;justify-content:space-between;padding:10px 14px;background:rgba(63,185,80,.05);font-weight:700;font-size:12px;border-top:1px solid var(--border)">'
+            +'<span>Total Facturas</span><span style="color:var(--green-l)">'+totalStr+'</span></div>';
+        }
+
+        // Card del embarque
+        html += '<div style="border-top:1px solid rgba(48,54,61,.3)">'
+          +'<div onclick="_toggleHF(\''+uid+'\')" style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;cursor:pointer;transition:background .12s" onmouseover="this.style.background=\'rgba(255,255,255,.03)\'" onmouseout="this.style.background=\'\'">'
+          +'<div>'
+          +'<div style="font-size:10px;font-weight:700;color:var(--orange-l)">'+(d.nro||'—')
+          +(isPend?' <span style="background:rgba(210,153,34,.15);border:1px solid rgba(210,153,34,.4);color:var(--orange-l);font-size:9px;padding:1px 5px;border-radius:4px">PENDIENTE</span>':'')
+          +(isParcial?' <span style="background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);font-size:9px;padding:1px 5px;border-radius:4px">PARCIAL</span>':'')
+          +(d.idFiscal?' · <span style="color:#a371f7;font-size:9px">🧾 '+d.idFiscal+'</span>':'')
           +'</div>'
-          +'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:11px;font-weight:700;color:var(--text)">'+fmt(dv.subtotal)+'</span>'
+          +'<div style="font-size:12px;font-weight:600;color:var(--text);margin-top:1px">'+(d.desc||'Sin descripción')+'</div>'
+          +'<div style="font-size:10px;color:var(--muted);margin-top:1px">'+tipoEmb+' · <span style="color:'+escColor+'">'+d.esc+'</span></div>'
           +'</div>'
-          +'<div id="'+duid+'" style="display:none">'+provHtml+'</div>'
+          +'<div style="text-align:right;flex-shrink:0;margin-left:12px">'
+          +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:13px;font-weight:800;color:var(--green-l)">'+totalStr+'</div>'
+          +'<div style="font-size:10px;color:var(--muted)">'+invL.length+' factura'+(invL.length!==1?'s':'')+'</div>'
+          +'</div></div>'
+          +'<div class="hfact-body" id="'+uid+'">'+deptHtml+'</div>'
           +'</div>';
       });
-      deptHtml+='<div style="display:flex;justify-content:space-between;padding:10px 14px;background:rgba(63,185,80,.05);font-weight:700;font-size:12px;border-top:1px solid var(--border)">'
-        +'<span>Total Facturas</span>'
-        +'<span style="color:var(--green-l)">'+totalStr+'</span>'
-        +'</div>';
-    }
 
-    html+='<div class="hfact-card">'
-      +'<div class="hfact-hdr" onclick="_toggleHF(\''+uid+'\')">'
-      +'<div>'
-      +'<div class="hfact-nro">'+(d.nro||'&mdash;')+' &middot; '+(d.fecha||'&mdash;')+' &middot; '+(d.esc||'&mdash;')+'</div>'
-      +'<div class="hfact-desc">'+(d.desc||'Sin descripci&oacute;n')+'</div>'
-      +'<div style="font-size:10px;color:var(--muted);margin-top:2px">'+tipoEmb+' &middot; '+deptKeys.length+' depto'+(deptKeys.length!==1?'s':'')+'</div>'
-      +'</div>'
-      +'<div style="text-align:right">'
-      +'<div class="hfact-total">'+totalStr+'</div>'
-      +'<div class="hfact-count">'+invL.length+' factura'+(invL.length!==1?'s':'')+'</div>'
-      +'</div>'
-      +'</div>'
-      +'<div class="hfact-body" id="'+uid+'">'+deptHtml+'</div>'
-      +'</div>';
+      html += '</div></div>'; // cierra mesBody + mesContainer
+    });
+
+    html += '</div></div>'; // cierra anioBody + anioContainer
   });
-  el.innerHTML=html;
+
+  el.innerHTML = html;
 }
 function _toggleHF(uid){
   const b=document.getElementById(uid); if(b) b.classList.toggle('open');
@@ -9463,8 +9598,11 @@ function renderInvLines(){
           +'onchange="invLines['+i+'].numFact=this.value;invLines['+i+'].nfac=this.value;" '
           +'oninput="invLines['+i+'].numFact=this.value;invLines['+i+'].nfac=this.value;" '
           +'style="flex:1;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:5px 10px;color:var(--text);font-size:11px;box-sizing:border-box">'
-          +'<button onclick="(function(i){invLines[i].numFact=document.getElementById(\'nfact-gasto-\'+i)?.value||invLines[i].numFact||\'\';;invLines[i].nfac=invLines[i].numFact;var b=this;b.textContent=\'✓\';b.style.background=\'rgba(63,185,80,.3)\';setTimeout(function(){b.textContent=\'💾\';b.style.background=\'rgba(63,185,80,.12)\';},1200);})('+i+')" '
-          +'style="flex-shrink:0;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;white-space:nowrap" title="Guardar N° Factura">💾</button>'
+          +'<button onclick="(function(i){var val=document.getElementById(\'nfact-gasto-\'+i)?.value||invLines[i].numFact||\'\';invLines[i].numFact=val;invLines[i].nfac=val;'
+          // Auto-propagar a líneas del mismo proveedor Sababa
+          +'var prov=(invLines[i].prov||\'\').toUpperCase();if(prov.includes(\'SABABA\')){invLines.forEach(function(l,j){if(j!==i&&(l.prov||\'\').toUpperCase().includes(\'SABABA\')){l.numFact=val;l.nfac=val;var el=document.getElementById(\'nfact-gasto-\'+j);if(el)el.value=val;}});}'
+          +'var b=this;b.textContent=\'✓\';b.style.background=\'rgba(63,185,80,.3)\';setTimeout(function(){b.textContent=\'💾\';b.style.background=\'rgba(63,185,80,.12)\';},1200);})('+i+')" '
+          +'style="flex-shrink:0;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;white-space:nowrap" title="Guardar N° Factura (se propaga a líneas del mismo proveedor)">💾</button>'
           +'</div>'
           +'</div>';
       }).join('');
