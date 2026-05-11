@@ -2081,7 +2081,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
         <span style="font-size:11px;font-weight:700;color:var(--text)">Historial de Embarques Procesados</span>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
-        <button onclick="event.stopPropagation();if(confirm('¿Limpiar todo el historial?')){tendData=[];saveTendData();renderTend();renderTopProvs();updateCmpNroList();_showToast('🗑 Historial limpiado','red',2000);}"
+        <button onclick="event.stopPropagation();if(confirm('¿Limpiar todo el historial?')){tendData=[];window._deletedEmbarques=new Set();saveTendData();renderTend();renderTopProvs();updateCmpNroList();_showToast('🗑 Historial limpiado','red',2000);}"
           style="background:none;border:1px solid rgba(218,54,51,.3);color:var(--red-l);border-radius:5px;padding:2px 8px;font-size:10px;cursor:pointer">🗑</button>
         <span class="hist-chev" style="font-size:11px;color:var(--muted)">▶</span>
       </div>
@@ -5587,7 +5587,11 @@ let tendData=[];
 // Un embarque procesado es inmutable: no se edita desde ningún
 // dispositivo. Para corregir: eliminar de Supabase y reprocesar.
 // ══════════════════════════════════════════════════════════════
-const _TEND_MASTER_KEY = '_TEND_MASTER';
+const _TEND_MASTER_KEY  = '_TEND_MASTER';
+const _DELETED_LIST_KEY = '_TEND_DELETED'; // NROs/TS eliminados — lista negra permanente
+
+// Lista de embarques eliminados (en memoria, se sincroniza con nube)
+if(!window._deletedEmbarques) window._deletedEmbarques = new Set();
 
 function loadTendData(){
   // No carga localStorage. tendData arranca vacío.
@@ -5618,7 +5622,11 @@ async function _syncTendToCloud(){
   try {
     const payload = {
       nombre: _TEND_MASTER_KEY,
-      datos: JSON.stringify({ tendData: tendData||[], updated_at: new Date().toISOString() }),
+      datos: JSON.stringify({
+        tendData:   tendData||[],
+        deleted:    Array.from(window._deletedEmbarques||[]),  // lista negra permanente
+        updated_at: new Date().toISOString()
+      }),
       updated_at: new Date().toISOString()
     };
     await _sb.from('simulador_sesiones').upsert(payload, { onConflict: 'nombre' });
@@ -5637,11 +5645,17 @@ async function _pullTendFromCloud(){
       .maybeSingle();
 
     let cloudTend = [];
+    let deletedSet = new Set(window._deletedEmbarques || []);
 
     if(!masterErr && masterData){
       try {
         const parsed = JSON.parse(masterData.datos||'{}');
         cloudTend = Array.isArray(parsed.tendData) ? parsed.tendData : [];
+        // Restaurar la lista negra guardada en el maestro
+        if(Array.isArray(parsed.deleted)){
+          parsed.deleted.forEach(k => deletedSet.add(String(k)));
+        }
+        window._deletedEmbarques = deletedSet;
       } catch(e){ cloudTend = []; }
     }
 
@@ -5684,7 +5698,9 @@ async function _pullTendFromCloud(){
               (c.nro && rec.nro && c.nro.trim().toUpperCase() === rec.nro.trim().toUpperCase()) ||
               (c.ts && rec.ts && c.ts === rec.ts)
             );
-            if(!existe){ cloudTend.push(rec); sesionesNuevas++; }
+            // No resucitar registros que el usuario eliminó explícitamente
+            const isDeleted = deletedSet.has(String(rec.nro||'')) || deletedSet.has(String(rec.ts||''));
+            if(!existe && !isDeleted){ cloudTend.push(rec); sesionesNuevas++; }
           });
         } catch(e){}
       });
@@ -6761,8 +6777,15 @@ function registrarAhorro(){
 }
 function deleteTend(idx){
   if(!confirm('¿Eliminar este registro?')) return;
+  const d = tendData[idx];
+  if(d){
+    // Agregar a lista negra permanente para que no resurja de sesiones individuales
+    if(!window._deletedEmbarques) window._deletedEmbarques = new Set();
+    if(d.nro) window._deletedEmbarques.add(String(d.nro));
+    if(d.ts)  window._deletedEmbarques.add(String(d.ts));
+  }
   tendData.splice(idx,1);
-  saveTendData();
+  saveTendData(); // sincroniza maestro + lista negra a Supabase
   renderTend();
   renderTopProvs();
   updateCmpNroList();
@@ -11274,8 +11297,12 @@ function _modCompDeleteEmb(idx) {
   if (!d) return;
   const nro = d.nro || '—';
   if (!confirm('¿Eliminar el embarque ' + nro + ' del historial?\nEsta acción no se puede deshacer.')) return;
+  // Agregar a lista negra permanente
+  if(!window._deletedEmbarques) window._deletedEmbarques = new Set();
+  if(d.nro) window._deletedEmbarques.add(String(d.nro));
+  if(d.ts)  window._deletedEmbarques.add(String(d.ts));
   tendData.splice(idx, 1);
-  saveTendData();
+  saveTendData(); // sincroniza maestro + lista negra a Supabase
   _renderModComp();
   // Clear result panel
   const res = document.getElementById('_modCompResult');
