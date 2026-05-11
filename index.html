@@ -4518,10 +4518,10 @@ function calcSab2(){
   }
   const fleteStd = v('s2_flete_sab') || fleteMain;
 
-  // ── COMISIÓN: (Base Liq. Aduanal × comPct) ± Diferencia ──
-  // baseLimpia = lo que heredó Liq. Aduanal (Merc+Flete o CIF−Traspaso), sin diferencia.
-  // Se multiplica por el % y se suma/resta la diferencia de pago por separado.
-  const comisionAuto = Math.round((baseLimpia * comPct + (diferencia||0)) * 100) / 100;
+  // ── COMISIÓN: 10% × Total Factura Sababa (= baseAjust) ──
+  // La comisión Sababa se calcula sobre el monto total que Sababa factura,
+  // que incluye la diferencia. Tolerancia ±$0.02 para corrección manual de centavo.
+  const comisionAuto = Math.round(baseAjust * comPct * 100) / 100;
   const comEl = document.getElementById('s2_comision_display');
   if(!window.s2_comisionEditada){
     if(comEl) comEl.value = comisionAuto.toFixed(2);
@@ -5708,7 +5708,15 @@ async function _pullTendFromCloud(){
 
     if(!cloudTend.length) return false;
 
-    // 3. La nube manda — reemplazar tendData directamente.
+    // 3. Filtrar también el maestro contra la lista negra
+    // (cubre el caso donde el maestro aún tiene el registro antes de sync)
+    cloudTend = cloudTend.filter(d => {
+      const byNro = d.nro && deletedSet.has(String(d.nro));
+      const byTs  = d.ts  && deletedSet.has(String(d.ts));
+      return !byNro && !byTs;
+    });
+
+    // 4. La nube manda — reemplazar tendData directamente.
     tendData = cloudTend;
 
     // 4. Correcciones y migraciones en memoria
@@ -7235,6 +7243,13 @@ function _buildHistProvRows(){
     lines.forEach(function(l){
       if((l.tipoFac||'mercancia')!=='mercancia') return;
       var prov=(l.prov||l.dept||'').trim(); if(!prov) return;
+      // Para embarques Sababa: aplicar nombre SI si existe en el directorio
+      if(isHomol && typeof _PROV_SI !== 'undefined'){
+        var provKey = prov.toUpperCase();
+        // Buscar en _PROV_SI por nombre exacto (case-insensitive)
+        var siMatch = Object.keys(_PROV_SI).find(function(k){ return k.toUpperCase() === provKey; });
+        if(siMatch) prov = _PROV_SI[siMatch];
+      }
       rows.push({prov,oc:l.oc||'—',numFact:l.numFact||l.nroFact||l.factura||'—',
         depto:(l.deptCat||l.dept||'Sin categoría').toUpperCase(),
         piezas:l.piezas||0,bultos:l.bultos||0,costo:l.costo||0,
@@ -10628,10 +10643,16 @@ function renderTopProvs(){
     const lines = d.snap?.invLines || d.invLines ||
                   (d.snap?.snap?.invLines) || [];
     const tipoEmb = (d.snap?.tipo || d.tipo || 'ZL');
+    const isEmbSab = (d.esc||'').toLowerCase().includes('sababa');
     lines.forEach(l=>{
-      const prov = (l.prov||l.dept||'').trim();
+      let prov = (l.prov||l.dept||'').trim();
       if(!prov || !l.costo) return;
       if((l.tipoFac||'mercancia') !== 'mercancia') return;
+      // Aplicar nombre SI para embarques Sababa
+      if(isEmbSab && typeof _PROV_SI !== 'undefined'){
+        const k = Object.keys(_PROV_SI).find(k => k.toUpperCase() === prov.toUpperCase());
+        if(k) prov = _PROV_SI[k];
+      }
       provTotals[prov] = (provTotals[prov]||0) + (l.costo||0);
       provCount[prov]  = (provCount[prov]||0) + 1;
       if(!provTipos[prov]) provTipos[prov] = tipoEmb;
