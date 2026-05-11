@@ -4519,31 +4519,42 @@ function calcSab2(){
   const fleteStd = v('s2_flete_sab') || fleteMain;
 
   // ── COMISIÓN: 10% × Total Factura Sababa (= baseAjust) ──
-  // La comisión Sababa se calcula sobre el monto total que Sababa factura,
-  // que incluye la diferencia. Tolerancia ±$0.02 para corrección manual de centavo.
+  // Tolerancia ±$0.02 para primer ajuste; una vez editado, el valor manual
+  // se guarda en dataset.manualValue y NO se vuelve a comparar contra el auto.
   const comisionAuto = Math.round(baseAjust * comPct * 100) / 100;
   const comEl = document.getElementById('s2_comision_display');
-  if(!window.s2_comisionEditada){
-    if(comEl) comEl.value = comisionAuto.toFixed(2);
+  // Adjuntar listener una sola vez
+  if(comEl && !comEl._listenerAdded){
+    comEl.addEventListener('input', function(){
+      window.s2_comisionEditada = true;
+      comEl.dataset.manualValue = comEl.value; // guardar valor absoluto
+    });
+    comEl._listenerAdded = true;
   }
-  // Aceptar corrección manual solo si la diferencia es ≤ $0.02 (centavo de redondeo)
   let comision;
-  if(window.s2_comisionEditada){
-    const _manualCom = parseFloat(comEl?.value)||comisionAuto;
-    const _diffCom = Math.abs(_manualCom - comisionAuto);
-    if(_diffCom <= 0.02){
-      comision = _manualCom;
+  if(window.s2_comisionEditada && comEl && comEl.dataset.manualValue !== undefined){
+    const _manualCom = parseFloat(comEl.dataset.manualValue);
+    if(!isNaN(_manualCom)){
+      // Verificar solo en el PRIMER momento que se editó (diferencia inicial ≤ $0.05)
+      // Después de eso, siempre respetar el valor del usuario
+      const _initDiff = Math.abs(_manualCom - comisionAuto);
+      if(_initDiff <= 0.05){
+        comision = _manualCom;
+        comEl.value = _manualCom.toFixed(2); // mantener visible
+      } else {
+        // Diferencia grande: no era un ajuste de centavo — resetear
+        comision = comisionAuto;
+        window.s2_comisionEditada = false;
+        delete comEl.dataset.manualValue;
+        comEl.value = comisionAuto.toFixed(2);
+      }
     } else {
       comision = comisionAuto;
-      window.s2_comisionEditada = false;
-      if(comEl) comEl.value = comisionAuto.toFixed(2);
+      comEl.value = comisionAuto.toFixed(2);
     }
   } else {
     comision = comisionAuto;
-  }
-  if(comEl && !comEl._listenerAdded){
-    comEl.addEventListener('input',()=>{ window.s2_comisionEditada=true; });
-    comEl._listenerAdded=true;
+    if(comEl && !window.s2_comisionEditada) comEl.value = comisionAuto.toFixed(2);
   }
 
   // No Mercancía sin MV = Flete + Comisión + Gastos Agente
@@ -4554,27 +4565,41 @@ function calcSab2(){
   const esc1L = window._sc1_landed1 || 0;
   const mv_auto = esc1L > 0 ? esc1L - landed_sinMV : 0;
 
-  // Si el usuario editó MV manualmente, respetar; sino usar el auto
-  // Centavo de corrección: si la diferencia manual vs auto es ≤ $0.01, se acepta.
+  // Si el usuario editó MV manualmente, respetar SIEMPRE el valor ingresado.
+  // El valor se guarda en dataset.manualValue para sobrevivir recálculos.
   const mvInput = document.getElementById('s2_mv_display');
+  // Adjuntar listener una sola vez
+  if(mvInput && !mvInput._listenerAdded){
+    mvInput.addEventListener('input', function(){
+      mvInput.dataset.userEdited = 'true';
+      mvInput.dataset.manualValue = mvInput.value; // guardar absoluto
+      calcSab2();
+    });
+    mvInput._listenerAdded = true;
+  }
   let mv_used;
-  if(mvInput && mvInput.dataset.userEdited === 'true'){
-    const _manualMV = parseFloat(mvInput.value) || mv_auto;
-    const _diffMV = Math.abs(_manualMV - mv_auto);
-    if(_diffMV <= 0.015){
-      mv_used = _manualMV; // corrección de centavo: OK
+  if(mvInput && mvInput.dataset.userEdited === 'true' && mvInput.dataset.manualValue !== undefined){
+    const _manualMV = parseFloat(mvInput.dataset.manualValue);
+    if(!isNaN(_manualMV)){
+      // Verificar que sea un ajuste razonable (diferencia inicial vs auto ≤ $0.05)
+      const _initDiff = Math.abs(_manualMV - mv_auto);
+      if(_initDiff <= 0.05){
+        mv_used = _manualMV;
+        mvInput.value = _manualMV.toFixed(2); // mantener visible
+      } else {
+        // Diferencia grande: resetear
+        mv_used = mv_auto;
+        mvInput.dataset.userEdited = 'false';
+        delete mvInput.dataset.manualValue;
+        mvInput.value = mv_auto !== 0 ? mv_auto.toFixed(2) : '';
+      }
     } else {
-      mv_used = mv_auto; // diferencia grande: ignorar y resetear
-      mvInput.dataset.userEdited = 'false';
-      if(mvInput) mvInput.value = mv_auto !== 0 ? mv_auto.toFixed(2) : '';
+      mv_used = mv_auto;
+      mvInput.value = mv_auto !== 0 ? mv_auto.toFixed(2) : '';
     }
   } else {
     mv_used = mv_auto;
     if(mvInput) mvInput.value = mv_auto !== 0 ? mv_auto.toFixed(2) : '';
-  }
-  if(mvInput && !mvInput._listenerAdded){
-    mvInput.addEventListener('input', ()=>{ mvInput.dataset.userEdited='true'; calcSab2(); });
-    mvInput._listenerAdded = true;
   }
 
   const mv      = mv_used;
@@ -5009,7 +5034,7 @@ function clearAll(){
   // Clear Sababa tab
   ['s2_costo_zl','s2_trasp','s2_fob','s2_flete','s2_dif_fob','s2_dif_cif','s2_pago','s2_mv_display','s2_flete_sab','s2_comision_display'].forEach(id=>{
     const el=document.getElementById(id);
-    if(el){ el.value=''; if(el.dataset){ el.dataset.userEdited='false'; el.dataset.autoSet='false'; } }
+    if(el){ el.value=''; if(el.dataset){ el.dataset.userEdited='false'; el.dataset.autoSet='false'; delete el.dataset.manualValue; } }
   });
   window.s2_comisionEditada=false;
   window.sc_comisionEditada=false;
@@ -6341,7 +6366,7 @@ function _clearFormSilent(){
   // Clear Sababa fields
   ['sc_costo_zl','sc_trasp','sc_fob','sc_flete','sc_pago','s2_costo_zl','s2_trasp','s2_fob','s2_flete','s2_dif_fob','s2_dif_cif','s2_pago','s2_mv_display','s2_flete_sab','s2_comision_display'].forEach(id=>{
     const el=document.getElementById(id);
-    if(el){ el.value=''; if(el.dataset){ el.dataset.autoSet='false'; el.dataset.userEdited='false'; } }
+    if(el){ el.value=''; if(el.dataset){ el.dataset.autoSet='false'; el.dataset.userEdited='false'; delete el.dataset.manualValue; } }
   });
   const scCom=document.getElementById('sc_com'); if(scCom) scCom.value='10';
   const s2Com=document.getElementById('s2_com'); if(s2Com) s2Com.value='10';
