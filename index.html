@@ -1343,7 +1343,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
 
       <!-- BLOQUE SOLO MODE — campos extras cuando se activa el check -->
       <div id="blk-solo-extra" style="display:none;background:rgba(163,113,247,.05);border:1px solid rgba(163,113,247,.2);border-radius:8px;padding:12px 14px;margin-bottom:12px">
-        <div style="font-size:10px;font-weight:700;color:#a371f7;letter-spacing:.07em;text-transform:uppercase;margin-bottom:10px">🔒 Modo Único — Desglose de Honorarios Corredor</div>
+        <div style="font-size:10px;font-weight:700;color:#a371f7;letter-spacing:.07em;text-transform:uppercase;margin-bottom:10px">🔒 Modo Único — Honorarios del Corredor</div>
 
         <!-- Selección corredor -->
         <div class="field">
@@ -1359,39 +1359,43 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
           <input type="text" id="solo_nombre" placeholder="Ej: Agencia García & Asociados" oninput="calcSoloExtra()">
         </div>
 
-        <!-- Honorarios -->
-        <div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:6px;margin-top:4px">Honorarios del Corredor</div>
+        <!-- Honorarios base -->
+        <div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:6px;margin-top:4px">Honorario Base (% sobre CIF)</div>
         <div class="r2">
           <div class="field">
             <label>Factor % (sobre CIF)</label>
             <input type="number" id="solo_hon_pct" value="1" step="0.01" min="0" oninput="calcSoloExtra()" style="border-color:rgba(163,113,247,.4)">
           </div>
           <div class="field">
-            <label>Honorario Calculado (USD)</label>
+            <label>Honorario Base Calculado (USD)</label>
             <input type="number" id="solo_hon_calc" readonly style="background:var(--bg);color:#a371f7;font-weight:700">
           </div>
         </div>
 
-        <!-- Otros Servicios -->
-        <div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:6px;margin-top:4px">Otros Servicios / Gastos del Corredor</div>
-        <div class="r2">
+        <!-- Otros gastos del corredor -->
+        <div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:6px;margin-top:4px">Otros Gastos del Corredor (para completar factura real)</div>
+        <div class="r3">
           <div class="field">
-            <label>Otro Servicio 1 (USD)</label>
-            <input type="number" id="solo_otros1" value="0" step="0.01" placeholder="0.00" oninput="calcSoloExtra()">
+            <label>Gasto 1 (USD)</label>
+            <input type="number" id="solo_otros1" value="0" step="0.01" placeholder="0.00" oninput="calcSoloExtra()" style="border-color:rgba(163,113,247,.3)">
           </div>
           <div class="field">
-            <label>Otro Servicio 2 (USD)</label>
-            <input type="number" id="solo_otros2" value="0" step="0.01" placeholder="0.00" oninput="calcSoloExtra()">
+            <label>Gasto 2 (USD)</label>
+            <input type="number" id="solo_otros2" value="0" step="0.01" placeholder="0.00" oninput="calcSoloExtra()" style="border-color:rgba(163,113,247,.3)">
+          </div>
+          <div class="field">
+            <label>Gasto 3 (USD)</label>
+            <input type="number" id="solo_otros3" value="0" step="0.01" placeholder="0.00" oninput="calcSoloExtra()" style="border-color:rgba(163,113,247,.3)">
           </div>
         </div>
 
         <!-- Total factura corredor -->
         <div class="field" style="margin-top:4px">
-          <label style="font-weight:700;color:#a371f7">Total Factura Corredor (USD)</label>
+          <label style="font-weight:700;color:#a371f7">Total Factura Corredor (USD) — Honorario Base + Gastos</label>
           <input type="number" id="solo_total_corredor" readonly style="background:var(--bg);color:#a371f7;font-weight:800;border-color:rgba(163,113,247,.5);font-size:14px">
         </div>
 
-        <p class="note" style="margin-top:6px;color:rgba(163,113,247,.7)">⚠️ En Modo Único: Acarreo, DMCE ($60) y honorarios automáticos del sistema quedan excluidos del cálculo. Solo permanece flete, impuestos y los honorarios aquí definidos.</p>
+        <p class="note" style="margin-top:6px;color:rgba(163,113,247,.7)">⚠️ En Modo Único: Acarreo, DMCE y honorarios automáticos quedan excluidos. El ITBMS se calcula sobre CIF (+ arancel si aplica). El Total Factura del corredor reemplaza los honorarios del escenario regular.</p>
       </div>
 
       <div id="blk-solo-comp">
@@ -1419,7 +1423,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
     <button class="btn btn-ghost" style="flex:1;background:rgba(63,185,80,.08);border-color:rgba(63,185,80,.25);color:var(--green-l)" onclick="_startProgress();procesarEmbarque()">
       ✅ Marcar como Procesado
     </button>
-    <button id="btn-aplicar-cambios" class="btn" style="flex:1;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.25);color:#f97316;opacity:.45;pointer-events:none;transition:all .25s" onclick="calc();_showToast('✅ Cambios aplicados','green',1500)">✓ Aplicar</button>
+    <button id="btn-aplicar-cambios" class="btn" style="flex:1;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.25);color:#f97316;opacity:.45;pointer-events:none;transition:all .25s" onclick="calc();if(typeof syncSC3fromSC1==='function')syncSC3fromSC1();setTimeout(function(){if(typeof calcSab2==='function')calcSab2();},80);_showToast('✅ Cambios aplicados','green',1500)">✓ Aplicar</button>
     <button class="btn btn-green" style="display:none;flex:2" onclick="_startProgress();calcAndShow()">⚡ Calcular — Ver Dashboard →</button>
   </div>
 
@@ -1601,7 +1605,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
         <input type="number" id="sc_costo_zl" readonly style="background:var(--bg);color:var(--blue-l);font-weight:700">
       </div>
       <div style="display:flex;gap:8px;margin-top:12px">
-        <button id="btn-aplicar-cif" class="btn" style="flex:1;background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);color:var(--blue-l);opacity:.45;pointer-events:none;transition:all .25s" onclick="calc();_showToast('✅ Cambios aplicados','green',1500)">✓ Aplicar</button>
+        <button id="btn-aplicar-cif" class="btn" style="flex:1;background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);color:var(--blue-l);opacity:.45;pointer-events:none;transition:all .25s" onclick="calc();if(typeof syncSC3fromSC1==='function')syncSC3fromSC1();setTimeout(function(){if(typeof calcSab2==='function')calcSab2();},80);_showToast('✅ Cambios aplicados','green',1500)">✓ Aplicar</button>
         <button class="btn btn-blue" style="flex:2" onclick="calcAndShow('cifexp')">⚡ Calcular — Ver Dashboard →</button>
       </div>
     </div>
@@ -2755,25 +2759,32 @@ function calcSoloExtra(){
   // Show/hide nombre field
   const nf = document.getElementById('solo_nombre_field');
   if(nf) nf.style.display = corredor==='custom'?'block':'none';
-  // Set default pct based on corredor
+  // Default % por corredor:
+  // CIF Express → 3% (su tarifa plana)
+  // Sababa      → 1% (su honorario base; los otros gastos se suman aparte)
+  // Custom      → 1% (neutro)
   const honPctEl = document.getElementById('solo_hon_pct');
-  if(honPctEl && corredor==='cifexp' && !honPctEl._userEdited) honPctEl.value='3';
-  if(honPctEl && corredor==='sababa' && !honPctEl._userEdited) honPctEl.value='10';
+  if(honPctEl && !honPctEl._userEdited){
+    if(corredor==='cifexp')  honPctEl.value='3';
+    else if(corredor==='sababa') honPctEl.value='1';
+    else honPctEl.value='1';
+  }
   honPctEl.addEventListener('input',()=>{ honPctEl._userEdited=true; }, {once:true});
 
   const CIF = parseFloat(document.getElementById('s1_cif')?.value)||0;
   const honPct = (parseFloat(document.getElementById('solo_hon_pct')?.value)||1)/100;
   const otros1 = parseFloat(document.getElementById('solo_otros1')?.value)||0;
   const otros2 = parseFloat(document.getElementById('solo_otros2')?.value)||0;
+  const otros3 = parseFloat(document.getElementById('solo_otros3')?.value)||0;
   const hon = CIF * honPct;
-  const total = hon + otros1 + otros2;
+  const total = hon + otros1 + otros2 + otros3;
 
   const honEl = document.getElementById('solo_hon_calc');
   if(honEl) honEl.value = hon>0?hon.toFixed(2):'';
   const totEl = document.getElementById('solo_total_corredor');
   if(totEl) totEl.value = total>0?total.toFixed(2):'';
 
-  // Store for calc() to use
+  // Store for calc() to use as sc1_hon
   window._soloHonorario = total;
   calc();
 }
@@ -8959,7 +8970,8 @@ function guardarSesion(){
     'sc_costo_zl','sc_trasp','sc_fob','sc_flete','sc_com','sc_pago',
     'sc_flete_sab','sc_origen_sab','sc_comision_display','sc2_hon_ng',
     's2_costo_zl','s2_trasp','s2_fob','s2_flete','s2_dif_fob','s2_dif_cif','s2_pago','s2_com',
-    's2_flete_sab','s2_agente'];
+    's2_flete_sab','s2_agente',
+    'solo_hon_pct','solo_otros1','solo_otros2','solo_otros3','solo_nombre'];
 
   const sesion={
     version:'1.0',
@@ -9512,7 +9524,9 @@ function loadInvFile(input){
     // ── Detectar columnas por nombre ──
     const tipoCol    =header.findIndex(h=>h==='TIPO'||h.includes('TIPO'));
     const rubroCol   =header.findIndex(h=>h.includes('RUBRO')||h.includes('DEPARTAMENTO')||h.includes('DEPT'));
-    const montoCol   =header.findIndex(h=>h.includes('MONTO')||h.includes('CIF')||h.includes('FOB'));
+    // TOTAL PAGO tiene prioridad sobre MONTO/CIF/FOB como columna de valor
+    const totalPagoCol=header.findIndex(h=>h.includes('TOTAL')&&h.includes('PAGO'));
+    const montoCol   =totalPagoCol>=0 ? totalPagoCol : header.findIndex(h=>h.includes('MONTO')||h.includes('CIF')||h.includes('FOB'));
     const nfacCol    =header.findIndex(h=>h.includes('FACTURA')||h.includes('INVOICE')||h.includes('FACT'));
     const ocCol      =header.findIndex(h=>h.includes('ORDEN')||h.includes('OC')||h.includes('PURCHASE'));
     const bultosCol  =header.findIndex(h=>h.includes('BULTO')||h.includes('CAJA')||h.includes('CARTON'));
@@ -9616,55 +9630,168 @@ function loadInvFile(input){
       if(b){ b.style.opacity='1'; b.style.pointerEvents='auto'; b.style.background='rgba(249,115,22,.85)'; b.style.color='#fff'; b.style.borderColor='#f97316'; }
     });
 
+    // ════════════════════════════════════════════════════════════
+    // POST-PARSE: Mapeo automático completo — secuencia de costeo
+    // Regla: Mercancía → campo principal → Flete → Seguro auto →
+    //        Gastos Origen → Diferencia → Sababa (domino completo)
+    // Todo aplica al primer upload, sin importar config del embarque
+    // ════════════════════════════════════════════════════════════
+
     const totalBultos   = invLines.reduce((s,l)=>s+(l.bultos||0),0);
     const totalTraspaso = invLines.reduce((s,l)=>s+(l.traspaso||0),0);
     const totalMerc     = invLines.filter(l=>(l.tipoFac||'mercancia')==='mercancia').reduce((s,l)=>s+(l.costo||0),0);
 
-    // Si el flete vino como línea de servicio (tipoFac=flete) en vez de fila legacy, tomarlo de ahí
+    // Si el flete vino como línea de servicio (tipoFac=flete), tomarlo de ahí
     if(!fleteDetectado){
       fleteDetectado = invLines.filter(l=>l.tipoFac==='flete').reduce((s,l)=>s+(l.costo||0),0);
-    }
-
-    // ── Mapear Gastos Origen/Destino (tipoFac=acarreo) al campo s1_agente ──
-    const gastosOrigenDetectado = invLines.filter(l=>l.tipoFac==='acarreo').reduce((s,l)=>s+(l.costo||0),0);
-    if(gastosOrigenDetectado>0){
-      const agEl = document.getElementById('s1_agente');
-      if(agEl){ agEl.value=gastosOrigenDetectado.toFixed(2); if(typeof mirrorAgente==='function') mirrorAgente(agEl.value); }
-      msg += '\nGastos Origen/Destino: $'+gastosOrigenDetectado.toFixed(2)+' aplicado.';
     }
 
     let msg = invLines.length + ' facturas cargadas.';
     if(totalBultos>0)   msg += '\nBultos: '+totalBultos;
     if(totalTraspaso>0) msg += '\nTraspaso: $'+totalTraspaso.toFixed(2)+' aplicado.';
 
-    // ── Aplicar FLETE ──
-    if(fleteDetectado>0){
+    // ── PASO 1: Determinar el término activo ──
+    // Se lee la variable global `termino` si existe; si el embarque no está
+    // configurado aún, se asume CIF (el más común en ZL) como default seguro.
+    const terminoActual = (typeof termino !== 'undefined' && termino) ? termino : 'CIF';
+    const esFOB = terminoActual === 'FOB';
+
+    // ── PASO 2: Mercancía → campo principal de Liquidación Aduanal ──
+    if(totalMerc > 0){
+      if(esFOB){
+        const fobEl = document.getElementById('s1_fob');
+        if(fobEl && !parseFloat(fobEl.value)){
+          fobEl.value = totalMerc.toFixed(2);
+          msg += '\nMercancía (FOB): $'+totalMerc.toFixed(2)+' → s1_fob';
+        }
+      } else {
+        // SIF / CIF / ZL — valor mercancía va directo al campo CIF
+        const cifEl = document.getElementById('s1_cif');
+        if(cifEl && !parseFloat(cifEl.value)){
+          cifEl.value = totalMerc.toFixed(2);
+          msg += '\nMercancía (CIF/SIF): $'+totalMerc.toFixed(2)+' → s1_cif';
+        }
+      }
+    }
+
+    // ── PASO 3: Flete → campo flete de Liquidación Aduanal ──
+    if(fleteDetectado > 0){
       const flEl = document.getElementById('s1_flete_fob');
-      if(flEl){ flEl.value=fleteDetectado.toFixed(2); calcFOB(); }
+      if(flEl){ flEl.value = fleteDetectado.toFixed(2); }
+      // Espejo a Sababa flete
       const sc3Fl = document.getElementById('sc_flete_sab');
-      if(sc3Fl && !parseFloat(sc3Fl.value)) sc3Fl.value=fleteDetectado.toFixed(2);
+      if(sc3Fl && !parseFloat(sc3Fl.value)) sc3Fl.value = fleteDetectado.toFixed(2);
+      const s2FlEl = document.getElementById('s2_flete');
+      if(s2FlEl && s2FlEl.dataset.autoSet !== 'false'){
+        s2FlEl.value = fleteDetectado.toFixed(2);
+        s2FlEl.dataset.autoSet = 'true';
+      }
       msg += '\nFLETE: $'+fleteDetectado.toFixed(2)+' aplicado.';
     }
-    if(seguroDetectado>0) msg += '\nSeguro: $'+seguroDetectado.toFixed(2);
 
-    // ── Aplicar PAGO_REALIZADO → diferencia automática ──
-    if(pagoRealizadoDetectado>0){
-      // Base = Mercancía + Flete (Costo y Flete = CIF para Sababa)
-      const baseParaDif = totalMerc + fleteDetectado;
-      const diferencia  = Math.round((baseParaDif - pagoRealizadoDetectado)*100)/100;
-
-      const difEl = document.getElementById('s1_dif_pago');
-      if(difEl){ difEl.value=diferencia.toFixed(2); if(typeof syncDifPagoSC3==='function') syncDifPagoSC3(); }
-      const difSabEl = document.getElementById('sc_dif_pago') || document.getElementById('s2_dif_pago');
-      if(difSabEl) difSabEl.value = diferencia.toFixed(2);
-
-      msg += '\n\nPAGO REALIZADO: $'+pagoRealizadoDetectado.toFixed(2);
-      msg += '\nMercancia + Flete: $'+baseParaDif.toFixed(2);
-      msg += '\nDiferencia calculada: $'+diferencia.toFixed(2)+' → aplicada automaticamente.';
+    // ── PASO 4: Seguro — siempre 1% sobre mercancía (se auto-calcula vía calcFOB/calc) ──
+    // No se escribe manualmente; calcFOB() y calc() lo derivan de FOB o CIF
+    // Si es FOB, llamar calcFOB para derivar seguro y CIF calculado
+    if(esFOB){
+      if(typeof calcFOB === 'function') calcFOB();
     }
 
+    // ── PASO 5: Gastos Origen/Destino (acarreo) → s1_agente ──
+    const gastosOrigenDetectado = invLines.filter(l=>l.tipoFac==='acarreo').reduce((s,l)=>s+(l.costo||0),0);
+    if(gastosOrigenDetectado > 0){
+      const agEl = document.getElementById('s1_agente');
+      if(agEl){ agEl.value = gastosOrigenDetectado.toFixed(2); if(typeof mirrorAgente==='function') mirrorAgente(agEl.value); }
+      msg += '\nGastos Origen/Destino: $'+gastosOrigenDetectado.toFixed(2)+' aplicado.';
+    }
+
+    // ── PASO 6: Diferencia de pago ──
+    // Diferencia = TOTAL_PAGO − (Mercancía + Flete)
+    // Positivo → pagaron de más → se SUMA al homologado
+    // Negativo → pagaron de menos → se RESTA del homologado
+    if(pagoRealizadoDetectado > 0){
+      const baseParaDif = totalMerc + fleteDetectado;
+      const diferencia  = Math.round((pagoRealizadoDetectado - baseParaDif)*100)/100;
+
+      const difEl = document.getElementById('s1_dif_pago');
+      if(difEl){
+        difEl.value = diferencia.toFixed(2);
+        if(typeof syncDifPagoSC3==='function') syncDifPagoSC3();
+      }
+      // Espejo de diferencia a Sababa (s2_dif_cif o s2_dif_fob según término)
+      const difSabCifEl = document.getElementById('s2_dif_cif');
+      const difSabFobEl = document.getElementById('s2_dif_fob');
+      if(!esFOB && difSabCifEl) difSabCifEl.value = diferencia.toFixed(2);
+      if(esFOB  && difSabFobEl) difSabFobEl.value = diferencia.toFixed(2);
+
+      msg += '\n\nTOTAL PAGO: $'+pagoRealizadoDetectado.toFixed(2);
+      msg += '\nBase (Merc.+Flete): $'+baseParaDif.toFixed(2);
+      msg += '\nDiferencia ('+(diferencia>=0?'+':'')+diferencia.toFixed(2)+'): aplicada automáticamente.';
+    }
+
+    // ── PASO 7: Domino → Sababa ──
+    // Se aplica independientemente del término y sin importar si el embarque está configurado.
+    // Sababa siempre recibe: Costo (mercancía), Flete, y Total Pago.
+    if(totalMerc > 0 || fleteDetectado > 0){
+      if(esFOB){
+        // Sababa FOB: s2_fob = mercancía, s2_flete = flete
+        const s2FobEl = document.getElementById('s2_fob');
+        if(s2FobEl && s2FobEl.dataset.autoSet !== 'false'){
+          s2FobEl.value = totalMerc.toFixed(2);
+          s2FobEl.dataset.autoSet = 'true';
+        }
+        const scFobEl = document.getElementById('sc_fob');
+        if(scFobEl && scFobEl.dataset.autoSet !== 'false'){
+          scFobEl.value = totalMerc.toFixed(2);
+          scFobEl.dataset.autoSet = 'true';
+        }
+      } else {
+        // Sababa CIF/ZL: s2_costo_zl = mercancía
+        const s2CostEl = document.getElementById('s2_costo_zl');
+        if(s2CostEl && s2CostEl.dataset.autoSet !== 'false'){
+          s2CostEl.value = totalMerc.toFixed(2);
+          s2CostEl.dataset.autoSet = 'true';
+        }
+        const scCostEl = document.getElementById('sc_costo_zl');
+        if(scCostEl) scCostEl.value = totalMerc.toFixed(2);
+      }
+
+      // Total Pago para Sababa = TOTAL_PAGO si viene en plantilla,
+      // de lo contrario = Mercancía + Flete (base real de costeo)
+      const totalPagoFinal = pagoRealizadoDetectado > 0
+        ? pagoRealizadoDetectado
+        : (totalMerc + fleteDetectado);
+
+      const s2PagoEl = document.getElementById('s2_pago');
+      if(s2PagoEl && s2PagoEl.dataset.autoSet !== 'false' && totalPagoFinal > 0){
+        s2PagoEl.value = totalPagoFinal.toFixed(2);
+        s2PagoEl.dataset.autoSet = 'true';
+      }
+      const scPagoEl = document.getElementById('sc_pago');
+      if(scPagoEl && scPagoEl.dataset.autoSet !== 'false' && totalPagoFinal > 0){
+        scPagoEl.value = totalPagoFinal.toFixed(2);
+        scPagoEl.dataset.autoSet = 'true';
+      }
+    }
+
+    // ── Traslado de traspaso si aplica ──
+    if(totalTraspaso > 0){
+      const trEl = document.getElementById('s1_traspaso');
+      if(trEl && !parseFloat(trEl.value)){ trEl.value = totalTraspaso.toFixed(2); }
+      const s2TrEl = document.getElementById('s2_trasp');
+      if(s2TrEl && s2TrEl.dataset.autoSet !== 'false'){ s2TrEl.value = totalTraspaso.toFixed(2); s2TrEl.dataset.autoSet='true'; }
+      const scTrEl = document.getElementById('sc_trasp');
+      if(scTrEl) scTrEl.value = totalTraspaso.toFixed(2);
+    }
+
+    if(seguroDetectado > 0) msg += '\nSeguro: $'+seguroDetectado.toFixed(2)+' (referencia).';
+
     alert(msg);
-    calc();
+    // Secuencia de disparo: Liquidación → Sync → Sababa
+    if(typeof calc==='function') calc();
+    // syncSC3fromSC1 propaga liquidación a Sababa (solo si el embarque ya tiene término)
+    if(typeof syncSC3fromSC1==='function') syncSC3fromSC1();
+    // calcSab2 recalcula Sababa con todos los valores ya mapeados
+    setTimeout(function(){ if(typeof calcSab2==='function') calcSab2(); }, 120);
     // Re-render in modal clone if facturas modal is open
     const modalOverlay = document.getElementById('tab-modal-overlay');
     if(modalOverlay && modalOverlay.classList.contains('open') && modalOverlay.getAttribute('data-tab')==='facturas'){
@@ -10057,7 +10184,8 @@ async function guardarSesionNube(){
     'sc_costo_zl','sc_trasp','sc_fob','sc_flete','sc_com','sc_pago',
     'sc_flete_sab','sc_origen_sab','sc_comision_display','sc2_hon_ng',
     's2_costo_zl','s2_trasp','s2_fob','s2_flete','s2_dif_fob','s2_dif_cif','s2_pago','s2_com',
-    's2_flete_sab','s2_agente'
+    's2_flete_sab','s2_agente',
+    'solo_hon_pct','solo_otros1','solo_otros2','solo_otros3','solo_nombre'
   ];
   const campos = {};
   _camposIds.forEach(id => {
@@ -11521,16 +11649,7 @@ function _showActivityMsg(msg, color, duration){
   }, duration);
 }
 
-// Auto-save every 2 minutes
-setInterval(function(){
-  try{
-    const hasData = document.getElementById('s1_cif')?.value;
-    if(hasData && typeof guardarSesion==='function'){
-      _showActivityMsg('💾 Guardado automático...','var(--green-l)',2500);
-      guardarSesion();
-    }
-  }catch(e){}
-}, 120000);
+// Auto-save automático desactivado — el usuario descarga manualmente con el botón Guardar Local.
 
 // ── SIDEBAR PIN ──
 let _sidebarPinned = false;
