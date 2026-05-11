@@ -3349,7 +3349,7 @@ function calc(){
          pagFinal:sc3_comision>0 ? (v('sc_pago')||sc3_baseAjustada) : 0,
          comision:sc3_comision, comBruta:sc3_comision>0?(sc3_comision-sc3_itbmsHomol):0,
          flete:sc3_flete, gastos:sc3_gastos,
-         mv:sc3_mv, mvPct:sc3_mvPct,
+         mv:Math.round((window._mvUserEdited&&window._mvManualValue!==undefined&&!isNaN(window._mvManualValue)?window._mvManualValue:sc3_mv)*100)/100, mvPct:sc3_mvPct,
          noMerc:sc3_noMerc, landed1:sc3_landed1, landedG:sc3_landedG, factor:sc3_factor,
          // DESEMBOLSO = CIF_original + comision + flete + gastos
          // AHORRO = desembolso_SC1 - desembolso_SC3
@@ -3367,7 +3367,7 @@ function calc(){
   const altLanded1 = compar==='cifexp' ? sc2_landed1 : sc3_landed1;
   const altFactor  = compar==='cifexp' ? sc2_factor  : sc3_factor;
   const altLandedG = compar==='cifexp' ? sc2_landedG : sc3_landedG;
-  const altMV      = compar==='cifexp' ? sc2_mv      : sc3_mv;
+  const altMV      = compar==='cifexp' ? sc2_mv : Math.round((window._mvUserEdited&&window._mvManualValue!==undefined&&!isNaN(window._mvManualValue)?window._mvManualValue:sc3_mv)*100)/100;
   const altMVpct   = compar==='cifexp' ? sc2_mvPct   : sc3_mvPct;
 
   // ── Auto-fill gastos de servicio en Proveedores/Facturas ──
@@ -4619,7 +4619,7 @@ function calcSab2(){
     }
   }
 
-  const mv      = mv_used;
+  const mv      = Math.round(mv_used*100)/100;
   const mvPct   = mercHomol>0 ? (mv/mercHomol)*100 : 0;
   const noMerc  = noMerc_sinMV + mv;
   const landed  = mercHomol + noMerc;  // = esc1L cuando MV está completo
@@ -4783,7 +4783,7 @@ function calcSab2(){
     window._lastSnap.sc3.comision    = comision;
     window._lastSnap.sc3.itbmsHomol  = itbmsHomol;
     window._lastSnap.sc3.comBruta    = Math.max(0, comision - itbmsHomol);
-    window._lastSnap.sc3.mv          = mv;
+    window._lastSnap.sc3.mv          = Math.round(mv*100)/100;
     window._lastSnap.sc3.mvPct       = mvPct;
     window._lastSnap.sc3.mercHomol   = mercHomol;
     window._lastSnap.sc3.baseAjustada = baseAjust;
@@ -7255,30 +7255,87 @@ function renderTend(){
     el.style.color=varPct>0?'var(--green-l)':'var(--red-l)';
   }
 
-  // History table (use filteredData)
-  const rows=[...filteredData].reverse().map((d)=>{
+  // History table — agrupado por Año → Mes (acordeones)
+  const currentYM = new Date().toISOString().slice(0,7); // "2026-05"
+  // Agrupar por año y mes
+  const byYear = {};
+  [...filteredData].reverse().forEach((d)=>{
     const idx=tendData.indexOf(d);
-    const pct=d.cif>0?(d.ahorro/d.cif*100).toFixed(2)+'%':'—';
-    const isPend = d.status === 'pendiente'; const isParcial = d.status === 'parcial';
-    const viaIco2 = d.viaTransporte==='AIR'?'✈️':d.viaTransporte==='LAND'?'🚛':'🚢';
-    const viaLabel2 = d.viaTransporte||'SEA';
-    const tramiteColor2 = d.tramiteTipo==='Local'?'var(--green-l)':'var(--orange-l)';
-    const tramiteBg2 = d.tramiteTipo==='Local'?'rgba(63,185,80,.12)':'rgba(240,136,62,.12)';
-    return `<div style="display:grid;grid-template-columns:auto 1fr auto auto auto;gap:8px;align-items:center;padding:9px 14px;border-bottom:1px solid rgba(48,54,61,.4);cursor:pointer;transition:background .15s${(isPend||isParcial)?';border-left:3px solid '+(isPend?'var(--orange-l)':'var(--blue-l)'):''}" onclick="if(event.target.classList.contains('del-btn')||event.target.classList.contains('btn-reabrir')){return;}abrirModuloComparativo_idx(${idx})" onmouseover="this.style.background='rgba(255,255,255,.03)'" onmouseout="this.style.background=''">
-      <div style="font-size:10px;font-weight:700;color:var(--orange-l);white-space:nowrap">${d.nro||'—'}</div>
-      <div>
-        <div style="font-size:12px;font-weight:500;color:var(--text)">${d.desc}${isPend?'&nbsp;<span class="badge-pendiente">🟡 PENDIENTE</span>':''}${d.status==='parcial'?'&nbsp;<span style="background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:3px;padding:1px 5px;font-size:9px;font-weight:700">🚢 PARCIAL</span>':''}</div>
-        <div style="font-size:10px;color:var(--muted);display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-top:2px">${d.fecha} · ${d.esc||''}&nbsp;<span style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:var(--blue-l)">${viaIco2} ${viaLabel2}</span>${d.tramiteTipo?`<span style="background:${tramiteBg2};border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:${tramiteColor2}">${d.tramiteTipo}</span>`:''}</div>
+    const dt=new Date(d.fecha||'2000-01-01');
+    const yr=dt.getFullYear();
+    const mo=String(dt.getMonth()+1).padStart(2,'0');
+    const ym=`${yr}-${mo}`;
+    if(!byYear[yr]) byYear[yr]={};
+    if(!byYear[yr][ym]) byYear[yr][ym]=[];
+    byYear[yr][ym].push({d,idx});
+  });
+
+  const monthNames=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  let histHtml='';
+  const years=Object.keys(byYear).sort((a,b)=>b-a); // desc
+  years.forEach(yr=>{
+    const monthsInYear=Object.keys(byYear[yr]).sort((a,b)=>b.localeCompare(a));
+    const yrTotal=monthsInYear.reduce((s,ym)=>s+byYear[yr][ym].reduce((ms,{d})=>ms+(d.ahorro||0),0),0);
+    const yrCount=monthsInYear.reduce((s,ym)=>s+byYear[yr][ym].length,0);
+    const yrId='tend-yr-'+yr;
+    histHtml+=`
+    <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:8px">
+      <div id="${yrId}-hd" onclick="(function(id){var b=document.getElementById(id+'-body');if(!b)return;var open=b.style.display!=='none';b.style.display=open?'none':'block';document.getElementById(id+'-chev').textContent=open?'▶':'▼';})('${yrId}')" style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--s2);cursor:pointer;user-select:none">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span id="${yrId}-chev" style="font-size:9px;color:var(--muted)">▼</span>
+          <span style="font-size:13px;font-weight:700;color:var(--text)">${yr}</span>
+          <span style="font-size:10px;color:var(--muted)">${yrCount} embarque${yrCount!==1?'s':''}</span>
+        </div>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:var(--green-l)">$${(yrTotal/1000).toFixed(2)}k ahorro</span>
       </div>
-      <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--green-l);font-weight:700;white-space:nowrap">$${(d.ahorro/1000).toFixed(2)}k</div>
-      <div style="font-size:11px;color:var(--orange-l);white-space:nowrap">${pct}</div>
-      <div style="display:flex;gap:4px;align-items:center">
-        <button class="btn-reabrir" onclick="event.stopPropagation();reabrirEmbarquePendiente(${idx})" style="${isPend?'':'background:rgba(88,166,255,.1);border-color:rgba(88,166,255,.3);color:var(--blue-l)'}">✏️ ${isPend?'Reabrir':'Editar'}</button>
-        <button class="del-btn" onclick="event.stopPropagation();deleteTend(${idx})" style="font-size:10px;padding:2px 6px;height:22px;flex-shrink:0">×</button>
-      </div>
-    </div>`;
-  }).join('');
-  _getEl('tend-hist').innerHTML=rows||'<div style="text-align:center;padding:24px;color:var(--muted)">Sin registros para este período.</div>';
+      <div id="${yrId}-body">`;
+
+    monthsInYear.forEach(ym=>{
+      const [yStr,mStr]=ym.split('-');
+      const moName=monthNames[parseInt(mStr,10)-1];
+      const entries=byYear[yr][ym];
+      const moTotal=entries.reduce((s,{d})=>s+(d.ahorro||0),0);
+      const isCurrentMonth=(ym===currentYM);
+      const moId='tend-mo-'+ym.replace('-','_');
+      histHtml+=`
+        <div style="border-top:1px solid var(--border)">
+          <div id="${moId}-hd" onclick="(function(id){var b=document.getElementById(id+'-body');if(!b)return;var open=b.style.display!=='none';b.style.display=open?'none':'block';document.getElementById(id+'-chev').textContent=open?'▶':'▼';})('${moId}')" style="display:flex;justify-content:space-between;align-items:center;padding:8px 14px 8px 28px;background:rgba(255,255,255,.02);cursor:pointer;user-select:none">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span id="${moId}-chev" style="font-size:9px;color:var(--muted)">${isCurrentMonth?'▼':'▶'}</span>
+              <span style="font-size:12px;font-weight:600;color:var(--text)">${moName}</span>
+              ${isCurrentMonth?'<span style="background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green-l);font-size:9px;font-weight:700;padding:1px 6px;border-radius:8px">ACTUAL</span>':''}
+              <span style="font-size:10px;color:var(--muted)">${entries.length} embarque${entries.length!==1?'s':''}</span>
+            </div>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:var(--green-l)">$${(moTotal/1000).toFixed(2)}k</span>
+          </div>
+          <div id="${moId}-body" style="display:${isCurrentMonth?'block':'none'}">`;
+
+      entries.forEach(({d,idx})=>{
+        const pct=d.cif>0?(d.ahorro/d.cif*100).toFixed(2)+'%':'—';
+        const isPend=d.status==='pendiente';
+        const viaIco=d.viaTransporte==='AIR'?'✈️':d.viaTransporte==='LAND'?'🚛':'🚢';
+        histHtml+=`<div style="display:grid;grid-template-columns:auto 1fr auto auto auto;gap:8px;align-items:center;padding:9px 14px 9px 42px;border-top:1px solid rgba(48,54,61,.3);cursor:pointer;transition:background .15s${isPend?';border-left:3px solid var(--orange-l)':''}" onclick="if(event.target.classList.contains('del-btn')||event.target.classList.contains('btn-reabrir')){return;}abrirModuloComparativo_idx(${idx})" onmouseover="this.style.background='rgba(255,255,255,.03)'" onmouseout="this.style.background=''">
+          <div style="font-size:10px;font-weight:700;color:var(--orange-l);white-space:nowrap">${d.nro||'—'}</div>
+          <div>
+            <div style="font-size:12px;font-weight:500;color:var(--text)">${d.desc}${isPend?'&nbsp;<span class="badge-pendiente">🟡 PENDIENTE</span>':''}</div>
+            <div style="font-size:10px;color:var(--muted);display:flex;gap:5px;align-items:center;margin-top:2px">${d.fecha} · ${d.esc||''} <span style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:var(--blue-l)">${viaIco} ${d.viaTransporte||'SEA'}</span></div>
+          </div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--green-l);font-weight:700;white-space:nowrap">$${(d.ahorro/1000).toFixed(2)}k</div>
+          <div style="font-size:11px;color:var(--orange-l);white-space:nowrap">${pct}</div>
+          <div style="display:flex;gap:4px;align-items:center">
+            <button class="btn-reabrir" onclick="event.stopPropagation();reabrirEmbarquePendiente(${idx})" style="${isPend?'':'background:rgba(88,166,255,.1);border-color:rgba(88,166,255,.3);color:var(--blue-l)'}">✏️ ${isPend?'Reabrir':'Editar'}</button>
+            <button class="del-btn" onclick="event.stopPropagation();deleteTend(${idx})" style="font-size:10px;padding:2px 6px;height:22px;flex-shrink:0">×</button>
+          </div>
+        </div>`;
+      });
+
+      histHtml+=`</div></div>`; // close month body + month container
+    });
+
+    histHtml+=`</div></div>`; // close year body + year container
+  });
+
+  _getEl('tend-hist').innerHTML=histHtml||'<div style="text-align:center;padding:24px;color:var(--muted)">Sin registros para este período.</div>';
 
   // Inject premium KPI block above chart if not already present
   renderDashboardKPIs(filteredData);
@@ -9404,6 +9461,16 @@ function cargarSesion(input){
         const allTipoBtns=document.querySelectorAll('[onclick*="setTipo"]');
         allTipoBtns.forEach(b=>{ if(b.getAttribute('onclick').includes("'"+tipo+"'")) setTipo(tipo,b); });
       } catch(e){}
+      // Restaurar botón sab2Tipo
+      try{
+        document.querySelectorAll('[onclick*="setSab2Tipo"]').forEach(b=>{
+          const oc=b.getAttribute('onclick')||'';
+          b.classList.remove('on','g');
+          if(oc.includes("'"+sab2Tipo+"'")){ b.classList.add('on','g'); }
+        });
+        const traspRow=document.getElementById('sab2-trasp-row');
+        if(traspRow) traspRow.style.display=sab2Tipo==='ZL'?'':'none';
+      }catch(e){}
       setTimeout(()=>{
         try {
           const allTermBtns=document.querySelectorAll('[onclick*="setTermino"]');
@@ -10722,6 +10789,16 @@ async function cargarSesionNubeIdx(idx){
     document.querySelectorAll('[onclick*="setTipo"]').forEach(b=>{
       if(b.getAttribute('onclick').includes("'"+tipo+"'")) setTipo(tipo,b);
     });
+  }catch(e){}
+  // ── Restaurar botón visual sab2Tipo ──
+  try{
+    document.querySelectorAll('[onclick*="setSab2Tipo"]').forEach(b=>{
+      const oc=b.getAttribute('onclick')||'';
+      b.classList.remove('on','g');
+      if(oc.includes("'"+sab2Tipo+"'")){ b.classList.add('on','g'); }
+    });
+    const traspRow=document.getElementById('sab2-trasp-row');
+    if(traspRow) traspRow.style.display=sab2Tipo==='ZL'?'':'none';
   }catch(e){}
   setTimeout(()=>{
     try{
