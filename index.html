@@ -5053,63 +5053,11 @@ function loadAgrupFromStorage(){
 }
 
 // =====================================================
-// CLEAR ALL — Reset form to blank state
+// CLEAR ALL — Recarga la página para estado limpio
 // =====================================================
 function clearAll(){
   if(!confirm('¿Limpiar todos los datos e iniciar un nuevo embarque?')) return;
-
-  // Clear main inputs
-  ['s1_cif','s1_fob','s1_flete_fob','s1_seguro','s1_cif_calc',
-   's1_acarreo','s1_dmce','s1_agente'].forEach(id=>{
-    const el=document.getElementById(id); if(el) el.value='';
-  });
-  // Reset to defaults that are fixed
-  ['s1_ar','s1_itbms','s1_reng','s1_gzlc','s1_tasa','s2_form','s1_equipos'].forEach(id=>{
-    const el=document.getElementById(id);
-    if(!el)return;
-    const defaults={'s1_ar':'10','s1_itbms':'7','s1_reng':'1','s1_gzlc':'133','s1_tasa':'100','s2_form':'3','s1_equipos':'1'};
-    el.value=defaults[id]||'';
-  });
-  // Clear display fields
-  ['disp_honMin','disp_coord','disp_form1','disp_reng','disp_hon1','disp_hon2',
-   'sc2_hon_g_display','sc2_itbms_hon_display'].forEach(id=>{
-    const el=document.getElementById(id); if(el) el.value='';
-  });
-  ['sc2_hon_ng'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
-  // Clear Sababa inline
-  ['sc_costo_zl','sc_trasp','sc_fob','sc_flete','sc_com','sc_pago'].forEach(id=>{
-    const el=document.getElementById(id);
-    if(el){ el.value=id==='sc_com'?'10':''; if(el.dataset) el.dataset.autoSet='false'; }
-  });
-  // Clear Sababa tab
-  ['s2_costo_zl','s2_trasp','s2_fob','s2_flete','s2_dif_fob','s2_dif_cif','s2_pago','s2_mv_display','s2_flete_sab','s2_comision_display'].forEach(id=>{
-    const el=document.getElementById(id);
-    if(el){ el.value=''; if(el.dataset){ el.dataset.userEdited='false'; el.dataset.autoSet='false'; delete el.dataset.manualValue; } }
-  });
-  window.s2_comisionEditada=false; window._comManualValue=undefined;
-  window.sc_comisionEditada=false;
-  ['s2_com','s2_itbms'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=id==='s2_com'?'10':'7'; });
-  // Clear aranceles tab
-  arItems=[];
-  if(document.getElementById('ar-items')) document.getElementById('ar-items').innerHTML='';
-  if(document.getElementById('ar_cif')) document.getElementById('ar_cif').value='';
-
-  // Reset results
-  ['res-sim','res-sab2','res-ar'].forEach(id=>{
-    const el=document.getElementById(id);
-    if(el) el.innerHTML=`<div class="ph"><div class="ph-icon">📊</div><div class="ph-txt">Ingresa los datos y presiona <strong>Calcular</strong>.</div></div>`;
-  });
-  window._s1TotalPagoEditado=false; window._sc1_landed1=0; window._mvUserEdited=false; window._mvManualValue=undefined;
-
-  // Reset toggles to default state
-  tipo='ZL'; termino='CIF'; compar='cifexp'; exon=true; sabTipoCmp='ZL'; sab2Tipo='';
-  document.querySelectorAll('.seg-btn').forEach(b=>b.classList.remove('on','g','b','o'));
-  document.querySelectorAll('[onclick*="setSab2Tipo"]').forEach(function(b){ b.classList.remove('on','g'); });
-  if(typeof updateSab2View==='function') updateSab2View();
-  // Re-apply defaults visually is complex; just scroll to top
-  window.scrollTo(0,0);
-  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('on',i===0));
-  document.querySelectorAll('.tab-pane').forEach((t,i)=>t.classList.toggle('on',i===0));
+  window.location.reload();
 }
 
 // =====================================================
@@ -7452,7 +7400,7 @@ function _buildHistProvRows(){
         depto:(l.deptCat||l.dept||'Sin categoría').toUpperCase(),
         piezas:l.piezas||0,bultos:l.bultos||0,costo:l.costo||0,
         desc: l._desc || l.oc || '',
-        nro,fecha,esc:escLabel,tipo:prov.toUpperCase().startsWith('S.I')?'ZL':'IMP',homol:isHomol,_dIdx:dIdx});
+        nro,fecha,esc:escLabel,tipo:prov.toUpperCase().startsWith('S.I')?'IMP':'ZL',homol:isHomol,_dIdx:dIdx});
     });
   });
   return rows;
