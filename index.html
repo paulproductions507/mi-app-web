@@ -687,13 +687,13 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
         <div style="font-size:12px;font-weight:700;color:#58a6ff">Dashboard</div>
         <div style="font-size:10px;color:var(--muted)">KPIs · Gráficas · Tendencias</div>
       </button>
-      <button onclick="iniciarApp('comparativo')"
-        style="background:linear-gradient(135deg,rgba(88,166,255,.12),rgba(88,166,255,.05));border:1px solid rgba(88,166,255,.3);border-radius:14px;padding:14px;text-align:left;cursor:pointer;transition:transform .15s,box-shadow .15s;display:flex;flex-direction:column;gap:3px"
-        onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(210,153,34,.2)'"
+      <button onclick="iniciarApp('histprovs')"
+        style="background:linear-gradient(135deg,rgba(163,113,247,.12),rgba(163,113,247,.05));border:1px solid rgba(163,113,247,.3);border-radius:14px;padding:14px;text-align:left;cursor:pointer;transition:transform .15s,box-shadow .15s;display:flex;flex-direction:column;gap:3px"
+        onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(163,113,247,.2)'"
         onmouseout="this.style.transform='';this.style.boxShadow=''">
-        <span style="font-size:24px">📊</span>
-        <div style="font-size:12px;font-weight:700;color:#58a6ff">Comparativo</div>
-        <div style="font-size:10px;color:var(--muted)">3 escenarios lado a lado</div>
+        <span style="font-size:24px">🏭</span>
+        <div style="font-size:12px;font-weight:700;color:#a371f7">Hist. Proveedores</div>
+        <div style="font-size:10px;color:var(--muted)">Mercancía · Servicio · OC</div>
       </button>
       <button onclick="iniciarApp('aranceles')"
         style="background:linear-gradient(135deg,rgba(240,136,62,.12),rgba(240,136,62,.05));border:1px solid rgba(240,136,62,.3);border-radius:14px;padding:14px;text-align:left;cursor:pointer;transition:transform .15s,box-shadow .15s;display:flex;flex-direction:column;gap:3px"
@@ -748,8 +748,8 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
         onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(163,113,247,.15)'"
         onmouseout="this.style.transform='';this.style.boxShadow=''">
         <span style="font-size:24px">🏭</span>
-        <div style="font-size:12px;font-weight:700;color:#a371f7">Proveedores</div>
-        <div style="font-size:10px;color:var(--muted)">Historial · Filtros · OC</div>
+        <div style="font-size:12px;font-weight:700;color:#a371f7">Hist. Proveedores</div>
+        <div style="font-size:10px;color:var(--muted)">Mercancía · Servicio · OC</div>
       </button>
     </div>
   </div>
@@ -822,9 +822,9 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       <div class="nav-icon" style="background:rgba(210,153,34,.1)">📈</div>
       <div><div class="nav-label">Tendencias</div><div class="nav-sub">Historial y top proveedores</div></div>
     </div>
-    <div class="sidebar-nav-item" onclick="closeSidebar();abrirModuloComparativo()" style="border:1px solid rgba(88,166,255,.3)">
-      <div class="nav-icon" style="background:rgba(88,166,255,.2)">📊</div>
-      <div><div class="nav-label" style="color:var(--blue-l)">Comparativo</div><div class="nav-sub">Reporte 3 escenarios</div></div>
+    <div class="sidebar-nav-item" onclick="closeSidebar();iniciarApp('histprovs')" style="border:1px solid rgba(163,113,247,.3)">
+      <div class="nav-icon" style="background:rgba(163,113,247,.1)">🏭</div>
+      <div><div class="nav-label" style="color:#a371f7">Hist. Proveedores</div><div class="nav-sub">Mercancía · Servicio · OC</div></div>
     </div>
   </div>
 
@@ -7326,9 +7326,22 @@ function renderHistProv(){
       oninput="_histProvSearch()"
       style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:7px;padding:8px 10px;color:var(--text);font-size:12px;box-sizing:border-box;margin-bottom:8px">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+      <select id="hp-seccion" onchange="_renderHistProvList()" style="background:var(--s2);border:1px solid var(--border);border-radius:7px;padding:7px 8px;color:var(--text);font-size:11px">
+        <option value="merc">🏭 Proveedores Mercancía</option>
+        <option value="serv">🔧 Proveedores Servicio</option>
+      </select>
+      <select id="hp-rubro" onchange="_renderHistProvList()" style="background:var(--s2);border:1px solid var(--border);border-radius:7px;padding:7px 8px;color:var(--text);font-size:11px;display:none">
+        <option value="">Rubro: Todos</option>
+        <option value="flete">🚢 Flete</option>
+        <option value="honorarios">💼 Honorarios / Comisión</option>
+        <option value="acarreo">📦 Acarreo / Gastos Origen</option>
+        <option value="itbms">🧾 ITBMS</option>
+        <option value="mv">💰 Master Value</option>
+        <option value="gastos">📋 Otros Gastos</option>
+      </select>
       <select id="hp-tipo"  onchange="_renderHistProvList()" style="background:var(--s2);border:1px solid var(--border);border-radius:7px;padding:7px 8px;color:var(--text);font-size:11px">
         <option value="">Tipo: Todos</option>
-        <option value="ZL">🚛 Zona Libre (S.I)</option>
+        <option value="ZL">🚛 Zona Libre</option>
         <option value="IMP">🚢 Importación</option>
       </select>
       <select id="hp-esc"   onchange="_renderHistProvList()" style="background:var(--s2);border:1px solid var(--border);border-radius:7px;padding:7px 8px;color:var(--text);font-size:11px">
@@ -7387,20 +7400,27 @@ function _buildHistProvRows(){
                 :(esc.toLowerCase().includes('sababa')||esc.toLowerCase().includes('sab'))?'Sababa':'Liq. Aduanal';
     var isHomol=escLabel==='Sababa'; var dIdx=tendData.indexOf(d);
     lines.forEach(function(l){
-      if((l.tipoFac||'mercancia')!=='mercancia') return;
+      var tf=l.tipoFac||'mercancia';
       var prov=(l.prov||l.dept||'').trim(); if(!prov) return;
-      // Para embarques Sababa: aplicar nombre SI si existe en el directorio
       if(isHomol && typeof _PROV_SI !== 'undefined'){
-        var provKey = prov.toUpperCase();
-        // Buscar en _PROV_SI por nombre exacto (case-insensitive)
-        var siMatch = Object.keys(_PROV_SI).find(function(k){ return k.toUpperCase() === provKey; });
-        if(siMatch) prov = _PROV_SI[siMatch];
+        var provKey=prov.toUpperCase();
+        var siMatch=Object.keys(_PROV_SI).find(function(k){ return k.toUpperCase()===provKey; });
+        if(siMatch) prov=_PROV_SI[siMatch];
       }
-      rows.push({prov,oc:l.oc||'—',numFact:l.numFact||l.nroFact||l.factura||'—',
+      var base={prov,oc:l.oc||'—',numFact:l.numFact||l.nroFact||l.factura||'—',
         depto:(l.deptCat||l.dept||'Sin categoría').toUpperCase(),
         piezas:l.piezas||0,bultos:l.bultos||0,costo:l.costo||0,
-        desc: l._desc || l.oc || '',
-        nro,fecha,esc:escLabel,tipo:prov.toUpperCase().startsWith('S.I')?'IMP':'ZL',homol:isHomol,_dIdx:dIdx});
+        desc:l._desc||l.oc||'',nro,fecha,esc:escLabel,
+        tipo:prov.toUpperCase().startsWith('S.I')?'IMP':'ZL',
+        homol:isHomol,_dIdx:dIdx};
+      if(tf==='mercancia'){
+        rows.push(Object.assign({},base,{seccion:'merc',rubro:'mercancia'}));
+      } else {
+        // Servicio: normalizar rubro
+        var rk=tf==='flete'?'flete':tf==='honorarios'||tf==='comision'?'honorarios':
+               tf==='acarreo'?'acarreo':tf==='itbms'?'itbms':tf==='mv'||tf==='mastervalue'?'mv':'gastos';
+        rows.push(Object.assign({},base,{seccion:'serv',rubro:rk,piezas:0,bultos:0}));
+      }
     });
   });
   return rows;
@@ -7413,14 +7433,24 @@ function _renderHistProvList(){
   var statsEl=root.querySelector('#histprov-stats');
   if(!listEl){renderHistProv();return;}
   var qB=(root.querySelector('#hp-buscar')?.value||'').toLowerCase().trim();
+  var qSec=root.querySelector('#hp-seccion')?.value||'merc';
+  var qRub=root.querySelector('#hp-rubro')?.value||'';
   var qT=root.querySelector('#hp-tipo')?.value||'';
   var qE=root.querySelector('#hp-esc')?.value||'';
   var qH=root.querySelector('#hp-homol')?.value||'';
   var qD=root.querySelector('#hp-depto')?.value||'';
+  // Show/hide rubro filter depending on section
+  var rubroEl=root.querySelector('#hp-rubro');
+  var tipoEl=root.querySelector('#hp-tipo');
+  if(rubroEl) rubroEl.style.display=qSec==='serv'?'':'none';
+  if(tipoEl)  tipoEl.style.display=qSec==='merc'?'':'none';
   var rows=_buildHistProvRows();
   var f=rows.filter(function(r){
+    if(r.seccion!==qSec) return false;
     if(qB&&!(r.prov.toLowerCase().includes(qB)||r.oc.toLowerCase().includes(qB)||r.nro.toLowerCase().includes(qB)||r.depto.toLowerCase().includes(qB)||(r.desc||'').toLowerCase().includes(qB))) return false;
-    if(qT&&r.tipo!==qT) return false; if(qE&&r.esc!==qE) return false;
+    if(qSec==='merc'&&qT&&r.tipo!==qT) return false;
+    if(qSec==='serv'&&qRub&&r.rubro!==qRub) return false;
+    if(qE&&r.esc!==qE) return false;
     if(qD&&r.depto!==qD) return false;
     if(qH==='si'&&!r.homol) return false; if(qH==='no'&&r.homol) return false;
     return true;
@@ -7459,8 +7489,11 @@ function _renderHistProvList(){
     '</div>';
     return;
   }
+  var rubroLabels={flete:'🚢 Flete',honorarios:'💼 Honorarios',acarreo:'📦 Acarreo',itbms:'🧾 ITBMS',mv:'💰 Master Value',gastos:'📋 Otros Gastos'};
   listEl.innerHTML=f.map(function(r){
-    var tB=r.tipo==='ZL'?'<span style="background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:4px;padding:1px 7px;font-size:9px;font-weight:700">ZL</span>':'<span style="background:rgba(240,136,62,.15);border:1px solid rgba(240,136,62,.3);color:var(--orange-l);border-radius:4px;padding:1px 7px;font-size:9px;font-weight:700">IMP</span>';
+    var tB=r.seccion==='serv'
+      ?'<span style="background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.3);color:#fbbf24;border-radius:4px;padding:1px 7px;font-size:9px;font-weight:700">'+(rubroLabels[r.rubro]||'📋 Gasto')+'</span>'
+      :(r.tipo==='ZL'?'<span style="background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:4px;padding:1px 7px;font-size:9px;font-weight:700">ZL</span>':'<span style="background:rgba(240,136,62,.15);border:1px solid rgba(240,136,62,.3);color:var(--orange-l);border-radius:4px;padding:1px 7px;font-size:9px;font-weight:700">IMP</span>');
     var eB=r.esc==='CIF Express'?'<span style="background:rgba(248,209,34,.1);border:1px solid rgba(248,209,34,.2);color:#f8d122;border-radius:4px;padding:1px 6px;font-size:9px;font-weight:600">CIF</span>':r.esc==='Sababa'?'<span style="background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.2);color:#a855f7;border-radius:4px;padding:1px 6px;font-size:9px;font-weight:600">SAB</span>':'<span style="background:rgba(139,148,158,.1);border:1px solid rgba(139,148,158,.2);color:var(--muted);border-radius:4px;padding:1px 6px;font-size:9px;font-weight:600">LIQ</span>';
     var hB=r.homol?'<span style="background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.2);color:var(--green-l);border-radius:4px;padding:1px 6px;font-size:9px;font-weight:600">HOMOL</span>':'';
     var clr=r.tipo==='ZL'?'var(--blue-l)':'var(--orange-l)';
