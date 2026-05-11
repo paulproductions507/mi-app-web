@@ -952,6 +952,9 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
     <div class="card-bd">
       <div class="r2">
         <div class="field"><label>N° Embarque</label><input type="text" id="s1_nro_emb" placeholder="Ej: EMB-2025-001"></div>
+        <div class="field"><label>ID / Factura Fiscal <span style="font-size:9px;color:var(--muted);font-weight:400">Sababa · Pre-Dec. · Liquidación</span></label><input type="text" id="s1_id_fiscal" placeholder="Ej: 0000000002 · PRE-2026-001" style="border-color:rgba(168,85,247,.35)" oninput=""></div>
+      </div>
+      <div class="r2">
         <div class="field"><label>Término</label>
           <div class="seg" id="termSeg">
             <div class="seg-btn" onclick="setTermino('CIF',this)">CIF</div>
@@ -1696,14 +1699,14 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       <!-- Comision editable display -->
       <div class="field">
         <label>Comisión calculada (auto — editable)</label>
-        <input type="number" id="s2_comision_display" step="0.01" class="mv-editable" placeholder="Se calcula: Pago×10%" oninput="window.s2_comisionEditada=true;calcSab2()">
+        <input type="number" id="s2_comision_display" step="0.01" class="mv-editable" placeholder="Se calcula: Pago×10%" oninput="window.s2_comisionEditada=true;window._comManualValue=parseFloat(this.value);calcSab2()">
       </div>
 
       <div class="r2">
         <div class="field">
           <label>Master Value (auto — editable) <span class="info-btn" onclick="document.getElementById('mv-info').classList.toggle('open')" style="font-style:normal">i</span></label>
           <div id="mv-info" class="info-box">Calculado = Costo Landed Esc.#1 − Costo Landed Sababa sin MV. Ajusta centavos si es necesario. El MV no se paga — es un puente contable.</div>
-          <input type="number" id="s2_mv_display" step="0.01" oninput="calcSab2()" class="mv-editable" placeholder="Se calcula automático">
+          <input type="number" id="s2_mv_display" step="0.01" oninput="window._mvManualValue=parseFloat(this.value);window._mvUserEdited=true;calcSab2();" class="mv-editable" placeholder="Se calcula automático">
         </div>
         <div class="field"><label>Gastos Destino / Agente (USD)</label><input type="number" id="s2_agente" value="" placeholder="0.00" step="0.01" oninput="this.dataset.autoSet='false';calcSab2()"></div>
       </div>
@@ -4519,42 +4522,37 @@ function calcSab2(){
   const fleteStd = v('s2_flete_sab') || fleteMain;
 
   // ── COMISIÓN: 10% × Total Factura Sababa (= baseAjust) ──
-  // Tolerancia ±$0.02 para primer ajuste; una vez editado, el valor manual
-  // se guarda en dataset.manualValue y NO se vuelve a comparar contra el auto.
+  // Valor manual se guarda en window._comManualValue (sobrevive re-renders del DOM)
   const comisionAuto = Math.round(baseAjust * comPct * 100) / 100;
   const comEl = document.getElementById('s2_comision_display');
-  // Adjuntar listener una sola vez
-  if(comEl && !comEl._listenerAdded){
-    comEl.addEventListener('input', function(){
-      window.s2_comisionEditada = true;
-      comEl.dataset.manualValue = comEl.value; // guardar valor absoluto
-    });
-    comEl._listenerAdded = true;
-  }
   let comision;
-  if(window.s2_comisionEditada && comEl && comEl.dataset.manualValue !== undefined){
-    const _manualCom = parseFloat(comEl.dataset.manualValue);
-    if(!isNaN(_manualCom)){
-      // Verificar solo en el PRIMER momento que se editó (diferencia inicial ≤ $0.05)
-      // Después de eso, siempre respetar el valor del usuario
-      const _initDiff = Math.abs(_manualCom - comisionAuto);
-      if(_initDiff <= 0.05){
-        comision = _manualCom;
-        comEl.value = _manualCom.toFixed(2); // mantener visible
-      } else {
-        // Diferencia grande: no era un ajuste de centavo — resetear
-        comision = comisionAuto;
-        window.s2_comisionEditada = false;
-        delete comEl.dataset.manualValue;
-        comEl.value = comisionAuto.toFixed(2);
-      }
+  if(window.s2_comisionEditada && window._comManualValue !== undefined && !isNaN(window._comManualValue)){
+    const initDiff = Math.abs(window._comManualValue - comisionAuto);
+    if(initDiff <= 0.05){
+      comision = window._comManualValue;
     } else {
+      // Diferencia grande: resetear
       comision = comisionAuto;
-      comEl.value = comisionAuto.toFixed(2);
+      window.s2_comisionEditada = false;
+      window._comManualValue = undefined;
     }
   } else {
     comision = comisionAuto;
-    if(comEl && !window.s2_comisionEditada) comEl.value = comisionAuto.toFixed(2);
+  }
+  // Sincronizar campo visual solo si el usuario NO está editando ahora mismo
+  if(comEl){
+    const isActive = document.activeElement === comEl;
+    if(!window.s2_comisionEditada || !isActive){
+      comEl.value = comision.toFixed(2);
+    }
+  }
+  // Adjuntar listener una sola vez para sincronizar global
+  if(comEl && !comEl._listenerAdded){
+    comEl.addEventListener('change', function(){
+      window.s2_comisionEditada = true;
+      window._comManualValue = parseFloat(this.value);
+    });
+    comEl._listenerAdded = true;
   }
 
   // No Mercancía sin MV = Flete + Comisión + Gastos Agente
@@ -4565,41 +4563,29 @@ function calcSab2(){
   const esc1L = window._sc1_landed1 || 0;
   const mv_auto = esc1L > 0 ? esc1L - landed_sinMV : 0;
 
-  // Si el usuario editó MV manualmente, respetar SIEMPRE el valor ingresado.
-  // El valor se guarda en dataset.manualValue para sobrevivir recálculos.
+  // ── MASTER VALUE: usar window._mvManualValue si el usuario editó ──
+  // Igual que comisión, el valor se guarda en global para sobrevivir re-renders.
   const mvInput = document.getElementById('s2_mv_display');
-  // Adjuntar listener una sola vez
-  if(mvInput && !mvInput._listenerAdded){
-    mvInput.addEventListener('input', function(){
-      mvInput.dataset.userEdited = 'true';
-      mvInput.dataset.manualValue = mvInput.value; // guardar absoluto
-      calcSab2();
-    });
-    mvInput._listenerAdded = true;
-  }
   let mv_used;
-  if(mvInput && mvInput.dataset.userEdited === 'true' && mvInput.dataset.manualValue !== undefined){
-    const _manualMV = parseFloat(mvInput.dataset.manualValue);
-    if(!isNaN(_manualMV)){
-      // Verificar que sea un ajuste razonable (diferencia inicial vs auto ≤ $0.05)
-      const _initDiff = Math.abs(_manualMV - mv_auto);
-      if(_initDiff <= 0.05){
-        mv_used = _manualMV;
-        mvInput.value = _manualMV.toFixed(2); // mantener visible
-      } else {
-        // Diferencia grande: resetear
-        mv_used = mv_auto;
-        mvInput.dataset.userEdited = 'false';
-        delete mvInput.dataset.manualValue;
-        mvInput.value = mv_auto !== 0 ? mv_auto.toFixed(2) : '';
-      }
+  if(window._mvUserEdited && window._mvManualValue !== undefined && !isNaN(window._mvManualValue)){
+    const initDiff = Math.abs(window._mvManualValue - mv_auto);
+    if(initDiff <= 0.05){
+      mv_used = window._mvManualValue;
     } else {
+      // Diferencia grande: resetear
       mv_used = mv_auto;
-      mvInput.value = mv_auto !== 0 ? mv_auto.toFixed(2) : '';
+      window._mvUserEdited = false;
+      window._mvManualValue = undefined;
     }
   } else {
     mv_used = mv_auto;
-    if(mvInput) mvInput.value = mv_auto !== 0 ? mv_auto.toFixed(2) : '';
+  }
+  // Sincronizar campo visual
+  if(mvInput){
+    const isActive = document.activeElement === mvInput;
+    if(!window._mvUserEdited || !isActive){
+      mvInput.value = mv_used !== 0 ? mv_used.toFixed(2) : '';
+    }
   }
 
   const mv      = mv_used;
@@ -5036,7 +5022,7 @@ function clearAll(){
     const el=document.getElementById(id);
     if(el){ el.value=''; if(el.dataset){ el.dataset.userEdited='false'; el.dataset.autoSet='false'; delete el.dataset.manualValue; } }
   });
-  window.s2_comisionEditada=false;
+  window.s2_comisionEditada=false; window._comManualValue=undefined;
   window.sc_comisionEditada=false;
   ['s2_com','s2_itbms'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=id==='s2_com'?'10':'7'; });
   // Clear aranceles tab
@@ -5049,7 +5035,7 @@ function clearAll(){
     const el=document.getElementById(id);
     if(el) el.innerHTML=`<div class="ph"><div class="ph-icon">📊</div><div class="ph-txt">Ingresa los datos y presiona <strong>Calcular</strong>.</div></div>`;
   });
-  window._s1TotalPagoEditado=false; window._sc1_landed1=0;
+  window._s1TotalPagoEditado=false; window._sc1_landed1=0; window._mvUserEdited=false; window._mvManualValue=undefined;
 
   // Reset toggles to default state
   tipo='ZL'; termino='CIF'; compar='cifexp'; exon=true; sabTipoCmp='ZL'; sab2Tipo='ZL';
@@ -5899,7 +5885,7 @@ function _getFilteredTendData(){
     }
     if(prov && (d.esc||'').trim()!==prov) return false;
     if(buscar){
-      const txt=[(d.nro||''),(d.desc||''),(d.esc||''),(d.tramiteTipo||'')].join(' ').toLowerCase();
+      const txt=[(d.nro||''),(d.desc||''),(d.esc||''),(d.tramiteTipo||''),(d.idFiscal||'')].join(' ').toLowerCase();
       if(!txt.includes(buscar)) return false;
     }
     if(origen && typeof _origenMatchFiltro==='function'){
@@ -6077,6 +6063,7 @@ function procesarEmbarque(){
     pais:   document.getElementById('s1_pais_emb')?.value   || '',
     ciudad: document.getElementById('s1_ciudad_emb')?.value || '',
     destino: document.getElementById('s1_destino')?.value   || '',
+    idFiscal: (document.getElementById('s1_id_fiscal')?.value||'').trim(),
     // ── Logística ──
     piezas:     invLines.reduce((s,l)=>s+(l.piezas||0),0) || window._totalPiezas || 0,
     bultos:     invLines.reduce((s,l)=>s+(l.bultos||0),0),
@@ -6238,6 +6225,7 @@ function reabrirEmbarquePendiente(idx){
   // ── 3. Campos básicos del embarque ──
   _set('s1_nro_emb',    d.nro   || '');
   _set('s1_desc_emb',   d.desc  || '');
+  _set('s1_id_fiscal',  d.idFiscal || '');
   _set('s1_origen_emb', s.origen|| '');
   _set('s1_destino',    s.destino|| '');
   // Restaurar selectores de origen país/ciudad
@@ -6379,7 +6367,7 @@ function _clearFormSilent(){
   renderInvLines();
   // Reset globals
   window._lastCIF=0; window._lastAhorroNeto=0; window._lastSnap=null; window._sc1_landed1=0;
-  window.s2_comisionEditada=false; window.sc_comisionEditada=false; window._s1TotalPagoEditado=false;
+  window.s2_comisionEditada=false; window.sc_comisionEditada=false; window._s1TotalPagoEditado=false; window._comManualValue=undefined; window._mvUserEdited=false; window._mvManualValue=undefined;
   window._pendienteUpdateIdx=-1;
   // Reset tipo/termino
   tipo='ZL'; termino='CIF'; compar='cifexp'; exon=true; sabTipoCmp='ZL'; sab2Tipo='ZL';
@@ -9318,6 +9306,10 @@ function renderInvLines(){
         +'<div style="flex:2"><input type="text" value="'+(l.oc||'')+'" placeholder="OC / Orden de Compra" oninput="invLines['+i+'].oc=this.value" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:5px;padding:5px 8px;color:var(--text);font-size:11px"></div>'
         +'<div style="flex:1"><input type="number" value="'+(l.traspaso||'')+'" placeholder="Traspaso" oninput="invLines['+i+'].traspaso=parseFloat(this.value)||0;_autoSumTraspaso()" style="width:100%;background:var(--s2);border:1px solid rgba(63,185,80,.25);border-radius:5px;padding:5px 8px;color:var(--green-l);font-size:11px;font-family:\'IBM Plex Mono\',monospace"></div>'
         +'</div>'
+        +'<div style="display:flex;gap:5px;align-items:center;margin-bottom:6px">'
+        +'<input type="text" value="'+(l.numFact||l.nfac||'')+'" placeholder="N° Factura Suplidor" id="nfact-merc-'+i+'" onchange="invLines['+i+'].numFact=this.value;invLines['+i+'].nfac=this.value;" oninput="invLines['+i+'].numFact=this.value;invLines['+i+'].nfac=this.value;" style="flex:1;background:var(--s2);border:1px solid rgba(88,166,255,.2);border-radius:5px;padding:5px 8px;color:var(--text);font-size:11px">'
+        +'<button onclick="(function(i){invLines[i].numFact=document.getElementById(\'nfact-merc-\'+i)?.value||invLines[i].numFact||\'\';;invLines[i].nfac=invLines[i].numFact;var b=this;b.textContent=\'✓\';b.style.background=\'rgba(63,185,80,.3)\';setTimeout(function(){b.textContent=\'💾\';b.style.background=\'rgba(63,185,80,.12)\';},1200);})('+i+')" style="flex-shrink:0;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:5px;padding:5px 10px;font-size:11px;cursor:pointer" title="Guardar N° Factura">💾</button>'
+        +'</div>'
         +'<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
         +'<div style="flex:1;min-width:0;position:relative"><input type="text" value="'+((l.prov||'').replace(/"/g,'&quot;'))+'" placeholder="Escribe proveedor para buscar..." list="prov-datalist" onchange="onInvProvChange('+i+',this.value)" oninput="invLines['+i+'].prov=this.value" style="width:100%;background:var(--s2);border:1px solid '+provBorder+';border-radius:6px;padding:6px 10px;color:var(--text);font-size:12px;box-sizing:border-box"></div>'
         +(provHint?'<div style="width:100%;margin-top:3px">'+provHint+'</div>':'')
@@ -9370,12 +9362,16 @@ function renderInvLines(){
           +'style="width:110px;flex-shrink:0;margin-left:auto;background:var(--s2);border:1px solid rgba(240,136,62,.3);border-radius:6px;padding:5px 8px;color:var(--orange-l);font-size:12px;font-family:\'IBM Plex Mono\',monospace;text-align:right;font-weight:700" '
           +'title="Editable — ajusta si hay diferencia de centavos">'
           +'</div>'
-          // N° Factura
-          +'<div style="margin-top:4px">'
+          // N° Factura con botón guardar
+          +'<div style="margin-top:4px;display:flex;gap:5px;align-items:center">'
           +'<input type="text" value="'+(l.numFact||l.nfac||'')+'" '
           +'placeholder="N° Factura (ej: SAB-2024-001)" '
-          +'oninput="invLines['+i+'].numFact=this.value;invLines['+i+'].nfac=this.value" '
-          +'style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:5px 10px;color:var(--text);font-size:11px;box-sizing:border-box">'
+          +'id="nfact-gasto-'+i+'" '
+          +'onchange="invLines['+i+'].numFact=this.value;invLines['+i+'].nfac=this.value;" '
+          +'oninput="invLines['+i+'].numFact=this.value;invLines['+i+'].nfac=this.value;" '
+          +'style="flex:1;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:5px 10px;color:var(--text);font-size:11px;box-sizing:border-box">'
+          +'<button onclick="(function(i){invLines[i].numFact=document.getElementById(\'nfact-gasto-\'+i)?.value||invLines[i].numFact||\'\';;invLines[i].nfac=invLines[i].numFact;var b=this;b.textContent=\'✓\';b.style.background=\'rgba(63,185,80,.3)\';setTimeout(function(){b.textContent=\'💾\';b.style.background=\'rgba(63,185,80,.12)\';},1200);})('+i+')" '
+          +'style="flex-shrink:0;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;white-space:nowrap" title="Guardar N° Factura">💾</button>'
           +'</div>'
           +'</div>';
       }).join('');
@@ -10295,7 +10291,7 @@ async function guardarSesionNube(){
     's1_reng','s1_gzlc','s1_tasa','s2_form',
     's1_equipo','s1_acarreo','s1_equipos','s1_dmce','s1_agente',
     's1_nro_emb','s1_desc_emb','s1_origen_emb','s1_pais_emb','s1_ciudad_emb',
-    's1_tipo_emb','s1_destino','s1_cartones',
+    's1_tipo_emb','s1_destino','s1_cartones','s1_id_fiscal',
     'sc_costo_zl','sc_trasp','sc_fob','sc_flete','sc_com','sc_pago',
     'sc_flete_sab','sc_origen_sab','sc_comision_display','sc2_hon_ng',
     's2_costo_zl','s2_trasp','s2_fob','s2_flete','s2_dif_fob','s2_dif_cif','s2_pago','s2_com',
@@ -10542,7 +10538,7 @@ async function autoGuardarSupabase(nombre){
       's1_reng','s1_gzlc','s1_tasa','s2_form',
       's1_equipo','s1_acarreo','s1_equipos','s1_dmce','s1_agente',
       's1_nro_emb','s1_desc_emb','s1_origen_emb','s1_pais_emb','s1_ciudad_emb',
-      's1_tipo_emb','s1_destino','s1_cartones',
+      's1_tipo_emb','s1_destino','s1_cartones','s1_id_fiscal',
       'sc_costo_zl','sc_trasp','sc_fob','sc_flete','sc_com','sc_pago',
       'sc_flete_sab','sc_origen_sab','sc_comision_display','sc2_hon_ng',
       's2_costo_zl','s2_trasp','s2_fob','s2_flete','s2_dif_fob','s2_dif_cif','s2_pago','s2_com',
