@@ -1539,10 +1539,44 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
           <input type="number" id="unico_hon_result" readonly style="background:var(--bg);color:var(--orange-l);font-weight:700">
         </div>
       </div>
+      <div class="field">
+        <label>N° Factura Honorarios</label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="text" id="unico_hon_nfac" placeholder="Ej: INV-2025-001" style="flex:1;background:var(--s2);border:1px solid rgba(240,136,62,.3);border-radius:6px;padding:8px 10px;color:var(--text);font-size:13px">
+          <button onclick="(function(b){var v=document.getElementById('unico_hon_nfac').value;window._unico_hon_nfac=v;b.textContent='✓ Guardado';b.style.background='rgba(63,185,80,.3)';if(typeof _showToast==='function')_showInlineToast(b,'✅ Factura guardada');setTimeout(function(){b.textContent='💾';b.style.background='rgba(63,185,80,.12)';},1500);})(this)"
+            style="flex-shrink:0;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:6px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer">💾</button>
+        </div>
+      </div>
       <div class="r2">
         <div class="field"><label>Tasa Aduana (USD)</label><input type="number" id="unico_tasa" value="100" step="0.01" oninput="calcUnico()"></div>
         <div class="field"><label>Gastos Origen/Destino (USD)</label><input type="number" id="unico_agente" value="0" step="0.01" oninput="calcUnico()"></div>
       </div>
+      <!-- GASTOS ADICIONALES CON TIPO -->
+      <div class="sep-lbl">Gastos Adicionales</div>
+      <div id="unico-gastos-list">
+        <div class="unico-gasto-row r2" style="margin-bottom:8px;align-items:flex-end">
+          <div class="field" style="margin:0"><label>Tipo de Gasto</label>
+            <select onchange="calcUnico()" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px;width:100%">
+              <option value="flete">🚢 Flete Internacional</option>
+              <option value="acarreo">📦 Acarreo / Gastos Origen</option>
+              <option value="honorarios">💼 Honorarios Adicionales</option>
+              <option value="itbms">🧾 ITBMS</option>
+              <option value="mv">💰 Master Value</option>
+              <option value="otros">📋 Otros Gastos</option>
+            </select>
+          </div>
+          <div class="field" style="margin:0"><label>Monto (USD)</label>
+            <input type="number" value="0" step="0.01" oninput="calcUnico()" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:13px;width:100%">
+          </div>
+          <div class="field" style="margin:0"><label>N° Factura</label>
+            <div style="display:flex;gap:6px">
+              <input type="text" placeholder="Factura" style="flex:1;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
+              <button onclick="(function(b){b.textContent='✓';b.style.background='rgba(63,185,80,.3)';if(typeof _showToast==='function')_showToast('✅ Gasto guardado','green',1500);setTimeout(function(){b.textContent='💾';b.style.background='rgba(63,185,80,.12)';},1200);})(this)" style="flex-shrink:0;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:5px;padding:6px 10px;font-size:11px;cursor:pointer">💾</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <button onclick="_unicoAddGasto()" style="background:rgba(88,166,255,.08);border:1px solid rgba(88,166,255,.25);color:var(--blue-l);border-radius:7px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;width:100%;margin-bottom:8px">+ Agregar Gasto</button>
 
       <button class="btn" style="background:linear-gradient(135deg,#a371f7,#58a6ff);margin-top:8px" onclick="calcUnicoFull()">⚡ Calcular Costo Único →</button>
     </div>
@@ -4095,6 +4129,29 @@ function _autoFillGastosProveedores(){
     }
     // Gastos agente — vienen de plantilla, no auto-generados aquí
     // (el usuario los sube con su proveedor real)
+  }
+
+  // ══════════════════════════════════════════════════════
+  // ESCENARIO: ÚNICO
+  // ══════════════════════════════════════════════════════
+  if(isUnico && window._unicoData){
+    const ud = window._unicoData;
+    const corProv = ud.corredor==='cifexp' ? 'CIF EXPRESS TRÁMITE S.A.' : 'SABABA IMPORTS, S.A.';
+    const corOC   = ud.corredor==='cifexp' ? 'Hon.CIF Único' : 'Hon.Sab Único';
+    add('honorarios', corProv, corOC, ud.hon, ud.honNfac||'');
+    if(ud.tasa>0) add('liquidacion', 'TESORO NACIONAL', 'Tasa Aduana', ud.tasa);
+    if(ud.agente>0) add('acarreo', 'ACARREO / TRANSPORTE', 'Gastos Origen/Destino', ud.agente);
+    // Add extra gastos from unico-gastos-list
+    document.querySelectorAll('#unico-gastos-list .unico-gasto-row').forEach(function(row){
+      var sel = row.querySelector('select');
+      var mto = row.querySelector('input[type=number]');
+      var nfc = row.querySelector('input[type=text]');
+      var tf  = sel ? sel.value : 'gastos';
+      var amt = mto ? (parseFloat(mto.value)||0) : 0;
+      var nf  = nfc ? (nfc.value||'') : '';
+      var provMap = {flete:'FLETE INTERNACIONAL',acarreo:'ACARREO / TRANSPORTE',honorarios:corProv,itbms:'TESORO NACIONAL',mv:'MASTER VALUE',otros:'OTROS GASTOS'};
+      if(amt>0.005) add(tf, provMap[tf]||'OTROS GASTOS', tf.toUpperCase(), amt, nf);
+    });
   }
 
   // ══════════════════════════════════════════════════════
@@ -9634,7 +9691,7 @@ function renderInvLines(){
         +'</div>'
         +'<div style="display:flex;gap:5px;align-items:center;margin-bottom:6px">'
         +'<input type="text" value="'+(l.numFact||l.nfac||'')+'" placeholder="N° Factura Suplidor" id="nfact-merc-'+i+'" onchange="invLines['+i+'].numFact=this.value;invLines['+i+'].nfac=this.value;" oninput="invLines['+i+'].numFact=this.value;invLines['+i+'].nfac=this.value;" style="flex:1;background:var(--s2);border:1px solid rgba(88,166,255,.2);border-radius:5px;padding:5px 8px;color:var(--text);font-size:11px">'
-        +'<button onclick="(function(i){invLines[i].numFact=document.getElementById(\'nfact-merc-\'+i)?.value||invLines[i].numFact||\'\';;invLines[i].nfac=invLines[i].numFact;var b=this;b.textContent=\'✓ Guardado\';b.style.background=\'rgba(63,185,80,.3)\';if(typeof _showToast===\'function\') _showToast(\'✅ N° Factura actualizada\',\'green\',2000);setTimeout(function(){b.textContent=\'💾\';b.style.background=\'rgba(63,185,80,.12)\';},1500);})('+i+')" style="flex-shrink:0;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:5px;padding:5px 10px;font-size:11px;cursor:pointer" title="Guardar N° Factura">💾</button>'
+        +'<button onclick="(function(i){invLines[i].numFact=document.getElementById(\'nfact-merc-\'+i)?.value||invLines[i].numFact||\'\';;invLines[i].nfac=invLines[i].numFact;var b=this;b.textContent=\'✓ Guardado\';b.style.background=\'rgba(63,185,80,.3)\';if(typeof _showToast===\'function\') _showInlineToast(b,\'✅ Factura guardada\');setTimeout(function(){b.textContent=\'💾\';b.style.background=\'rgba(63,185,80,.12)\';},1500);})('+i+')" style="flex-shrink:0;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:5px;padding:5px 10px;font-size:11px;cursor:pointer" title="Guardar N° Factura">💾</button>'
         +'</div>'
         +'<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
         +'<div style="flex:1;min-width:0;position:relative"><input type="text" value="'+((l.prov||'').replace(/"/g,'&quot;'))+'" placeholder="Escribe proveedor para buscar..." list="prov-datalist" onchange="onInvProvChange('+i+',this.value)" oninput="invLines['+i+'].prov=this.value" style="width:100%;background:var(--s2);border:1px solid '+provBorder+';border-radius:6px;padding:6px 10px;color:var(--text);font-size:12px;box-sizing:border-box"></div>'
@@ -9699,7 +9756,7 @@ function renderInvLines(){
           +'<button onclick="(function(i){var val=document.getElementById(\'nfact-gasto-\'+i)?.value||invLines[i].numFact||\'\';invLines[i].numFact=val;invLines[i].nfac=val;'
           // Auto-propagar a líneas del mismo proveedor Sababa
           +'var prov=(invLines[i].prov||\'\').toUpperCase();if(prov.includes(\'SABABA\')){invLines.forEach(function(l,j){if(j!==i&&(l.prov||\'\').toUpperCase().includes(\'SABABA\')){l.numFact=val;l.nfac=val;var el=document.getElementById(\'nfact-gasto-\'+j);if(el)el.value=val;}});}'
-          +'var b=this;b.textContent=\'✓ Guardado\';b.style.background=\'rgba(63,185,80,.3)\';if(typeof _showToast===\'function\') _showToast(\'✅ N° Factura actualizada\',\'green\',2000);setTimeout(function(){b.textContent=\'💾\';b.style.background=\'rgba(63,185,80,.12)\';},1500);})('+i+')" '
+          +'var b=this;b.textContent=\'✓ Guardado\';b.style.background=\'rgba(63,185,80,.3)\';if(typeof _showToast===\'function\') _showInlineToast(b,\'✅ Factura guardada\');setTimeout(function(){b.textContent=\'💾\';b.style.background=\'rgba(63,185,80,.12)\';},1500);})('+i+')" '
           +'style="flex-shrink:0;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;white-space:nowrap" title="Guardar N° Factura (se propaga a líneas del mismo proveedor)">💾</button>'
           +'</div>'
           +'</div>';
@@ -11253,6 +11310,37 @@ function calcUnico(){
   if(honEl) honEl.value = hon > 0 ? hon.toFixed(2) : '';
 }
 
+function _unicoRemoveGasto(btn){
+  var p=btn.parentElement;
+  var tries=0;
+  while(p&&tries<5){
+    if(p.className&&p.className.indexOf('unico-gasto-row')>=0){p.remove();calcUnico();return;}
+    p=p.parentElement;tries++;
+  }
+}
+function _unicoAddGasto(){
+  var c=document.getElementById('unico-gastos-list');
+  var d=document.createElement('div');
+  d.className='unico-gasto-row';
+  d.style.cssText='display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;align-items:flex-end;margin-bottom:8px';
+  d.innerHTML=
+    '<div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Tipo de Gasto</label>'+
+    '<select onchange="calcUnico()" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 8px;color:var(--text);font-size:12px;width:100%">'+
+    '<option value="flete">🚢 Flete Internacional</option>'+
+    '<option value="acarreo">📦 Acarreo / Gastos Origen</option>'+
+    '<option value="honorarios">💼 Honorarios Adicionales</option>'+
+    '<option value="itbms">🧾 ITBMS</option>'+
+    '<option value="mv">💰 Master Value</option>'+
+    '<option value="otros">📋 Otros Gastos</option>'+
+    '</select></div>'+
+    '<div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Monto (USD)</label>'+
+    '<input type="number" value="0" step="0.01" oninput="calcUnico()" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 8px;color:var(--text);font-size:13px;width:100%"></div>'+
+    '<div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">N° Factura</label>'+
+    '<input type="text" placeholder="Ej: INV-001" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 8px;color:var(--text);font-size:12px;width:100%"></div>'+
+    '<button onclick="_unicoRemoveGasto(this)" style="background:rgba(218,54,51,.1);border:1px solid rgba(218,54,51,.3);color:var(--red-l);border-radius:5px;padding:7px 10px;font-size:13px;cursor:pointer;height:34px;align-self:flex-end">✕</button>';
+  c.appendChild(d);
+}
+
 function calcUnicoFull(){
   const corredor = document.getElementById('unico_corredor')?.value || 'cifexp';
   const nro = document.getElementById('unico_nro')?.value || '';
@@ -11283,6 +11371,8 @@ function calcUnicoFull(){
 
   // Activate único mode — lock other comparison tabs
   window._unicoModeActive = true;
+  window._unicoData = {corredor, nro, cif, hon, honPct, tasa, agente, corName,
+    honNfac: document.getElementById('unico_hon_nfac')?.value||''};
   // Mark comparison tabs as disabled visually
   document.querySelectorAll('.tab').forEach(t=>{
     const txt = t.textContent;
@@ -11352,6 +11442,29 @@ function _enableAllApplyBtns(){
   });
 }
 
+function _showInlineToast(btn, msg){
+  // Remove any existing inline toast
+  var old = document.getElementById('_inline_toast');
+  if(old) old.remove();
+  var t = document.createElement('div');
+  t.id = '_inline_toast';
+  t.textContent = msg;
+  t.style.cssText = 'position:absolute;z-index:99999;background:rgba(63,185,80,.95);color:#fff;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:700;white-space:nowrap;pointer-events:none;box-shadow:0 4px 16px rgba(0,0,0,.4);transition:opacity .3s,transform .3s;opacity:0;transform:translateY(8px)';
+  // Position relative to button
+  var rect = btn.getBoundingClientRect();
+  t.style.left = (rect.left + window.scrollX) + 'px';
+  t.style.top  = (rect.top  + window.scrollY - 36) + 'px';
+  document.body.appendChild(t);
+  requestAnimationFrame(function(){
+    t.style.opacity = '1';
+    t.style.transform = 'translateY(0)';
+  });
+  setTimeout(function(){
+    t.style.opacity = '0';
+    t.style.transform = 'translateY(-8px)';
+    setTimeout(function(){ if(t.parentNode) t.remove(); }, 350);
+  }, 2000);
+}
 function _showToast(msg, type='green', duration=2500){
   const colors={green:'rgba(63,185,80,.15)',blue:'rgba(88,166,255,.15)',red:'rgba(218,54,51,.15)',orange:'rgba(240,136,62,.15)'};
   const borders={green:'rgba(63,185,80,.4)',blue:'rgba(88,166,255,.4)',red:'rgba(218,54,51,.4)',orange:'rgba(240,136,62,.4)'};
