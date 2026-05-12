@@ -10320,12 +10320,21 @@ function _unicoLoadPlantilla(input){
           const badge = l._corregido
             ? `<span style="font-size:9px;background:rgba(240,136,62,.12);color:var(--orange-l);border-radius:3px;padding:1px 4px;margin-left:4px">✏ Corregido</span>`
             : `<span style="font-size:9px;color:var(--green-l);margin-left:4px">✓</span>`;
-          return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(48,54,61,.3)">
-            <div style="flex:1;min-width:0;overflow:hidden">
-              <span style="color:${color};font-size:11px;font-weight:600">${l.prov||'—'}</span>${badge}
-              <span style="color:var(--muted);font-size:9px;margin-left:4px">${l.deptCat||''}</span>
+          // Mostrar nombre oficial (l.prov ya fue reemplazado con el nombre oficial)
+          // Si el usuario quiere corregirlo, hacemos el campo editable también
+          return `<div style="padding:4px 0;border-bottom:1px solid rgba(48,54,61,.3)">
+            <div style="display:flex;align-items:center;gap:6px">
+              <div style="flex:1;min-width:0">
+                <input type="text" value="${(l.prov||'').replace(/"/g,'&quot;')}"
+                  list="prov-datalist"
+                  oninput="window._unicoInvLines[${realIdx}].prov=this.value"
+                  onchange="(function(inp,i){var m=typeof provMatch==='function'?provMatch(inp.value):null;if(m&&(m.exact||m.score>=0.8)){window._unicoInvLines[i].prov=m.name;inp.value=m.name;inp.style.borderColor='rgba(63,185,80,.4)';}else{inp.style.borderColor='rgba(218,54,51,.5)';}})(this,${realIdx})"
+                  style="width:100%;background:transparent;border:1px solid rgba(63,185,80,.25);border-radius:5px;padding:3px 7px;color:${color};font-size:11px;font-weight:600">
+                ${badge}
+                <span style="color:var(--muted);font-size:9px;margin-left:2px">${l.deptCat||''}</span>
+              </div>
+              <span style="color:var(--green-l);font-family:monospace;font-size:11px;font-weight:700;flex-shrink:0;margin-left:8px">${fmt(l.costo)}</span>
             </div>
-            <span style="color:var(--green-l);font-family:monospace;font-size:11px;font-weight:700;flex-shrink:0;margin-left:8px">${fmt(l.costo)}</span>
           </div>`;
         }
       }).join('') + (mercU.length>60?`<div style="color:var(--muted);font-size:10px;padding:4px 0">…y ${mercU.length-60} más</div>`:'');
@@ -11225,8 +11234,14 @@ function provMatch(q){
       return {name,score:1,exact:true,si};
     }
     let score=0;
-    if(N.includes(Q)||Q.includes(N))score=Math.min(Q.length,N.length)/Math.max(Q.length,N.length);
-    else score=_bigram(Q,N);
+    if(N.includes(Q)||Q.includes(N)){
+      score=Math.min(Q.length,N.length)/Math.max(Q.length,N.length);
+      // Bonus: si Q es un prefijo del nombre oficial (ej: "MARBLE" es prefijo de "MARBLE ARCH HOLDING CORP.")
+      // y Q tiene al menos 4 caracteres, dar score alto para que sea encontrado
+      if(N.startsWith(Q) && Q.length >= 4) score = Math.max(score, 0.85);
+    } else {
+      score=_bigram(Q,N);
+    }
     if(score>bScore){bScore=score;best=name;}
   }
   if(bScore<0.25)return null;
