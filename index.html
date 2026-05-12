@@ -10673,7 +10673,33 @@ function loadInvFile(input){
       }
 
       const line={prov:provRaw, deptCat, costo, bultos, traspaso, piezas, oc:ocVal, nfac:nfacVal, tipoFac, numFact:nfacVal, ocHomologada:ocHomolVal, montoHomologado:montoHomol};
-      if(provRaw) line._match=provMatch(provRaw);
+      if(provRaw){
+        line._match = provMatch(provRaw);
+        // ── AUTO-CORRECCIÓN: si el match es exacto o muy alto (≥0.8), reemplazar nombre ──
+        // Esto garantiza que el proveedor queda con el nombre oficial de la lista
+        if(line._match && (line._match.exact || line._match.score >= 0.8)){
+          const finalName = (compar==='sababa' && line._match.si) ? line._match.si : line._match.name;
+          line.prov = finalName; // reemplazar con nombre oficial
+        }
+      }
+      // ── AUTO-CORRECCIÓN DEPARTAMENTO: si el deptCat no está en la lista, buscar el más cercano ──
+      if(tipoFac === 'mercancia' && deptCat){
+        const deptList = getDeptList ? getDeptList() : [];
+        const deptUp = deptCat.toUpperCase();
+        // Buscar coincidencia exacta (case-insensitive)
+        const exactDept = deptList.find(d => d.toUpperCase() === deptUp);
+        if(exactDept){
+          line.deptCat = exactDept; // corregir capitalización
+        } else {
+          // Buscar si algún dept de la lista está contenido en el nombre o viceversa
+          const closeDept = deptList.find(d => {
+            const DU = d.toUpperCase();
+            return DU.includes(deptUp) || deptUp.includes(DU);
+          });
+          if(closeDept) line.deptCat = closeDept;
+          // Si no hay match, dejar el valor del archivo para que el usuario lo corrija visualmente
+        }
+      }
       if(provRaw||costo>0) invLines.push(line);
     });
 
@@ -10685,17 +10711,25 @@ function loadInvFile(input){
     // Show results immediately — don't require Esc1 to be configured first
     if(typeof calc==='function') calc();
 
-    // ── Auto-fill descripción con departamentos al subir plantilla ──
+    // Contar cuántos proveedores fueron auto-corregidos
+    const _autoCorr = invLines.filter(l=>l._match&&(l._match.exact||l._match.score>=0.8)&&l.tipoFac==='mercancia').length;
+    const _noMatch  = invLines.filter(l=>l.tipoFac==='mercancia'&&l.prov&&!l._match).length;
+
+    // ── Auto-fill Tipo de Mercancía con departamentos de la plantilla ──
+    // Se recalcula SIEMPRE después de la corrección automática de departamentos
+    const _mercLinesAuto = invLines.filter(l=>(l.tipoFac||'mercancia')==='mercancia');
+    const _totalMercAuto = _mercLinesAuto.reduce((s,l)=>s+(l.costo||0),0);
+    const _deptSumsAuto = {};
+    _mercLinesAuto.forEach(l=>{ const k=(l.deptCat||l.dept||'').trim(); if(k){if(!_deptSumsAuto[k])_deptSumsAuto[k]=0;_deptSumsAuto[k]+=(l.costo||0);} });
+    const _dptParts = Object.entries(_deptSumsAuto).sort((a,b)=>b[1]-a[1])
+      .map(([k,v])=>{ const p=_totalMercAuto>0?(v/_totalMercAuto*100).toFixed(0):0; return k+' '+p+'%'; });
+    const _descStr = _dptParts.join(', ');
+    // Actualizar campo Tipo de Mercancía del formulario principal
     const _descAutoEl = document.getElementById('s1_desc_emb');
-    if(_descAutoEl && (!_descAutoEl.value || _descAutoEl.value.trim()==='')) {
-      const _deptSumsAuto = {};
-      const _mercLinesAuto = invLines.filter(l=>(l.tipoFac||'mercancia')==='mercancia');
-      const _totalMercAuto = _mercLinesAuto.reduce((s,l)=>s+(l.costo||0),0);
-      _mercLinesAuto.forEach(l=>{ const k=(l.deptCat||l.dept||'').trim(); if(k){if(!_deptSumsAuto[k])_deptSumsAuto[k]=0;_deptSumsAuto[k]+=(l.costo||0);} });
-      const _dptParts = Object.entries(_deptSumsAuto).sort((a,b)=>b[1]-a[1])
-        .map(([k,v])=>{ const p=_totalMercAuto>0?(v/_totalMercAuto*100).toFixed(0):0; return k+' '+p+'%'; });
-      if(_dptParts.length) _descAutoEl.value = _dptParts.join(', ');
-    }
+    if(_descAutoEl && _descStr) _descAutoEl.value = _descStr;
+    // Actualizar campo Tipo de Mercancía del Escenario Único
+    const _descUnicoEl = document.getElementById('unico_desc');
+    if(_descUnicoEl && _descStr && (!_descUnicoEl.value || _descUnicoEl.value.trim()==='')) _descUnicoEl.value = _descStr;
     ['btn-aplicar-cambios','btn-aplicar-cif','btn-aplicar-sab'].forEach(function(id){
       var b=document.getElementById(id);
       if(b){ b.style.opacity='1'; b.style.pointerEvents='auto'; b.style.background='rgba(249,115,22,.85)'; b.style.color='#fff'; b.style.borderColor='#f97316'; }
@@ -10855,8 +10889,20 @@ function loadInvFile(input){
     }
 
     if(seguroDetectado > 0) msg += '\nSeguro: $'+seguroDetectado.toFixed(2)+' (referencia).';
+    if(_autoCorr > 0) msg += '\n✅ '+_autoCorr+' proveedores corregidos al nombre oficial.';
+    if(_noMatch > 0)  msg += '\n⚠️ '+_noMatch+' proveedor(es) no encontrado(s) — verifica en Proveedores.';
 
-    alert(msg);
+    // Usar _showToast en vez de alert
+    var _toastMsg = invLines.filter(function(l){return (l.tipoFac||'mercancia')==='mercancia';}).length + ' facturas cargadas';
+    if(_autoCorr>0) _toastMsg += ' · '+_autoCorr+' nombres corregidos';
+    if(_noMatch>0)  _toastMsg += ' · '+_noMatch+' sin verificar (marcados en rojo)';
+    if(_descStr)    _toastMsg += ' · ' + _descStr;
+    var _toastColor = _noMatch>0 ? 'orange' : 'green';
+    if(typeof _showToast==='function'){
+      _showToast('✅ '+_toastMsg, _toastColor, 5000);
+    } else {
+      alert(msg);
+    }
     // Secuencia de disparo: Liquidación → Sync → Sababa
     if(typeof calc==='function') calc();
     // syncSC3fromSC1 propaga liquidación a Sababa (solo si el embarque ya tiene término)
