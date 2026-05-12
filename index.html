@@ -791,7 +791,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       <div><div class="nav-label">Sababa Imports</div><div class="nav-sub">Facturación fiscal homologada</div></div>
     </div>
 
-    <div class="sidebar-nav-item" onclick="closeSidebar();_abrirUnico()">
+    <div class="sidebar-nav-item" onclick="closeSidebar();switchTab('unico',document.querySelectorAll('.tab')[3])">
       <div class="nav-icon" style="background:rgba(163,113,247,.15)">🔒</div>
       <div><div class="nav-label">Escenario Único</div><div class="nav-sub">Sin alternativa de comparación</div></div>
     </div>
@@ -927,7 +927,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       <div class="tab on" onclick="switchTab('sim',this)">📋 Liq. Aduanal</div>
       <div class="tab" onclick="switchTab('cifexp',this)">⚡ CIF Express</div>
       <div class="tab" onclick="switchTab('sababa',this)">🤝 Sababa</div>
-      <div class="tab" id="tab-btn-unico" onclick="_abrirUnico()" style="color:#a371f7">🔒 Único</div>
+      <div class="tab" onclick="switchTab('unico',this)" style="color:#a371f7">🔒 Único</div>
       <div class="tab" onclick="switchTab('facturas',this)">🧾 Proveedores</div>
       <div class="tab" onclick="abrirModuloComparativo()" style="color:var(--blue-l)">📊 Comparativo</div>
       <div class="tab" onclick="switchTab('aranceles',this)">📦 Aranceles</div>
@@ -2578,7 +2578,15 @@ function switchTab(id,el){
   if(id==='unico'){
     const f=document.getElementById('unico_fecha');
     if(f&&!f.value) f.value=new Date().toISOString().slice(0,10);
-    setTimeout(function(){ if(typeof calcUnico==='function') calcUnico(); if(typeof _unicoRestaurarEstado==='function') _unicoRestaurarEstado(); }, 80);
+    // Restaurar estado guardado
+    if(typeof _unicoRestaurarEstado==='function') setTimeout(_unicoRestaurarEstado, 50);
+    // Delegación de eventos directa en el tab (no modal — no hay IDs duplicados)
+    const paneU = document.getElementById('tab-unico');
+    if(paneU && !paneU._unicoEventsAttached){
+      paneU._unicoEventsAttached = true;
+      paneU.addEventListener('input',  function(){ calcUnico(); });
+      paneU.addEventListener('change', function(){ calcUnico(); });
+    }
   }
   // Update header tab indicator
   const tabNames={'sim':'📋 Liquidación Aduanal','cifexp':'⚡ CIF Express','sababa':'🤝 Sababa Imports',
@@ -13688,10 +13696,8 @@ body:not(.sidebar-pinned) #app-wrapper {
         if(tabId==='cifexp'    && typeof updateCifExpDisplays==='function') updateCifExpDisplays();
         if(tabId==='sababa'    && typeof calcSab2==='function')        calcSab2();
         if(tabId==='unico'){
-          var fd=document.getElementById('unico_fecha-clone')||document.getElementById('unico_fecha');
-          if(fd && !fd.value) fd.value = new Date().toISOString().slice(0,10);
-          // Restaurar estado guardado al abrir el modal
-          if(typeof _unicoRestaurarEstado==='function') setTimeout(_unicoRestaurarEstado, 80);
+          // unico is now a direct tab — no longer opened via modal
+          // This block kept for safety but should not execute
         }
         // Habilitar botones Aplicar en el clone recién creado
         if(typeof _enableAllApplyBtns==='function') _enableAllApplyBtns();
@@ -13807,11 +13813,7 @@ body:not(.sidebar-pinned) #app-wrapper {
       }
       // Es un tab normal — guardarlo en window para que closeTabModal lo lea
       window._lastNonModalTabGlobal = id;
-      // Solo cerrar el modal si está abierto; si no hay modal abierto, ir directo al original
-      var overlay = document.getElementById('tab-modal-overlay');
-      if(overlay && overlay.classList.contains('open')){
-        closeTabModal();
-      }
+      closeTabModal();
       if(_origSwitch) _origSwitch.apply(this, arguments);
     };
 
@@ -13840,67 +13842,6 @@ body:not(.sidebar-pinned) #app-wrapper {
 
 })();
 </script>
-
-<!-- ═══════════════════════════════════════════════════════
-     ESCENARIO ÚNICO — OVERLAY PROPIO (independiente del modal system)
-     ═══════════════════════════════════════════════════════ -->
-<div id="unico-overlay" style="display:none;position:fixed;inset:0;z-index:9000;background:var(--bg);overflow-y:auto;">
-  <div style="position:sticky;top:0;z-index:10;background:var(--s1);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:10px 16px;">
-    <div style="font-size:13px;font-weight:700;color:#a371f7">🔒 Escenario Único</div>
-    <button onclick="_cerrarUnico()" style="background:rgba(218,54,51,.12);border:1px solid rgba(218,54,51,.25);color:var(--red-l);border-radius:7px;padding:5px 16px;font-size:12px;font-weight:600;cursor:pointer">✕ Cerrar</button>
-  </div>
-  <div id="unico-overlay-body"></div>
-</div>
-
-<script>
-function _abrirUnico(){
-  var overlay = document.getElementById('unico-overlay');
-  var body    = document.getElementById('unico-overlay-body');
-  var source  = document.getElementById('tab-unico');
-  if(!overlay || !source) return;
-
-  // Mover el contenido real (no clonar) al overlay
-  if(body.children.length === 0){
-    body.appendChild(source.querySelector('.page'));
-  }
-
-  overlay.style.display = 'block';
-  document.body.style.overflow = 'hidden';
-
-  // Resaltar tab button
-  document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('on'); });
-  var btn = document.getElementById('tab-btn-unico');
-  if(btn) btn.classList.add('on');
-
-  // Inicializar fecha y calcular
-  var f = document.getElementById('unico_fecha');
-  if(f && !f.value) f.value = new Date().toISOString().slice(0,10);
-  setTimeout(function(){
-    if(typeof _unicoRestaurarEstado === 'function') _unicoRestaurarEstado();
-    if(typeof calcUnico === 'function') calcUnico();
-  }, 80);
-}
-
-function _cerrarUnico(){
-  var overlay = document.getElementById('unico-overlay');
-  if(!overlay) return;
-  overlay.style.display = 'none';
-  document.body.style.overflow = '';
-
-  // Quitar resaltado del tab
-  var btn = document.getElementById('tab-btn-unico');
-  if(btn) btn.classList.remove('on');
-}
-
-// ESC cierra el overlay
-document.addEventListener('keydown', function(e){
-  if(e.key === 'Escape'){
-    var overlay = document.getElementById('unico-overlay');
-    if(overlay && overlay.style.display !== 'none') _cerrarUnico();
-  }
-});
-</script>
-
 </div><!-- /app-wrapper -->
 </body>
 </html>
