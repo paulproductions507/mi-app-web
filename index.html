@@ -2557,11 +2557,10 @@ function switchTab(id,el){
     alert('🔒 Modo Único activo: CIF Express y Sababa Imports bloqueados.');
     return;
   }
-  // Asegurar que app-wrapper esté visible (por si venimos del splash o de un modal)
-  var appW = document.getElementById('app-wrapper');
-  if(appW){ appW.classList.remove('hidden'); appW.style.opacity='1'; appW.style.transform='none'; }
-  var splash = document.getElementById('splash');
-  if(splash){ splash.style.display='none'; }
+  var _aw=document.getElementById('app-wrapper');
+  if(_aw){_aw.classList.remove('hidden');_aw.style.opacity='1';_aw.style.transform='none';}
+  var _sp=document.getElementById('splash');
+  if(_sp) _sp.style.display='none';
   document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
   const pane=document.getElementById('tab-'+id);
@@ -3353,9 +3352,19 @@ function iniciarApp(tab){
     if(tab==='resumen')   tab='tendencias';
 
     // Direct tabs — show without modal
-    if(tab==='sim'){
-      // Already showing tab-sim (it starts with 'on'), nothing to do
-      window._lastNonModalTabGlobal = 'sim';
+    if(tab==='sim'||tab==='unico'){
+      document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('on'));
+      document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
+      var dp=document.getElementById('tab-'+tab);
+      if(dp) dp.classList.add('on');
+      var dt=document.querySelector('.tab[onclick*="\''+tab+'\'"]');
+      if(dt) dt.classList.add('on');
+      window._lastNonModalTabGlobal = tab;
+      if(tab==='unico'){
+        var f=document.getElementById('unico_fecha');
+        if(f&&!f.value) f.value=new Date().toISOString().slice(0,10);
+        setTimeout(function(){ if(typeof calcUnico==='function') calcUnico(); },80);
+      }
       return;
     }
 
@@ -3385,7 +3394,7 @@ function iniciarApp(tab){
       if(typeof abrirModuloComparativo==='function') abrirModuloComparativo();
     } else if(typeof openTabModal==='function'){
       var _labels = {
-        'cifexp':'⚡ CIF Express','sababa':'🤝 Sababa Imports','unico':'🔒 Escenario Único',
+        'cifexp':'⚡ CIF Express','sababa':'🤝 Sababa Imports',
         'facturas':'🧾 Proveedores','aranceles':'📦 Aranceles','tendencias':'📈 Tendencias',
         'config':'⚙️ Configuración','histprovs':'🏭 Historial de Proveedores'
       };
