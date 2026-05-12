@@ -10073,7 +10073,7 @@ function renderInvLines(){
         +'<button onclick="(function(i){invLines[i].numFact=document.getElementById(\'nfact-merc-\'+i)?.value||invLines[i].numFact||\'\';;invLines[i].nfac=invLines[i].numFact;var b=this;b.textContent=\'✓ Guardado\';b.style.background=\'rgba(63,185,80,.3)\';if(typeof _showToast===\'function\') _showInlineToast(b,\'✅ Factura guardada\');setTimeout(function(){b.textContent=\'💾\';b.style.background=\'rgba(63,185,80,.12)\';},1500);})('+i+')" style="flex-shrink:0;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:5px;padding:5px 10px;font-size:11px;cursor:pointer" title="Guardar N° Factura">💾</button>'
         +'</div>'
         +'<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
-        +'<div style="flex:1;min-width:0;position:relative"><input type="text" value="'+((l.prov||'').replace(/"/g,'&quot;'))+'" placeholder="Escribe proveedor para buscar..." list="prov-datalist" onchange="onInvProvChange('+i+',this.value)" oninput="invLines['+i+'].prov=this.value" style="width:100%;background:var(--s2);border:1px solid '+provBorder+';border-radius:6px;padding:6px 10px;color:var(--text);font-size:12px;box-sizing:border-box"></div>'
+        +'<div style="flex:1;min-width:0;position:relative"><input type="text" value="'+((l.prov||'').replace(/"/g,'&quot;'))+'" placeholder="'+(m&&!m.exact&&m.score<0.8?'⚠ Escribe el nombre correcto...':'Escribe proveedor para buscar...')+'" list="prov-datalist" onchange="onInvProvChange('+i+',this.value)" oninput="invLines['+i+'].prov=this.value" style="width:100%;background:var(--s2);border:1px solid '+provBorder+';border-radius:6px;padding:6px 10px;color:'+((!m||m.score<0.25)?'var(--red-l)':'var(--text)')+';font-size:12px;box-sizing:border-box'+((!m||m.score<0.25)?';font-weight:700':'')+'"></div>'
         +(provHint?'<div style="width:100%;margin-top:3px">'+provHint+'</div>':'')
         +(l.deptCat?'<div style="font-size:10px;color:var(--green-l);margin-top:4px">✓ '+l.deptCat+'</div>':'')
         +(typeof _getContenedorSelect==='function'?'<div style="width:100%;margin-top:4px">'+_getContenedorSelect(i,l._contenedor)+'</div>':'')
@@ -10255,30 +10255,94 @@ function _unicoLoadPlantilla(input){
       let tipoFac   = 'mercancia';
       let deptCat   = rubroRaw;
       if(tipoRaw==='servicio'){ tipoFac='gastos'; deptCat='GASTOS'; }
-      window._unicoInvLines.push({prov:provRaw, deptCat, costo, tipoFac, nfac:nfacVal, bultos, piezas});
+
+      const line = {prov:provRaw, deptCat, costo, tipoFac, nfac:nfacVal, bultos, piezas};
+
+      // ── Auto-corrección de proveedor contra lista oficial ──
+      if(provRaw && typeof provMatch==='function'){
+        line._match = provMatch(provRaw);
+        if(line._match && (line._match.exact || line._match.score >= 0.8)){
+          line.prov = line._match.name; // reemplazar con nombre oficial
+          line._corregido = (provRaw !== line._match.name);
+        } else if(!line._match || line._match.score < 0.25){
+          line._noMatch = true; // no encontrado — mostrar en rojo
+        }
+      }
+
+      // ── Auto-corrección de departamento contra lista oficial ──
+      if(tipoFac === 'mercancia' && deptCat && typeof getDeptList==='function'){
+        const deptList = getDeptList();
+        const deptUp   = deptCat.toUpperCase();
+        const exactD   = deptList.find(d => d.toUpperCase() === deptUp);
+        if(exactD){ line.deptCat = exactD; }
+        else {
+          const closeD = deptList.find(d => { const DU=d.toUpperCase(); return DU.includes(deptUp)||deptUp.includes(DU); });
+          if(closeD) line.deptCat = closeD;
+        }
+      }
+
+      window._unicoInvLines.push(line);
     });
 
-    // Render preview
-    const mercU = window._unicoInvLines.filter(l=>l.tipoFac==='mercancia');
+    // Render preview with validation colors
+    const mercU  = window._unicoInvLines.filter(l=>l.tipoFac==='mercancia');
     const totalU = mercU.reduce((s,l)=>s+(l.costo||0),0);
-    const fmt = n=>'$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2});
+    const fmt    = n=>'$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2});
+    const corrCount  = mercU.filter(l=>l._corregido).length;
+    const noMatchCount = mercU.filter(l=>l._noMatch).length;
 
     const listEl = document.getElementById('unico-inv-lines-list');
     const totalEl= document.getElementById('unico-inv-total');
     const prevEl = document.getElementById('unico-inv-preview');
     const statEl = document.getElementById('unico-plantilla-status');
     if(listEl){
-      listEl.innerHTML = mercU.slice(0,50).map(l=>
-        `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(48,54,61,.3)">
-          <span style="color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${l.prov||'—'} <span style="color:var(--muted);font-size:9px">${l.deptCat||''}</span></span>
-          <span style="color:var(--green-l);font-family:'IBM Plex Mono',monospace;flex-shrink:0;margin-left:8px">${fmt(l.costo)}</span>
-        </div>`
-      ).join('') + (mercU.length>50?`<div style="color:var(--muted);font-size:10px;padding:4px 0">…y ${mercU.length-50} más</div>`:'');
+      listEl.innerHTML = mercU.slice(0,60).map((l,idx)=>{
+        const realIdx = window._unicoInvLines.indexOf(l);
+        if(l._noMatch){
+          // Campo editable con autocomplete para proveedores no encontrados
+          return `<div style="padding:4px 0;border-bottom:1px solid rgba(48,54,61,.3)">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+              <span style="font-size:9px;background:rgba(218,54,51,.18);color:var(--red-l);border-radius:3px;padding:1px 6px;flex-shrink:0">⚠ No encontrado</span>
+              <span style="color:var(--muted);font-size:9px">${l.deptCat||''}</span>
+              <span style="color:var(--green-l);font-family:monospace;font-size:11px;font-weight:700;margin-left:auto">${fmt(l.costo)}</span>
+            </div>
+            <div style="display:flex;gap:4px;align-items:center">
+              <input type="text" value="${(l.prov||'').replace(/"/g,'&quot;')}"
+                list="prov-datalist"
+                placeholder="Escribe o elige el proveedor correcto…"
+                oninput="window._unicoInvLines[${realIdx}].prov=this.value;this.style.borderColor='rgba(240,136,62,.5)'"
+                onchange="(function(inp,i){var m=typeof provMatch==='function'?provMatch(inp.value):null;if(m&&(m.exact||m.score>=0.8)){window._unicoInvLines[i].prov=m.name;inp.value=m.name;inp.style.borderColor='rgba(63,185,80,.5)';window._unicoInvLines[i]._noMatch=false;window._unicoInvLines[i]._corregido=false;}else{inp.style.borderColor='rgba(218,54,51,.5)';};})(this,${realIdx})"
+                style="flex:1;background:rgba(218,54,51,.07);border:1px solid rgba(218,54,51,.4);border-radius:6px;padding:5px 8px;color:var(--red-l);font-size:11px;font-weight:600">
+            </div>
+          </div>`;
+        } else {
+          const color = l._corregido ? 'var(--orange-l)' : 'var(--green-l)';
+          const badge = l._corregido
+            ? `<span style="font-size:9px;background:rgba(240,136,62,.12);color:var(--orange-l);border-radius:3px;padding:1px 4px;margin-left:4px">✏ Corregido</span>`
+            : `<span style="font-size:9px;color:var(--green-l);margin-left:4px">✓</span>`;
+          return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(48,54,61,.3)">
+            <div style="flex:1;min-width:0;overflow:hidden">
+              <span style="color:${color};font-size:11px;font-weight:600">${l.prov||'—'}</span>${badge}
+              <span style="color:var(--muted);font-size:9px;margin-left:4px">${l.deptCat||''}</span>
+            </div>
+            <span style="color:var(--green-l);font-family:monospace;font-size:11px;font-weight:700;flex-shrink:0;margin-left:8px">${fmt(l.costo)}</span>
+          </div>`;
+        }
+      }).join('') + (mercU.length>60?`<div style="color:var(--muted);font-size:10px;padding:4px 0">…y ${mercU.length-60} más</div>`:'');
     }
     if(totalEl) totalEl.textContent = fmt(totalU);
-    if(prevEl) prevEl.style.display = window._unicoInvLines.length ? 'block':'none';
-    if(statEl) statEl.textContent = `${window._unicoInvLines.length} filas cargadas — ${mercU.length} de mercancía · Total: ${fmt(totalU)}`;
-    _showToast(`✅ ${window._unicoInvLines.length} filas cargadas`, 'green', 2000);
+    if(prevEl)  prevEl.style.display = window._unicoInvLines.length ? 'block':'none';
+
+    // Status message with correction summary
+    let statusMsg = `${window._unicoInvLines.length} filas cargadas — ${mercU.length} mercancía · Total: ${fmt(totalU)}`;
+    if(corrCount>0)    statusMsg += ` · ✏ ${corrCount} nombre(s) corregido(s) al oficial`;
+    if(noMatchCount>0) statusMsg += ` · ⚠ ${noMatchCount} no encontrado(s) — edita el nombre en la plantilla`;
+    if(statEl) statEl.innerHTML = `<span style="color:${noMatchCount>0?'var(--orange-l)':'var(--green-l)'}">${statusMsg}</span>`;
+
+    // Toast resumen
+    const toastColor = noMatchCount>0 ? 'orange' : 'green';
+    const toastMsg = mercU.length+' facturas'+(corrCount>0?' · '+corrCount+' corregidos':'')+(noMatchCount>0?' · ⚠ '+noMatchCount+' sin verificar':'');
+    _showToast('✅ '+toastMsg, toastColor, 4000);
   }
   if(isXlsx){
     if(typeof XLSX==='undefined'){ _showToast('Cargando librería Excel… reintenta.','orange',3000); return; }
