@@ -1016,13 +1016,13 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
             <option value="">— Selecciona país primero —</option>
           </select>
         </div>
-        <div class="field"><label>Destino Final</label><input type="text" id="s1_destino" placeholder="Ej: Ciudad de Panamá"></div>
+        <div class="field" style="display:none"><label>Destino Final</label><input type="text" id="s1_destino" placeholder="Ej: Ciudad de Panamá"></div>
       </div>
       <!-- Campo oculto que consolida país+ciudad para compatibilidad con el resto del sistema -->
       <input type="hidden" id="s1_origen_emb" value="">
       <div class="r2">
         <div class="field"><label>Tipo de Embarque</label>
-          <select id="s1_tipo_emb" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px;width:100%">
+          <select id="s1_tipo_emb" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px;width:100%" onchange="_toggleContenedorField(this.value)">
             <option value="">— Selecciona —</option>
             <option value="Contenedor directo">Contenedor directo</option>
             <option value="Camión">Camión</option>
@@ -1227,6 +1227,17 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
         <span>⚠️ No aplicar DMCE ni Acarreo <span style="font-size:10px;color:var(--muted)">(mercancía con tratamiento especial)</span></span>
       </label>
 
+      <!-- CONTENEDOR ÚNICO — solo para tipo Contenedor directo -->
+      <div id="blk-nro-contenedor" style="display:none;margin-bottom:8px">
+        <div class="r2">
+          <div class="field"><label>N° Contenedor</label>
+            <input type="text" id="s1_nro_cont" placeholder="Ej: MSCU1234567" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px">
+          </div>
+          <div class="field"><label>Fecha de Llegada</label>
+            <input type="date" id="s1_fecha_llegada" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px">
+          </div>
+        </div>
+      </div>
       <!-- CONTENEDORES MÚLTIPLES — solo aparece si equipo=Contenedor y cant>1 -->
       <div id="multi-contenedores-wrap" style="display:none;margin-top:10px">
         <div style="font-size:10px;font-weight:700;color:var(--blue-l);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px">
@@ -1804,7 +1815,8 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
         <div style="display:flex;gap:6px">
           <button onclick="document.getElementById('nuevo-prov-panel').style.display=document.getElementById('nuevo-prov-panel').style.display==='none'?'flex':'none'"
             style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:6px;padding:3px 10px;font-size:11px;cursor:pointer">+ Proveedor</button>
-          <button onclick="addInvLine()" style="background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:6px;padding:3px 10px;font-size:11px;cursor:pointer">+ Factura</button>
+          <button onclick="addInvLine()" style="background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:6px;padding:3px 10px;font-size:11px;cursor:pointer">+ Mercancía</button
+          <button onclick="addInvLine('servicio')" style="background:rgba(240,136,62,.1);border:1px solid rgba(240,136,62,.3);color:var(--orange-l);border-radius:6px;padding:3px 10px;font-size:11px;cursor:pointer">+ Servicio</button>
         </div>
       </div>
       <!-- Panel para agregar nuevo proveedor permanente -->
@@ -2612,6 +2624,9 @@ function setEquipo(val){
     if(dmceNote) dmceNote.textContent='$60.00 fijo';
   }
   calc();
+  // Show/hide contenedor number field
+  const tipoEmb = document.getElementById('s1_tipo_emb');
+  if(tipoEmb) _toggleContenedorField(tipoEmb.value);
 }
 function isDesktop(){ return window.innerWidth >= 1024; }
 
@@ -6369,6 +6384,8 @@ function reabrirEmbarquePendiente(idx){
   if(s.equipo){
     const eqEl = document.getElementById('s1_equipo');
     if(eqEl){ eqEl.value = s.equipo; if(typeof setEquipo==='function') setEquipo(s.equipo); }
+    // Also restore tipo_emb for contenedor field visibility
+    if(s.tipoEquipo){ const te=document.getElementById('s1_tipo_emb'); if(te){te.value=s.tipoEquipo;if(typeof _toggleContenedorField==='function')_toggleContenedorField(s.tipoEquipo);} }
   }
   if(s.equipos !== undefined) _set('s1_equipos', s.equipos);
   // Restaurar vía de transporte
@@ -7568,8 +7585,8 @@ function _renderHistProvList(){
         '<span>📋 <strong style="color:var(--text)">'+r.nro+'</strong></span>'+
         (r.numFact!=='—'?'<span>🧾 Fact: <strong style="color:var(--text)">'+r.numFact+'</strong></span>':'')+
         (r.oc!=='—'?'<span>OC: <strong style="color:var(--text)">'+r.oc+'</strong></span>':'')+
-        (r.ocHomologada?'<span>OC Homol: <strong style="color:#a371f7">'+r.ocHomologada+'</strong></span>':'')+
-        (r.montoHomologado>0?'<span>💜 Homol: <strong style="color:#a371f7">$'+r.montoHomologado.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</strong></span>':'')+
+        (r.ocHomologada?'<span>OC Homol: <strong style="color:#f08632">'+r.ocHomologada+'</strong></span>':'')+
+        (r.montoHomologado>0?'<span>🟠 Homol: <strong style="color:#f08632">$'+r.montoHomologado.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</strong></span>':'')+
         (r.seccion==='merc'&&r.piezas>0?'<span>🔢 <strong style="color:var(--blue-l)">'+r.piezas.toLocaleString()+' pzas</strong></span>':r.seccion==='merc'?'<span style="color:var(--muted)">— pzas</span>':'')+
         (r.bultos>0?'<span>📦 <strong style="color:var(--text)">'+r.bultos+' ctn</strong></span>':'<span style="color:var(--muted)">— ctn</span>')+
         '<span>📅 '+r.fecha+'</span>'+
@@ -9608,8 +9625,14 @@ function initFormScroll(){
 let invLines=[];
 const INV_COLORS=['#3fb950','#58a6ff','#f08632','#f85149','#d29922','#8b949e','#58d68d','#7fb3d3'];
 
-function addInvLine(){
-  invLines.push({dept:'',costo:0,tipoFac:'mercancia'});
+function addInvLine(tipo){
+  tipo = tipo || 'mercancia';
+  if(tipo==='servicio'){
+    // Add a service line with dropdown for rubro
+    invLines.push({prov:'',costo:0,tipoFac:'gastos',deptCat:'GASTOS',_userAdded:true,_tipoServicio:'gastos'});
+  } else {
+    invLines.push({dept:'',costo:0,tipoFac:'mercancia'});
+  }
   renderInvLines();
 }
 function removeInvLine(idx){
@@ -11294,6 +11317,11 @@ function salirModoLectura(){
 // =====================================================
 window._unicoModeActive = false;
 
+function _toggleContenedorField(val){
+  var blk = document.getElementById('blk-nro-contenedor');
+  var isContenedor = val && val.toLowerCase().includes('contenedor');
+  if(blk) blk.style.display = isContenedor ? '' : 'none';
+}
 function calcUnico(){
   const corredor = document.getElementById('unico_corredor')?.value || 'cifexp';
   const cif = parseFloat(document.getElementById('unico_cif')?.value) || 0;
@@ -11449,21 +11477,13 @@ function _showInlineToast(btn, msg){
   var t = document.createElement('div');
   t.id = '_inline_toast';
   t.textContent = msg;
-  t.style.cssText = 'position:absolute;z-index:99999;background:rgba(63,185,80,.95);color:#fff;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:700;white-space:nowrap;pointer-events:none;box-shadow:0 4px 16px rgba(0,0,0,.4);transition:opacity .3s,transform .3s;opacity:0;transform:translateY(8px)';
-  // Position relative to button
-  var rect = btn.getBoundingClientRect();
-  t.style.left = (rect.left + window.scrollX) + 'px';
-  t.style.top  = (rect.top  + window.scrollY - 36) + 'px';
+    var rect=btn.getBoundingClientRect();
+  var left=rect.left+rect.width/2;
+  var top=rect.top-8;
+  t.style.cssText='position:fixed;z-index:999999;background:rgba(63,185,80,.97);color:#fff;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700;white-space:nowrap;pointer-events:none;box-shadow:0 4px 20px rgba(0,0,0,.5);transition:opacity .25s,transform .25s;opacity:0;transform:translateY(6px);left:'+left+'px;top:'+top+'px';
   document.body.appendChild(t);
-  requestAnimationFrame(function(){
-    t.style.opacity = '1';
-    t.style.transform = 'translateY(0)';
-  });
-  setTimeout(function(){
-    t.style.opacity = '0';
-    t.style.transform = 'translateY(-8px)';
-    setTimeout(function(){ if(t.parentNode) t.remove(); }, 350);
-  }, 2000);
+  requestAnimationFrame(function(){t.style.opacity='1';t.style.transform='translateY(-36px)';});
+  setTimeout(function(){t.style.opacity='0';setTimeout(function(){if(t.parentNode)t.remove();},300);},2200);
 }
 function _showToast(msg, type='green', duration=2500){
   const colors={green:'rgba(63,185,80,.15)',blue:'rgba(88,166,255,.15)',red:'rgba(218,54,51,.15)',orange:'rgba(240,136,62,.15)'};
