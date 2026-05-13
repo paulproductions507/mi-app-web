@@ -711,21 +711,21 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
         <div style="font-size:12px;font-weight:700;color:#a855f7">Historial Facturas</div>
         <div style="font-size:10px;color:var(--muted)">Facturas por embarque</div>
       </button>
-      <button onclick="iniciarApp('unico')"
-        style="background:linear-gradient(135deg,rgba(163,113,247,.12),rgba(163,113,247,.05));border:1px solid rgba(163,113,247,.3);border-radius:14px;padding:12px;text-align:left;cursor:pointer;transition:transform .15s,box-shadow .15s;display:flex;flex-direction:column;gap:3px"
-        onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(163,113,247,.2)'"
+      <button onclick="guardarSesionNube();_showToast('☁️ Sesión guardada','green')"
+        style="background:linear-gradient(135deg,rgba(34,197,94,.12),rgba(34,197,94,.05));border:1px solid rgba(34,197,94,.3);border-radius:14px;padding:12px;text-align:left;cursor:pointer;transition:transform .15s,box-shadow .15s;display:flex;flex-direction:column;gap:3px"
+        onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(34,197,94,.2)'"
         onmouseout="this.style.transform='';this.style.boxShadow=''">
-        <span style="font-size:28px">🔒</span>
-        <div style="font-size:12px;font-weight:700;color:#a371f7">Escenario Único</div>
-        <div style="font-size:10px;color:var(--muted)">Sin comparación alternativa</div>
+        <span style="font-size:28px">☁️</span>
+        <div style="font-size:12px;font-weight:700;color:#22c55e">Guardar Nube</div>
+        <div style="font-size:10px;color:var(--muted)">Sync automático</div>
       </button>
-      <button onclick="iniciarApp('histprovs')"
-        style="background:linear-gradient(135deg,rgba(163,113,247,.12),rgba(163,113,247,.05));border:1px solid rgba(163,113,247,.3);border-radius:14px;padding:12px;text-align:left;cursor:pointer;transition:transform .15s,box-shadow .15s;display:flex;flex-direction:column;gap:3px"
-        onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(163,113,247,.2)'"
+      <button onclick="_startProgress();cargarSesionNube()"
+        style="background:linear-gradient(135deg,rgba(99,179,237,.12),rgba(99,179,237,.05));border:1px solid rgba(99,179,237,.3);border-radius:14px;padding:12px;text-align:left;cursor:pointer;transition:transform .15s,box-shadow .15s;display:flex;flex-direction:column;gap:3px"
+        onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(99,179,237,.2)'"
         onmouseout="this.style.transform='';this.style.boxShadow=''">
-        <span style="font-size:28px">🏭</span>
-        <div style="font-size:12px;font-weight:700;color:#a371f7">Hist. Proveedores</div>
-        <div style="font-size:10px;color:var(--muted)">Embarques · Único incluido</div>
+        <span style="font-size:28px">📥</span>
+        <div style="font-size:12px;font-weight:700;color:#63b3ed">Cargar Sesión</div>
+        <div style="font-size:10px;color:var(--muted)">Restaurar desde nube</div>
       </button>
       <button onclick="iniciarApp('facturas')"
         style="background:linear-gradient(135deg,rgba(251,191,36,.12),rgba(251,191,36,.05));border:1px solid rgba(251,191,36,.3);border-radius:14px;padding:12px;text-align:left;cursor:pointer;transition:transform .15s,box-shadow .15s;display:flex;flex-direction:column;gap:3px"
@@ -927,7 +927,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       <div class="tab on" onclick="switchTab('sim',this)">📋 Liq. Aduanal</div>
       <div class="tab" onclick="switchTab('cifexp',this)">⚡ CIF Express</div>
       <div class="tab" onclick="switchTab('sababa',this)">🤝 Sababa</div>
-      <!-- tab Único oculto — se accede desde el Menú Principal o el sidebar -->
+      <div class="tab" onclick="switchTab('unico',this)" style="color:#a371f7">🔒 Único</div>
       <div class="tab" onclick="switchTab('facturas',this)">🧾 Proveedores</div>
       <div class="tab" onclick="abrirModuloComparativo()" style="color:var(--blue-l)">📊 Comparativo</div>
       <div class="tab" onclick="switchTab('aranceles',this)">📦 Aranceles</div>
@@ -1004,7 +1004,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
           <option value="Espana">🇪🇸 España</option>
           <option value="Alemania">🇩🇪 Alemania</option>
           <option value="Portugal">🇵🇹 Portugal</option>
-          <option value="Panama">🇵🇦 Panamá (Local / ZL)</option>
+          <option value="Panama">🇵🇦 Panamá</option>
           <option value="Puerto Rico">🇵🇷 Puerto Rico</option>
           <option value="Otro">🌐 Otro país</option>
         </select>
@@ -1361,7 +1361,63 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
   <div class="card" style="margin-bottom:12px">
     <div class="card-hd" style="cursor:pointer;user-select:none" onclick="_toggleSection('card-body-5___comparativo','card-chev-5___comparativo',this)"><div class="dot b"></div><h3>5 · Comparativo</h3><span id="card-chev-5___comparativo" style="margin-left:auto;font-size:11px;color:var(--muted)">▼</span>
     <div class="card-bd">
-      <!-- Escenario Único se maneja exclusivamente desde su propio tab 🔒 Único -->
+      <div style="background:rgba(163,113,247,.07);border:1px solid rgba(163,113,247,.3);border-radius:8px;padding:10px 14px;margin-bottom:12px">
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:12px;font-weight:600;color:var(--text)">
+          <input type="checkbox" id="chk-solo-mode" onchange="toggleSoloMode()" style="width:16px;height:16px;accent-color:#a371f7">
+          Escenario único — sin alternativa de comparación
+        </label>
+        <p class="note" style="margin-top:4px">El sistema sigue calculando el Costo Landed. Solo se omite la comparativa. <strong style="color:rgba(163,113,247,.9)">Acarreo, DMCE y honorarios automáticos quedan excluidos.</strong></p>
+      </div>
+
+      <!-- BLOQUE SOLO MODE — campos extras cuando se activa el check -->
+      <div id="blk-solo-extra" style="display:none;background:rgba(163,113,247,.05);border:1px solid rgba(163,113,247,.2);border-radius:8px;padding:12px 14px;margin-bottom:12px">
+        <div style="font-size:10px;font-weight:700;color:#a371f7;letter-spacing:.07em;text-transform:uppercase;margin-bottom:10px">🔒 Modo Único — Honorarios del Corredor</div>
+
+        <!-- Selección corredor -->
+        <div class="field">
+          <label>Corredor / Agente Aduanal</label>
+          <select id="solo_corredor" onchange="calcSoloExtra()" style="background:var(--s2);border:1px solid rgba(163,113,247,.4);color:var(--text)">
+            <option value="custom">✏️ Nombre personalizado</option>
+            <option value="cifexp">⚡ CIF Express</option>
+            <option value="sababa">🤝 Sababa Imports</option>
+          </select>
+        </div>
+        <div class="field" id="solo_nombre_field">
+          <label>Nombre del Corredor</label>
+          <input type="text" id="solo_nombre" placeholder="Ej: Agencia García & Asociados" oninput="calcSoloExtra()">
+        </div>
+
+        <!-- Honorarios base -->
+        <div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:6px;margin-top:4px">Honorario Base (% sobre CIF)</div>
+        <div class="r2">
+          <div class="field">
+            <label>Factor % (sobre CIF)</label>
+            <input type="number" id="solo_hon_pct" value="1" step="0.01" min="0" oninput="calcSoloExtra()" style="border-color:rgba(163,113,247,.4)">
+          </div>
+          <div class="field">
+            <label>Honorario Base Calculado (USD)</label>
+            <input type="number" id="solo_hon_calc" readonly style="background:var(--bg);color:#a371f7;font-weight:700">
+          </div>
+        </div>
+
+        <!-- Gastos del corredor por rubro -->
+        <div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:6px;margin-top:4px">Gastos del Corredor — por Rubro</div>
+        <div id="solo-gastos-list">
+          <!-- filas dinámicas -->
+        </div>
+        <button onclick="_soloAddGasto()" style="background:rgba(163,113,247,.08);border:1px solid rgba(163,113,247,.3);color:#a371f7;border-radius:6px;padding:6px 14px;font-size:11px;font-weight:600;cursor:pointer;width:100%;margin-bottom:8px">+ Agregar Gasto del Corredor</button>
+
+        <!-- Total factura corredor -->
+        <div class="field" style="margin-top:4px">
+          <label style="font-weight:700;color:#a371f7">Total Factura Corredor (USD) — Honorario Base + Gastos</label>
+          <input type="number" id="solo_total_corredor" readonly style="background:var(--bg);color:#a371f7;font-weight:800;border-color:rgba(163,113,247,.5);font-size:14px">
+        </div>
+
+        <p class="note" style="margin-top:6px;color:rgba(163,113,247,.7)">⚠️ En Modo Único: Acarreo, DMCE y honorarios automáticos quedan excluidos. El ITBMS se calcula sobre CIF (+ arancel si aplica). El Total Factura del corredor reemplaza los honorarios del escenario regular.</p>
+        <div style="margin-top:10px;display:flex;gap:8px">
+          <button onclick="switchTab('facturas',document.querySelector('.tab[onclick*=facturas]'))" style="flex:1;background:rgba(163,113,247,.12);border:1px solid rgba(163,113,247,.4);color:#a371f7;border-radius:7px;padding:9px 14px;font-size:12px;font-weight:700;cursor:pointer">🧾 Abrir Proveedores → Registrar Facturas</button>
+        </div>
+      </div>
 
       <div id="blk-solo-comp">
         <div class="field"><label>Comparar contra</label>
@@ -1528,7 +1584,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
             <option value="Tailandia">🇹🇭 Tailandia</option>
             <option value="Italia">🇮🇹 Italia</option>
             <option value="Espana">🇪🇸 España</option>
-            <option value="Panama">🇵🇦 Panamá (Local / ZL)</option>
+            <option value="Panama">🇵🇦 Panamá</option>
             <option value="Otro">🌐 Otro país</option>
           </select>
         </div>
@@ -2050,7 +2106,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
           <option value="Japan">🇯🇵 Japón</option>
           <option value="Taiwan">🇹🇼 Taiwán</option>
           <option value="Turkey">🇹🇷 Turquía</option>
-          <option value="Panama">🇵🇦 Panamá/ZL</option>
+          <option value="Panama">🇵🇦 Panamá</option>
           <option value="Puerto Rico">🇵🇷 Puerto Rico</option>
           <option value="Bangladesh">🇧🇩 Bangladesh</option>
           <option value="Indonesia">🇮🇩 Indonesia</option>
@@ -2535,7 +2591,10 @@ function switchTab(id,el){
       _updateTendSubtitle();
     }, 50);
   }
-  // Escenario Único ahora es un tab integrado — no abre popup
+  if(id==='unico'){
+    abrirUnicoModulo();
+    return; // don't show the blank tab
+  }
   // Update header tab indicator
   const tabNames={'sim':'📋 Liquidación Aduanal','cifexp':'⚡ CIF Express','sababa':'🤝 Sababa Imports',
     'facturas':'🧾 Proveedores','comparativo':'📊 Comparativo','aranceles':'📦 Aranceles',
@@ -3335,8 +3394,10 @@ function iniciarApp(tab){
     if(tab==='comparativo'){
       if(typeof abrirModuloComparativo==='function') abrirModuloComparativo();
     } else if(tab==='unico'){
-      // Escenario Único — abrir el módulo (mismo comportamiento que el sidebar)
-      if(typeof abrirUnicoModulo==='function') abrirUnicoModulo();
+      // Escenario Único es tab directo — no modal
+      closeSidebar();
+      var uniTabBtn = document.querySelector('.tab[onclick*="unico"]');
+      if(typeof switchTab==='function') switchTab('unico', uniTabBtn);
     } else if(typeof openTabModal==='function'){
       var _labels = {
         'cifexp':'⚡ CIF Express','sababa':'🤝 Sababa Imports',
@@ -7709,7 +7770,6 @@ function renderHistProv(){
         <option value="CIF Express">⚡ CIF Express</option>
         <option value="Sababa">🤝 Sababa</option>
         <option value="Liq. Aduanal">📋 Liq. Aduanal</option>
-        <option value="Único">🔒 Escenario Único</option>
       </select>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
@@ -7758,8 +7818,7 @@ function _buildHistProvRows(){
     var esc=d.esc||d.snap?.esc||'';
     var nro=d.nro||'—'; var fecha=d.fecha||d.snap?.fecha||'—';
     var escLabel=(esc.toLowerCase().includes('cif')||esc.toLowerCase().includes('express'))?'CIF Express'
-                :(esc.toLowerCase().includes('sababa')||esc.toLowerCase().includes('sab'))?'Sababa'
-                :(esc.toLowerCase().includes('único')||esc.toLowerCase().includes('unico')||d.modoUnico||d.tipoEsc==='unico')?'Único':'Liq. Aduanal';
+                :(esc.toLowerCase().includes('sababa')||esc.toLowerCase().includes('sab'))?'Sababa':'Liq. Aduanal';
     var isHomol=escLabel==='Sababa'; var dIdx=tendData.indexOf(d);
     lines.forEach(function(l){
       var tf=l.tipoFac||'mercancia';
@@ -12390,42 +12449,36 @@ async function procesarUnico(){
   if(!nro){
     if(!confirm('⚠️ No hay N° de Embarque. ¿Continuar sin número?')) return;
   }
+  const fechaInput = prompt('📅 Fecha del embarque:', ud.fecha || new Date().toISOString().slice(0,10));
+  if(fechaInput === null) return;
+  const fecha = (fechaInput && /^\d{4}-\d{2}-\d{2}$/.test(fechaInput.trim())) ? fechaInput.trim() : ud.fecha;
 
   // Build invLines from the unico gastos for historial compatibility
   const unicoInvLines = [];
   const R = n=>Math.round(n*100)/100;
   const provCor = ud.provCor || ud.corName.replace(/[⚡🤝✏️]/g,'').trim();
   const honNfac = ud.honNfac || '';
-  const idFac = ud.idFiscal || honNfac;
 
-  if(ud.arancel>0.001) unicoInvLines.push({tipoFac:'liquidacion', deptCat:'GASTOS', prov:'TESORO NACIONAL', costo:R(ud.arancel), oc:'Pago Arancelario', nfac:idFac, numFact:idFac, _autoGasto:true});
-  if(ud.itbms>0.001)   unicoInvLines.push({tipoFac:'itbms', deptCat:'GASTOS', prov:'TESORO NACIONAL', costo:R(ud.itbms), oc:'ITBMS s/CIF+Arancel', nfac:idFac, numFact:idFac, _autoGasto:true});
-  if(ud.tasa>0.001)    unicoInvLines.push({tipoFac:'tasa', deptCat:'GASTOS', prov:'TESORO NACIONAL', costo:R(ud.tasa), oc:'Tasa Aduana', nfac:idFac, numFact:idFac, _autoGasto:true});
-  if(ud.uso>0.001)     unicoInvLines.push({tipoFac:'uso_sistema', deptCat:'GASTOS', prov:'TESORO NACIONAL', costo:R(ud.uso), oc:'Uso del Sistema', nfac:idFac, numFact:idFac, _autoGasto:true});
+  if(ud.arancel>0.001) unicoInvLines.push({tipoFac:'liquidacion', deptCat:'GASTOS', prov:'TESORO NACIONAL', costo:R(ud.arancel), oc:'Pago Arancelario', nfac:ud.idFiscal||honNfac, numFact:ud.idFiscal||honNfac, _autoGasto:true});
+  if(ud.itbms>0.001)   unicoInvLines.push({tipoFac:'itbms', deptCat:'GASTOS', prov:'TESORO NACIONAL', costo:R(ud.itbms), oc:'ITBMS s/CIF+Arancel', nfac:ud.idFiscal||honNfac, numFact:ud.idFiscal||honNfac, _autoGasto:true});
+  if(ud.tasa>0.001)    unicoInvLines.push({tipoFac:'tasa', deptCat:'GASTOS', prov:'TESORO NACIONAL', costo:R(ud.tasa), oc:'Tasa Aduana', nfac:ud.idFiscal||honNfac, numFact:ud.idFiscal||honNfac, _autoGasto:true});
+  if(ud.uso>0.001)     unicoInvLines.push({tipoFac:'uso_sistema', deptCat:'GASTOS', prov:'TESORO NACIONAL', costo:R(ud.uso), oc:'Uso del Sistema', nfac:ud.idFiscal||honNfac, numFact:ud.idFiscal||honNfac, _autoGasto:true});
   if(ud.hon>0.001)     unicoInvLines.push({tipoFac:'honorarios', deptCat:'GASTOS', prov:provCor, costo:R(ud.hon), oc:'Honorarios Corredor ('+ud.honPct.toFixed(2)+'%)', nfac:honNfac, numFact:honNfac, _autoGasto:true});
   if(ud.agente>0.001)  unicoInvLines.push({tipoFac:'acarreo', deptCat:'GASTOS', prov:provCor, costo:R(ud.agente), oc:'Gastos Origen/Destino', _autoGasto:true});
   if(ud.dmce>0.001)    unicoInvLines.push({tipoFac:'dmce', deptCat:'GASTOS', prov:provCor, costo:R(ud.dmce), oc:'DMCE', _autoGasto:true});
   (ud.gastosRows||[]).forEach(g=>{
     unicoInvLines.push({tipoFac:g.rubro, deptCat:'GASTOS', prov:provCor, costo:R(g.monto), nfac:g.nfac, numFact:g.nfac, _autoGasto:true});
   });
-  // Facturas de mercancía de la plantilla cargada
-  (window._unicoInvLines||[]).filter(l=>l.tipoFac==='mercancia').forEach(l=>{
-    unicoInvLines.push({tipoFac:'mercancia', deptCat:l.deptCat||'MERCANCIA', prov:l.prov, costo:R(l.costo), nfac:l.nfac, bultos:l.bultos, piezas:l.piezas, montoHomologado:null});
-  });
 
   const snap = {
     nro: nro||'SIN-NRO-'+Date.now(),
-    desc: ud.desc||'Embarque Único',
-    fecha: ud.fecha || new Date().toISOString().slice(0,10),
+    desc: ud.desc||'Embarque',
+    fecha,
     ahorro: 0,
     cif: ud.cif,
     esc: 'Único — '+ud.corName.replace(/[⚡🤝✏️]/g,'').trim(),
-    tipoEsc: 'unico',
-    modoUnico: true,
     ts: Date.now(),
-    snap: {
-      sc1:{ cif:ud.cif, landed:ud.landed, factor:ud.factor, arancel:ud.arancel, itbms:ud.itbms, hon:ud.hon, tasa:ud.tasa, uso:ud.uso }
-    },
+    snap: { sc1:{ cif:ud.cif, landed:ud.landed, factor:ud.factor, arancel:ud.arancel, itbms:ud.itbms, hon:ud.hon } },
     invLines: unicoInvLines,
     status: 'completo',
     origen: (ud.pais||'')+(ud.ciudad?' / '+ud.ciudad:''),
@@ -12436,6 +12489,7 @@ async function procesarUnico(){
     tipoEquipo: ud.tipoEmb||'',
     cartones: ud.cartones||0,
     viaTransporte: 'SEA',
+    modoUnico: true,
     corredor: ud.corredor,
     provCorredor: provCor,
   };
@@ -12453,89 +12507,29 @@ async function procesarUnico(){
     tendData.push(snap);
   }
 
-  // Save to cloud (same as procesarEmbarque)
-  saveTendData();
-  try{ await guardarSesionNube(); }catch(e){}
-  if(typeof renderTend==='function') renderTend();
-  if(typeof renderTopProvs==='function') renderTopProvs();
-  if(typeof renderDashboardKPIs==='function') renderDashboardKPIs();
-  if(typeof updateCmpNroList==='function') updateCmpNroList();
-  if(typeof _populateProveedorFilter==='function') _populateProveedorFilter();
+  // Ensure Supabase is connected before saving
+  if(!_sb){ initSupabase(); await new Promise(r=>setTimeout(r,600)); }
+  if(!_sb){ _showToast('❌ Sin conexión a nube. Intenta de nuevo.','red',4000); return; }
 
-  // Store for "pendiente" button
-  window._procOverlayNro = snap.nro;
-
-  // Show success overlay (same style as procesarEmbarque but with Desembolso instead of Ahorro)
-  _showUnicoProcessingOverlay(snap.nro, snap.desc, ud.cif, ud.landed, ud.factor, ()=>{
-    // Reset unico form
-    _unicoLimpiarForm();
-    volverInicio();
-  });
-}
-
-function _showUnicoProcessingOverlay(nro, desc, cif, desembolso, factor, onDone){
-  const fmt=n=>'$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-  const old=document.getElementById('_procOverlay'); if(old) old.remove();
-  window._procOverlayDone = onDone;
-  const div=document.createElement('div');
-  div.id='_procOverlay';
-  div.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(6px)';
-  div.innerHTML=`
-    <div style="background:#fff;border-radius:24px;padding:36px 28px;max-width:360px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.5);animation:_pop .4s cubic-bezier(.34,1.56,.64,1)">
-      <style>@keyframes _pop{from{transform:scale(.75);opacity:0}to{transform:scale(1);opacity:1}}</style>
-      <div style="width:72px;height:72px;background:linear-gradient(135deg,#22c55e,#16a34a);border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:38px;margin:0 auto 20px;box-shadow:0 8px 24px rgba(34,197,94,.35)">✅</div>
-      <div style="font-size:20px;font-weight:800;color:#15803d;margin-bottom:8px">¡Embarque Procesado!</div>
-      <div style="font-size:14px;font-weight:700;color:#374151;margin-bottom:4px">${nro||'Sin número'}</div>
-      <div style="font-size:12px;color:#636c76;margin-bottom:20px">${desc}</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px">
-        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px">
-          <div style="font-size:9px;color:#15803d;text-transform:uppercase;margin-bottom:4px;font-weight:700">Valor Mercancía</div>
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:700;color:#15803d">${fmt(cif)}</div>
-        </div>
-        <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:10px;padding:12px">
-          <div style="font-size:9px;color:#7c3aed;text-transform:uppercase;margin-bottom:4px;font-weight:700">Desembolso</div>
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:700;color:#7c3aed">${fmt(desembolso)}</div>
-        </div>
-      </div>
-      <div style="background:#f8f9fa;border-radius:8px;padding:8px 12px;margin-bottom:16px;font-size:11px;color:#374151">
-        Factor de Importación: <strong style="color:#d97706">${Number(factor||0).toFixed(2)}%</strong>
-      </div>
-      <div style="font-size:11px;color:#636c76;margin-bottom:20px">☁️ Guardado en la nube automáticamente</div>
-      <button onclick="window._procOverlayDone&&window._procOverlayDone();document.getElementById('_procOverlay')?.remove()" 
-        style="width:100%;background:linear-gradient(135deg,#22c55e,#2563eb);border:none;border-radius:14px;padding:16px;color:#fff;font-size:15px;font-weight:800;cursor:pointer;letter-spacing:.02em;box-shadow:0 4px 20px rgba(34,197,94,.4);margin-bottom:10px">
-        🏠 Inicio
-      </button>
-      <button onclick="_marcarPendienteYCerrar()" 
-        style="width:100%;background:rgba(210,153,34,.12);border:1.5px solid rgba(210,153,34,.5);border-radius:14px;padding:11px;color:#d29922;font-size:12px;font-weight:700;cursor:pointer;letter-spacing:.01em;">
-        🟡 Marcar como Pendiente (factura por confirmar)
-      </button>
-    </div>`;
-  document.body.appendChild(div);
-}
-
-function _unicoLimpiarForm(){
-  // Reset key fields of the Único form
-  const ids=['unico_nro','unico_id_fiscal','unico_desc','unico_cif','unico_ar','unico_itbms',
-    'unico_tasa','unico_uso_sistema','unico_agente','unico_dmce','unico_hon_pct','unico_hon_nfac','unico_fecha'];
-  ids.forEach(function(id){
-    var el=document.getElementById(id);
-    if(el){ if(id==='unico_ar') el.value='10'; else if(id==='unico_itbms') el.value='7';
-      else if(id==='unico_tasa') el.value='100'; else if(id==='unico_uso_sistema') el.value='3';
-      else if(id==='unico_hon_pct') el.value='1'; else el.value=''; }
-  });
-  // Clear gastos adicionales rows
-  var gl=document.getElementById('unico-gastos-list'); if(gl) gl.innerHTML='';
-  // Clear plantilla
-  var ps=document.getElementById('unico-plantilla-status'); if(ps) ps.textContent='Sin plantilla cargada.';
-  var pi=document.getElementById('unico-inv-preview'); if(pi) pi.style.display='none';
-  window._unicoInvLines=[];
-  window._unicoData=null;
-  // Clear result area
-  var res=document.getElementById('res-unico');
-  if(res) res.innerHTML='<div class="ph"><div class="ph-icon">🔒</div><div class="ph-txt">Ingresa los datos y presiona Calcular para ver el resumen.</div></div>';
-  // Clear saved state
-  try{ localStorage.removeItem('_unico_estado_v3'); }catch(e){}
-  calcUnico();
+  try {
+    const payload = {
+      nombre: _TEND_MASTER_KEY,
+      datos: JSON.stringify({
+        tendData: tendData||[],
+        deleted: Array.from(window._deletedEmbarques||[]),
+        updated_at: new Date().toISOString()
+      }),
+      updated_at: new Date().toISOString()
+    };
+    const { error } = await _sb.from('simulador_sesiones').upsert(payload, { onConflict: 'nombre' });
+    if(error){ throw new Error(error.message); }
+    if(typeof renderTend==='function') renderTend();
+    if(typeof updateCmpNroList==='function') updateCmpNroList();
+    _showToast(`✅ Embarque #${nro||'—'} guardado en nube (Escenario Único)`, 'green', 4000);
+  } catch(e) {
+    console.error('Error guardando en nube:', e);
+    _showToast(`❌ Error al guardar: ${e.message}`, 'red', 5000);
+  }
 }
 
 // ── TOAST NOTIFICATION SYSTEM ──
