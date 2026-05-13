@@ -878,20 +878,62 @@ async function procesar(){
   var ok = await _pushToCloud(data);
 
   if(ok){
-    toast('✅ Embarque #'+data.nro+' guardado en la nube','green');
     localStorage.removeItem('_unico_estado2');
-    // Reset form
-    setTimeout(function(){
-      btn.textContent='✅ Guardado en la nube';
-      btn.style.background='rgba(63,185,80,.2)';
-      btn.disabled=false;
-    },500);
     lastCalc=null;
+    // Show success overlay
+    _showSuccessOverlay(data.nro, data.desc, data.cif, d.landed, d.factor);
   } else {
     toast('⚠️ Guardado localmente — sin conexión a la nube','orange');
     btn.textContent='✅ Procesar al Historial';
     btn.disabled=false;
   }
+}
+
+function _showSuccessOverlay(nro, desc, cif, desembolso, factor){
+  var fmt=function(n){ return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
+  var old=document.getElementById('_succOverlay'); if(old) old.remove();
+  var div=document.createElement('div');
+  div.id='_succOverlay';
+  div.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(6px)';
+  div.innerHTML='<div style="background:#fff;border-radius:24px;padding:36px 28px;max-width:360px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.5);animation:_pop .4s cubic-bezier(.34,1.56,.64,1)">'
+    +'<style>@keyframes _pop{from{transform:scale(.75);opacity:0}to{transform:scale(1);opacity:1}}</style>'
+    +'<div style="width:72px;height:72px;background:linear-gradient(135deg,#22c55e,#16a34a);border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:38px;margin:0 auto 20px;box-shadow:0 8px 24px rgba(34,197,94,.35)">✅</div>'
+    +'<div style="font-size:20px;font-weight:800;color:#15803d;margin-bottom:8px">¡Embarque Procesado!</div>'
+    +'<div style="font-size:14px;font-weight:700;color:#374151;margin-bottom:4px">'+(nro||'Sin número')+'</div>'
+    +'<div style="font-size:12px;color:#636c76;margin-bottom:20px">'+desc+'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px">'
+      +'<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px">'
+        +'<div style="font-size:9px;color:#15803d;text-transform:uppercase;margin-bottom:4px;font-weight:700">Valor Mercancía</div>'
+        +'<div style="font-family:monospace;font-size:15px;font-weight:700;color:#15803d">'+fmt(cif)+'</div>'
+      +'</div>'
+      +'<div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:10px;padding:12px">'
+        +'<div style="font-size:9px;color:#7c3aed;text-transform:uppercase;margin-bottom:4px;font-weight:700">Desembolso</div>'
+        +'<div style="font-family:monospace;font-size:15px;font-weight:700;color:#7c3aed">'+fmt(desembolso)+'</div>'
+      +'</div>'
+    +'</div>'
+    +'<div style="background:#f8f9fa;border-radius:8px;padding:8px 12px;margin-bottom:16px;font-size:11px;color:#374151">'
+      +'Factor de Importación: <strong style="color:#d97706">'+Number(factor||0).toFixed(2)+'%</strong>'
+    +'</div>'
+    +'<div style="font-size:11px;color:#636c76;margin-bottom:20px">☁️ Guardado en la nube automáticamente</div>'
+    +'<button onclick="document.getElementById(\'_succOverlay\').remove();window.location.href=\'index.html\'" '
+      +'style="width:100%;background:linear-gradient(135deg,#22c55e,#2563eb);border:none;border-radius:14px;padding:16px;color:#fff;font-size:15px;font-weight:800;cursor:pointer;letter-spacing:.02em;box-shadow:0 4px 20px rgba(34,197,94,.4);margin-bottom:10px">🏠 Inicio</button>'
+    +'<button onclick="_marcarPendienteStandalone(\''+nro+'\');document.getElementById(\'_succOverlay\').remove();window.location.href=\'index.html\'" '
+      +'style="width:100%;background:rgba(210,153,34,.12);border:1.5px solid rgba(210,153,34,.5);border-radius:14px;padding:11px;color:#d29922;font-size:12px;font-weight:700;cursor:pointer;">🟡 Marcar como Pendiente (factura por confirmar)</button>'
+    +'</div>';
+  document.body.appendChild(div);
+}
+
+async function _marcarPendienteStandalone(nro){
+  if(!nro||!_sb) return;
+  try{
+    var res=await _sb.from('simulador_sesiones').select('datos').eq('nombre',_SB_MASTER).maybeSingle();
+    if(!res.data) return;
+    var parsed=JSON.parse(res.data.datos);
+    var td=parsed.tendData||[];
+    var idx=td.findIndex(function(t){return t.nro&&t.nro.trim().toUpperCase()===nro.toUpperCase();});
+    if(idx!==-1){ td[idx].status='pendiente'; }
+    await _sb.from('simulador_sesiones').upsert({nombre:_SB_MASTER,datos:JSON.stringify({tendData:td,updated_at:new Date().toISOString()}),updated_at:new Date().toISOString()},{onConflict:'nombre'});
+  }catch(e){ console.warn('pendiente:',e); }
 }
 
 function buildInvLines(d){
