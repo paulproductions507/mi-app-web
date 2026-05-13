@@ -791,7 +791,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       <div><div class="nav-label">Sababa Imports</div><div class="nav-sub">Facturación fiscal homologada</div></div>
     </div>
 
-    <div class="sidebar-nav-item" onclick="closeSidebar();switchTab('unico',document.querySelectorAll('.tab')[3])">
+    <div class="sidebar-nav-item" onclick="closeSidebar();switchTab('unico',document.querySelector('.tab[onclick*=unico]'))">
       <div class="nav-icon" style="background:rgba(163,113,247,.15)">🔒</div>
       <div><div class="nav-label">Escenario Único</div><div class="nav-sub">Sin alternativa de comparación</div></div>
     </div>
@@ -2578,9 +2578,8 @@ function switchTab(id,el){
   if(id==='unico'){
     const f=document.getElementById('unico_fecha');
     if(f&&!f.value) f.value=new Date().toISOString().slice(0,10);
-    // Restaurar estado guardado
     if(typeof _unicoRestaurarEstado==='function') setTimeout(_unicoRestaurarEstado, 50);
-    // Delegación de eventos directa en el tab (no modal — no hay IDs duplicados)
+    // Attach event delegation once
     const paneU = document.getElementById('tab-unico');
     if(paneU && !paneU._unicoEventsAttached){
       paneU._unicoEventsAttached = true;
@@ -3386,9 +3385,14 @@ function iniciarApp(tab){
     // Modal tabs
     if(tab==='comparativo'){
       if(typeof abrirModuloComparativo==='function') abrirModuloComparativo();
+    } else if(tab==='unico'){
+      // Escenario Único es tab directo — no modal
+      closeSidebar();
+      var uniTabBtn = document.querySelector('.tab[onclick*="unico"]');
+      if(typeof switchTab==='function') switchTab('unico', uniTabBtn);
     } else if(typeof openTabModal==='function'){
       var _labels = {
-        'cifexp':'⚡ CIF Express','sababa':'🤝 Sababa Imports','unico':'🔒 Escenario Único',
+        'cifexp':'⚡ CIF Express','sababa':'🤝 Sababa Imports',
         'facturas':'🧾 Proveedores','aranceles':'📦 Aranceles','tendencias':'📈 Tendencias',
         'config':'⚙️ Configuración','histprovs':'🏭 Historial de Proveedores'
       };
