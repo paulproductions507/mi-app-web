@@ -791,7 +791,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       <div><div class="nav-label">Sababa Imports</div><div class="nav-sub">Facturación fiscal homologada</div></div>
     </div>
 
-    <div class="sidebar-nav-item" onclick="closeSidebar();switchTab('unico',document.querySelector('.tab[onclick*=unico]'))">
+    <div class="sidebar-nav-item" onclick="closeSidebar();abrirUnicoModulo()">
       <div class="nav-icon" style="background:rgba(163,113,247,.15)">🔒</div>
       <div><div class="nav-label">Escenario Único</div><div class="nav-sub">Sin alternativa de comparación</div></div>
     </div>
@@ -2552,6 +2552,22 @@ const fmt=n=>isNaN(n)?'$—':'$'+Number(n).toLocaleString('en-US',{minimumFracti
 const fmtP=n=>(n*100).toFixed(4)+'%';
 const lookupArt=desc=>{const q=desc.toUpperCase().trim();const f=arts.find(a=>q.includes(a.d)||a.d.split(' ').every(w=>q.includes(w)));return f?f.p:null;};
 
+function abrirUnicoModulo(){
+  // Open standalone Escenario Único module
+  var w = window.open('unico.html','_unico','width=720,height=860,resizable=yes,scrollbars=yes');
+  if(!w){ window.location.href='unico.html'; return; }
+  // Pass data to the new window after it loads
+  w.addEventListener('load', function(){
+    try{
+      w._PROV_NAMES = window._PROV_NAMES;
+      w._RUBROS_GASTO = window._RUBROS_GASTO;
+      w.tendData = window.tendData;
+      w.saveTendData = window.saveTendData;
+      w.renderTend = window.renderTend;
+      w.XLSX = window.XLSX;
+    }catch(e){}
+  });
+}
 function switchTab(id,el){
   if(window._unicoModeActive && (id==='cifexp'||id==='sababa')){
     alert('🔒 Modo Único activo: CIF Express y Sababa Imports bloqueados.');
@@ -2576,16 +2592,8 @@ function switchTab(id,el){
     }, 50);
   }
   if(id==='unico'){
-    const f=document.getElementById('unico_fecha');
-    if(f&&!f.value) f.value=new Date().toISOString().slice(0,10);
-    if(typeof _unicoRestaurarEstado==='function') setTimeout(_unicoRestaurarEstado, 50);
-    // Attach event delegation once
-    const paneU = document.getElementById('tab-unico');
-    if(paneU && !paneU._unicoEventsAttached){
-      paneU._unicoEventsAttached = true;
-      paneU.addEventListener('input',  function(){ calcUnico(); });
-      paneU.addEventListener('change', function(){ calcUnico(); });
-    }
+    abrirUnicoModulo();
+    return; // don't show the blank tab
   }
   // Update header tab indicator
   const tabNames={'sim':'📋 Liquidación Aduanal','cifexp':'⚡ CIF Express','sababa':'🤝 Sababa Imports',
