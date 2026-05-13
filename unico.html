@@ -119,7 +119,13 @@ datalist option{background:var(--s2);color:var(--text)}
   <span class="hdr-icon">🔒</span>
   <span class="hdr-title">Escenario Único</span>
   <span id="cloud-badge" style="font-size:10px;color:var(--muted);margin-left:8px">☁️ Conectando…</span>
+  <!-- Indicador de auto-guardado -->
+  <span id="_save-indicator" style="font-size:10px;color:var(--green);margin-left:10px;opacity:0;transition:opacity .4s;white-space:nowrap">💾 Guardado</span>
   <span class="hdr-sub" style="margin-left:auto">ZLC Panamá · Sin comparación alternativa</span>
+  <button onclick="saveState();toast('💾 Borrador guardado localmente','green')"
+    style="background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green);border-radius:6px;padding:5px 11px;font-size:11px;font-weight:600;cursor:pointer;margin-left:8px;white-space:nowrap">
+    💾 Guardar
+  </button>
   <a class="hdr-back" id="back-btn" href="#">← Volver</a>
 </div>
 
@@ -130,7 +136,10 @@ datalist option{background:var(--s2);color:var(--text)}
 
 <!-- ══ PLANTILLA ══ -->
 <div class="card">
-  <div class="card-hd">📂 Plantilla de Proveedores</div>
+  <div class="card-hd" style="justify-content:space-between">
+    <span>📂 Plantilla de Proveedores</span>
+    <span id="_plant-save-badge" style="font-size:9px;font-weight:700;color:var(--green);display:none">✓ Guardada</span>
+  </div>
   <div class="card-bd">
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
       <button onclick="downloadTemplate('csv')" style="flex:1;min-width:80px;background:rgba(63,185,80,.08);border:1px solid rgba(63,185,80,.2);color:var(--green);border-radius:7px;padding:7px;font-size:11px;cursor:pointer">📥 CSV</button>
@@ -1045,6 +1054,7 @@ function parseRows(rows){
     invLines.push(line);
   });
   renderPreview();
+  setTimeout(_autoSave, 100); // guardar plantilla cargada
 }
 
 function renderPreview(){
@@ -1114,6 +1124,7 @@ function applyPlantilla(){
   if(bultos>0&&!cartEl.value) cartEl.value=bultos;
   calcLive();
   toast('✅ '+fmt(total)+' aplicado al formulario','green');
+  _autoSave();
 }
 
 function loadFile(input){
@@ -1158,8 +1169,17 @@ function downloadTemplate(type){
 }
 
 // ═══════════════════════════════════════════════
-// PERSISTENCIA
+// PERSISTENCIA — guarda TODO incluyendo plantilla
 // ═══════════════════════════════════════════════
+var _saveTimer=null;
+function _showSaveIndicator(){
+  var el=document.getElementById('_save-indicator');
+  if(!el) return;
+  el.style.opacity='1';
+  clearTimeout(el._hideTimer);
+  el._hideTimer=setTimeout(function(){ el.style.opacity='0'; },2500);
+}
+
 function saveState(){
   try{
     var gastos=[];
@@ -1170,6 +1190,7 @@ function saveState(){
         nfac:row.querySelector('.gasto-nfac').value
       });
     });
+    // Incluir invLines (plantilla) en el estado guardado
     localStorage.setItem('_unico_estado2',JSON.stringify({
       corredor:gv('corredor'),provCor:gv('prov-cor'),nombreCor:gv('nombre-cor'),
       nro:gv('nro'),idFiscal:gv('id-fiscal'),desc:gv('desc'),
@@ -1177,9 +1198,20 @@ function saveState(){
       cartones:gv('cartones'),fecha:gv('fecha'),estatus:gv('estatus'),
       cif:gv('cif'),arPct:gv('ar-pct'),itbms:gv('itbms-pct'),
       tasa:gv('tasa'),uso:gv('uso'),agente:gv('agente'),dmce:gv('dmce'),
-      honPct:gv('hon-pct'),honNfac:gv('hon-nfac'),gastos
+      honPct:gv('hon-pct'),honNfac:gv('hon-nfac'),gastos,
+      invLines: invLines   // ← guardar la plantilla completa
     }));
+    _showSaveIndicator();
+    // Mostrar badge en tarjeta de plantilla si hay datos
+    var pb=document.getElementById('_plant-save-badge');
+    if(pb) pb.style.display = invLines.length ? 'inline' : 'none';
   }catch(e){}
+}
+
+// Guardado automático con debounce (300ms después del último cambio)
+function _autoSave(){
+  clearTimeout(_saveTimer);
+  _saveTimer=setTimeout(saveState, 300);
 }
 
 function loadState(){
@@ -1187,7 +1219,7 @@ function loadState(){
     var raw=localStorage.getItem('_unico_estado2');
     if(!raw) return;
     var e=JSON.parse(raw);
-    var su=function(id,v){if(v){var el=document.getElementById(id);if(el)el.value=v;}};
+    var su=function(id,v){if(v!==undefined&&v!==null&&v!==''){var el=document.getElementById(id);if(el)el.value=v;}};
     // Corredor first
     var corEl=document.getElementById('corredor');
     if(corEl&&e.corredor) corEl.value=e.corredor;
@@ -1206,7 +1238,17 @@ function loadState(){
     if(e.gastos&&e.gastos.length){
       e.gastos.forEach(function(g){addGasto(g.rubro,g.monto,g.nfac);});
     }
+    // Restaurar plantilla de proveedores
+    if(e.invLines&&e.invLines.length){
+      invLines=e.invLines;
+      renderPreview();
+      var pp=document.getElementById('plant-preview');
+      var ps=document.getElementById('plant-status');
+      if(pp) pp.style.display='block';
+      if(ps) ps.innerHTML='<span style="color:var(--green)">✓ Plantilla restaurada · '+invLines.filter(function(l){return l.tipoFac==="mercancia";}).length+' facturas</span>';
+    }
     setTimeout(calcLive,120);
+    toast('📂 Borrador restaurado automáticamente','green');
   }catch(err){}
 }
 
@@ -1226,11 +1268,11 @@ document.getElementById('back-btn').addEventListener('click',function(e){
 document.addEventListener('input',  function(e){
   if(!e.target.classList.contains('gasto-rubro')&&!e.target.classList.contains('gasto-nfac')&&!e.target.classList.contains('prov-edit'))
     calcLive();
-  saveState();
+  _autoSave();
 });
 document.addEventListener('change', function(e){
   calcLive();
-  saveState();
+  _autoSave();
 });
 
 // ═══════════════════════════════════════════════
