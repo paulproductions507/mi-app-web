@@ -108,6 +108,7 @@ input[readonly]{background:var(--bg);color:var(--muted);cursor:default}
 /* Datalist */
 datalist option{background:var(--s2);color:var(--text)}
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
@@ -117,7 +118,8 @@ datalist option{background:var(--s2);color:var(--text)}
 <div class="hdr">
   <span class="hdr-icon">🔒</span>
   <span class="hdr-title">Escenario Único</span>
-  <span class="hdr-sub">ZLC Panamá · Sin comparación alternativa</span>
+  <span id="cloud-badge" style="font-size:10px;color:var(--muted);margin-left:8px">☁️ Conectando…</span>
+  <span class="hdr-sub" style="margin-left:auto">ZLC Panamá · Sin comparación alternativa</span>
   <a class="hdr-back" id="back-btn" href="#">← Volver</a>
 </div>
 
@@ -672,44 +674,91 @@ function calcular(){
     gastosRows, honNfac:gv('hon-nfac'), idFiscal:gv('id-fiscal'),
     cartones:parseInt(gv('cartones'))||0, estatus:gv('estatus')};
 
-  var corColor=cor==='cifexp'?'var(--blue)':cor==='sababa'?'var(--orange)':'var(--purple)';
+  var hon_pct_disp = (honPct*100).toFixed(2);
 
-  var desglose=[
-    {lbl:'Valor Mercancía (CIF)', val:cif, color:'var(--text)'},
-    {lbl:'Arancel ('+arPct*100+'%)', val:arancel, color:'var(--red)'},
-    {lbl:'Honorarios '+corName+' ('+(honPct*100)+'%)', val:hon, color:corColor},
-    {lbl:'Tasa Aduana', val:tasa, color:'var(--orange)'},
-    {lbl:'Uso del Sistema', val:uso, color:'var(--green)'},
-    {lbl:'Gastos Origen/Destino', val:agente, color:'var(--muted)'},
-    {lbl:'DMCE', val:dmce, color:'var(--muted)'},
-  ].filter(function(x){return x.val!==0;});
-  gastosRows.forEach(function(g){
+  // ── Build ordered desglose ──
+  var impuestos=[
+    {lbl:'Liquidación (DAI '+arPct*100+'%)', val:arancel},
+    {lbl:'ITBM (s/CIF+Arancel)', val:itbms},
+    {lbl:'Tasa Aduana', val:tasa},
+    {lbl:'ITBM s/Tasa', val:itbmsTasa},
+    {lbl:'Uso del Sistema', val:uso},
+  ].filter(function(x){return x.val>0;});
+  var totalImpuestos=impuestos.reduce(function(s,x){return s+x.val;},0);
+
+  var honorarios=[{lbl:'Manejo de Liquidación ('+hon_pct_disp+'% sobre CIF)', val:hon}];
+  if(agente>0) honorarios.push({lbl:'Gastos Origen/Destino', val:agente});
+
+  var gastosExtra=gastosRows.filter(function(g){return g.monto>0;});
+  var descuentos=gastosRows.filter(function(g){return g.monto<0;});
+  var totalHon=honorarios.reduce(function(s,x){return s+x.val;},0);
+  var totalExtra=gastosExtra.reduce(function(s,g){return s+g.monto;},0);
+  var totalDesc=descuentos.reduce(function(s,g){return s+g.monto;},0);
+  var totalCorr=totalHon+totalExtra+totalDesc;
+
+  function secHtml(title,color,rows,total,showTotal){
+    var h='<div style="background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:8px">'
+      +'<div style="padding:6px 12px;background:var(--s2);font-size:10px;font-weight:700;color:'+color+';text-transform:uppercase;letter-spacing:.06em">'+title+'</div>'
+      +'<div style="padding:8px 12px">';
+    rows.forEach(function(r){
+      var rColor=r.val<0?'var(--green)':'var(--muted)';
+      h+='<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(48,54,61,.3);font-size:11px">'
+        +'<span style="color:var(--muted)">'+r.lbl+'</span>'
+        +'<span style="font-family:monospace;font-weight:700;color:'+rColor+'">'+fmt(r.val)+'</span></div>';
+    });
+    if(showTotal){
+      h+='<div style="display:flex;justify-content:space-between;padding:5px 0;margin-top:2px;font-size:12px;font-weight:700">'
+        +'<span style="color:var(--text)">Subtotal</span>'
+        +'<span style="font-family:monospace;color:'+color+'">'+fmt(total)+'</span></div>';
+    }
+    h+='</div></div>';
+    return h;
+  }
+
+  var gastosExtraRows=gastosExtra.map(function(g){
     var lbl=(RUBROS.find(function(r){return r.val===g.rubro;})||{lbl:g.rubro}).lbl;
-    desglose.push({lbl:lbl+(g.nfac?' · '+g.nfac:''), val:g.monto, color:g.monto<0?'var(--green)':'var(--muted)'});
+    return {lbl:lbl+(g.nfac?' · '+g.nfac:''), val:g.monto};
+  });
+  var descRows=descuentos.map(function(g){
+    var lbl=(RUBROS.find(function(r){return r.val===g.rubro;})||{lbl:g.rubro}).lbl;
+    return {lbl:lbl+(g.nfac?' · '+g.nfac:''), val:g.monto};
   });
 
   document.getElementById('result').style.display='block';
   document.getElementById('result').innerHTML=
     '<div style="background:linear-gradient(135deg,rgba(163,113,247,.1),rgba(88,166,255,.07));border:2px solid rgba(163,113,247,.4);border-radius:14px;padding:16px;margin-top:14px">'
     +'<div style="font-size:10px;font-weight:700;color:var(--purple);letter-spacing:.1em;text-transform:uppercase;text-align:center;margin-bottom:12px">ESCENARIO ÚNICO · '+(nro||'—')+' · '+corName+'</div>'
-    +'<div class="kpi-grid">'
+    // KPIs
+    +'<div class="kpi-grid" style="margin-bottom:14px">'
     +'<div class="kpi purple"><div class="kpi-label">Valor CIF</div><div class="kpi-val">'+fmt(cif)+'</div></div>'
     +'<div class="kpi green"><div class="kpi-label">Costo Landed</div><div class="kpi-val">'+fmt(landed)+'</div></div>'
     +'<div class="kpi orange"><div class="kpi-label">Factor Import.</div><div class="kpi-val">'+factor.toFixed(2)+'%</div></div>'
     +'</div>'
-    +'<div class="desglose-table">'
-    +desglose.map(function(d){
-      return '<div class="desglose-row"><span style="color:var(--muted)">'+d.lbl+'</span><span style="color:'+d.color+';font-family:monospace;font-weight:700">'+fmt(d.val)+'</span></div>';
-    }).join('')
-    +'<div class="desglose-row subtotal"><span>Costo Landed Total</span><span style="color:var(--green);font-family:monospace;font-size:15px">'+fmt(landed)+'</span></div>'
-    +'<div class="desglose-row itbms"><span>ITBMS (desembolso '+itbPct*100+'%)</span><span style="font-family:monospace">'+fmt(itbms)+'</span></div>'
-    +'<div class="desglose-row" style="color:var(--muted);font-size:10px"><span>Costo Landed Global (inc. ITBMS)</span><span style="font-family:monospace">'+fmt(landed_g)+'</span></div>'
+    // Mercancía
+    +'<div style="background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:8px">'
+    +'<div style="padding:6px 12px;background:var(--s2);font-size:10px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.06em">Mercancía</div>'
+    +'<div style="padding:8px 12px"><div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700"><span>Valor CIF Total</span><span style="font-family:monospace;color:var(--green)">'+fmt(cif)+'</span></div></div>'
     +'</div>'
-    +(pais||fecha||provCor?'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:10px;color:var(--muted);margin-top:10px">'
-      +(pais?'<div>📍 <strong style="color:var(--text)">'+pais+(ciudad?' / '+ciudad:'')+'</strong></div>':'')
-      +(tipoEmb?'<div>🚢 <strong style="color:var(--text)">'+tipoEmb+'</strong></div>':'')
-      +(fecha?'<div>📅 <strong style="color:var(--text)">'+fecha+'</strong></div>':'')
-      +(provCor?'<div>🏢 <strong style="color:var(--text)">'+provCor+'</strong></div>':'')
+    // Impuestos (Tesoro Nacional)
+    +secHtml('🏛️ Impuestos — Tesoro Nacional','var(--red)',impuestos,totalImpuestos,true)
+    // Honorarios y gastos del corredor
+    +secHtml('💼 '+corName+' — Honorarios y Gastos','var(--purple)',
+      honorarios.concat(gastosExtraRows),totalHon+totalExtra,true)
+    // Descuentos si hay
+    +(descRows.length?secHtml('🏷️ Notas de Crédito / Descuentos','var(--green)',descRows,totalDesc,false):'')
+    // Total final
+    +'<div style="background:rgba(63,185,80,.08);border:1px solid rgba(63,185,80,.3);border-radius:8px;padding:10px 14px;margin-bottom:10px">'
+    +'<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:11px;color:var(--muted)">Mercancía</span><span style="font-family:monospace;font-size:11px">'+fmt(cif)+'</span></div>'
+    +'<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:11px;color:var(--red)">Impuestos (Tesoro Nac.)</span><span style="font-family:monospace;font-size:11px;color:var(--red)">'+fmt(totalImpuestos)+'</span></div>'
+    +'<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:11px;color:var(--purple)">Corredor (hon.+gastos)</span><span style="font-family:monospace;font-size:11px;color:var(--purple)">'+fmt(totalCorr)+'</span></div>'
+    +'<div style="display:flex;justify-content:space-between;padding-top:6px;border-top:1px solid rgba(63,185,80,.2)"><span style="font-size:14px;font-weight:800">Costo Landed Total</span><span style="font-family:monospace;font-size:18px;font-weight:800;color:var(--green)">'+fmt(landed)+'</span></div>'
+    +'</div>'
+    // Meta info
+    +(pais||fecha?'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:10px;color:var(--muted)">'
+      +(pais?'<div>📍 '+pais+(ciudad?' / '+ciudad:'')+'</div>':'')
+      +(tipoEmb?'<div>🚢 '+tipoEmb+'</div>':'')
+      +(fecha?'<div>📅 '+fecha+'</div>':'')
+      +(provCor?'<div>🏢 '+provCor+'</div>':'')
       +'</div>':'')
     +'</div>';
 
@@ -719,51 +768,129 @@ function calcular(){
 }
 
 // ═══════════════════════════════════════════════
-// PROCESAR AL HISTORIAL
+// SUPABASE
 // ═══════════════════════════════════════════════
-function procesar(){
-  if(!lastCalc || !lastCalc.cif){ toast('⚠️ Calcula primero.','red'); return; }
-  var d=lastCalc;
-  // Send to parent/opener
-  var data={
-    nro:d.nro||('UNI-'+Date.now()),
-    desc:d.desc,
-    fecha:d.fecha||new Date().toISOString().slice(0,10),
-    ahorro:0, cif:d.cif,
-    esc:'Único — '+(d.corName||'').replace(/[⚡🤝✏️]/g,'').trim(),
-    ts:Date.now(),
-    snap:{sc1:{cif:d.cif,landed:d.landed,factor:d.factor,arancel:d.arancel,itbms:d.itbms,hon:d.hon}},
-    modoUnico:true, corredor:d.cor, provCorredor:d.provCor,
-    pais:d.pais, ciudad:d.ciudad, tipoEquipo:d.tipoEmb, cartones:d.cartones,
-    idFiscal:d.idFiscal, estatus:d.estatus,
-    invLines:buildInvLines(d),
-    status:'completo'
-  };
-  var sent=false;
+var _SB_URL = 'https://kgrunsunahooitmqzaaq.supabase.co';
+var _SB_KEY = 'sb_publishable_pRDW1CDvw8iKlSy8oTz5uA_v0GA4GkA';
+var _SB_MASTER = 'simulador_master_v2';
+var _sb = null;
+
+function initSB(){
+  try{
+    if(window.supabase){
+      _sb = window.supabase.createClient(_SB_URL, _SB_KEY);
+      document.getElementById('cloud-badge').textContent='☁️ Nube ✓';
+      document.getElementById('cloud-badge').style.color='var(--green)';
+    }
+  }catch(e){ console.warn('SB init:',e); }
+}
+
+async function _pushToCloud(data){
+  // 1. Push to parent window if available
+  var sentLocal = false;
   try{
     if(window.opener && window.opener.tendData){
       var td=window.opener.tendData;
       var idx=td.findIndex(function(t){return t.nro&&t.nro.trim().toUpperCase()===data.nro.toUpperCase();});
-      if(idx!==-1){ if(!confirm('El embarque #'+data.nro+' ya existe. ¿Reemplazar?')) return; td[idx]=data; }
-      else td.push(data);
+      if(idx!==-1) td[idx]=data; else td.push(data);
       if(typeof window.opener.saveTendData==='function') window.opener.saveTendData();
       if(typeof window.opener.renderTend==='function') window.opener.renderTend();
-      sent=true;
+      if(typeof window.opener.renderTopProvs==='function') window.opener.renderTopProvs();
+      sentLocal=true;
     }
   }catch(e){}
-  if(!sent){
-    // Fallback: save to localStorage for parent to pick up
-    try{ localStorage.setItem('_unico_pendiente',JSON.stringify(data)); sent=true; } catch(e){}
+
+  // 2. Push directly to Supabase regardless
+  if(!_sb){ initSB(); }
+  if(_sb){
+    try{
+      // Pull current master first
+      var existing=[];
+      var res=await _sb.from('simulador_sesiones').select('datos').eq('nombre',_SB_MASTER).maybeSingle();
+      if(res.data){ try{ var p=JSON.parse(res.data.datos); existing=p.tendData||[]; }catch(e){} }
+      // Merge
+      var idx2=existing.findIndex(function(t){return t.nro&&t.nro.trim().toUpperCase()===data.nro.toUpperCase();});
+      if(idx2!==-1) existing[idx2]=data; else existing.push(data);
+      // Save
+      var payload={
+        nombre:_SB_MASTER,
+        datos:JSON.stringify({tendData:existing,updated_at:new Date().toISOString()}),
+        updated_at:new Date().toISOString()
+      };
+      var r=await _sb.from('simulador_sesiones').upsert(payload,{onConflict:'nombre'});
+      if(!r.error){
+        document.getElementById('cloud-badge').textContent='☁️ Guardado ✓';
+        document.getElementById('cloud-badge').style.color='var(--green)';
+        return true;
+      } else {
+        console.warn('SB upsert error:',r.error);
+      }
+    }catch(e){ console.warn('SB push:',e); }
   }
-  if(sent){
-    toast('✅ Embarque #'+data.nro+' procesado al historial','green');
-    // Clear state
-    localStorage.removeItem('_unico_estado');
-    document.getElementById('btn-proc').style.display='none';
-    document.getElementById('result').style.display='none';
+
+  // 3. Fallback: localStorage pending
+  if(!sentLocal){
+    try{ localStorage.setItem('_unico_pendiente',JSON.stringify(data)); }catch(e){}
+    return false;
+  }
+  return sentLocal;
+}
+
+// ═══════════════════════════════════════════════
+// PROCESAR AL HISTORIAL
+// ═══════════════════════════════════════════════
+async function procesar(){
+  if(!lastCalc||!lastCalc.cif){ toast('⚠️ Calcula primero.','red'); return; }
+  var d=lastCalc;
+  if(!d.nro){ if(!confirm('No hay N° de Embarque. ¿Continuar?')) return; }
+
+  var btn=document.getElementById('btn-proc');
+  btn.textContent='⏳ Guardando en la nube…';
+  btn.disabled=true;
+
+  var data={
+    nro: d.nro||('UNI-'+Date.now()),
+    desc: d.desc||'Embarque Único',
+    fecha: d.fecha||new Date().toISOString().slice(0,10),
+    ahorro: 0,
+    cif: d.cif,
+    esc: 'Único — '+(d.corName||'').replace(/[⚡🤝✏️]/g,'').trim(),
+    tipoEsc: 'unico',
+    tipoLiquidacion: 'liquidacion',  // siempre liquidación en Único
+    modoUnico: true,
+    corredor: d.cor,
+    provCorredor: d.provCor,
+    ts: Date.now(),
+    snap:{
+      sc1:{
+        cif:d.cif, landed:d.landed, factor:d.factor,
+        arancel:d.arancel, itbms:d.itbms, itbmsTasa:d.itbmsTasa,
+        hon:d.hon, tasa:d.tasa, uso:d.uso
+      }
+    },
+    pais: d.pais, ciudad: d.ciudad,
+    tipoEquipo: d.tipoEmb, cartones: d.cartones,
+    idFiscal: d.idFiscal, estatus: d.estatus,
+    invLines: buildInvLines(d),
+    status: 'completo'
+  };
+
+  var ok = await _pushToCloud(data);
+
+  if(ok){
+    toast('✅ Embarque #'+data.nro+' guardado en la nube','green');
+    localStorage.removeItem('_unico_estado2');
+    // Reset form
+    setTimeout(function(){
+      btn.textContent='✅ Guardado en la nube';
+      btn.style.background='rgba(63,185,80,.2)';
+      btn.disabled=false;
+    },500);
     lastCalc=null;
   } else {
-    toast('⚠️ No se pudo conectar con el sistema principal.','red');
+    toast('⚠️ Guardado localmente — sin conexión a la nube','orange');
+    btn.textContent='✅ Procesar al Historial';
+    btn.disabled=false;
   }
 }
 
@@ -1074,6 +1201,8 @@ document.addEventListener('change', function(e){
   onCorredorChange();
   // Load saved state
   loadState();
+  // Init Supabase
+  setTimeout(initSB, 500);
 })();
 </script>
 </body>
