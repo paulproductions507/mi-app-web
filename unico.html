@@ -335,7 +335,47 @@ var PROV_NAMES=["MAYS ZONA LIBRE, S.A./PARIGI","MARBLE ARCH HOLDING CORP.","TRAD
   });
 })();
 
+// DEPT LIST — lista oficial de departamentos
+var DEPT_LIST=["ACCESO. DE DAMAS","ACCESORIO PARA AUTOS","BEBES","BISUTERIA/JOYERIAS/ACCESORIOS","CABALLEROS","CALZADOS","COMESTIBLE","COSMÉTICOS Y FRAGANCIAS","DAMAS-NEW","DEPORTES","DEPTO. LOTES","ESCOLAR","FERRETERIA","FIESTA","HOGAR","JUGUETERIA","NAVIDAD","NIÑAS","NIÑOS","REGALOS","REGALIAS","ROPA INTERIOR - DAMAS","SUMINISTROS","TEMPORAL","VENTA DE PATIO"];
+// Load custom from parent or localStorage
+(function(){
+  try{
+    var src=null;
+    if(window.opener&&window.opener._customDepts) src=window.opener._customDepts;
+    else if(window.parent&&window.parent._customDepts) src=window.parent._customDepts;
+    if(src&&src.length){ DEPT_LIST=src; return; }
+    // Try localStorage (same origin)
+    var saved=localStorage.getItem('_simDepts');
+    if(saved){ var p=JSON.parse(saved); if(p&&p.length) DEPT_LIST=p; }
+  }catch(e){}
+})();
+
+function deptMatch(raw){
+  if(!raw||!DEPT_LIST.length) return raw;
+  var Q=raw.trim().toUpperCase();
+  // 1. Exact match (case-insensitive)
+  var exact=DEPT_LIST.find(function(d){return d.toUpperCase()===Q;});
+  if(exact) return exact;
+  // 2. Contains match — Q is contained in official or vice versa
+  var contains=DEPT_LIST.find(function(d){
+    var DU=d.toUpperCase();
+    return DU===Q||DU.includes(Q)||Q.includes(DU);
+  });
+  if(contains) return contains;
+  // 3. Bigram similarity — for close typos
+  var best=null,bScore=0;
+  DEPT_LIST.forEach(function(d){
+    var s=bigram(Q,d.toUpperCase());
+    if(s>bScore){bScore=s;best=d;}
+  });
+  if(bScore>=0.55) return best;
+  // 4. Not found — return original (keep as-is)
+  return raw;
+}
+
+// ═══════════════════════════════════════════════
 // CIUDADES
+// ═══════════════════════════════════════════════
 var CIUDADES={
   'USA':['Miami','Nueva York','Los Ángeles','Chicago','Houston'],
   'China':['Guangzhou','Shanghai','Shenzhen','Ningbo','Tianjin'],
@@ -442,6 +482,23 @@ function onCorredorChange(){
 // ═══════════════════════════════════════════════
 // CIUDADES
 // ═══════════════════════════════════════════════
+var CIUDADES={
+  'USA':['Miami','Nueva York','Los Ángeles','Chicago','Houston'],
+  'China':['Guangzhou','Shanghai','Shenzhen','Ningbo','Tianjin'],
+  'Panama':['Zona Libre de Colón','Ciudad de Panamá','Balboa'],
+  'Colombia':['Bogotá','Medellín','Barranquilla'],
+  'Mexico':['Ciudad de México','Monterrey','Manzanillo'],
+  'Brasil':['São Paulo','Santos','Manaus'],
+  'India':['Mumbai','Delhi','Chennai'],
+  'Vietnam':['Ho Chi Minh','Hanói'],
+  'Korea':['Seúl','Busan','Incheon'],
+  'Japan':['Tokio','Osaka','Kobe'],
+  'Taiwan':['Taipéi','Kaohsiung'],
+  'Turkey':['Estambul','Izmir','Mersin'],
+  'Italia':['Milán','Génova','Nápoles'],
+  'Espana':['Barcelona','Madrid','Valencia'],
+};
+
 function fillCiudades(){
   var pais=gv('pais');
   var sel=document.getElementById('ciudad');
@@ -735,10 +792,11 @@ function parseRows(rows){
     var costoStr=String(r[mc]||'').replace(/[^0-9.-]/g,'');
     var costo=Math.round(parseFloat(costoStr||'0')*100)/100;
     if(!provRaw&&!costo) return;
-    var deptCat=(r[rc]||'').trim();
+    var deptRaw=(r[rc]||'').trim();
+    var deptCat=deptMatch(deptRaw); // auto-correct to official name
     var nfac=String(r[nc]||'').trim();
     var bultos=parseInt(String(r[bc]||'').replace(/[^0-9]/g,''))||0;
-    var line={prov:provRaw,deptCat,costo,tipoFac:'mercancia',nfac,bultos,_raw:provRaw};
+    var line={prov:provRaw,deptCat,costo,tipoFac:'mercancia',nfac,bultos,_raw:provRaw,_deptRaw:deptRaw,_deptFixed:(deptCat!==deptRaw&&deptRaw!=='')};
     // provMatch
     if(provRaw){
       var m=provMatch(provRaw);
@@ -773,8 +831,11 @@ function renderPreview(){
     }
     var color=l._corregido?'var(--orange)':'var(--green)';
     var badge=l._corregido?'<span class="badge fixed">✏ Corregido</span>':'<span class="badge ok">✓</span>';
+    var deptBadge=l._deptFixed
+      ?'<span class="badge fixed" title="Dept corregido: '+l._deptRaw+' → '+l.deptCat+'">✏ '+l.deptCat+'</span>'
+      :'<span style="color:var(--muted);font-size:9px;margin-left:4px">'+l.deptCat+'</span>';
     return '<div class="prov-item">'
-      +'<span class="prov-name" style="color:'+color+'">'+l.prov+badge+'<span style="color:var(--muted);font-size:9px;margin-left:4px">'+l.deptCat+'</span></span>'
+      +'<span class="prov-name" style="color:'+color+'">'+l.prov+badge+deptBadge+'</span>'
       +'<span class="prov-val">'+fmt(l.costo)+'</span>'
       +'</div>';
   }).join('');
