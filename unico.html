@@ -241,27 +241,37 @@ datalist option{background:var(--s2);color:var(--text)}
   <div class="card-bd">
     <div class="field">
       <label>Monto CIF Total (USD)</label>
-      <input type="number" id="cif" placeholder="Ej: 34,802.50" step="0.01" style="font-size:15px;font-weight:700;color:var(--green);border-color:rgba(63,185,80,.4)">
+      <input type="number" id="cif" placeholder="Ej: 34,802.50" step="0.01" oninput="_resetManual()" style="font-size:15px;font-weight:700;color:var(--green);border-color:rgba(63,185,80,.4)">
     </div>
 
     <div class="computed-row">
-      <div class="field" style="margin:0"><label>Factor Arancelario % (DAI)</label><input type="number" id="ar-pct" value="10" step="0.0001" style="border-color:rgba(248,81,73,.3)"></div>
+      <div class="field" style="margin:0"><label>Factor Arancelario % (DAI)</label><input type="number" id="ar-pct" value="10" step="0.0001" style="border-color:rgba(248,81,73,.3)" oninput="_resetManual()"></div>
       <div class="computed-arrow">→</div>
-      <div class="field" style="margin:0"><label style="color:var(--red)">Pago Arancelario (USD)</label><input type="number" id="ar-monto" readonly></div>
+      <div class="field" style="margin:0"><label style="color:var(--red)">Pago Arancelario (USD) <span style="font-weight:400;color:var(--muted);font-size:9px">editable</span></label><input type="number" id="ar-monto" oninput="_markManual('ar-monto');calcLive()" style="color:var(--red);font-weight:700;border-color:rgba(248,81,73,.3)"></div>
     </div>
     <div class="computed-row blue">
-      <div class="field" style="margin:0"><label>ITBMS % (s/CIF+Arancel)</label><input type="number" id="itbms-pct" value="7" step="0.01" style="border-color:rgba(88,166,255,.3)"></div>
+      <div class="field" style="margin:0"><label>ITBMS % (s/CIF+Arancel)</label><input type="number" id="itbms-pct" value="7" step="0.01" style="border-color:rgba(88,166,255,.3)" oninput="_resetManual()"></div>
       <div class="computed-arrow">→</div>
-      <div class="field" style="margin:0"><label style="color:var(--blue)">ITBMS a pagar (USD)</label><input type="number" id="itbms-monto" readonly></div>
+      <div class="field" style="margin:0"><label style="color:var(--blue)">ITBMS a pagar (USD) <span style="font-weight:400;color:var(--muted);font-size:9px">editable</span></label><input type="number" id="itbms-monto" oninput="_markManual('itbms-monto');calcLive()" style="color:var(--blue);font-weight:700;border-color:rgba(88,166,255,.3)"></div>
     </div>
     <div class="r2">
-      <div class="field"><label>Tasa Aduana (USD)</label><input type="number" id="tasa" value="100" step="0.01"></div>
+      <div class="field">
+        <label>Tasa Aduana (USD)</label>
+        <input type="number" id="tasa" value="100" step="0.01" oninput="_resetManual()">
+      </div>
+      <div class="field">
+        <label>ITBMS s/Tasa (USD) <span style="font-weight:400;color:var(--muted);font-size:9px">editable</span></label>
+        <input type="number" id="itbms-tasa" style="color:var(--blue);font-weight:700;border-color:rgba(88,166,255,.2)"
+          oninput="_markManual('itbms-tasa');calcLive()" placeholder="7.00">
+        <p class="note">7% s/Tasa — va a Tesoro Nacional</p>
+      </div>
+    </div>
+    <div class="r2">
       <div class="field"><label>Uso del Sistema (USD)</label><input type="number" id="uso" value="3" step="0.01"><p class="note">$3, $6 o $9</p></div>
-    </div>
-    <div class="r2">
       <div class="field"><label>Gastos Origen/Destino (USD)</label><input type="number" id="agente" value="0" step="0.01"></div>
-      <div class="field"><label>DMCE (USD)</label><input type="number" id="dmce" value="0" step="0.01"></div>
     </div>
+    <!-- DMCE oculto — no aplica en Escenario Único -->
+    <input type="hidden" id="dmce" value="0">
   </div>
 </div>
 
@@ -272,7 +282,7 @@ datalist option{background:var(--s2);color:var(--text)}
     <div class="computed-row purple">
       <div class="field" style="margin:0"><label id="hon-lbl">Factor % (sobre CIF)</label><input type="number" id="hon-pct" value="1" step="0.01" min="0"></div>
       <div class="computed-arrow">→</div>
-      <div class="field" style="margin:0"><label style="color:var(--purple)">Honorarios Calculados (USD)</label><input type="number" id="hon-monto" readonly></div>
+      <div class="field" style="margin:0"><label style="color:var(--purple)">Honorarios Calculados (USD)</label><input type="number" id="hon-monto" oninput="calcLive()" style="color:var(--purple);font-weight:700;border-color:rgba(163,113,247,.3)"></div>
     </div>
     <div class="field">
       <label>N° Factura Honorarios</label>
@@ -287,8 +297,11 @@ datalist option{background:var(--s2);color:var(--text)}
   <div class="card-bd">
     <div class="warn">
       ⚠️ <strong>Solo agrega aquí lo que NO está calculado arriba.</strong><br>
-      <span style="color:var(--muted)">El sistema ya incluyó: Arancel, ITBMS, Tasa, Uso del Sistema y Honorarios.<br>
-      Nota de Crédito / Descuento → pon el monto en <strong>negativo</strong> (ej: -175.50).</span>
+      <span style="color:var(--muted)">
+        El sistema ya incluyó en <strong>Tesoro Nacional</strong>: Liquidación (DAI), ITBM, Tasa y Uso del Sistema.<br>
+        Aquí van gastos adicionales que el corredor te factura aparte (almacenaje, inspección, acarreo, etc.) o notas de crédito.<br>
+        <strong style="color:var(--orange)">Nota de Crédito / Descuento → monto en negativo (ej: -175.50).</strong>
+      </span>
     </div>
     <div id="gastos-list"></div>
     <button class="btn btn-add" onclick="addGasto()">+ Agregar Gasto</button>
@@ -302,6 +315,7 @@ datalist option{background:var(--s2);color:var(--text)}
   <div class="sum-row"><span class="sum-label">Arancel</span><span class="sum-val" id="s-ar" style="color:var(--red)">$0.00</span></div>
   <div class="sum-row"><span class="sum-label">Honorarios Corredor</span><span class="sum-val" id="s-hon" style="color:var(--purple)">$0.00</span></div>
   <div class="sum-row"><span class="sum-label">Tasa + Uso Sistema</span><span class="sum-val" id="s-tasa" style="color:var(--orange)">$0.00</span></div>
+  <div class="sum-row"><span class="sum-label">ITBMS s/Tasa (Tesoro Nac.)</span><span class="sum-val" id="s-itbms-tasa" style="color:var(--blue)">$0.00</span></div>
   <div class="sum-row"><span class="sum-label">Gastos Adicionales</span><span class="sum-val" id="s-extras" style="color:var(--muted)">$0.00</span></div>
   <div class="sum-row total"><span>Costo Landed</span><span id="s-landed">$0.00</span></div>
   <div class="sum-row"><span class="sum-label">ITBMS (desembolso)</span><span class="sum-val" id="s-itbms" style="color:var(--blue)">$0.00</span></div>
@@ -522,20 +536,35 @@ function calcLive(){
   var uso   =parseFloat(gv('uso'))||0;
   var agente=parseFloat(gv('agente'))||0;
   var dmce  =parseFloat(gv('dmce'))||0;
-  var arancel=R(cif*arPct);
-  var itbms  =R((cif+arancel)*itbPct);
-  var hon    =R(cif*honPct);
-  var extras =0;
+
+  // Auto-calculated values
+  var arAuto      = R(cif*arPct);
+  var itbAuto     = Math.ceil((cif+arAuto)*itbPct*100)/100;
+  var itbTasaAuto = Math.ceil(tasa*itbPct*100)/100;
+  var honAuto     = R(cif*honPct);
+
+  // Respect manual edits — only update if user hasn't touched the field
+  var arEl      = document.getElementById('ar-monto');
+  var itbEl     = document.getElementById('itbms-monto');
+  var itbTasaEl = document.getElementById('itbms-tasa');
+  var honEl     = document.getElementById('hon-monto');
+  if(arEl      && !arEl._manual)      arEl.value      = arAuto>0      ? arAuto.toFixed(2)      : '';
+  if(itbEl     && !itbEl._manual)     itbEl.value     = itbAuto>0     ? itbAuto.toFixed(2)     : '';
+  if(itbTasaEl && !itbTasaEl._manual) itbTasaEl.value = itbTasaAuto>0 ? itbTasaAuto.toFixed(2) : '';
+  if(honEl     && !honEl._manual)     honEl.value     = honAuto>0     ? honAuto.toFixed(2)     : '';
+
+  // Use actual displayed values for landed (manual or auto)
+  var arancel  = parseFloat(arEl ? arEl.value : arAuto)||0;
+  var itbms    = parseFloat(itbEl ? itbEl.value : itbAuto)||0;
+  var itbmsTasa= parseFloat(itbTasaEl ? itbTasaEl.value : itbTasaAuto)||0;
+  var hon      = parseFloat(honEl ? honEl.value : honAuto)||0;
+
+  var extras=0;
   document.querySelectorAll('.gasto-monto').forEach(function(inp){
     extras+=parseFloat(inp.value)||0;
   });
-  var landed=R(cif+arancel+hon+tasa+uso+agente+dmce+extras);
+  var landed=R(cif+arancel+hon+tasa+uso+agente+dmce+itbmsTasa+extras);
   var factor=cif>0?((landed/cif)-1)*100:0;
-
-  // Update computed fields
-  sv('ar-monto',   arancel>0?arancel.toFixed(2):'');
-  sv('itbms-monto',itbms>0?itbms.toFixed(2):'');
-  sv('hon-monto',  hon>0?hon.toFixed(2):'');
 
   // Update live summary
   var sumDiv=document.getElementById('live-summary');
@@ -545,6 +574,7 @@ function calcLive(){
     document.getElementById('s-ar').textContent=fmt(arancel);
     document.getElementById('s-hon').textContent=fmt(hon);
     document.getElementById('s-tasa').textContent=fmt(tasa+uso);
+    document.getElementById('s-itbms-tasa').textContent=fmt(itbmsTasa);
     document.getElementById('s-extras').textContent=fmt(extras);
     document.getElementById('s-landed').textContent=fmt(landed);
     document.getElementById('s-itbms').textContent=fmt(itbms);
@@ -552,9 +582,17 @@ function calcLive(){
   } else {
     sumDiv.style.display='none';
   }
-  // Save with debounce
   clearTimeout(calcLive._t);
   calcLive._t=setTimeout(saveState,300);
+}
+
+// Mark field as manually edited so calcLive won't overwrite it
+// Also resets when CIF or % fields change
+function _markManual(fieldId){ var el=document.getElementById(fieldId); if(el) el._manual=true; }
+function _resetManual(){
+  ['ar-monto','itbms-monto','itbms-tasa','hon-monto'].forEach(function(id){
+    var el=document.getElementById(id); if(el) el._manual=false;
+  });
 }
 
 // ═══════════════════════════════════════════════
@@ -623,13 +661,14 @@ function calcular(){
     if(monto!==0) gastosRows.push({rubro,monto,nfac});
     extras+=monto;
   });
-  var landed=R(cif+arancel+hon+tasa+uso+agente+dmce+extras);
+  var itbmsTasa = parseFloat(document.getElementById('itbms-tasa')?.value)||0;
+  var landed=R(cif+arancel+hon+tasa+uso+agente+itbmsTasa+extras);
   var factor=cif>0?((landed/cif)-1)*100:0;
   var landed_g=R(landed+itbms);
 
   lastCalc={cor,nro,desc,pais,ciudad,tipoEmb,fecha,provCor,corName,
     cif,arPct:arPct*100,itbPct:itbPct*100,honPct:honPct*100,
-    arancel,itbms,hon,tasa,uso,agente,dmce,extras,landed,landed_g,factor,
+    arancel,itbms,itbmsTasa,hon,tasa,uso,agente,extras,landed,landed_g,factor,
     gastosRows, honNfac:gv('hon-nfac'), idFiscal:gv('id-fiscal'),
     cartones:parseInt(gv('cartones'))||0, estatus:gv('estatus')};
 
@@ -733,19 +772,45 @@ function buildInvLines(d){
   var R2=function(n){return Math.round(n*100)/100;};
   var provCor=d.provCor||d.corName.replace(/[⚡🤝✏️]/g,'').trim();
   var idFac=d.idFiscal||d.honNfac||'';
-  if(d.arancel>0.001) lines.push({tipoFac:'liquidacion',deptCat:'GASTOS',prov:'TESORO NACIONAL',costo:R2(d.arancel),oc:'Pago Arancelario',nfac:idFac,_autoGasto:true});
-  if(d.itbms>0.001)   lines.push({tipoFac:'itbms',deptCat:'GASTOS',prov:'TESORO NACIONAL',costo:R2(d.itbms),oc:'ITBMS',nfac:idFac,_autoGasto:true});
-  if(d.tasa>0.001)    lines.push({tipoFac:'tasa',deptCat:'GASTOS',prov:'TESORO NACIONAL',costo:R2(d.tasa),oc:'Tasa Aduana',nfac:idFac,_autoGasto:true});
-  if(d.uso>0.001)     lines.push({tipoFac:'uso_sistema',deptCat:'GASTOS',prov:'TESORO NACIONAL',costo:R2(d.uso),oc:'Uso del Sistema',nfac:idFac,_autoGasto:true});
-  if(d.hon>0.001)     lines.push({tipoFac:'honorarios',deptCat:'GASTOS',prov:provCor,costo:R2(d.hon),oc:'Honorarios Corredor ('+d.honPct.toFixed(2)+'%)',nfac:d.honNfac,_autoGasto:true});
-  if(d.agente>0.001)  lines.push({tipoFac:'gastos_destino',deptCat:'GASTOS',prov:provCor,costo:R2(d.agente),oc:'Gastos Origen/Destino',_autoGasto:true});
-  if(d.dmce>0.001)    lines.push({tipoFac:'dmce',deptCat:'GASTOS',prov:provCor,costo:R2(d.dmce),oc:'DMCE',_autoGasto:true});
-  (d.gastosRows||[]).forEach(function(g){
-    lines.push({tipoFac:g.rubro,deptCat:'GASTOS',prov:provCor,costo:R2(g.monto),nfac:g.nfac,_autoGasto:true});
+
+  // ── TESORO NACIONAL ──────────────────────────────────────────
+  // Grupo Primavera paga estos impuestos a nombre propio.
+  // El corredor los adelanta operativamente y los incluye en su
+  // factura de reembolso, pero fiscalmente son de Grupo Primavera.
+  // categoria='impuesto' permite buscarlos en tendencias por "impuesto".
+  var tn={prov:'TESORO NACIONAL',categoria:'impuesto',montoHomologado:null,_autoGasto:true};
+  if(d.arancel>0.001) lines.push(Object.assign({},tn,{tipoFac:'liquidacion',deptCat:'GASTOS',costo:R2(d.arancel),oc:'Liquidación / DAI',nfac:idFac}));
+  if(d.itbms>0.001)   lines.push(Object.assign({},tn,{tipoFac:'itbms',      deptCat:'GASTOS',costo:R2(d.itbms),  oc:'ITBM (s/CIF + Arancel)',nfac:idFac}));
+  if(d.tasa>0.001)    lines.push(Object.assign({},tn,{tipoFac:'tasa',        deptCat:'GASTOS',costo:R2(d.tasa),      oc:'Tasa Aduana',nfac:idFac}));
+  if(d.itbmsTasa>0.001) lines.push(Object.assign({},tn,{tipoFac:'itbms',      deptCat:'GASTOS',costo:R2(d.itbmsTasa), oc:'ITBM s/Tasa',nfac:idFac}));
+  if(d.uso>0.001)     lines.push(Object.assign({},tn,{tipoFac:'uso_sistema', deptCat:'GASTOS',costo:R2(d.uso),    oc:'Uso del Sistema',nfac:idFac}));
+
+  // ── CORREDOR (honorarios + otros gastos que él factura) ──────
+  // Factura del corredor = su comisión + reembolso de impuestos.
+  // Aquí solo registramos los honorarios propios del corredor.
+  if(d.hon>0.001) lines.push({
+    tipoFac:'honorarios',deptCat:'GASTOS',prov:provCor,
+    costo:R2(d.hon),oc:'Honorarios Corredor ('+d.honPct.toFixed(2)+'%)',
+    nfac:d.honNfac,montoHomologado:null,_autoGasto:true
   });
-  // Add merc lines from plantilla
+  if(d.agente>0.001) lines.push({
+    tipoFac:'gastos_destino',deptCat:'GASTOS',prov:provCor,
+    costo:R2(d.agente),oc:'Gastos Origen/Destino',
+    montoHomologado:null,_autoGasto:true
+  });
+
+  // ── GASTOS ADICIONALES (rubros que el usuario agrega) ────────
+  (d.gastosRows||[]).forEach(function(g){
+    lines.push({tipoFac:g.rubro,deptCat:'GASTOS',prov:provCor,
+      costo:R2(g.monto),nfac:g.nfac,montoHomologado:null,_autoGasto:true});
+  });
+
+  // ── MERCANCÍA (de la plantilla cargada) ─────────────────────
+  // montoHomologado: null — no aplica en Escenario Único
   invLines.filter(function(l){return l.tipoFac==='mercancia';}).forEach(function(l){
-    lines.push({tipoFac:'mercancia',deptCat:l.deptCat,prov:l.prov,costo:l.costo,nfac:l.nfac,bultos:l.bultos,piezas:l.piezas});
+    lines.push({tipoFac:'mercancia',deptCat:l.deptCat,prov:l.prov,
+      costo:l.costo,nfac:l.nfac,bultos:l.bultos,piezas:l.piezas,
+      montoHomologado:null});
   });
   return lines;
 }
