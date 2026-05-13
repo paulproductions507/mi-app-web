@@ -791,7 +791,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       <div><div class="nav-label">Sababa Imports</div><div class="nav-sub">Facturación fiscal homologada</div></div>
     </div>
 
-    <div class="sidebar-nav-item" onclick="closeSidebar();abrirUnicoModulo()">
+    <div class="sidebar-nav-item" onclick="closeSidebar();switchTab('unico',document.querySelector('.tab[onclick*=\'unico\']'))">
       <div class="nav-icon" style="background:rgba(163,113,247,.15)">🔒</div>
       <div><div class="nav-label">Escenario Único</div><div class="nav-sub">Sin alternativa de comparación</div></div>
     </div>
@@ -2592,8 +2592,11 @@ function switchTab(id,el){
     }, 50);
   }
   if(id==='unico'){
-    abrirUnicoModulo();
-    return; // don't show the blank tab
+    // Show internal tab — do NOT open unico.html in a separate window
+    const pane=document.getElementById('tab-unico');
+    if(pane){ pane.classList.add('on'); }
+    if(el) el.classList.add('on');
+    return;
   }
   // Update header tab indicator
   const tabNames={'sim':'📋 Liquidación Aduanal','cifexp':'⚡ CIF Express','sababa':'🤝 Sababa Imports',
@@ -6081,7 +6084,7 @@ async function _syncTendToCloud(){
 async function _pullTendFromCloud(){
   if(!_sb) return false;
   try {
-    // 1. Leer el registro maestro
+    // 1. Leer el registro maestro (_TEND_MASTER)
     const { data: masterData, error: masterErr } = await _sb
       .from('simulador_sesiones')
       .select('datos, updated_at')
@@ -6095,13 +6098,32 @@ async function _pullTendFromCloud(){
       try {
         const parsed = JSON.parse(masterData.datos||'{}');
         cloudTend = Array.isArray(parsed.tendData) ? parsed.tendData : [];
-        // Restaurar la lista negra guardada en el maestro
-        if(Array.isArray(parsed.deleted)){
-          parsed.deleted.forEach(k => deletedSet.add(String(k)));
-        }
+        if(Array.isArray(parsed.deleted)) parsed.deleted.forEach(k=>deletedSet.add(String(k)));
         window._deletedEmbarques = deletedSet;
       } catch(e){ cloudTend = []; }
     }
+
+    // 1b. ALSO read old unico.html key 'simulador_master_v2' to recover old embarques
+    try {
+      const { data: oldMaster } = await _sb
+        .from('simulador_sesiones')
+        .select('datos')
+        .eq('nombre', 'simulador_master_v2')
+        .maybeSingle();
+      if(oldMaster && oldMaster.datos){
+        const oldParsed = JSON.parse(oldMaster.datos||'{}');
+        const oldTend = Array.isArray(oldParsed.tendData) ? oldParsed.tendData : [];
+        oldTend.forEach(rec => {
+          if(!rec.nro && !rec.ts) return;
+          const isDeleted = deletedSet.has(String(rec.nro||'')) || deletedSet.has(String(rec.ts||''));
+          const existe = cloudTend.find(c =>
+            (c.nro && rec.nro && c.nro.trim().toUpperCase() === rec.nro.trim().toUpperCase()) ||
+            (c.ts && rec.ts && c.ts === rec.ts)
+          );
+          if(!existe && !isDeleted){ cloudTend.push(rec); }
+        });
+      }
+    } catch(e){ /* old key may not exist */ }
 
     // 2. SIEMPRE revisar sesiones individuales — pueden tener embarques más nuevos
     //    que el maestro aún no tiene (ej: guardados antes de esta lógica, o
