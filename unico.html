@@ -187,6 +187,11 @@ datalist option{background:var(--s2);color:var(--text)}
       <div class="field"><label>N° Embarque</label><input type="text" id="nro" placeholder="Ej: 22835"></div>
       <div class="field"><label>ID / Factura Fiscal</label><input type="text" id="id-fiscal" placeholder="Ej: PRE-2026-001"></div>
     </div>
+    <div class="field">
+      <label>N° Factura Tesoro Nacional <span style="font-weight:400;color:var(--muted);font-size:9px">(Liquidación, ITBMS, Tasa, Uso Sistema)</span></label>
+      <input type="text" id="tn-nfac" placeholder="Ej: TN-2026-001" style="border-color:rgba(248,81,73,.3)">
+      <p class="note" style="color:var(--red)">Esta factura aplica a todos los rubros del Tesoro Nacional</p>
+    </div>
     <div class="field"><label>Tipo de Mercancía</label><input type="text" id="desc" placeholder="Ej: Hogar 47%, Ropa 22%"></div>
 
     <div class="sep">Origen y Logística</div>
@@ -680,7 +685,7 @@ function calcular(){
   lastCalc={cor,nro,desc,pais,ciudad,tipoEmb,fecha,provCor,corName,
     cif,arPct:arPct*100,itbPct:itbPct*100,honPct:honPct*100,
     arancel,itbms,itbmsTasa,hon,tasa,uso,agente,extras,landed,landed_g,factor,
-    gastosRows, honNfac:gv('hon-nfac'), idFiscal:gv('id-fiscal'),
+    gastosRows, honNfac:gv('hon-nfac'), idFiscal:gv('id-fiscal'), tnNfac:gv('tn-nfac'),
     cartones:parseInt(gv('cartones'))||0, estatus:gv('estatus')};
 
   var hon_pct_disp = (honPct*100).toFixed(2);
@@ -781,7 +786,7 @@ function calcular(){
 // ═══════════════════════════════════════════════
 var _SB_URL = 'https://kgrunsunahooitmqzaaq.supabase.co';
 var _SB_KEY = 'sb_publishable_pRDW1CDvw8iKlSy8oTz5uA_v0GA4GkA';
-var _SB_MASTER = 'simulador_master_v2';
+var _SB_MASTER = '_TEND_MASTER';
 var _sb = null;
 
 function initSB(){
@@ -949,7 +954,7 @@ function buildInvLines(d){
   var lines=[];
   var R2=function(n){return Math.round(n*100)/100;};
   var provCor=d.provCor||d.corName.replace(/[⚡🤝✏️]/g,'').trim();
-  var idFac=d.idFiscal||d.honNfac||'';
+  var idFac=d.tnNfac||d.idFiscal||d.honNfac||'';
 
   // ── TESORO NACIONAL ──────────────────────────────────────────
   // Grupo Primavera paga estos impuestos a nombre propio.
@@ -1193,7 +1198,7 @@ function saveState(){
     // Incluir invLines (plantilla) en el estado guardado
     localStorage.setItem('_unico_estado2',JSON.stringify({
       corredor:gv('corredor'),provCor:gv('prov-cor'),nombreCor:gv('nombre-cor'),
-      nro:gv('nro'),idFiscal:gv('id-fiscal'),desc:gv('desc'),
+      nro:gv('nro'),idFiscal:gv('id-fiscal'),tnNfac:gv('tn-nfac'),desc:gv('desc'),
       pais:gv('pais'),ciudad:gv('ciudad'),tipoEmb:gv('tipo-emb'),
       cartones:gv('cartones'),fecha:gv('fecha'),estatus:gv('estatus'),
       cif:gv('cif'),arPct:gv('ar-pct'),itbms:gv('itbms-pct'),
@@ -1224,7 +1229,7 @@ function loadState(){
     var corEl=document.getElementById('corredor');
     if(corEl&&e.corredor) corEl.value=e.corredor;
     su('prov-cor',e.provCor); su('nombre-cor',e.nombreCor);
-    su('nro',e.nro); su('id-fiscal',e.idFiscal); su('desc',e.desc);
+    su('nro',e.nro); su('id-fiscal',e.idFiscal); su('tn-nfac',e.tnNfac); su('desc',e.desc);
     su('cartones',e.cartones); su('fecha',e.fecha); su('estatus',e.estatus);
     su('cif',e.cif); su('ar-pct',e.arPct); su('itbms-pct',e.itbms);
     su('tasa',e.tasa); su('uso',e.uso); su('agente',e.agente); su('dmce',e.dmce);

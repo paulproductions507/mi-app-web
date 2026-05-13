@@ -927,7 +927,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       <div class="tab on" onclick="switchTab('sim',this)">📋 Liq. Aduanal</div>
       <div class="tab" onclick="switchTab('cifexp',this)">⚡ CIF Express</div>
       <div class="tab" onclick="switchTab('sababa',this)">🤝 Sababa</div>
-      <!-- tab Único oculto — se accede desde el Menú Principal o el sidebar -->
+      <div class="tab" onclick="switchTab('unico',this)" style="color:#a371f7">🔒 Escenario Único</div>
       <div class="tab" onclick="switchTab('facturas',this)">🧾 Proveedores</div>
       <div class="tab" onclick="abrirModuloComparativo()" style="color:var(--blue-l)">📊 Comparativo</div>
       <div class="tab" onclick="switchTab('aranceles',this)">📦 Aranceles</div>
@@ -5084,14 +5084,14 @@ function calcSab2(){
           </div>
           <div style="padding:10px 14px;text-align:center">
             <div style="font-size:9px;color:var(--muted)">% Importación Sababa</div>
-            <div style="font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:700;color:var(--orange-l)">${factor.toFixed(2)}%</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:700;color:var(--orange-l)">${((factor-1)*100).toFixed(2)}%</div>
           </div>
         </div>
         <div class="mrow"><span class="ml" style="color:var(--blue-l)">Master Value (puente — no se paga)</span><span class="mv b">${fmt(mv)}</span></div>
         <div class="landed-blk">
           <div class="landed-tag">Costo Landed Sababa = Costo Landed Esc.#1 ✓</div>
           <div class="landed-primary o">${fmt(landed)}</div>
-          <div class="factor-chip">${factor.toFixed(2)}% importación</div>
+          <div class="factor-chip">${((factor-1)*100).toFixed(2)}% importación</div>
         </div>
 
         <!-- AHORRO PANEL -->
@@ -12065,10 +12065,10 @@ function calcUnico(){
   var dmce   = parseFloat(document.getElementById('unico_dmce')?.value)||0;
   var corredor = document.getElementById('unico_corredor')?.value||'cifexp';
 
-  var arancel    = R(cif * arPct);
-  var itbms      = R((cif + arancel) * itbPct);
-  var itbmsTasa  = R(tasa * itbPct);
-  var hon        = R(cif * honPct);
+  var arancel   = R(cif * arPct);
+  var itbms     = R((cif + arancel) * itbPct);
+  var itbmsTasa = R(tasa * itbPct);
+  var hon       = R(cif * honPct);
 
   // Gastos adicionales de la lista dinámica
   var extrasTotal = 0;
@@ -12077,7 +12077,7 @@ function calcUnico(){
     extrasTotal += parseFloat(inp?.value)||0;
   });
 
-  var landed = R(cif + arancel + hon + tasa + uso + agente + dmce + itbmsTasa + extrasTotal);
+  var landed = R(cif + arancel + hon + tasa + itbmsTasa + uso + agente + dmce + extrasTotal);
   var factor = cif > 0 ? ((landed/cif)-1)*100 : 0;
 
   // Actualizar campos calculados
@@ -12285,10 +12285,10 @@ function calcUnicoFull(){
   const dmce   = parseFloat(document.getElementById('unico_dmce')?.value)||0;
 
   const R = n=>Math.round(n*100)/100;
-  const arancel    = R(cif * arPct);
-  const itbms      = R((cif + arancel) * itbPct);
-  const itbmsTasa  = R(tasa * itbPct);
-  const hon        = R(cif * honPct);
+  const arancel   = R(cif * arPct);
+  const itbms     = R((cif + arancel) * itbPct);
+  const itbmsTasa = R(tasa * itbPct);
+  const hon       = R(cif * honPct);
 
   // Gastos adicionales
   const gastosRows = [];
@@ -12303,7 +12303,7 @@ function calcUnicoFull(){
   });
   const extrasTotal = gastosRows.reduce((s,g)=>s+g.monto,0);
 
-  const landed  = R(cif + arancel + hon + tasa + uso + agente + dmce + itbmsTasa + extrasTotal);
+  const landed  = R(cif + arancel + hon + tasa + itbmsTasa + uso + agente + dmce + extrasTotal);
   const factor  = cif > 0 ? landed/cif : 1;
   const landedG = R(landed + itbms);
 
@@ -12323,7 +12323,7 @@ function calcUnicoFull(){
   gastosRows.forEach(g=>{ gastosDesglose.push({lbl:(window._RUBROS_GASTO?.find(r=>r.val===g.rubro)?.lbl||g.rubro)+' — Fac: '+(g.nfac||'—'), val:g.monto, color:'var(--muted)'}); });
 
   window._unicoData = {corredor, nro, desc, pais, ciudad, tipoEmb, provCor,
-    cif, arancel, hon, honPct: honPct*100, tasa, uso, agente, dmce, itbms, itbmsTasa, landed, landedG,
+    cif, arancel, hon, honPct: honPct*100, tasa, itbmsTasa, uso, agente, dmce, itbms, landed, landedG,
     factor: (factor-1)*100, corName,
     honNfac: document.getElementById('unico_hon_nfac')?.value||'',
     idFiscal: document.getElementById('unico_id_fiscal')?.value||'',
@@ -12349,7 +12349,7 @@ function calcUnicoFull(){
         </div>
         <div style="text-align:center;background:rgba(240,136,62,.08);border:1px solid rgba(240,136,62,.3);border-radius:10px;padding:12px 8px">
           <div style="font-size:9px;font-weight:700;color:var(--orange-l);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Factor Import.</div>
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:800;color:var(--orange-l)">${factor.toFixed(2)}%</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:800;color:var(--orange-l)">${((factor-1)*100).toFixed(2)}%</div>
         </div>
       </div>
 
@@ -12457,9 +12457,9 @@ async function procesarUnico(){
     tendData.push(snap);
   }
 
-  // Save to cloud — save directly and await confirmation
-  if(!_sb){ initSupabase(); await new Promise(r=>setTimeout(r,400)); }
-  try{ await _syncTendToCloud(); }catch(e){ console.warn('Cloud sync error:',e); }
+  // Save to cloud — await directo para garantizar que se guarda
+  if(!_sb){ initSupabase(); await new Promise(r=>setTimeout(r,600)); }
+  try{ await _syncTendToCloud(); }catch(e){ console.warn('syncTend error:',e); }
   try{ await guardarSesionNube(); }catch(e){}
   if(typeof renderTend==='function') renderTend();
   if(typeof renderTopProvs==='function') renderTopProvs();
