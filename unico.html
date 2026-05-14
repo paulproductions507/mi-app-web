@@ -231,21 +231,28 @@ datalist option{background:var(--s2);color:var(--text)}
       </div>
       <div class="field"><label>Cant. Cartones</label><input type="number" id="cartones" placeholder="0" min="0" step="1"></div>
     </div>
-    <div class="r2">
+    <div class="r3" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
       <div class="field">
-        <label>Vía de Transporte <span style="font-weight:400;color:var(--muted);font-size:9px">auto</span></label>
+        <label>Vía Transporte <span style="font-weight:400;color:var(--muted);font-size:9px">auto</span></label>
         <select id="via-transporte" onchange="saveState()">
-          <option value="SEA">🚢 SEA — Marítimo</option>
-          <option value="LAND">🚛 LAND — Terrestre</option>
-          <option value="AIR">✈️ AIR — Aéreo</option>
+          <option value="SEA">🚢 SEA</option>
+          <option value="LAND">🚛 LAND</option>
+          <option value="AIR">✈️ AIR</option>
         </select>
-        <p class="note">Se asigna automáticamente según tipo de embarque</p>
       </div>
       <div class="field">
-        <label>Término de Embarque</label>
+        <label>Término</label>
         <select id="termino-emb" onchange="saveState()">
-          <option value="CIF">CIF — Cost, Insurance &amp; Freight</option>
-          <option value="FOB">FOB — Free on Board</option>
+          <option value="CIF">CIF</option>
+          <option value="FOB">FOB</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Tipo Proveedor</label>
+        <select id="tipo-proveedor" onchange="saveState()">
+          <option value="ZL">🚛 Zona Libre</option>
+          <option value="IMP">🚢 Importación</option>
+          <option value="MIX">🔀 Mixto</option>
         </select>
       </div>
     </div>
@@ -260,14 +267,6 @@ datalist option{background:var(--s2);color:var(--text)}
           <option value="Procesado">✅ Procesado</option>
         </select>
       </div>
-    </div>
-    <div class="field">
-      <label>Tipo de Proveedor</label>
-      <select id="tipo-proveedor" onchange="saveState()">
-        <option value="ZL">🚛 Zona Libre (ZL)</option>
-        <option value="IMP">🚢 Importación Directa (IMP)</option>
-        <option value="MIX">🔀 Mixto (ZL + IMP)</option>
-      </select>
     </div>
   </div>
 </div>
@@ -708,7 +707,8 @@ function calcular(){
     arancel,itbms,itbmsTasa,hon,tasa,uso,agente,extras,landed,landed_g,factor,
     gastosRows, honNfac:gv('hon-nfac'), idFiscal:gv('id-fiscal'),
     cartones:parseInt(gv('cartones'))||0, estatus:gv('estatus'),
-    viaTransporte:gv('via-transporte')||'SEA', terminoEmb:gv('termino-emb')||'CIF',
+    viaTransporte:gv('via-transporte')||'SEA',
+    terminoEmb:gv('termino-emb')||'CIF',
     tipoProveedor:gv('tipo-proveedor')||'ZL'};
 
   var hon_pct_disp = (honPct*100).toFixed(2);
@@ -804,20 +804,20 @@ function calcular(){
   toast('✅ Costo Único calculado','green');
 }
 
-// ══════════════════════════════════════
+// ════════════════════════════════════════
 // AUTO VÍA DE TRANSPORTE
-// ══════════════════════════════════════
+// ════════════════════════════════════════
 function _autoViaTransporte(tipoEmb){
   var el=document.getElementById('via-transporte');
   if(!el) return;
   if(tipoEmb==='Camión') el.value='LAND';
-  else if(tipoEmb==='' ) {}  // no cambiar
-  else el.value='SEA';  // Contenedor directo / Carga suelta
+  else if(tipoEmb==='') {}
+  else el.value='SEA';
 }
 
-// ══════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════
 // SUPABASE
-// ══════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════
 var _SB_URL = 'https://kgrunsunahooitmqzaaq.supabase.co';
 var _SB_KEY = 'sb_publishable_pRDW1CDvw8iKlSy8oTz5uA_v0GA4GkA';
 var _SB_MASTER = '_TEND_MASTER';
@@ -895,7 +895,6 @@ async function procesar(){
   var btn=document.getElementById('btn-proc');
   btn.textContent='⏳ Guardando en la nube…';
   btn.disabled=true;
-  // Auto-set estatus a Procesado
   var estatusEl=document.getElementById('estatus');
   if(estatusEl) estatusEl.value='Procesado';
 
@@ -1030,10 +1029,14 @@ function buildInvLines(d){
 
   // ── MERCANCÍA (de la plantilla cargada) ─────────────────────
   // montoHomologado: null — no aplica en Escenario Único
+  var tipoProv3=gv('tipo-proveedor')||d.tipoProveedor||'ZL';
   invLines.filter(function(l){return l.tipoFac==='mercancia';}).forEach(function(l){
     lines.push({tipoFac:'mercancia',deptCat:l.deptCat,prov:l.prov,
-      costo:l.costo,nfac:l.nfac,oc:l.nfac||(d.nro?'Emb.'+d.nro:''),
-      bultos:l.bultos,piezas:l.piezas,montoHomologado:null});
+      costo:l.costo,nfac:l.nfac,numFact:l.nfac,
+      oc:l.oc||l.nfac||('Emb.'+d.nro),
+      bultos:l.bultos||0,piezas:l.piezas||0,
+      tipoProv:tipoProv3,
+      montoHomologado:null});
   });
   return lines;
 }

@@ -7761,19 +7761,28 @@ function _buildHistProvRows(){
                 :(esc.toLowerCase().includes('sababa')||esc.toLowerCase().includes('sab'))?'Sababa'
                 :(esc.toLowerCase().includes('único')||esc.toLowerCase().includes('unico')||d.modoUnico||d.tipoEsc==='unico')?'Único':'Liq. Aduanal';
     var isHomol=escLabel==='Sababa'; var dIdx=tendData.indexOf(d);
+    var isUnico2 = !!(d.modoUnico || d.tipoEsc==='unico');
     lines.forEach(function(l){
       var tf=l.tipoFac||'mercancia';
       var prov=(l.prov||l.dept||'').trim(); if(!prov) return;
-      if(isHomol && typeof _PROV_SI !== 'undefined'){
+      // Solo aplicar prefijo S.I en Sababa, NUNCA en Único
+      if(isHomol && !isUnico2 && typeof _PROV_SI !== 'undefined'){
         var provKey=prov.toUpperCase();
         var siMatch=Object.keys(_PROV_SI).find(function(k){ return k.toUpperCase()===provKey; });
         if(siMatch) prov=_PROV_SI[siMatch];
       }
-      var base={prov,oc:l.oc||'—',numFact:l.numFact||l.nroFact||l.factura||'—',ocHomologada:l.ocHomologada||'',montoHomologado:l.montoHomologado||0,
+      // Tipo ZL/IMP: para Único usar el campo tipoProv de la línea; para otros usar nombre
+      var tipoP;
+      if(isUnico2){
+        tipoP = (l.tipoProv||l.tipoProveedor||'ZL').toUpperCase()==='IMP'?'IMP':'ZL';
+      } else {
+        tipoP = prov.toUpperCase().startsWith('S.I')?'IMP':'ZL';
+      }
+      var base={prov,oc:l.oc||l.nfac||'—',numFact:l.numFact||l.nroFact||l.nfac||l.factura||'—',ocHomologada:l.ocHomologada||'',montoHomologado:l.montoHomologado||0,
         depto:(l.deptCat||l.dept||'Sin categoría').toUpperCase(),
         piezas:l.piezas||0,bultos:l.bultos||0,costo:l.costo||0,
         desc:l._desc||l.oc||'',nro,fecha,esc:escLabel,
-        tipo:prov.toUpperCase().startsWith('S.I')?'IMP':'ZL',
+        tipo:tipoP,
         homol:isHomol,_dIdx:dIdx};
       if(tf==='mercancia'){
         rows.push(Object.assign({},base,{seccion:'merc',rubro:'mercancia'}));
@@ -8553,11 +8562,14 @@ function _renderGroupSections(data){
     var mercLines  = lines.filter(function(l){ return (l.tipoFac||'mercancia')==='mercancia'; });
     var gastoLines = lines.filter(function(l){ return l.tipoFac && l.tipoFac!=='mercancia'; });
     var totalMerc  = mercLines.reduce(function(s,l){ return s+(l.costo||0); }, 0);
-    var sc1u = snap.sc1 || {};
-    var isUnico = !!(d.modoUnico);
-    var totalNoMerc= isUnico ? (sc1u.noMerc||0) : (isSab ? (sc3.noMerc||0) : (sc2.noMerc||0));
-    var totalItbms = isUnico ? (sc1u.itbms||0)  : (isSab ? (sc3.itbmsHomol||0) : ((sc2.itbms||0)+(sc2.itbmsTasaFinal||0)+(sc2.itbmsHon||0)));
-    var landed     = isUnico ? ((sc1u.cif||0)+(sc1u.noMerc||0)+(sc1u.itbms||0)) : (isSab ? (sc3.landedG||sc3.landed1||0) : (sc2.landedG||sc2.landed1||0));
+    var sc1u = snap.sc1||{};
+    var isUnicoM = !!(d.modoUnico||d.tipoEsc==='unico');
+    var totalNoMerc = isUnicoM ? (sc1u.noMerc||0)
+                                : isSab ? (sc3.noMerc||0) : (sc2.noMerc||0);
+    var totalItbms  = isUnicoM ? (sc1u.itbms||0)
+                                : isSab ? (sc3.itbmsHomol||0) : ((sc2.itbms||0)+(sc2.itbmsTasaFinal||0)+(sc2.itbmsHon||0));
+    var landed      = isUnicoM ? ((sc1u.cif||0)+(sc1u.noMerc||0)+(sc1u.itbms||0))
+                                : isSab ? (sc3.landedG||sc3.landed1||0) : (sc2.landedG||sc2.landed1||0);
     var landedCosteable = totalMerc + totalNoMerc; // Sin ITBMS
     var fobHomol   = isSab ? (sc3.mercHomol||0) : 0; // Solo Sababa tiene FOB homologado
     var fmt2l = function(n){ return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
@@ -8636,12 +8648,10 @@ function _renderGroupSections(data){
       }).join('')
       : '<div style="padding:12px;color:var(--muted);font-size:11px;text-align:center">Sin facturas de mercancía.</div>')
 
-      // Facturas de gastos — agrupadas por N° Factura (totalizado + desglose al tap)
+      // Facturas de gastos — agrupadas por N° factura (totalizado + desglose al tap)
       +(gastoLines.length ? (function(){
-        var gid='_gd_'+Date.now();
         var tipoIcons={flete:'🚢',acarreo:'🌐',honorarios:'👔',itbms:'🧾',gastos:'📋',liquidacion:'🏛️',tasa:'💵',uso_sistema:'💻'};
         var totalGastos=gastoLines.reduce(function(s,l){return s+(l.costo||0);},0);
-        // Agrupar por N° factura
         var byNfac={};
         gastoLines.forEach(function(l){
           var k=l.nfac||l.numFact||'Sin N° Factura';
@@ -12421,9 +12431,9 @@ async function procesarUnico(){
 
   if(ud.arancel>0.001) unicoInvLines.push({tipoFac:'liquidacion', deptCat:'GASTOS', prov:'TESORO NACIONAL', costo:R(ud.arancel), oc:'Pago Arancelario', nfac:idFac, numFact:idFac, _autoGasto:true});
   if(ud.itbms>0.001)   unicoInvLines.push({tipoFac:'itbms', deptCat:'GASTOS', prov:'TESORO NACIONAL', costo:R(ud.itbms), oc:'ITBMS s/CIF+Arancel', nfac:idFac, numFact:idFac, _autoGasto:true});
-  if(ud.tasa>0.001)       unicoInvLines.push({tipoFac:'tasa',        deptCat:'GASTOS', prov:'TESORO NACIONAL', costo:R(ud.tasa),      oc:'Tasa Aduana',         nfac:idFac, numFact:idFac, _autoGasto:true});
-  if(ud.itbmsTasa>0.001) unicoInvLines.push({tipoFac:'itbms',       deptCat:'GASTOS', prov:'TESORO NACIONAL', costo:R(ud.itbmsTasa), oc:'ITBM s/Tasa',          nfac:idFac, numFact:idFac, _autoGasto:true});
-  if(ud.uso>0.001)        unicoInvLines.push({tipoFac:'uso_sistema', deptCat:'GASTOS', prov:'TESORO NACIONAL', costo:R(ud.uso),       oc:'Uso del Sistema',      nfac:idFac, numFact:idFac, _autoGasto:true});
+  if(ud.tasa>0.001)       unicoInvLines.push({tipoFac:'tasa',        deptCat:'GASTOS', prov:'TESORO NACIONAL', costo:R(ud.tasa),      oc:'Tasa Aduana',    nfac:idFac, numFact:idFac, _autoGasto:true});
+  if(ud.itbmsTasa>0.001) unicoInvLines.push({tipoFac:'itbms',       deptCat:'GASTOS', prov:'TESORO NACIONAL', costo:R(ud.itbmsTasa), oc:'ITBM s/Tasa',     nfac:idFac, numFact:idFac, _autoGasto:true});
+  if(ud.uso>0.001)        unicoInvLines.push({tipoFac:'uso_sistema', deptCat:'GASTOS', prov:'TESORO NACIONAL', costo:R(ud.uso),       oc:'Uso del Sistema', nfac:idFac, numFact:idFac, _autoGasto:true});
   if(ud.hon>0.001)     unicoInvLines.push({tipoFac:'honorarios', deptCat:'GASTOS', prov:provCor, costo:R(ud.hon), oc:'Honorarios Corredor ('+ud.honPct.toFixed(2)+'%)', nfac:honNfac, numFact:honNfac, _autoGasto:true});
   if(ud.agente>0.001)  unicoInvLines.push({tipoFac:'acarreo', deptCat:'GASTOS', prov:provCor, costo:R(ud.agente), oc:'Gastos Origen/Destino', _autoGasto:true});
   if(ud.dmce>0.001)    unicoInvLines.push({tipoFac:'dmce', deptCat:'GASTOS', prov:provCor, costo:R(ud.dmce), oc:'DMCE', _autoGasto:true});
@@ -12431,8 +12441,21 @@ async function procesarUnico(){
     unicoInvLines.push({tipoFac:g.rubro, deptCat:'GASTOS', prov:provCor, costo:R(g.monto), nfac:g.nfac, numFact:g.nfac, _autoGasto:true});
   });
   // Facturas de mercancía de la plantilla cargada
+  const tipoProv2 = document.getElementById('unico_tipoprov')?.value || ud.tipoProveedor || 'ZL';
   (window._unicoInvLines||[]).filter(l=>l.tipoFac==='mercancia').forEach(l=>{
-    unicoInvLines.push({tipoFac:'mercancia', deptCat:l.deptCat||'MERCANCIA', prov:l.prov, costo:R(l.costo), nfac:l.nfac, bultos:l.bultos, piezas:l.piezas, montoHomologado:null});
+    unicoInvLines.push({
+      tipoFac:'mercancia',
+      deptCat: l.deptCat||'MERCANCIA',
+      prov:    l.prov,
+      costo:   R(l.costo),
+      nfac:    l.nfac,
+      numFact: l.nfac,
+      oc:      l.oc || l.nfac || ('Emb.'+nro),
+      bultos:  l.bultos||0,
+      piezas:  l.piezas||0,
+      tipoProv: tipoProv2,
+      montoHomologado: null
+    });
   });
 
   const snap = {
@@ -12446,7 +12469,7 @@ async function procesarUnico(){
     modoUnico: true,
     ts: Date.now(),
     snap: {
-      sc1:{ cif:ud.cif, landed:ud.landed, factor:ud.factor, arancel:ud.arancel, itbms:ud.itbms, itbmsTasa:ud.itbmsTasa||0, hon:ud.hon, tasa:ud.tasa, uso:ud.uso, noMerc:ud.landed-ud.cif }
+      sc1:{ cif:ud.cif, landed:ud.landed, factor:ud.factor, arancel:ud.arancel, itbms:ud.itbms, itbmsTasa:ud.itbmsTasa||0, hon:ud.hon, tasa:ud.tasa, uso:ud.uso, noMerc:Math.round((ud.landed-ud.cif)*100)/100 }
     },
     invLines: unicoInvLines,
     status: 'completo',
@@ -12457,7 +12480,7 @@ async function procesarUnico(){
     equipos: 1,
     tipoEquipo: ud.tipoEmb||'',
     cartones: ud.cartones||0,
-    viaTransporte: (document.getElementById('unico_via')?.value) || (ud.tipoEmb==='Camión'?'LAND':'SEA'),
+    viaTransporte: (ud.tipoEmb==='Camión'?'LAND':'SEA'),
     corredor: ud.corredor,
     provCorredor: provCor,
   };
@@ -12475,7 +12498,7 @@ async function procesarUnico(){
     tendData.push(snap);
   }
 
-  // Save to cloud — await directo garantiza escritura en Supabase
+  // Save directo a nube — await garantiza escritura
   if(!_sb){ initSupabase(); await new Promise(r=>setTimeout(r,600)); }
   try{ await _syncTendToCloud(); }catch(e){ console.warn('syncTend:',e); }
   try{ await guardarSesionNube(); }catch(e){}
