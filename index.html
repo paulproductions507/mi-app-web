@@ -927,7 +927,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       <div class="tab on" onclick="switchTab('sim',this)">📋 Liq. Aduanal</div>
       <div class="tab" onclick="switchTab('cifexp',this)">⚡ CIF Express</div>
       <div class="tab" onclick="switchTab('sababa',this)">🤝 Sababa</div>
-      <div class="tab" onclick="switchTab('unico',this)" style="color:#a371f7">🔒 Escenario Único</div>
+      <div class="tab" onclick="switchTab('unico',this)" style="color:#a371f7;font-weight:700">🔒 Esc. Único</div>
       <div class="tab" onclick="switchTab('facturas',this)">🧾 Proveedores</div>
       <div class="tab" onclick="abrirModuloComparativo()" style="color:var(--blue-l)">📊 Comparativo</div>
       <div class="tab" onclick="switchTab('aranceles',this)">📦 Aranceles</div>
@@ -8553,9 +8553,11 @@ function _renderGroupSections(data){
     var mercLines  = lines.filter(function(l){ return (l.tipoFac||'mercancia')==='mercancia'; });
     var gastoLines = lines.filter(function(l){ return l.tipoFac && l.tipoFac!=='mercancia'; });
     var totalMerc  = mercLines.reduce(function(s,l){ return s+(l.costo||0); }, 0);
-    var totalNoMerc= isSab ? (sc3.noMerc||0) : (sc2.noMerc||0);
-    var totalItbms = isSab ? (sc3.itbmsHomol||0) : ((sc2.itbms||0)+(sc2.itbmsTasaFinal||0)+(sc2.itbmsHon||0));
-    var landed     = isSab ? (sc3.landedG||sc3.landed1||0) : (sc2.landedG||sc2.landed1||0);
+    var sc1u = snap.sc1 || {};
+    var isUnico = !!(d.modoUnico);
+    var totalNoMerc= isUnico ? (sc1u.noMerc||0) : (isSab ? (sc3.noMerc||0) : (sc2.noMerc||0));
+    var totalItbms = isUnico ? (sc1u.itbms||0)  : (isSab ? (sc3.itbmsHomol||0) : ((sc2.itbms||0)+(sc2.itbmsTasaFinal||0)+(sc2.itbmsHon||0)));
+    var landed     = isUnico ? ((sc1u.cif||0)+(sc1u.noMerc||0)+(sc1u.itbms||0)) : (isSab ? (sc3.landedG||sc3.landed1||0) : (sc2.landedG||sc2.landed1||0));
     var landedCosteable = totalMerc + totalNoMerc; // Sin ITBMS
     var fobHomol   = isSab ? (sc3.mercHomol||0) : 0; // Solo Sababa tiene FOB homologado
     var fmt2l = function(n){ return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
@@ -8634,30 +8636,46 @@ function _renderGroupSections(data){
       }).join('')
       : '<div style="padding:12px;color:var(--muted);font-size:11px;text-align:center">Sin facturas de mercancía.</div>')
 
-      // Facturas de gastos — colapsable
+      // Facturas de gastos — agrupadas por N° Factura (totalizado + desglose al tap)
       +(gastoLines.length ? (function(){
         var gid='_gd_'+Date.now();
-        var tipoIcons={flete:'🚢',acarreo:'🌐',honorarios:'👔',itbms:'🧾',gastos:'📋',liquidacion:'🏛️'};
+        var tipoIcons={flete:'🚢',acarreo:'🌐',honorarios:'👔',itbms:'🧾',gastos:'📋',liquidacion:'🏛️',tasa:'💵',uso_sistema:'💻'};
         var totalGastos=gastoLines.reduce(function(s,l){return s+(l.costo||0);},0);
-        var inner=gastoLines.map(function(l){
-          return '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:var(--s1);border:1px solid var(--border);border-radius:7px;margin-bottom:5px">'
-            +'<div style="display:flex;align-items:center;gap:7px"><span style="font-size:13px">'+(tipoIcons[l.tipoFac]||'📋')+'</span>'
-            +'<div><div style="font-size:11px;font-weight:600;color:var(--text)">'+(l.prov||l.tipoFac)+'</div>'
-            +(l.oc&&l.oc!=='auto-migrado'?'<div style="font-size:9px;color:var(--muted)">Ref: '+l.oc+'</div>':'')
+        // Agrupar por N° factura
+        var byNfac={};
+        gastoLines.forEach(function(l){
+          var k=l.nfac||l.numFact||'Sin N° Factura';
+          if(!byNfac[k]){byNfac[k]={nfac:k,lines:[],noMercT:0,itbmsT:0,total:0};}
+          byNfac[k].lines.push(l);
+          if(l.tipoFac==='itbms') byNfac[k].itbmsT+=(l.costo||0);
+          else byNfac[k].noMercT+=(l.costo||0);
+          byNfac[k].total+=(l.costo||0);
+        });
+        var inner=Object.values(byNfac).map(function(grp,gi){
+          var gid2='_nfg_'+gi+'_'+Date.now();
+          var dlines=grp.lines.map(function(l){
+            return '<div style="display:flex;justify-content:space-between;padding:5px 12px;font-size:10px;border-top:1px solid rgba(255,255,255,.05)">'
+              +'<span style="color:var(--muted)">'+(tipoIcons[l.tipoFac]||'📋')+' '+(l.oc||l.prov||l.tipoFac)+'</span>'
+              +'<span style="font-family:\'IBM Plex Mono\',monospace;color:var(--orange-l)">'+fmt2l(l.costo)+'</span></div>';
+          }).join('');
+          return '<div style="background:var(--s1);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;overflow:hidden">'
+            +'<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;cursor:pointer" onclick="var b=document.getElementById(\''+gid2+'\');var o=b.style.display!==\'none\';b.style.display=o?\'none\':\'block\';this.querySelector(\'.gc4\').textContent=o?\'▶\':\'▼\'">'
+            +'<div><div style="font-size:11px;font-weight:700;color:var(--text)">📄 '+grp.nfac+'</div>'
+            +'<div style="font-size:9px;color:var(--muted);margin-top:2px">'
+            +(grp.noMercT>0?'No Merc: <b>'+fmt2l(grp.noMercT)+'</b>  ':'')+' '+(grp.itbmsT>0?'ITBMS: <b>'+fmt2l(grp.itbmsT)+'</b>':'')
             +'</div></div>'
-            +'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:var(--orange-l)">'+fmt2l(l.costo)+'</span>'
-            +'</div>';
+            +'<div style="display:flex;align-items:center;gap:8px">'
+            +'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:13px;font-weight:800;color:var(--orange-l)">'+fmt2l(grp.total)+'</span>'
+            +'<span class="gc4" style="font-size:11px;color:var(--muted)">▶</span></div></div>'
+            +'<div id="'+gid2+'" style="display:none">'+dlines+'</div></div>';
         }).join('');
         return '<div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-top:10px">'
-          +'<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;background:var(--s2);cursor:pointer;user-select:none"'
-          +' onclick="var b=document.getElementById(\''+gid+'\');var o=b.style.display!==\'none\';b.style.display=o?\'none\':\'block\';this.querySelector(\'.gc\').textContent=o?\'▶\':\'▼\'">'
+          +'<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;background:var(--s2)">'
           +'<div style="display:flex;align-items:center;gap:7px"><span style="font-size:12px">💸</span>'
           +'<span style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">Gastos del Embarque</span>'
           +'<span style="font-size:9px;color:var(--muted2)">('+gastoLines.length+' líneas)</span></div>'
-          +'<div style="display:flex;align-items:center;gap:8px">'
-          +'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:11px;color:var(--orange-l);font-weight:700">'+fmt2l(totalGastos)+'</span>'
-          +'<span class="gc" style="font-size:11px;color:var(--muted)">▶</span></div></div>'
-          +'<div id="'+gid+'" style="display:none;padding:8px">'+inner+'</div>'
+          +'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:11px;color:var(--orange-l);font-weight:700">'+fmt2l(totalGastos)+'</span></div>'
+          +'<div style="padding:8px">'+inner+'</div>'
           +'</div>';
       })() : '')
       +'</div>';
@@ -12403,9 +12421,9 @@ async function procesarUnico(){
 
   if(ud.arancel>0.001) unicoInvLines.push({tipoFac:'liquidacion', deptCat:'GASTOS', prov:'TESORO NACIONAL', costo:R(ud.arancel), oc:'Pago Arancelario', nfac:idFac, numFact:idFac, _autoGasto:true});
   if(ud.itbms>0.001)   unicoInvLines.push({tipoFac:'itbms', deptCat:'GASTOS', prov:'TESORO NACIONAL', costo:R(ud.itbms), oc:'ITBMS s/CIF+Arancel', nfac:idFac, numFact:idFac, _autoGasto:true});
-  if(ud.tasa>0.001)       unicoInvLines.push({tipoFac:'tasa', deptCat:'GASTOS', prov:'TESORO NACIONAL', costo:R(ud.tasa), oc:'Tasa Aduana', nfac:idFac, numFact:idFac, _autoGasto:true});
-  if(ud.itbmsTasa>0.001) unicoInvLines.push({tipoFac:'itbms', deptCat:'GASTOS', prov:'TESORO NACIONAL', costo:R(ud.itbmsTasa), oc:'ITBM s/Tasa', nfac:idFac, numFact:idFac, _autoGasto:true});
-  if(ud.uso>0.001)        unicoInvLines.push({tipoFac:'uso_sistema', deptCat:'GASTOS', prov:'TESORO NACIONAL', costo:R(ud.uso), oc:'Uso del Sistema', nfac:idFac, numFact:idFac, _autoGasto:true});
+  if(ud.tasa>0.001)       unicoInvLines.push({tipoFac:'tasa',        deptCat:'GASTOS', prov:'TESORO NACIONAL', costo:R(ud.tasa),      oc:'Tasa Aduana',         nfac:idFac, numFact:idFac, _autoGasto:true});
+  if(ud.itbmsTasa>0.001) unicoInvLines.push({tipoFac:'itbms',       deptCat:'GASTOS', prov:'TESORO NACIONAL', costo:R(ud.itbmsTasa), oc:'ITBM s/Tasa',          nfac:idFac, numFact:idFac, _autoGasto:true});
+  if(ud.uso>0.001)        unicoInvLines.push({tipoFac:'uso_sistema', deptCat:'GASTOS', prov:'TESORO NACIONAL', costo:R(ud.uso),       oc:'Uso del Sistema',      nfac:idFac, numFact:idFac, _autoGasto:true});
   if(ud.hon>0.001)     unicoInvLines.push({tipoFac:'honorarios', deptCat:'GASTOS', prov:provCor, costo:R(ud.hon), oc:'Honorarios Corredor ('+ud.honPct.toFixed(2)+'%)', nfac:honNfac, numFact:honNfac, _autoGasto:true});
   if(ud.agente>0.001)  unicoInvLines.push({tipoFac:'acarreo', deptCat:'GASTOS', prov:provCor, costo:R(ud.agente), oc:'Gastos Origen/Destino', _autoGasto:true});
   if(ud.dmce>0.001)    unicoInvLines.push({tipoFac:'dmce', deptCat:'GASTOS', prov:provCor, costo:R(ud.dmce), oc:'DMCE', _autoGasto:true});
@@ -12428,7 +12446,7 @@ async function procesarUnico(){
     modoUnico: true,
     ts: Date.now(),
     snap: {
-      sc1:{ cif:ud.cif, landed:ud.landed, factor:ud.factor, arancel:ud.arancel, itbms:ud.itbms, hon:ud.hon, tasa:ud.tasa, uso:ud.uso }
+      sc1:{ cif:ud.cif, landed:ud.landed, factor:ud.factor, arancel:ud.arancel, itbms:ud.itbms, itbmsTasa:ud.itbmsTasa||0, hon:ud.hon, tasa:ud.tasa, uso:ud.uso, noMerc:ud.landed-ud.cif }
     },
     invLines: unicoInvLines,
     status: 'completo',
@@ -12439,7 +12457,7 @@ async function procesarUnico(){
     equipos: 1,
     tipoEquipo: ud.tipoEmb||'',
     cartones: ud.cartones||0,
-    viaTransporte: 'SEA',
+    viaTransporte: (document.getElementById('unico_via')?.value) || (ud.tipoEmb==='Camión'?'LAND':'SEA'),
     corredor: ud.corredor,
     provCorredor: provCor,
   };
@@ -12457,9 +12475,9 @@ async function procesarUnico(){
     tendData.push(snap);
   }
 
-  // Save to cloud — await directo para garantizar que se guarda
+  // Save to cloud — await directo garantiza escritura en Supabase
   if(!_sb){ initSupabase(); await new Promise(r=>setTimeout(r,600)); }
-  try{ await _syncTendToCloud(); }catch(e){ console.warn('syncTend error:',e); }
+  try{ await _syncTendToCloud(); }catch(e){ console.warn('syncTend:',e); }
   try{ await guardarSesionNube(); }catch(e){}
   if(typeof renderTend==='function') renderTend();
   if(typeof renderTopProvs==='function') renderTopProvs();

@@ -187,11 +187,6 @@ datalist option{background:var(--s2);color:var(--text)}
       <div class="field"><label>N° Embarque</label><input type="text" id="nro" placeholder="Ej: 22835"></div>
       <div class="field"><label>ID / Factura Fiscal</label><input type="text" id="id-fiscal" placeholder="Ej: PRE-2026-001"></div>
     </div>
-    <div class="field">
-      <label>N° Factura Tesoro Nacional <span style="font-weight:400;color:var(--muted);font-size:9px">(Liquidación, ITBMS, Tasa, Uso Sistema)</span></label>
-      <input type="text" id="tn-nfac" placeholder="Ej: TN-2026-001" style="border-color:rgba(248,81,73,.3)">
-      <p class="note" style="color:var(--red)">Esta factura aplica a todos los rubros del Tesoro Nacional</p>
-    </div>
     <div class="field"><label>Tipo de Mercancía</label><input type="text" id="desc" placeholder="Ej: Hogar 47%, Ropa 22%"></div>
 
     <div class="sep">Origen y Logística</div>
@@ -227,7 +222,7 @@ datalist option{background:var(--s2);color:var(--text)}
     <div class="r2">
       <div class="field">
         <label>Tipo de Embarque</label>
-        <select id="tipo-emb">
+        <select id="tipo-emb" onchange="_autoViaTransporte(this.value)">
           <option value="">— Selecciona —</option>
           <option value="Contenedor directo">Contenedor directo</option>
           <option value="Camión">Camión</option>
@@ -235,6 +230,24 @@ datalist option{background:var(--s2);color:var(--text)}
         </select>
       </div>
       <div class="field"><label>Cant. Cartones</label><input type="number" id="cartones" placeholder="0" min="0" step="1"></div>
+    </div>
+    <div class="r2">
+      <div class="field">
+        <label>Vía de Transporte <span style="font-weight:400;color:var(--muted);font-size:9px">auto</span></label>
+        <select id="via-transporte" onchange="saveState()">
+          <option value="SEA">🚢 SEA — Marítimo</option>
+          <option value="LAND">🚛 LAND — Terrestre</option>
+          <option value="AIR">✈️ AIR — Aéreo</option>
+        </select>
+        <p class="note">Se asigna automáticamente según tipo de embarque</p>
+      </div>
+      <div class="field">
+        <label>Término de Embarque</label>
+        <select id="termino-emb" onchange="saveState()">
+          <option value="CIF">CIF — Cost, Insurance &amp; Freight</option>
+          <option value="FOB">FOB — Free on Board</option>
+        </select>
+      </div>
     </div>
     <div class="r2">
       <div class="field"><label>Fecha del Embarque</label><input type="date" id="fecha"></div>
@@ -247,6 +260,14 @@ datalist option{background:var(--s2);color:var(--text)}
           <option value="Procesado">✅ Procesado</option>
         </select>
       </div>
+    </div>
+    <div class="field">
+      <label>Tipo de Proveedor</label>
+      <select id="tipo-proveedor" onchange="saveState()">
+        <option value="ZL">🚛 Zona Libre (ZL)</option>
+        <option value="IMP">🚢 Importación Directa (IMP)</option>
+        <option value="MIX">🔀 Mixto (ZL + IMP)</option>
+      </select>
     </div>
   </div>
 </div>
@@ -685,8 +706,10 @@ function calcular(){
   lastCalc={cor,nro,desc,pais,ciudad,tipoEmb,fecha,provCor,corName,
     cif,arPct:arPct*100,itbPct:itbPct*100,honPct:honPct*100,
     arancel,itbms,itbmsTasa,hon,tasa,uso,agente,extras,landed,landed_g,factor,
-    gastosRows, honNfac:gv('hon-nfac'), idFiscal:gv('id-fiscal'), tnNfac:gv('tn-nfac'),
-    cartones:parseInt(gv('cartones'))||0, estatus:gv('estatus')};
+    gastosRows, honNfac:gv('hon-nfac'), idFiscal:gv('id-fiscal'),
+    cartones:parseInt(gv('cartones'))||0, estatus:gv('estatus'),
+    viaTransporte:gv('via-transporte')||'SEA', terminoEmb:gv('termino-emb')||'CIF',
+    tipoProveedor:gv('tipo-proveedor')||'ZL'};
 
   var hon_pct_disp = (honPct*100).toFixed(2);
 
@@ -781,9 +804,20 @@ function calcular(){
   toast('✅ Costo Único calculado','green');
 }
 
-// ═══════════════════════════════════════════════
+// ══════════════════════════════════════
+// AUTO VÍA DE TRANSPORTE
+// ══════════════════════════════════════
+function _autoViaTransporte(tipoEmb){
+  var el=document.getElementById('via-transporte');
+  if(!el) return;
+  if(tipoEmb==='Camión') el.value='LAND';
+  else if(tipoEmb==='' ) {}  // no cambiar
+  else el.value='SEA';  // Contenedor directo / Carga suelta
+}
+
+// ══════════════════════════════════════════════════════
 // SUPABASE
-// ═══════════════════════════════════════════════
+// ══════════════════════════════════════════════════════
 var _SB_URL = 'https://kgrunsunahooitmqzaaq.supabase.co';
 var _SB_KEY = 'sb_publishable_pRDW1CDvw8iKlSy8oTz5uA_v0GA4GkA';
 var _SB_MASTER = '_TEND_MASTER';
@@ -861,6 +895,9 @@ async function procesar(){
   var btn=document.getElementById('btn-proc');
   btn.textContent='⏳ Guardando en la nube…';
   btn.disabled=true;
+  // Auto-set estatus a Procesado
+  var estatusEl=document.getElementById('estatus');
+  if(estatusEl) estatusEl.value='Procesado';
 
   var data={
     nro: d.nro||('UNI-'+Date.now()),
@@ -885,6 +922,9 @@ async function procesar(){
     pais: d.pais, ciudad: d.ciudad,
     tipoEquipo: d.tipoEmb, cartones: d.cartones,
     idFiscal: d.idFiscal, estatus: d.estatus,
+    viaTransporte: d.viaTransporte||'SEA',
+    terminoEmb: d.terminoEmb||'CIF',
+    tipoProveedor: d.tipoProveedor||'ZL',
     invLines: buildInvLines(d),
     status: 'completo'
   };
@@ -954,7 +994,7 @@ function buildInvLines(d){
   var lines=[];
   var R2=function(n){return Math.round(n*100)/100;};
   var provCor=d.provCor||d.corName.replace(/[⚡🤝✏️]/g,'').trim();
-  var idFac=d.tnNfac||d.idFiscal||d.honNfac||'';
+  var idFac=d.idFiscal||d.honNfac||'';
 
   // ── TESORO NACIONAL ──────────────────────────────────────────
   // Grupo Primavera paga estos impuestos a nombre propio.
@@ -992,8 +1032,8 @@ function buildInvLines(d){
   // montoHomologado: null — no aplica en Escenario Único
   invLines.filter(function(l){return l.tipoFac==='mercancia';}).forEach(function(l){
     lines.push({tipoFac:'mercancia',deptCat:l.deptCat,prov:l.prov,
-      costo:l.costo,nfac:l.nfac,bultos:l.bultos,piezas:l.piezas,
-      montoHomologado:null});
+      costo:l.costo,nfac:l.nfac,oc:l.nfac||(d.nro?'Emb.'+d.nro:''),
+      bultos:l.bultos,piezas:l.piezas,montoHomologado:null});
   });
   return lines;
 }
@@ -1198,7 +1238,8 @@ function saveState(){
     // Incluir invLines (plantilla) en el estado guardado
     localStorage.setItem('_unico_estado2',JSON.stringify({
       corredor:gv('corredor'),provCor:gv('prov-cor'),nombreCor:gv('nombre-cor'),
-      nro:gv('nro'),idFiscal:gv('id-fiscal'),tnNfac:gv('tn-nfac'),desc:gv('desc'),
+      nro:gv('nro'),idFiscal:gv('id-fiscal'),desc:gv('desc'),
+    viaTransporte:gv('via-transporte'),terminoEmb:gv('termino-emb'),tipoProveedor:gv('tipo-proveedor'),
       pais:gv('pais'),ciudad:gv('ciudad'),tipoEmb:gv('tipo-emb'),
       cartones:gv('cartones'),fecha:gv('fecha'),estatus:gv('estatus'),
       cif:gv('cif'),arPct:gv('ar-pct'),itbms:gv('itbms-pct'),
@@ -1229,7 +1270,10 @@ function loadState(){
     var corEl=document.getElementById('corredor');
     if(corEl&&e.corredor) corEl.value=e.corredor;
     su('prov-cor',e.provCor); su('nombre-cor',e.nombreCor);
-    su('nro',e.nro); su('id-fiscal',e.idFiscal); su('tn-nfac',e.tnNfac); su('desc',e.desc);
+    su('nro',e.nro); su('id-fiscal',e.idFiscal); su('desc',e.desc);
+    if(e.viaTransporte) su('via-transporte',e.viaTransporte);
+    if(e.terminoEmb) su('termino-emb',e.terminoEmb);
+    if(e.tipoProveedor) su('tipo-proveedor',e.tipoProveedor);
     su('cartones',e.cartones); su('fecha',e.fecha); su('estatus',e.estatus);
     su('cif',e.cif); su('ar-pct',e.arPct); su('itbms-pct',e.itbms);
     su('tasa',e.tasa); su('uso',e.uso); su('agente',e.agente); su('dmce',e.dmce);
