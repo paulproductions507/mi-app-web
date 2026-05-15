@@ -1,0 +1,1432 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>🔒 Escenario Único — ZLC Panamá</title>
+<style>
+:root{
+  --bg:#0d1117;--s1:#161b22;--s2:#1c2230;--border:#30363d;
+  --text:#e6edf3;--muted:#8b949e;
+  --green:#3fb950;--blue:#58a6ff;--orange:#f0883e;
+  --red:#f85149;--purple:#a371f7;--yellow:#d2a52e;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;min-height:100vh}
+
+/* HEADER */
+.hdr{background:var(--s1);border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:10}
+.hdr-icon{font-size:20px}
+.hdr-title{font-size:15px;font-weight:700;color:var(--purple)}
+.hdr-sub{font-size:10px;color:var(--muted);margin-left:auto}
+.hdr-back{background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);color:var(--blue);border-radius:6px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;text-decoration:none}
+
+/* LAYOUT */
+.page{max-width:680px;margin:0 auto;padding:14px 12px 60px}
+
+/* CARD */
+.card{background:var(--s1);border:1px solid var(--border);border-radius:12px;margin-bottom:12px;overflow:hidden}
+.card-hd{padding:10px 14px;background:var(--s2);border-bottom:1px solid var(--border);font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center;gap:6px}
+.card-bd{padding:14px}
+
+/* FIELDS */
+.field{margin-bottom:10px}
+.field label{display:block;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+input,select,textarea{width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:13px;outline:none;transition:border-color .15s}
+input:focus,select:focus{border-color:var(--purple)}
+input[readonly]{background:var(--bg);color:var(--muted);cursor:default}
+.r2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.note{font-size:10px;color:var(--muted);margin-top:2px}
+
+/* SEPARATOR */
+.sep{font-size:10px;font-weight:700;color:var(--purple);text-transform:uppercase;letter-spacing:.07em;padding:8px 0 4px;border-bottom:1px solid rgba(163,113,247,.2);margin-bottom:10px}
+
+/* BUTTON */
+.btn{display:block;width:100%;border:none;border-radius:8px;padding:12px;font-size:13px;font-weight:700;cursor:pointer;transition:opacity .15s}
+.btn:hover{opacity:.85}
+.btn-calc{background:linear-gradient(135deg,#a371f7,#58a6ff);color:#fff}
+.btn-proc{background:rgba(63,185,80,.15);border:1px solid rgba(63,185,80,.3)!important;color:var(--green)}
+.btn-add{background:rgba(88,166,255,.08);border:1px solid rgba(88,166,255,.2);color:var(--blue);font-size:12px;padding:8px;margin-bottom:8px}
+
+/* COMPUTED FIELD (with arrow) */
+.computed-row{display:grid;grid-template-columns:1fr 28px 1fr;gap:6px;align-items:end;margin-bottom:10px}
+.computed-arrow{text-align:center;color:var(--muted);font-size:16px;padding-bottom:8px}
+.computed-row input[readonly]{color:var(--orange);font-weight:700;border-color:rgba(240,136,62,.3)}
+.computed-row.green input[readonly]{color:var(--green);border-color:rgba(63,185,80,.3)}
+.computed-row.blue  input[readonly]{color:var(--blue);border-color:rgba(88,166,255,.3)}
+.computed-row.purple input[readonly]{color:var(--purple);border-color:rgba(163,113,247,.3)}
+
+/* LIVE SUMMARY */
+#live-summary{background:rgba(163,113,247,.07);border:1px solid rgba(163,113,247,.2);border-radius:10px;padding:12px;margin-bottom:12px;display:none}
+.sum-row{display:flex;justify-content:space-between;padding:3px 0;font-size:12px}
+.sum-row.total{border-top:1px solid rgba(163,113,247,.2);padding-top:8px;margin-top:4px}
+.sum-row.total span:first-child{font-weight:700;font-size:13px}
+.sum-row.total span:last-child{font-weight:800;font-size:16px;color:var(--green)}
+.sum-label{color:var(--muted)}
+.sum-val{font-family:monospace;font-weight:600}
+
+/* GASTOS ADICIONALES */
+.gasto-row{background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px;position:relative}
+.gasto-del{position:absolute;top:8px;right:8px;background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.2);color:var(--red);border-radius:4px;width:24px;height:24px;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center}
+
+/* WARNING */
+.warn{background:rgba(210,153,34,.08);border:1px solid rgba(210,153,34,.2);border-radius:8px;padding:9px 12px;font-size:11px;color:var(--yellow);line-height:1.6;margin-bottom:10px}
+
+/* TABLA EDITABLE PROVEEDORES */
+.inv-table{width:100%;border-collapse:collapse;font-size:11px}
+.inv-table th{background:var(--s2);color:var(--muted);font-weight:700;text-transform:uppercase;font-size:9px;letter-spacing:.05em;padding:6px 5px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}
+.inv-table td{padding:4px 3px;border-bottom:1px solid rgba(48,54,61,.5);vertical-align:middle}
+.inv-table tr:last-child td{border-bottom:none}
+.inv-table tr:hover td{background:rgba(88,166,255,.03)}
+.inv-inp{background:var(--s2);border:1px solid transparent;border-radius:4px;padding:4px 6px;color:var(--text);font-size:11px;width:100%;outline:none;transition:border-color .15s}
+.inv-inp:focus{border-color:var(--purple)}
+.inv-inp.warn-field{border-color:rgba(248,81,73,.4);color:var(--red)}
+.inv-inp.ok-field{border-color:rgba(63,185,80,.3);color:var(--green)}
+.inv-del-btn{background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.2);color:var(--red);border-radius:4px;width:22px;height:22px;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.inv-add-row{background:rgba(88,166,255,.07);border:1px dashed rgba(88,166,255,.25);color:var(--blue);border-radius:6px;padding:7px;font-size:11px;font-weight:600;cursor:pointer;width:100%;margin-top:6px;transition:background .15s}
+.inv-add-row:hover{background:rgba(88,166,255,.13)}
+.inv-total-bar{display:flex;justify-content:space-between;align-items:center;padding:8px 4px 4px;border-top:1px solid var(--border);margin-top:4px}
+
+/* RESULT */
+#result{display:none}
+.kpi-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px}
+.kpi{background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:12px 8px;text-align:center}
+.kpi-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+.kpi-val{font-family:monospace;font-size:16px;font-weight:800}
+.kpi.purple .kpi-label{color:var(--purple)} .kpi.purple .kpi-val{color:var(--purple)}
+.kpi.green  .kpi-label{color:var(--green)}  .kpi.green  .kpi-val{color:var(--green)}
+.kpi.orange .kpi-label{color:var(--orange)} .kpi.orange .kpi-val{color:var(--orange)}
+
+.desglose-table{background:var(--bg);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:12px}
+.desglose-row{display:flex;justify-content:space-between;padding:6px 12px;border-bottom:1px solid var(--border);font-size:12px}
+.desglose-row:last-child{border:none}
+.desglose-row.subtotal{background:rgba(63,185,80,.05);font-weight:700}
+.desglose-row.itbms{font-style:italic;color:var(--blue)}
+
+/* PLANTILLA PREVIEW */
+.prov-list{max-height:200px;overflow-y:auto;margin:8px 0}
+.prov-item{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(48,54,61,.4);font-size:11px}
+.prov-name{flex:1;font-weight:600}
+.prov-name.ok{color:var(--green)}
+.prov-name.fixed{color:var(--orange)}
+.badge{font-size:9px;border-radius:3px;padding:1px 5px;margin-left:4px}
+.badge.ok{background:rgba(63,185,80,.12);color:var(--green)}
+.badge.fixed{background:rgba(240,136,62,.12);color:var(--orange)}
+.badge.err{background:rgba(248,81,73,.15);color:var(--red)}
+.prov-edit{flex:1;background:rgba(248,81,73,.06);border:1px solid rgba(248,81,73,.3);border-radius:5px;padding:4px 7px;color:var(--red);font-size:11px;font-weight:600;margin-right:6px}
+.prov-val{font-family:monospace;font-weight:700;color:var(--green);flex-shrink:0}
+
+/* TOAST */
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1c2230;border:1px solid var(--border);border-radius:8px;padding:10px 18px;font-size:12px;font-weight:600;z-index:999;opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap}
+#toast.show{opacity:1}
+
+/* Datalist */
+datalist option{background:var(--s2);color:var(--text)}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<div id="toast"></div>
+
+<!-- HEADER -->
+<div class="hdr">
+  <span class="hdr-icon">🔒</span>
+  <span class="hdr-title">Escenario Único</span>
+  <span id="cloud-badge" style="font-size:10px;color:var(--muted);margin-left:8px">☁️ Conectando…</span>
+  <!-- Indicador de auto-guardado -->
+  <span id="_save-indicator" style="font-size:10px;color:var(--green);margin-left:10px;opacity:0;transition:opacity .4s;white-space:nowrap">💾 Guardado</span>
+  <span class="hdr-sub" style="margin-left:auto">ZLC Panamá · Sin comparación alternativa</span>
+  <button onclick="saveState();toast('💾 Borrador guardado localmente','green')"
+    style="background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green);border-radius:6px;padding:5px 11px;font-size:11px;font-weight:600;cursor:pointer;margin-left:8px;white-space:nowrap">
+    💾 Guardar
+  </button>
+  <a class="hdr-back" id="back-btn" href="#">← Volver</a>
+</div>
+
+<div class="page">
+
+<!-- DATALIST PROVEEDORES -->
+<datalist id="prov-dl"></datalist>
+
+<!-- ══ PLANTILLA ══ -->
+<div class="card">
+  <div class="card-hd" style="justify-content:space-between">
+    <span>📂 Plantilla de Proveedores</span>
+    <span id="_plant-save-badge" style="font-size:9px;font-weight:700;color:var(--green);display:none">✓ Guardada</span>
+  </div>
+  <div class="card-bd">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+      <button onclick="downloadTemplate('csv')" style="flex:1;min-width:80px;background:rgba(63,185,80,.08);border:1px solid rgba(63,185,80,.2);color:var(--green);border-radius:7px;padding:7px;font-size:11px;cursor:pointer">📥 CSV</button>
+      <button onclick="downloadTemplate('xlsx')" style="flex:1;min-width:80px;background:rgba(88,166,255,.08);border:1px solid rgba(88,166,255,.2);color:var(--blue);border-radius:7px;padding:7px;font-size:11px;cursor:pointer">📥 Excel</button>
+      <button onclick="document.getElementById('file-in').click()" style="flex:2;min-width:100px;background:rgba(163,113,247,.12);border:1px solid rgba(163,113,247,.3);color:var(--purple);border-radius:7px;padding:7px;font-size:11px;font-weight:700;cursor:pointer">📂 Cargar Plantilla</button>
+      <input type="file" id="file-in" accept=".csv,.xlsx,.xls" style="display:none" onchange="loadFile(this)">
+    </div>
+    <div id="plant-status" style="font-size:10px;color:var(--muted)">Sin plantilla cargada.</div>
+    <div id="plant-preview" style="display:block">
+      <div class="prov-list" id="prov-list"></div>
+      <div style="display:flex;justify-content:space-between;padding-top:8px;border-top:1px solid var(--border);margin-top:4px">
+        <span style="font-size:11px;color:var(--muted)">Total Mercancía:</span>
+        <span id="plant-total" style="font-family:monospace;font-size:13px;font-weight:800;color:var(--green)">$0.00</span>
+      </div>
+      <button class="btn btn-add" style="margin-top:8px;background:linear-gradient(135deg,rgba(63,185,80,.2),rgba(63,185,80,.1));border:1px solid rgba(63,185,80,.3);color:var(--green)" onclick="applyPlantilla()">✓ Aplicar CIF al formulario</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ DATOS DEL EMBARQUE ══ -->
+<div class="card">
+  <div class="card-hd">📋 Datos del Embarque</div>
+  <div class="card-bd">
+
+    <div class="sep">Corredor / Agente Aduanal</div>
+    <div class="field">
+      <label>Corredor</label>
+      <select id="corredor" onchange="onCorredorChange()">
+        <option value="cifexp">⚡ CIF Express</option>
+        <option value="sababa">🤝 Sababa Imports</option>
+        <option value="otro">✏️ Otro Corredor</option>
+      </select>
+    </div>
+    <div class="field" id="nombre-cor-field" style="display:none">
+      <label>Nombre del Corredor</label>
+      <input type="text" id="nombre-cor" placeholder="Ej: Agencia García">
+    </div>
+    <div class="field">
+      <label>Proveedor (para facturas)</label>
+      <input type="text" id="prov-cor" list="prov-dl" placeholder="Se llena automáticamente según corredor">
+    </div>
+
+    <div class="sep">Identificación</div>
+    <div class="r2">
+      <div class="field"><label>N° Embarque</label><input type="text" id="nro" placeholder="Ej: 22835"></div>
+      <div class="field"><label>ID / Factura Fiscal</label><input type="text" id="id-fiscal" placeholder="Ej: PRE-2026-001"></div>
+    </div>
+    <div class="field"><label>Tipo de Mercancía</label><input type="text" id="desc" placeholder="Ej: Hogar 47%, Ropa 22%"></div>
+
+    <div class="sep">Origen y Logística</div>
+    <div class="r2">
+      <div class="field">
+        <label>País de Origen</label>
+        <select id="pais" onchange="fillCiudades()">
+          <option value="">— Selecciona —</option>
+          <option value="USA">🇺🇸 Estados Unidos</option>
+          <option value="China">🇨🇳 China</option>
+          <option value="Mexico">🇲🇽 México</option>
+          <option value="Brasil">🇧🇷 Brasil</option>
+          <option value="Colombia">🇨🇴 Colombia</option>
+          <option value="India">🇮🇳 India</option>
+          <option value="Vietnam">🇻🇳 Vietnam</option>
+          <option value="Korea">🇰🇷 Corea del Sur</option>
+          <option value="Japan">🇯🇵 Japón</option>
+          <option value="Taiwan">🇹🇼 Taiwán</option>
+          <option value="Turkey">🇹🇷 Turquía</option>
+          <option value="Italia">🇮🇹 Italia</option>
+          <option value="Espana">🇪🇸 España</option>
+          <option value="Panama">🇵🇦 Panamá</option>
+          <option value="Otro">🌐 Otro</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Ciudad / Puerto</label>
+        <select id="ciudad">
+          <option value="">— Selecciona país primero —</option>
+        </select>
+      </div>
+    </div>
+    <div class="r2">
+      <div class="field">
+        <label>Tipo de Embarque</label>
+        <select id="tipo-emb" onchange="_autoViaTransporte(this.value)">
+          <option value="">— Selecciona —</option>
+          <option value="Contenedor directo">Contenedor directo</option>
+          <option value="Camión">Camión</option>
+          <option value="Carga suelta">Carga suelta</option>
+        </select>
+      </div>
+      <div class="field"><label>Cant. Cartones</label><input type="number" id="cartones" placeholder="0" min="0" step="1"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">
+      <div class="field" style="margin:0">
+        <label>Vía <span style="font-weight:400;color:var(--muted);font-size:9px">auto</span></label>
+        <select id="via-transporte" onchange="saveState()">
+          <option value="SEA">🚢 SEA</option>
+          <option value="LAND">🚛 LAND</option>
+          <option value="AIR">✈️ AIR</option>
+        </select>
+      </div>
+      <div class="field" style="margin:0">
+        <label>Término</label>
+        <select id="termino-emb" onchange="saveState()">
+          <option value="CIF">CIF</option>
+          <option value="FOB">FOB</option>
+        </select>
+      </div>
+      <div class="field" style="margin:0">
+        <label>Tipo Prov.</label>
+        <select id="tipo-proveedor" onchange="saveState()">
+          <option value="ZL">🚛 ZL</option>
+          <option value="IMP">🚢 IMP</option>
+          <option value="MIX">🔀 Mixto</option>
+        </select>
+      </div>
+    </div>
+    <div class="r2">
+      <div class="field"><label>Fecha del Embarque</label><input type="date" id="fecha"></div>
+      <div class="field">
+        <label>Estatus</label>
+        <select id="estatus">
+          <option value="Nuevo">🔵 Nuevo</option>
+          <option value="En tránsito">🟡 En tránsito</option>
+          <option value="En aduana">🟠 En aduana</option>
+          <option value="Procesado">✅ Procesado</option>
+        </select>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ VALOR E IMPUESTOS ══ -->
+<div class="card">
+  <div class="card-hd">💰 Valor e Impuestos</div>
+  <div class="card-bd">
+    <div class="field">
+      <label>Monto CIF Total (USD)</label>
+      <input type="number" id="cif" placeholder="Ej: 34,802.50" step="0.01" oninput="_resetManual()" style="font-size:15px;font-weight:700;color:var(--green);border-color:rgba(63,185,80,.4)">
+    </div>
+
+    <div class="computed-row">
+      <div class="field" style="margin:0"><label>Factor Arancelario % (DAI)</label><input type="number" id="ar-pct" value="10" step="0.0001" style="border-color:rgba(248,81,73,.3)" oninput="_resetManual()"></div>
+      <div class="computed-arrow">→</div>
+      <div class="field" style="margin:0"><label style="color:var(--red)">Pago Arancelario (USD) <span style="font-weight:400;color:var(--muted);font-size:9px">editable</span></label><input type="number" id="ar-monto" oninput="_markManual('ar-monto');calcLive()" style="color:var(--red);font-weight:700;border-color:rgba(248,81,73,.3)"></div>
+    </div>
+    <div class="computed-row blue">
+      <div class="field" style="margin:0"><label>ITBMS % (s/CIF+Arancel)</label><input type="number" id="itbms-pct" value="7" step="0.01" style="border-color:rgba(88,166,255,.3)" oninput="_resetManual()"></div>
+      <div class="computed-arrow">→</div>
+      <div class="field" style="margin:0"><label style="color:var(--blue)">ITBMS a pagar (USD) <span style="font-weight:400;color:var(--muted);font-size:9px">editable</span></label><input type="number" id="itbms-monto" oninput="_markManual('itbms-monto');calcLive()" style="color:var(--blue);font-weight:700;border-color:rgba(88,166,255,.3)"></div>
+    </div>
+    <div class="r2">
+      <div class="field">
+        <label>Tasa Aduana (USD)</label>
+        <input type="number" id="tasa" value="100" step="0.01" oninput="_resetManual()">
+      </div>
+      <div class="field">
+        <label>ITBMS s/Tasa (USD) <span style="font-weight:400;color:var(--muted);font-size:9px">editable</span></label>
+        <input type="number" id="itbms-tasa" style="color:var(--blue);font-weight:700;border-color:rgba(88,166,255,.2)"
+          oninput="_markManual('itbms-tasa');calcLive()" placeholder="7.00">
+        <p class="note">7% s/Tasa — va a Tesoro Nacional</p>
+      </div>
+    </div>
+    <div class="r2">
+      <div class="field"><label>Uso del Sistema (USD)</label><input type="number" id="uso" value="3" step="0.01"><p class="note">$3, $6 o $9</p></div>
+      <div class="field"><label>Gastos Origen/Destino (USD)</label><input type="number" id="agente" value="0" step="0.01"></div>
+    </div>
+    <!-- DMCE oculto — no aplica en Escenario Único -->
+    <input type="hidden" id="dmce" value="0">
+  </div>
+</div>
+
+<!-- ══ HONORARIOS ══ -->
+<div class="card">
+  <div class="card-hd">💼 Honorarios del Corredor</div>
+  <div class="card-bd">
+    <div class="computed-row purple">
+      <div class="field" style="margin:0"><label id="hon-lbl">Factor % (sobre CIF)</label><input type="number" id="hon-pct" value="1" step="0.01" min="0"></div>
+      <div class="computed-arrow">→</div>
+      <div class="field" style="margin:0"><label style="color:var(--purple)">Honorarios Calculados (USD)</label><input type="number" id="hon-monto" oninput="calcLive()" style="color:var(--purple);font-weight:700;border-color:rgba(163,113,247,.3)"></div>
+    </div>
+    <div class="field">
+      <label>N° Factura Honorarios</label>
+      <input type="text" id="hon-nfac" placeholder="Ej: INV-2025-001">
+    </div>
+  </div>
+</div>
+
+<!-- ══ GASTOS ADICIONALES ══ -->
+<div class="card">
+  <div class="card-hd">📋 Gastos Adicionales</div>
+  <div class="card-bd">
+    <div class="warn">
+      ⚠️ <strong>Solo agrega aquí lo que NO está calculado arriba.</strong><br>
+      <span style="color:var(--muted)">
+        El sistema ya incluyó en <strong>Tesoro Nacional</strong>: Liquidación (DAI), ITBM, Tasa y Uso del Sistema.<br>
+        Aquí van gastos adicionales que el corredor te factura aparte (almacenaje, inspección, acarreo, etc.) o notas de crédito.<br>
+        <strong style="color:var(--orange)">Nota de Crédito / Descuento → monto en negativo (ej: -175.50).</strong>
+      </span>
+    </div>
+    <div id="gastos-list"></div>
+    <button class="btn btn-add" onclick="addGasto()">+ Agregar Gasto</button>
+  </div>
+</div>
+
+<!-- ══ RESUMEN EN VIVO ══ -->
+<div id="live-summary">
+  <div style="font-size:10px;font-weight:700;color:var(--purple);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px">Resumen en Vivo</div>
+  <div class="sum-row"><span class="sum-label">CIF Mercancía</span><span class="sum-val" id="s-cif" style="color:var(--text)">$0.00</span></div>
+  <div class="sum-row"><span class="sum-label">Arancel</span><span class="sum-val" id="s-ar" style="color:var(--red)">$0.00</span></div>
+  <div class="sum-row"><span class="sum-label">Honorarios Corredor</span><span class="sum-val" id="s-hon" style="color:var(--purple)">$0.00</span></div>
+  <div class="sum-row"><span class="sum-label">Tasa + Uso Sistema</span><span class="sum-val" id="s-tasa" style="color:var(--orange)">$0.00</span></div>
+  <div class="sum-row"><span class="sum-label">ITBMS s/Tasa (Tesoro Nac.)</span><span class="sum-val" id="s-itbms-tasa" style="color:var(--blue)">$0.00</span></div>
+  <div class="sum-row"><span class="sum-label">Gastos Adicionales</span><span class="sum-val" id="s-extras" style="color:var(--muted)">$0.00</span></div>
+  <div class="sum-row total"><span>Costo Landed</span><span id="s-landed">$0.00</span></div>
+  <div class="sum-row"><span class="sum-label">ITBMS (desembolso)</span><span class="sum-val" id="s-itbms" style="color:var(--blue)">$0.00</span></div>
+  <div class="sum-row"><span class="sum-label">Factor Importación</span><span class="sum-val" id="s-factor" style="color:var(--green)">0.00%</span></div>
+</div>
+
+<!-- ══ BOTONES PRINCIPALES ══ -->
+<button class="btn btn-calc" onclick="calcular()" style="margin-bottom:8px">⚡ Calcular Costo Único →</button>
+<button class="btn btn-proc" id="btn-proc" style="display:none;border:1px solid" onclick="procesar()">✅ Procesar al Historial</button>
+
+<!-- ══ RESULTADO ══ -->
+<div id="result"></div>
+
+</div><!-- /page -->
+
+<script>
+// ═══════════════════════════════════════════════
+// PROVEEDORES — lista oficial
+// ═══════════════════════════════════════════════
+var PROV_NAMES=["MAYS ZONA LIBRE, S.A./PARIGI","MARBLE ARCH HOLDING CORP.","TRADING EXPRESS SUPPLY S DE RL","SPARKLINE TRADING INC.","BAGUTA ZONA LIBRE","FINAL FOUR, S. A.","NEW VERSE S.A.","SABABA IMPORT, S.A.","CIF EXPRESS, S.A. (TRAMITE DE","TESORO NACIONAL"];
+// Load full list from parent if available
+if(typeof invLines==='undefined') var invLines=[];
+
+(function(){
+  try{
+    if(window.opener && window.opener._PROV_NAMES) PROV_NAMES=window.opener._PROV_NAMES;
+    else if(window.parent && window.parent._PROV_NAMES) PROV_NAMES=window.parent._PROV_NAMES;
+  }catch(e){}
+  // Build datalist
+  var dl=document.getElementById('prov-dl');
+  PROV_NAMES.forEach(function(n){
+    var o=document.createElement('option'); o.value=n; dl.appendChild(o);
+  });
+})();
+
+// DEPT LIST — lista oficial de departamentos
+var DEPT_LIST=["ACCESO. DE DAMAS","ACCESORIO PARA AUTOS","BEBES","BISUTERIA/JOYERIAS/ACCESORIOS","CABALLEROS","CALZADOS","COMESTIBLE","COSMÉTICOS Y FRAGANCIAS","DAMAS-NEW","DEPORTES","DEPTO. LOTES","ESCOLAR","FERRETERIA","FIESTA","HOGAR","JUGUETERIA","NAVIDAD","NIÑAS","NIÑOS","REGALOS","REGALIAS","ROPA INTERIOR - DAMAS","SUMINISTROS","TEMPORAL","VENTA DE PATIO"];
+// Load custom from parent or localStorage
+(function(){
+  try{
+    var src=null;
+    if(window.opener&&window.opener._customDepts) src=window.opener._customDepts;
+    else if(window.parent&&window.parent._customDepts) src=window.parent._customDepts;
+    if(src&&src.length){ DEPT_LIST=src; return; }
+    // Try localStorage (same origin)
+    var saved=localStorage.getItem('_simDepts');
+    if(saved){ var p=JSON.parse(saved); if(p&&p.length) DEPT_LIST=p; }
+  }catch(e){}
+})();
+
+// Init tabla vacía después de que DEPT_LIST esté disponible
+setTimeout(function(){ if(typeof renderPreview==='function') renderPreview(); }, 0);
+
+function deptMatch(raw){
+  if(!raw||!DEPT_LIST.length) return raw;
+  var Q=raw.trim().toUpperCase();
+  // 1. Exact match (case-insensitive)
+  var exact=DEPT_LIST.find(function(d){return d.toUpperCase()===Q;});
+  if(exact) return exact;
+  // 2. Contains match — Q is contained in official or vice versa
+  var contains=DEPT_LIST.find(function(d){
+    var DU=d.toUpperCase();
+    return DU===Q||DU.includes(Q)||Q.includes(DU);
+  });
+  if(contains) return contains;
+  // 3. Bigram similarity — for close typos
+  var best=null,bScore=0;
+  DEPT_LIST.forEach(function(d){
+    var s=bigram(Q,d.toUpperCase());
+    if(s>bScore){bScore=s;best=d;}
+  });
+  if(bScore>=0.55) return best;
+  // 4. Not found — return original (keep as-is)
+  return raw;
+}
+
+// ═══════════════════════════════════════════════
+// CIUDADES
+// ═══════════════════════════════════════════════
+var CIUDADES={
+  'USA':['Miami','Nueva York','Los Ángeles','Chicago','Houston'],
+  'China':['Guangzhou','Shanghai','Shenzhen','Ningbo','Tianjin'],
+  'Panama':['Zona Libre de Colón','Ciudad de Panamá','Balboa'],
+  'Colombia':['Bogotá','Medellín','Barranquilla'],
+  'Mexico':['Ciudad de México','Monterrey','Manzanillo'],
+  'Brasil':['São Paulo','Santos','Manaus'],
+  'India':['Mumbai','Delhi','Chennai'],
+  'Vietnam':['Ho Chi Minh','Hanói'],
+  'Korea':['Seúl','Busan','Incheon'],
+  'Japan':['Tokio','Osaka','Kobe'],
+  'Taiwan':['Taipéi','Kaohsiung'],
+  'Turkey':['Estambul','Izmir','Mersin'],
+  'Italia':['Milán','Génova','Nápoles'],
+  'Espana':['Barcelona','Madrid','Valencia'],
+};
+
+// RUBROS
+var RUBROS=[
+  {val:'liquidacion',   lbl:'🏛️ Liquidación / Pago Arancelario'},
+  {val:'itbms',         lbl:'🧾 ITBMS'},
+  {val:'tasa',          lbl:'💵 Tasa / Uso del Sistema'},
+  {val:'honorarios',    lbl:'💼 Honorarios / Comisión Corredor'},
+  {val:'acarreo',       lbl:'🚛 Acarreo (Transporte Local)'},
+  {val:'gastos_destino',lbl:'📦 Gastos de Destino (Port, Handling)'},
+  {val:'flete',         lbl:'🚢 Flete Internacional'},
+  {val:'uso_sistema',   lbl:'💻 Uso del Sistema'},
+  {val:'seguro',        lbl:'🛡️ Seguro de Carga'},
+  {val:'almacenaje',    lbl:'🏪 Almacenaje'},
+  {val:'inspeccion',    lbl:'🔍 Inspección'},
+  {val:'dmce',          lbl:'📝 DMCE'},
+  {val:'nota_credito',  lbl:'🏷️ Nota de Crédito / Descuento'},
+  {val:'otros',         lbl:'📋 Otros Gastos'},
+];
+// Load from parent/opener if available
+(function(){
+  try{
+    var src=null;
+    if(window.opener && window.opener._RUBROS_GASTO) src=window.opener._RUBROS_GASTO;
+    else if(window.parent && window.parent._RUBROS_GASTO) src=window.parent._RUBROS_GASTO;
+    if(src && src.length) RUBROS=src;
+  }catch(e){}
+})();
+
+function rubroOpts(sel){
+  return RUBROS.map(function(r){
+    return '<option value="'+r.val+'"'+(r.val===sel?' selected':'')+'>'+r.lbl+'</option>';
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════
+var invLines=[];      // plantilla cargada
+var lastCalc=null;    // resultado del último cálculo
+
+// ═══════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════
+var R=function(n){return Math.round(n*100)/100;};
+var fmt=function(n){return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});};
+var gv=function(id){var el=document.getElementById(id);return el?el.value:'';};
+var sv=function(id,v){var el=document.getElementById(id);if(el)el.value=v;};
+
+function toast(msg,color){
+  var t=document.getElementById('toast');
+  t.textContent=msg;
+  t.style.borderColor=color==='green'?'var(--green)':color==='red'?'var(--red)':'var(--orange)';
+  t.style.color=color==='green'?'var(--green)':color==='red'?'var(--red)':'var(--orange)';
+  t.classList.add('show');
+  setTimeout(function(){t.classList.remove('show');},3000);
+}
+
+// ═══════════════════════════════════════════════
+// CORREDOR
+// ═══════════════════════════════════════════════
+function onCorredorChange(){
+  var cor=gv('corredor');
+  var nf=document.getElementById('nombre-cor-field');
+  var honLbl=document.getElementById('hon-lbl');
+  var provEl=document.getElementById('prov-cor');
+  if(cor==='cifexp'){
+    nf.style.display='none';
+    if(!provEl._manual) provEl.value='CIF EXPRESS TRÁMITE S.A.';
+    honLbl.textContent='Factor % (CIF Express)';
+    sv('hon-pct','3');
+  } else if(cor==='sababa'){
+    nf.style.display='none';
+    if(!provEl._manual) provEl.value='SABABA IMPORT, S.A.';
+    honLbl.textContent='Factor % (Sababa)';
+    sv('hon-pct','1');
+  } else {
+    nf.style.display='block';
+    if(!provEl._manual) provEl.value='';
+    honLbl.textContent='Factor % (sobre CIF)';
+  }
+  document.getElementById('prov-cor').addEventListener('input',function(){
+    document.getElementById('prov-cor')._manual=true;
+  },{once:true});
+  calcLive();
+  saveState();
+}
+
+// ═══════════════════════════════════════════════
+// CIUDADES
+// ═══════════════════════════════════════════════
+var CIUDADES={
+  'USA':['Miami','Nueva York','Los Ángeles','Chicago','Houston'],
+  'China':['Guangzhou','Shanghai','Shenzhen','Ningbo','Tianjin'],
+  'Panama':['Zona Libre de Colón','Ciudad de Panamá','Balboa'],
+  'Colombia':['Bogotá','Medellín','Barranquilla'],
+  'Mexico':['Ciudad de México','Monterrey','Manzanillo'],
+  'Brasil':['São Paulo','Santos','Manaus'],
+  'India':['Mumbai','Delhi','Chennai'],
+  'Vietnam':['Ho Chi Minh','Hanói'],
+  'Korea':['Seúl','Busan','Incheon'],
+  'Japan':['Tokio','Osaka','Kobe'],
+  'Taiwan':['Taipéi','Kaohsiung'],
+  'Turkey':['Estambul','Izmir','Mersin'],
+  'Italia':['Milán','Génova','Nápoles'],
+  'Espana':['Barcelona','Madrid','Valencia'],
+};
+
+function fillCiudades(){
+  var pais=gv('pais');
+  var sel=document.getElementById('ciudad');
+  var cities=CIUDADES[pais]||[];
+  sel.innerHTML='<option value="">— Selecciona ciudad —</option>';
+  cities.forEach(function(c){
+    var o=document.createElement('option'); o.value=c; o.textContent=c; sel.appendChild(o);
+  });
+  saveState();
+}
+
+// ═══════════════════════════════════════════════
+// CÁLCULO EN VIVO
+// ═══════════════════════════════════════════════
+function calcLive(){
+  var cif   =parseFloat(gv('cif'))||0;
+  var arPct =(parseFloat(gv('ar-pct'))||0)/100;
+  var itbPct=(parseFloat(gv('itbms-pct'))||7)/100;
+  var honPct=(parseFloat(gv('hon-pct'))||0)/100;
+  var tasa  =parseFloat(gv('tasa'))||0;
+  var uso   =parseFloat(gv('uso'))||0;
+  var agente=parseFloat(gv('agente'))||0;
+  var dmce  =parseFloat(gv('dmce'))||0;
+
+  // Auto-calculated values
+  var arAuto      = R(cif*arPct);
+  var itbAuto     = Math.ceil((cif+arAuto)*itbPct*100)/100;
+  var itbTasaAuto = Math.ceil(tasa*itbPct*100)/100;
+  var honAuto     = R(cif*honPct);
+
+  // Respect manual edits — only update if user hasn't touched the field
+  var arEl      = document.getElementById('ar-monto');
+  var itbEl     = document.getElementById('itbms-monto');
+  var itbTasaEl = document.getElementById('itbms-tasa');
+  var honEl     = document.getElementById('hon-monto');
+  if(arEl      && !arEl._manual)      arEl.value      = arAuto>0      ? arAuto.toFixed(2)      : '';
+  if(itbEl     && !itbEl._manual)     itbEl.value     = itbAuto>0     ? itbAuto.toFixed(2)     : '';
+  if(itbTasaEl && !itbTasaEl._manual) itbTasaEl.value = itbTasaAuto>0 ? itbTasaAuto.toFixed(2) : '';
+  if(honEl     && !honEl._manual)     honEl.value     = honAuto>0     ? honAuto.toFixed(2)     : '';
+
+  // Use actual displayed values for landed (manual or auto)
+  var arancel  = parseFloat(arEl ? arEl.value : arAuto)||0;
+  var itbms    = parseFloat(itbEl ? itbEl.value : itbAuto)||0;
+  var itbmsTasa= parseFloat(itbTasaEl ? itbTasaEl.value : itbTasaAuto)||0;
+  var hon      = parseFloat(honEl ? honEl.value : honAuto)||0;
+
+  var extras=0;
+  document.querySelectorAll('.gasto-monto').forEach(function(inp){
+    extras+=parseFloat(inp.value)||0;
+  });
+  var landed=R(cif+arancel+hon+tasa+uso+agente+dmce+itbmsTasa+extras);
+  var factor=cif>0?((landed/cif)-1)*100:0;
+
+  // Update live summary
+  var sumDiv=document.getElementById('live-summary');
+  if(cif>0){
+    sumDiv.style.display='block';
+    document.getElementById('s-cif').textContent=fmt(cif);
+    document.getElementById('s-ar').textContent=fmt(arancel);
+    document.getElementById('s-hon').textContent=fmt(hon);
+    document.getElementById('s-tasa').textContent=fmt(tasa+uso);
+    document.getElementById('s-itbms-tasa').textContent=fmt(itbmsTasa);
+    document.getElementById('s-extras').textContent=fmt(extras);
+    document.getElementById('s-landed').textContent=fmt(landed);
+    document.getElementById('s-itbms').textContent=fmt(itbms);
+    document.getElementById('s-factor').textContent=factor.toFixed(2)+'%';
+  } else {
+    sumDiv.style.display='none';
+  }
+  clearTimeout(calcLive._t);
+  calcLive._t=setTimeout(saveState,300);
+}
+
+// Mark field as manually edited so calcLive won't overwrite it
+// Also resets when CIF or % fields change
+function _markManual(fieldId){ var el=document.getElementById(fieldId); if(el) el._manual=true; }
+function _resetManual(){
+  ['ar-monto','itbms-monto','itbms-tasa','hon-monto'].forEach(function(id){
+    var el=document.getElementById(id); if(el) el._manual=false;
+  });
+}
+
+// ═══════════════════════════════════════════════
+// GASTOS ADICIONALES
+// ═══════════════════════════════════════════════
+var gastoId=0;
+function addGasto(rubro,monto,nfac){
+  var id='g'+(++gastoId);
+  var div=document.createElement('div');
+  div.className='gasto-row'; div.id=id;
+  div.innerHTML='<button class="gasto-del" onclick="delGasto(\''+id+'\')" title="Eliminar">×</button>'
+    +'<div class="field" style="margin-bottom:6px"><label>Tipo de Gasto</label><select class="gasto-rubro">'+rubroOpts(rubro||'otros')+'</select></div>'
+    +'<div class="r2">'
+    +'<div class="field" style="margin:0"><label>Monto (USD)</label><input type="number" class="gasto-monto" value="'+(monto||0)+'" step="0.01" placeholder="0.00"></div>'
+    +'<div class="field" style="margin:0"><label>N° Factura</label><input type="text" class="gasto-nfac" value="'+(nfac||'')+'" placeholder="Ej: INV-001"></div>'
+    +'</div>';
+  document.getElementById('gastos-list').appendChild(div);
+  // Fade in
+  div.style.opacity='0';
+  requestAnimationFrame(function(){
+    div.style.transition='opacity .2s';
+    div.style.opacity='1';
+  });
+  div.querySelector('.gasto-monto').addEventListener('input',calcLive);
+  calcLive();
+}
+function delGasto(id){
+  var el=document.getElementById(id);
+  if(el) el.remove();
+  calcLive();
+}
+
+// ═══════════════════════════════════════════════
+// CALCULAR (resultado completo)
+// ═══════════════════════════════════════════════
+function calcular(){
+  var cif=parseFloat(gv('cif'))||0;
+  if(!cif){ toast('⚠️ Ingresa el valor CIF del embarque.','red'); return; }
+
+  var nro    =gv('nro');
+  var desc   =gv('desc');
+  var pais   =gv('pais');
+  var ciudad =gv('ciudad');
+  var tipoEmb=gv('tipo-emb');
+  var fecha  =gv('fecha');
+  var cor    =gv('corredor');
+  var provCor=gv('prov-cor');
+  var corName=cor==='cifexp'?'⚡ CIF Express':cor==='sababa'?'🤝 Sababa Imports':'✏️ '+(gv('nombre-cor')||'Corredor');
+
+  var arPct =(parseFloat(gv('ar-pct'))||0)/100;
+  var itbPct=(parseFloat(gv('itbms-pct'))||7)/100;
+  var honPct=(parseFloat(gv('hon-pct'))||0)/100;
+  var tasa  =parseFloat(gv('tasa'))||0;
+  var uso   =parseFloat(gv('uso'))||0;
+  var agente=parseFloat(gv('agente'))||0;
+  var dmce  =parseFloat(gv('dmce'))||0;
+  var arancel=R(cif*arPct);
+  var itbms  =R((cif+arancel)*itbPct);
+  var hon    =R(cif*honPct);
+  var gastosRows=[];
+  var extras=0;
+  document.querySelectorAll('.gasto-row').forEach(function(row){
+    var rubro=row.querySelector('.gasto-rubro').value;
+    var monto=parseFloat(row.querySelector('.gasto-monto').value)||0;
+    var nfac =row.querySelector('.gasto-nfac').value;
+    if(monto!==0) gastosRows.push({rubro,monto,nfac});
+    extras+=monto;
+  });
+  var itbmsTasa = parseFloat(document.getElementById('itbms-tasa')?.value)||0;
+  var landed=R(cif+arancel+hon+tasa+uso+agente+itbmsTasa+extras);
+  var factor=cif>0?((landed/cif)-1)*100:0;
+  var landed_g=R(landed+itbms);
+
+  lastCalc={cor,nro,desc,pais,ciudad,tipoEmb,fecha,provCor,corName,
+    cif,arPct:arPct*100,itbPct:itbPct*100,honPct:honPct*100,
+    arancel,itbms,itbmsTasa,hon,tasa,uso,agente,extras,landed,landed_g,factor,
+    gastosRows, honNfac:gv('hon-nfac'), idFiscal:gv('id-fiscal'),
+    cartones:parseInt(gv('cartones'))||0, estatus:gv('estatus'),
+    viaTransporte:gv('via-transporte')||'SEA',
+    terminoEmb:gv('termino-emb')||'CIF',
+    tipoProveedor:gv('tipo-proveedor')||'ZL'};
+
+  var hon_pct_disp = (honPct*100).toFixed(2);
+
+  // ── Build ordered desglose ──
+  var impuestos=[
+    {lbl:'Liquidación (DAI '+arPct*100+'%)', val:arancel},
+    {lbl:'ITBM (s/CIF+Arancel)', val:itbms},
+    {lbl:'Tasa Aduana', val:tasa},
+    {lbl:'ITBM s/Tasa', val:itbmsTasa},
+    {lbl:'Uso del Sistema', val:uso},
+  ].filter(function(x){return x.val>0;});
+  var totalImpuestos=impuestos.reduce(function(s,x){return s+x.val;},0);
+
+  var honorarios=[{lbl:'Manejo de Liquidación ('+hon_pct_disp+'% sobre CIF)', val:hon}];
+  if(agente>0) honorarios.push({lbl:'Gastos Origen/Destino', val:agente});
+
+  var gastosExtra=gastosRows.filter(function(g){return g.monto>0;});
+  var descuentos=gastosRows.filter(function(g){return g.monto<0;});
+  var totalHon=honorarios.reduce(function(s,x){return s+x.val;},0);
+  var totalExtra=gastosExtra.reduce(function(s,g){return s+g.monto;},0);
+  var totalDesc=descuentos.reduce(function(s,g){return s+g.monto;},0);
+  var totalCorr=totalHon+totalExtra+totalDesc;
+
+  function secHtml(title,color,rows,total,showTotal){
+    var h='<div style="background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:8px">'
+      +'<div style="padding:6px 12px;background:var(--s2);font-size:10px;font-weight:700;color:'+color+';text-transform:uppercase;letter-spacing:.06em">'+title+'</div>'
+      +'<div style="padding:8px 12px">';
+    rows.forEach(function(r){
+      var rColor=r.val<0?'var(--green)':'var(--muted)';
+      h+='<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(48,54,61,.3);font-size:11px">'
+        +'<span style="color:var(--muted)">'+r.lbl+'</span>'
+        +'<span style="font-family:monospace;font-weight:700;color:'+rColor+'">'+fmt(r.val)+'</span></div>';
+    });
+    if(showTotal){
+      h+='<div style="display:flex;justify-content:space-between;padding:5px 0;margin-top:2px;font-size:12px;font-weight:700">'
+        +'<span style="color:var(--text)">Subtotal</span>'
+        +'<span style="font-family:monospace;color:'+color+'">'+fmt(total)+'</span></div>';
+    }
+    h+='</div></div>';
+    return h;
+  }
+
+  var gastosExtraRows=gastosExtra.map(function(g){
+    var lbl=(RUBROS.find(function(r){return r.val===g.rubro;})||{lbl:g.rubro}).lbl;
+    return {lbl:lbl+(g.nfac?' · '+g.nfac:''), val:g.monto};
+  });
+  var descRows=descuentos.map(function(g){
+    var lbl=(RUBROS.find(function(r){return r.val===g.rubro;})||{lbl:g.rubro}).lbl;
+    return {lbl:lbl+(g.nfac?' · '+g.nfac:''), val:g.monto};
+  });
+
+  document.getElementById('result').style.display='block';
+  document.getElementById('result').innerHTML=
+    '<div style="background:linear-gradient(135deg,rgba(163,113,247,.1),rgba(88,166,255,.07));border:2px solid rgba(163,113,247,.4);border-radius:14px;padding:16px;margin-top:14px">'
+    +'<div style="font-size:10px;font-weight:700;color:var(--purple);letter-spacing:.1em;text-transform:uppercase;text-align:center;margin-bottom:12px">ESCENARIO ÚNICO · '+(nro||'—')+' · '+corName+'</div>'
+    // KPIs
+    +'<div class="kpi-grid" style="margin-bottom:14px">'
+    +'<div class="kpi purple"><div class="kpi-label">Valor CIF</div><div class="kpi-val">'+fmt(cif)+'</div></div>'
+    +'<div class="kpi green"><div class="kpi-label">Costo Landed</div><div class="kpi-val">'+fmt(landed)+'</div></div>'
+    +'<div class="kpi orange"><div class="kpi-label">Factor Import.</div><div class="kpi-val">'+factor.toFixed(2)+'%</div></div>'
+    +'</div>'
+    // Mercancía
+    +'<div style="background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:8px">'
+    +'<div style="padding:6px 12px;background:var(--s2);font-size:10px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.06em">Mercancía</div>'
+    +'<div style="padding:8px 12px"><div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700"><span>Valor CIF Total</span><span style="font-family:monospace;color:var(--green)">'+fmt(cif)+'</span></div></div>'
+    +'</div>'
+    // Impuestos (Tesoro Nacional)
+    +secHtml('🏛️ Impuestos — Tesoro Nacional','var(--red)',impuestos,totalImpuestos,true)
+    // Honorarios y gastos del corredor
+    +secHtml('💼 '+corName+' — Honorarios y Gastos','var(--purple)',
+      honorarios.concat(gastosExtraRows),totalHon+totalExtra,true)
+    // Descuentos si hay
+    +(descRows.length?secHtml('🏷️ Notas de Crédito / Descuentos','var(--green)',descRows,totalDesc,false):'')
+    // Total final
+    +'<div style="background:rgba(63,185,80,.08);border:1px solid rgba(63,185,80,.3);border-radius:8px;padding:10px 14px;margin-bottom:10px">'
+    +'<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:11px;color:var(--muted)">Mercancía</span><span style="font-family:monospace;font-size:11px">'+fmt(cif)+'</span></div>'
+    +'<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:11px;color:var(--red)">Impuestos (Tesoro Nac.)</span><span style="font-family:monospace;font-size:11px;color:var(--red)">'+fmt(totalImpuestos)+'</span></div>'
+    +'<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:11px;color:var(--purple)">Corredor (hon.+gastos)</span><span style="font-family:monospace;font-size:11px;color:var(--purple)">'+fmt(totalCorr)+'</span></div>'
+    +'<div style="display:flex;justify-content:space-between;padding-top:6px;border-top:1px solid rgba(63,185,80,.2)"><span style="font-size:14px;font-weight:800">Costo Landed Total</span><span style="font-family:monospace;font-size:18px;font-weight:800;color:var(--green)">'+fmt(landed)+'</span></div>'
+    +'</div>'
+    // Meta info
+    +(pais||fecha?'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:10px;color:var(--muted)">'
+      +(pais?'<div>📍 '+pais+(ciudad?' / '+ciudad:'')+'</div>':'')
+      +(tipoEmb?'<div>🚢 '+tipoEmb+'</div>':'')
+      +(fecha?'<div>📅 '+fecha+'</div>':'')
+      +(provCor?'<div>🏢 '+provCor+'</div>':'')
+      +'</div>':'')
+    +'</div>';
+
+  document.getElementById('btn-proc').style.display='block';
+  document.getElementById('btn-proc').scrollIntoView({behavior:'smooth',block:'center'});
+  toast('✅ Costo Único calculado','green');
+}
+
+// ════════════════════════════════════════
+// AUTO VÍA DE TRANSPORTE
+// ════════════════════════════════════════
+function _autoViaTransporte(tipoEmb){
+  var el=document.getElementById('via-transporte');
+  if(!el) return;
+  if(tipoEmb==='Camión') el.value='LAND';
+  else if(tipoEmb==='') {}
+  else el.value='SEA';
+  saveState();
+}
+
+// ═══════════════════════════════════════════════
+// SUPABASE
+// ═══════════════════════════════════════════════
+var _SB_URL = 'https://kgrunsunahooitmqzaaq.supabase.co';
+var _SB_KEY = 'sb_publishable_pRDW1CDvw8iKlSy8oTz5uA_v0GA4GkA';
+var _SB_MASTER = '_TEND_MASTER';
+var _sb = null;
+
+function initSB(){
+  try{
+    if(window.supabase){
+      _sb = window.supabase.createClient(_SB_URL, _SB_KEY);
+      document.getElementById('cloud-badge').textContent='☁️ Nube ✓';
+      document.getElementById('cloud-badge').style.color='var(--green)';
+    }
+  }catch(e){ console.warn('SB init:',e); }
+}
+
+async function _pushToCloud(data){
+  // 1. Push to parent window if available
+  var sentLocal = false;
+  try{
+    if(window.opener && window.opener.tendData){
+      var td=window.opener.tendData;
+      var idx=td.findIndex(function(t){return t.nro&&t.nro.trim().toUpperCase()===data.nro.toUpperCase();});
+      if(idx!==-1) td[idx]=data; else td.push(data);
+      if(typeof window.opener.saveTendData==='function') window.opener.saveTendData();
+      if(typeof window.opener.renderTend==='function') window.opener.renderTend();
+      if(typeof window.opener.renderTopProvs==='function') window.opener.renderTopProvs();
+      sentLocal=true;
+    }
+  }catch(e){}
+
+  // 2. Push directly to Supabase regardless
+  if(!_sb){ initSB(); }
+  if(_sb){
+    try{
+      // Pull current master first
+      var existing=[];
+      var res=await _sb.from('simulador_sesiones').select('datos').eq('nombre',_SB_MASTER).maybeSingle();
+      if(res.data){ try{ var p=JSON.parse(res.data.datos); existing=p.tendData||[]; }catch(e){} }
+      // Merge
+      var idx2=existing.findIndex(function(t){return t.nro&&t.nro.trim().toUpperCase()===data.nro.toUpperCase();});
+      if(idx2!==-1) existing[idx2]=data; else existing.push(data);
+      // Save
+      var payload={
+        nombre:_SB_MASTER,
+        datos:JSON.stringify({tendData:existing,updated_at:new Date().toISOString()}),
+        updated_at:new Date().toISOString()
+      };
+      var r=await _sb.from('simulador_sesiones').upsert(payload,{onConflict:'nombre'});
+      if(!r.error){
+        document.getElementById('cloud-badge').textContent='☁️ Guardado ✓';
+        document.getElementById('cloud-badge').style.color='var(--green)';
+        return true;
+      } else {
+        console.warn('SB upsert error:',r.error);
+      }
+    }catch(e){ console.warn('SB push:',e); }
+  }
+
+  // 3. Fallback: localStorage pending
+  if(!sentLocal){
+    try{ localStorage.setItem('_unico_pendiente',JSON.stringify(data)); }catch(e){}
+    return false;
+  }
+  return sentLocal;
+}
+
+// ═══════════════════════════════════════════════
+// PROCESAR AL HISTORIAL
+// ═══════════════════════════════════════════════
+async function procesar(){
+  if(!lastCalc||!lastCalc.cif){ toast('⚠️ Calcula primero.','red'); return; }
+  var d=lastCalc;
+  if(!d.nro){ if(!confirm('No hay N° de Embarque. ¿Continuar?')) return; }
+
+  var btn=document.getElementById('btn-proc');
+  btn.textContent='⏳ Guardando en la nube…';
+  btn.disabled=true;
+  var _sEl=document.getElementById('estatus');
+  if(_sEl) _sEl.value='Procesado';
+
+  var data={
+    nro: d.nro||('UNI-'+Date.now()),
+    desc: d.desc||'Embarque Único',
+    fecha: d.fecha||new Date().toISOString().slice(0,10),
+    ahorro: 0,
+    cif: d.cif,
+    esc: 'Único — '+(d.corName||'').replace(/[⚡🤝✏️]/g,'').trim(),
+    tipoEsc: 'unico',
+    tipoLiquidacion: 'liquidacion',  // siempre liquidación en Único
+    modoUnico: true,
+    corredor: d.cor,
+    provCorredor: d.provCor,
+    ts: Date.now(),
+    snap:{
+      sc1:{
+        cif:d.cif, landed:d.landed, factor:d.factor,
+        arancel:d.arancel, itbms:d.itbms, itbmsTasa:d.itbmsTasa,
+        hon:d.hon, tasa:d.tasa, uso:d.uso
+      }
+    },
+    pais: d.pais, ciudad: d.ciudad,
+    tipoEquipo: d.tipoEmb, cartones: d.cartones,
+    idFiscal: d.idFiscal, estatus: d.estatus,
+    viaTransporte: d.viaTransporte||'SEA',
+    terminoEmb: d.terminoEmb||'CIF',
+    tipoProveedor: d.tipoProveedor||'ZL',
+    invLines: buildInvLines(d),
+    status: 'completo'
+  };
+
+  var ok = await _pushToCloud(data);
+
+  if(ok){
+    localStorage.removeItem('_unico_estado2');
+    lastCalc=null;
+    // Show success overlay
+    _showSuccessOverlay(data.nro, data.desc, data.cif, d.landed, d.factor);
+  } else {
+    toast('⚠️ Guardado localmente — sin conexión a la nube','orange');
+    btn.textContent='✅ Procesar al Historial';
+    btn.disabled=false;
+  }
+}
+
+function _showSuccessOverlay(nro, desc, cif, desembolso, factor){
+  var fmt=function(n){ return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
+  var old=document.getElementById('_succOverlay'); if(old) old.remove();
+  var div=document.createElement('div');
+  div.id='_succOverlay';
+  div.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(6px)';
+  div.innerHTML='<div style="background:#fff;border-radius:24px;padding:36px 28px;max-width:360px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.5);animation:_pop .4s cubic-bezier(.34,1.56,.64,1)">'
+    +'<style>@keyframes _pop{from{transform:scale(.75);opacity:0}to{transform:scale(1);opacity:1}}</style>'
+    +'<div style="width:72px;height:72px;background:linear-gradient(135deg,#22c55e,#16a34a);border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:38px;margin:0 auto 20px;box-shadow:0 8px 24px rgba(34,197,94,.35)">✅</div>'
+    +'<div style="font-size:20px;font-weight:800;color:#15803d;margin-bottom:8px">¡Embarque Procesado!</div>'
+    +'<div style="font-size:14px;font-weight:700;color:#374151;margin-bottom:4px">'+(nro||'Sin número')+'</div>'
+    +'<div style="font-size:12px;color:#636c76;margin-bottom:20px">'+desc+'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px">'
+      +'<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px">'
+        +'<div style="font-size:9px;color:#15803d;text-transform:uppercase;margin-bottom:4px;font-weight:700">Valor Mercancía</div>'
+        +'<div style="font-family:monospace;font-size:15px;font-weight:700;color:#15803d">'+fmt(cif)+'</div>'
+      +'</div>'
+      +'<div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:10px;padding:12px">'
+        +'<div style="font-size:9px;color:#7c3aed;text-transform:uppercase;margin-bottom:4px;font-weight:700">Desembolso</div>'
+        +'<div style="font-family:monospace;font-size:15px;font-weight:700;color:#7c3aed">'+fmt(desembolso)+'</div>'
+      +'</div>'
+    +'</div>'
+    +'<div style="background:#f8f9fa;border-radius:8px;padding:8px 12px;margin-bottom:16px;font-size:11px;color:#374151">'
+      +'Factor de Importación: <strong style="color:#d97706">'+Number(factor||0).toFixed(2)+'%</strong>'
+    +'</div>'
+    +'<div style="font-size:11px;color:#636c76;margin-bottom:20px">☁️ Guardado en la nube automáticamente</div>'
+    +'<button onclick="document.getElementById(\'_succOverlay\').remove();window.location.href=\'index.html\'" '
+      +'style="width:100%;background:linear-gradient(135deg,#22c55e,#2563eb);border:none;border-radius:14px;padding:16px;color:#fff;font-size:15px;font-weight:800;cursor:pointer;letter-spacing:.02em;box-shadow:0 4px 20px rgba(34,197,94,.4);margin-bottom:10px">🏠 Inicio</button>'
+    +'<button onclick="_marcarPendienteStandalone(\''+nro+'\');document.getElementById(\'_succOverlay\').remove();window.location.href=\'index.html\'" '
+      +'style="width:100%;background:rgba(210,153,34,.12);border:1.5px solid rgba(210,153,34,.5);border-radius:14px;padding:11px;color:#d29922;font-size:12px;font-weight:700;cursor:pointer;">🟡 Marcar como Pendiente (factura por confirmar)</button>'
+    +'</div>';
+  document.body.appendChild(div);
+}
+
+async function _marcarPendienteStandalone(nro){
+  if(!nro||!_sb) return;
+  try{
+    var res=await _sb.from('simulador_sesiones').select('datos').eq('nombre',_SB_MASTER).maybeSingle();
+    if(!res.data) return;
+    var parsed=JSON.parse(res.data.datos);
+    var td=parsed.tendData||[];
+    var idx=td.findIndex(function(t){return t.nro&&t.nro.trim().toUpperCase()===nro.toUpperCase();});
+    if(idx!==-1){ td[idx].status='pendiente'; }
+    await _sb.from('simulador_sesiones').upsert({nombre:_SB_MASTER,datos:JSON.stringify({tendData:td,updated_at:new Date().toISOString()}),updated_at:new Date().toISOString()},{onConflict:'nombre'});
+  }catch(e){ console.warn('pendiente:',e); }
+}
+
+function buildInvLines(d){
+  var lines=[];
+  var R2=function(n){return Math.round(n*100)/100;};
+  var provCor=d.provCor||d.corName.replace(/[⚡🤝✏️]/g,'').trim();
+  var idFac=d.idFiscal||d.honNfac||'';
+
+  // ── TESORO NACIONAL ──────────────────────────────────────────
+  // Grupo Primavera paga estos impuestos a nombre propio.
+  // El corredor los adelanta operativamente y los incluye en su
+  // factura de reembolso, pero fiscalmente son de Grupo Primavera.
+  // categoria='impuesto' permite buscarlos en tendencias por "impuesto".
+  var tn={prov:'TESORO NACIONAL',categoria:'impuesto',montoHomologado:null,_autoGasto:true};
+  if(d.arancel>0.001) lines.push(Object.assign({},tn,{tipoFac:'liquidacion',deptCat:'GASTOS',costo:R2(d.arancel),oc:'Liquidación / DAI',nfac:idFac}));
+  if(d.itbms>0.001)   lines.push(Object.assign({},tn,{tipoFac:'itbms',      deptCat:'GASTOS',costo:R2(d.itbms),  oc:'ITBM (s/CIF + Arancel)',nfac:idFac}));
+  if(d.tasa>0.001)    lines.push(Object.assign({},tn,{tipoFac:'tasa',        deptCat:'GASTOS',costo:R2(d.tasa),      oc:'Tasa Aduana',nfac:idFac}));
+  if(d.itbmsTasa>0.001) lines.push(Object.assign({},tn,{tipoFac:'itbms',      deptCat:'GASTOS',costo:R2(d.itbmsTasa), oc:'ITBM s/Tasa',nfac:idFac}));
+  if(d.uso>0.001)     lines.push(Object.assign({},tn,{tipoFac:'uso_sistema', deptCat:'GASTOS',costo:R2(d.uso),    oc:'Uso del Sistema',nfac:idFac}));
+
+  // ── CORREDOR (honorarios + otros gastos que él factura) ──────
+  // Factura del corredor = su comisión + reembolso de impuestos.
+  // Aquí solo registramos los honorarios propios del corredor.
+  if(d.hon>0.001) lines.push({
+    tipoFac:'honorarios',deptCat:'GASTOS',prov:provCor,
+    costo:R2(d.hon),oc:'Honorarios Corredor ('+d.honPct.toFixed(2)+'%)',
+    nfac:d.honNfac,montoHomologado:null,_autoGasto:true
+  });
+  if(d.agente>0.001) lines.push({
+    tipoFac:'gastos_destino',deptCat:'GASTOS',prov:provCor,
+    costo:R2(d.agente),oc:'Gastos Origen/Destino',
+    montoHomologado:null,_autoGasto:true
+  });
+
+  // ── GASTOS ADICIONALES (rubros que el usuario agrega) ────────
+  (d.gastosRows||[]).forEach(function(g){
+    lines.push({tipoFac:g.rubro,deptCat:'GASTOS',prov:provCor,
+      costo:R2(g.monto),nfac:g.nfac,montoHomologado:null,_autoGasto:true});
+  });
+
+  // ── MERCANCÍA (de la plantilla cargada) ─────────────────────
+  // montoHomologado: null — no aplica en Escenario Único
+  var _tipoProv=gv('tipo-proveedor')||d.tipoProveedor||'ZL';
+  invLines.filter(function(l){return l.tipoFac==='mercancia';}).forEach(function(l){
+    lines.push({tipoFac:'mercancia',deptCat:l.deptCat,prov:l.prov,
+      costo:l.costo,nfac:l.nfac,numFact:l.nfac,
+      oc:l.oc||l.nfac||('Emb.'+d.nro),
+      bultos:l.bultos||0,piezas:l.piezas||0,
+      tipoProv:_tipoProv,
+      montoHomologado:null});
+  });
+  return lines;
+}
+
+// ═══════════════════════════════════════════════
+// PLANTILLA — LOAD
+// ═══════════════════════════════════════════════
+function provMatch(q){
+  if(!q||!PROV_NAMES.length) return null;
+  var Q=q.trim().toUpperCase();
+  var best=null, bScore=0;
+  for(var i=0;i<PROV_NAMES.length;i++){
+    var N=PROV_NAMES[i].toUpperCase();
+    if(N===Q) return {name:PROV_NAMES[i],score:1,exact:true};
+    var s=0;
+    if(N.startsWith(Q)&&Q.length>=4) s=0.9;
+    else if(N.includes(Q)||Q.includes(N)) s=Math.min(Q.length,N.length)/Math.max(Q.length,N.length);
+    else s=bigram(Q,N);
+    if(s>bScore){bScore=s;best=PROV_NAMES[i];}
+  }
+  if(bScore<0.25) return null;
+  return {name:best,score:bScore,exact:false};
+}
+function bigram(a,b){
+  function bg(s){var m={};for(var i=0;i<s.length-1;i++){var k=s[i]+s[i+1];m[k]=(m[k]||0)+1;}return m;}
+  var ma=bg(a),mb=bg(b),c=0,tot=0;
+  for(var k in ma){tot+=ma[k];if(mb[k]) c+=Math.min(ma[k],mb[k]);}
+  for(var k2 in mb) tot+=mb[k2];
+  return tot?2*c/tot:0;
+}
+
+function parseRows(rows){
+  if(rows.length<2) return;
+  var hdr=rows[0].map(function(h){return String(h||'').toUpperCase().trim();});
+  var mc=hdr.findIndex(function(h){return (h.includes('TOTAL')&&h.includes('PAGO'))||h.includes('MONTO')||h.includes('CIF')||h.includes('FOB');});
+  var rc=hdr.findIndex(function(h){return h.includes('RUBRO')||h.includes('DEPARTAMENTO')||h.includes('DEPT');});
+  var nc=hdr.findIndex(function(h){return h.includes('FACTURA')||h.includes('FACT');});
+  var bc=hdr.findIndex(function(h){return h.includes('BULTO')||h.includes('CAJA')||h.includes('CARTON');});
+  var oc2c=hdr.findIndex(function(h){return h==='OC'||(h.includes('OC')&&!h.includes('HOMOL'))||(h.includes('ORDEN')&&h.includes('COMPRA'));});
+  var pc=hdr.findIndex(function(h){return h.includes('PIEZA')||h==='PZS'||h==='PZAS';});
+  if(mc<0) mc=3; if(rc<0) rc=1; if(nc<0) nc=2; if(bc<0) bc=5;
+
+  invLines=[];
+  rows.slice(1).forEach(function(r){
+    var provRaw=(r[0]||'').trim();
+    var costoStr=String(r[mc]||'').replace(/[^0-9.-]/g,'');
+    var costo=Math.round(parseFloat(costoStr||'0')*100)/100;
+    if(!provRaw&&!costo) return;
+    var deptRaw=(r[rc]||'').trim();
+    var deptCat=deptMatch(deptRaw); // auto-correct to official name
+    var nfac=String(r[nc]||'').trim();
+    var bultos=parseInt(String(r[bc]||'').replace(/[^0-9]/g,''))||0;
+    var piezasRaw=pc>=0?parseInt(String(r[pc]||'').replace(/[^0-9]/g,''))||0:0;
+    var ocRaw=oc2c>=0?String(r[oc2c]||'').trim():'';
+    var line={prov:provRaw,deptCat,costo,tipoFac:'mercancia',nfac,oc:ocRaw,bultos,piezas:piezasRaw,_raw:provRaw,_deptRaw:deptRaw,_deptFixed:(deptCat!==deptRaw&&deptRaw!=='')};
+    // provMatch
+    if(provRaw){
+      var m=provMatch(provRaw);
+      if(m&&(m.exact||m.score>=0.8)){
+        line._matched=true;
+        line._corregido=(provRaw.toUpperCase()!==m.name.toUpperCase());
+        line.prov=m.name;
+      } else {
+        line._noMatch=true;
+      }
+    }
+    invLines.push(line);
+  });
+  renderPreview();
+  setTimeout(_autoSave, 100); // guardar plantilla cargada
+}
+
+function renderPreview(){
+  if(typeof invLines==='undefined'||!invLines) return;
+  var merc=invLines.filter(function(l){return l.tipoFac==='mercancia';});
+  var total=merc.reduce(function(s,l){return s+(l.costo||0);},0);
+  var noMatchCount=merc.filter(function(l){return l._noMatch;}).length;
+
+  // Opciones de departamento para el select inline
+  var deptOpts=DEPT_LIST.map(function(d){return '<option value="'+d+'">'+d+'</option>';}).join('');
+
+  var listEl=document.getElementById('prov-list');
+  // Tabla editable — cada fila tiene todos los campos modificables
+  var rows=merc.map(function(l,i){
+    var realIdx=invLines.indexOf(l);
+    var provCls=l._noMatch?'warn-field':l._corregido?'ok-field':'';
+    var provTitle=l._noMatch?'⚠ Proveedor no reconocido — edita para corregir':l._corregido?'✏ Corregido automáticamente':'';
+    return '<tr id="_inv_row_'+realIdx+'">'
+      // Proveedor
+      +'<td style="min-width:130px"><input type="text" class="inv-inp '+provCls+'" list="prov-dl" value="'+l.prov.replace(/"/g,'&quot;')+'" title="'+provTitle+'"'
+      +' oninput="invLines['+realIdx+'].prov=this.value;invLines['+realIdx+']._noMatch=false;_reCalcTotal()"'
+      +' onchange="_fixProvInline(this,'+realIdx+')"></td>'
+      // Depto
+      +'<td style="min-width:110px"><select class="inv-inp" onchange="invLines['+realIdx+'].deptCat=this.value;_reCalcTotal()">'
+      +'<option value="">—</option>'+DEPT_LIST.map(function(d){return'<option value="'+d+'"'+(d===l.deptCat?' selected':'')+'>'+d+'</option>';}).join('')
+      +'</select></td>'
+      // N° Factura
+      +'<td style="min-width:80px"><input type="text" class="inv-inp" value="'+(l.nfac||'').replace(/"/g,'&quot;')+'" placeholder="N° Fact"'
+      +' oninput="invLines['+realIdx+'].nfac=this.value"></td>'
+      // OC
+      +'<td style="min-width:70px"><input type="text" class="inv-inp" value="'+(l.oc||'').replace(/"/g,'&quot;')+'" placeholder="OC"'
+      +' oninput="invLines['+realIdx+'].oc=this.value"></td>'
+      // CIF
+      +'<td style="min-width:80px"><input type="number" class="inv-inp" style="color:var(--green);font-weight:700;text-align:right" value="'+(l.costo||0)+'" step="0.01" min="0"'
+      +' oninput="invLines['+realIdx+'].costo=parseFloat(this.value)||0;_reCalcTotal()"></td>'
+      // Bultos
+      +'<td style="min-width:50px"><input type="number" class="inv-inp" style="text-align:center" value="'+(l.bultos||0)+'" min="0"'
+      +' oninput="invLines['+realIdx+'].bultos=parseInt(this.value)||0"></td>'
+      // Piezas
+      +'<td style="min-width:55px"><input type="number" class="inv-inp" style="text-align:center" value="'+(l.piezas||0)+'" min="0"'
+      +' oninput="invLines['+realIdx+'].piezas=parseInt(this.value)||0"></td>'
+      // Eliminar
+      +'<td style="text-align:center"><button class="inv-del-btn" onclick="_delInvLine('+realIdx+')" title="Eliminar fila">×</button></td>'
+      +'</tr>';
+  }).join('');
+
+  listEl.innerHTML='<div style="overflow-x:auto">'
+    +'<table class="inv-table">'
+    +'<thead><tr>'
+    +'<th>Proveedor</th><th>Departamento</th><th>N° Factura</th><th>OC</th>'
+    +'<th style="text-align:right">CIF (USD)</th><th style="text-align:center">Bultos</th>'
+    +'<th style="text-align:center">Piezas</th><th></th>'
+    +'</tr></thead>'
+    +'<tbody>'+rows+'</tbody>'
+    +'</table></div>'
+    +'<button class="inv-add-row" onclick="_addInvLineManual()">+ Agregar fila manualmente</button>';
+
+  document.getElementById('plant-total').textContent=fmt(total);
+  document.getElementById('plant-preview').style.display=(invLines.length||true)?'block':'none';
+  var statusColor=noMatchCount>0?'var(--orange)':'var(--green)';
+  var statusMsg=merc.length+' facturas · '+fmt(total);
+  if(noMatchCount>0) statusMsg+=' · ⚠ '+noMatchCount+' sin verificar';
+  document.getElementById('plant-status').innerHTML='<span style="color:'+statusColor+'">'+statusMsg+'</span>';
+}
+
+function _reCalcTotal(){
+  var total=invLines.filter(function(l){return l.tipoFac==='mercancia';}).reduce(function(s,l){return s+(l.costo||0);},0);
+  document.getElementById('plant-total').textContent=fmt(total);
+  calcLive();
+}
+
+function _fixProvInline(inp,idx){
+  var m=provMatch(inp.value);
+  if(m&&(m.exact||m.score>=0.8)){
+    invLines[idx].prov=m.name;
+    inp.value=m.name;
+    inp.className=inp.className.replace('warn-field','').replace('ok-field','')+' ok-field';
+    invLines[idx]._noMatch=false;
+    invLines[idx]._corregido=false;
+    toast('✅ '+m.name,'green');
+  }
+}
+
+function _delInvLine(idx){
+  invLines.splice(idx,1);
+  renderPreview();
+  _reCalcTotal();
+}
+
+function _addInvLineManual(){
+  invLines.push({tipoFac:'mercancia',prov:'',deptCat:'',nfac:'',oc:'',costo:0,bultos:0,piezas:0,_noMatch:true,_manual:true});
+  renderPreview();
+  // Focus the new prov input
+  var rows=document.querySelectorAll('#prov-list table tbody tr');
+  if(rows.length){
+    var lastInp=rows[rows.length-1].querySelector('input[type="text"]');
+    if(lastInp) setTimeout(function(){lastInp.focus();},50);
+  }
+}
+
+function fixProv(inp,idx){
+  var m=provMatch(inp.value);
+  if(m&&(m.exact||m.score>=0.8)){
+    invLines[idx].prov=m.name;
+    inp.value=m.name;
+    inp.style.borderColor='rgba(63,185,80,.4)';
+    inp.style.color='var(--green)';
+    invLines[idx]._noMatch=false;
+    invLines[idx]._corregido=false;
+    toast('✅ Corregido: '+m.name,'green');
+  }
+}
+
+function applyPlantilla(){
+  var merc=invLines.filter(function(l){return l.tipoFac==='mercancia';});
+  var total=merc.reduce(function(s,l){return s+(l.costo||0);},0);
+  if(!total){ toast('⚠️ Sin mercancía en la plantilla.','red'); return; }
+  sv('cif',total.toFixed(2));
+  // Tipo de mercancía por departamentos
+  var deptSums={};
+  merc.forEach(function(l){var k=(l.deptCat||'').trim();if(k){if(!deptSums[k])deptSums[k]=0;deptSums[k]+=l.costo;}});
+  var deptParts=Object.entries(deptSums).sort(function(a,b){return b[1]-a[1];})
+    .map(function(x){return x[0]+' '+(total>0?(x[1]/total*100).toFixed(0):0)+'%';});
+  var descEl=document.getElementById('desc');
+  if(deptParts.length&&(!descEl.value||descEl.value.trim()==='')) descEl.value=deptParts.join(', ');
+  // Cartones
+  var bultos=merc.reduce(function(s,l){return s+(l.bultos||0);},0);
+  var cartEl=document.getElementById('cartones');
+  if(bultos>0&&!cartEl.value) cartEl.value=bultos;
+  calcLive();
+  toast('✅ '+fmt(total)+' aplicado al formulario','green');
+  _autoSave();
+}
+
+function loadFile(input){
+  var file=input.files[0]; if(!file) return;
+  var isXlsx=/\.(xlsx|xls)$/i.test(file.name);
+  if(isXlsx){
+    // Try to use XLSX from parent window
+    var XLSX=null;
+    try{ if(window.opener&&window.opener.XLSX) XLSX=window.opener.XLSX; } catch(e){}
+    if(!XLSX){
+      toast('⚠️ Usa el formato CSV para este módulo independiente.','orange');
+      input.value=''; return;
+    }
+    var reader=new FileReader();
+    reader.onload=function(e){
+      var wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+      var ws=wb.Sheets[wb.SheetNames[0]];
+      parseRows(XLSX.utils.sheet_to_json(ws,{header:1,defval:''}).map(function(r){return r.map(function(c){return String(c===null||c===undefined?'':c).trim();});}));
+    };
+    reader.readAsArrayBuffer(file);
+  } else {
+    var reader2=new FileReader();
+    reader2.onload=function(e){
+      var lines=e.target.result.split('\n').filter(function(l){return l.trim()&&!l.trim().startsWith('#');});
+      parseRows(lines.map(function(l){return l.split(',').map(function(c){return c.replace(/^"|"$/g,'').trim();});}));
+    };
+    reader2.readAsText(file,'UTF-8');
+  }
+  input.value='';
+}
+
+function downloadTemplate(type){
+  var header='Proveedor,Departamento,Nro.Factura,Total.Pago.Fac,OC,OC.Homologada,Bultos,Traspaso,Piezas';
+  if(type==='csv'){
+    var csv=header+'\nMARBLE ARCH HOLDING CORP.,DEPORTES,INV-001,1888.00,,,,0,0';
+    var a=document.createElement('a');
+    a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+    a.download='plantilla_unico.csv'; a.click();
+  } else {
+    toast('Descarga la plantilla CSV y ábrela en Excel para editarla.','orange');
+  }
+}
+
+// ═══════════════════════════════════════════════
+// PERSISTENCIA — guarda TODO incluyendo plantilla
+// ═══════════════════════════════════════════════
+var _saveTimer=null;
+function _showSaveIndicator(){
+  var el=document.getElementById('_save-indicator');
+  if(!el) return;
+  el.style.opacity='1';
+  clearTimeout(el._hideTimer);
+  el._hideTimer=setTimeout(function(){ el.style.opacity='0'; },2500);
+}
+
+function saveState(){
+  try{
+    var gastos=[];
+    document.querySelectorAll('.gasto-row').forEach(function(row){
+      gastos.push({
+        rubro:row.querySelector('.gasto-rubro').value,
+        monto:row.querySelector('.gasto-monto').value,
+        nfac:row.querySelector('.gasto-nfac').value
+      });
+    });
+    // Incluir invLines (plantilla) en el estado guardado
+    localStorage.setItem('_unico_estado2',JSON.stringify({
+      corredor:gv('corredor'),provCor:gv('prov-cor'),nombreCor:gv('nombre-cor'),
+      nro:gv('nro'),idFiscal:gv('id-fiscal'),desc:gv('desc'),
+    viaTransporte:gv('via-transporte'),terminoEmb:gv('termino-emb'),tipoProveedor:gv('tipo-proveedor'),
+      pais:gv('pais'),ciudad:gv('ciudad'),tipoEmb:gv('tipo-emb'),
+      cartones:gv('cartones'),fecha:gv('fecha'),estatus:gv('estatus'),
+      cif:gv('cif'),arPct:gv('ar-pct'),itbms:gv('itbms-pct'),
+      tasa:gv('tasa'),uso:gv('uso'),agente:gv('agente'),dmce:gv('dmce'),
+      honPct:gv('hon-pct'),honNfac:gv('hon-nfac'),gastos,
+      invLines: invLines   // ← guardar la plantilla completa
+    }));
+    _showSaveIndicator();
+    // Mostrar badge en tarjeta de plantilla si hay datos
+    var pb=document.getElementById('_plant-save-badge');
+    if(pb) pb.style.display = invLines.length ? 'inline' : 'none';
+  }catch(e){}
+}
+
+// Guardado automático con debounce (300ms después del último cambio)
+function _autoSave(){
+  clearTimeout(_saveTimer);
+  _saveTimer=setTimeout(saveState, 300);
+}
+
+function loadState(){
+  try{
+    var raw=localStorage.getItem('_unico_estado2');
+    if(!raw) return;
+    var e=JSON.parse(raw);
+    var su=function(id,v){if(v!==undefined&&v!==null&&v!==''){var el=document.getElementById(id);if(el)el.value=v;}};
+    // Corredor first
+    var corEl=document.getElementById('corredor');
+    if(corEl&&e.corredor) corEl.value=e.corredor;
+    su('prov-cor',e.provCor); su('nombre-cor',e.nombreCor);
+    su('nro',e.nro); su('id-fiscal',e.idFiscal); su('desc',e.desc);
+    if(e.viaTransporte) su('via-transporte',e.viaTransporte);
+    if(e.terminoEmb) su('termino-emb',e.terminoEmb);
+    if(e.tipoProveedor) su('tipo-proveedor',e.tipoProveedor);
+    su('cartones',e.cartones); su('fecha',e.fecha); su('estatus',e.estatus);
+    su('cif',e.cif); su('ar-pct',e.arPct); su('itbms-pct',e.itbms);
+    su('tasa',e.tasa); su('uso',e.uso); su('agente',e.agente); su('dmce',e.dmce);
+    su('hon-pct',e.honPct); su('hon-nfac',e.honNfac);
+    if(e.pais){ su('pais',e.pais); fillCiudades(); setTimeout(function(){su('ciudad',e.ciudad);},80); }
+    su('tipo-emb',e.tipoEmb);
+    if(e.corredor){
+      var nf=document.getElementById('nombre-cor-field');
+      if(nf) nf.style.display=e.corredor==='otro'?'block':'none';
+    }
+    if(e.gastos&&e.gastos.length){
+      e.gastos.forEach(function(g){addGasto(g.rubro,g.monto,g.nfac);});
+    }
+    // Restaurar plantilla de proveedores
+    if(e.invLines&&e.invLines.length){
+      invLines=e.invLines;
+      renderPreview();
+      var pp=document.getElementById('plant-preview');
+      var ps=document.getElementById('plant-status');
+      if(pp) pp.style.display='block';
+      if(ps) ps.innerHTML='<span style="color:var(--green)">✓ Plantilla restaurada · '+invLines.filter(function(l){return l.tipoFac==="mercancia";}).length+' facturas</span>';
+    }
+    setTimeout(calcLive,120);
+    toast('📂 Borrador restaurado automáticamente','green');
+  }catch(err){}
+}
+
+// ═══════════════════════════════════════════════
+// BACK BUTTON
+// ═══════════════════════════════════════════════
+document.getElementById('back-btn').addEventListener('click',function(e){
+  e.preventDefault();
+  if(window.opener&&!window.opener.closed){ window.close(); }
+  else if(window.history.length>1){ window.history.back(); }
+  else { window.close(); }
+});
+
+// ═══════════════════════════════════════════════
+// EVENT DELEGATION — calcLive on any input change
+// ═══════════════════════════════════════════════
+document.addEventListener('input',  function(e){
+  if(!e.target.classList.contains('gasto-rubro')&&!e.target.classList.contains('gasto-nfac')&&!e.target.classList.contains('prov-edit'))
+    calcLive();
+  _autoSave();
+});
+document.addEventListener('change', function(e){
+  calcLive();
+  _autoSave();
+});
+
+// ═══════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════
+(function(){
+  // Set today as default date
+  sv('fecha',new Date().toISOString().slice(0,10));
+  // Init corredor
+  onCorredorChange();
+  // Load saved state
+  loadState();
+  // Init Supabase
+  setTimeout(initSB, 500);
+})();
+</script>
+</body>
+</html>
