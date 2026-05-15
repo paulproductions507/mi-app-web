@@ -200,7 +200,11 @@ datalist option{background:var(--s2);color:var(--text)}
     <div class="sep">Identificación</div>
     <div class="r2">
       <div class="field"><label>N° Embarque</label><input type="text" id="nro" placeholder="Ej: 22835"></div>
-      <div class="field"><label>ID / Factura Fiscal</label><input type="text" id="id-fiscal" placeholder="Ej: PRE-2026-001"></div>
+      <div class="field"><label>N° Identificación Interna</label><input type="text" id="id-fiscal" placeholder="Ej: PRE-2026-001"><p class="note">ID interno del embarque (no confundir con factura de impuestos)</p></div>
+    </div>
+    <div class="r2">
+      <div class="field"><label>N° Factura Tesoro Nacional <span style="font-weight:400;color:var(--blue);font-size:9px">para impuestos</span></label><input type="text" id="nfac-tesoro" placeholder="Ej: TN-2026-00123"><p class="note">Número de la factura con la que se pagan los impuestos al Tesoro Nacional</p></div>
+      <div class="field"><label>Cant. Equipos / Contenedores</label><input type="number" id="cant-equipos" placeholder="1" min="0" step="1" value="1"><p class="note">Cantidad de contenedores, paletas o equipos logísticos</p></div>
     </div>
     <div class="field"><label>Tipo de Mercancía</label><input type="text" id="desc" placeholder="Ej: Hogar 47%, Ropa 22%"></div>
 
@@ -376,6 +380,17 @@ datalist option{background:var(--s2);color:var(--text)}
 <!-- ══ BOTONES PRINCIPALES ══ -->
 <button class="btn btn-calc" onclick="calcular()" style="margin-bottom:8px">⚡ Calcular Costo Único →</button>
 <button class="btn btn-proc" id="btn-proc" style="display:none;border:1px solid" onclick="procesar()">✅ Procesar al Historial</button>
+
+<!-- ══ DESCARGAR RESULTADO ══ -->
+<div id="download-btns" style="display:none;margin-top:8px">
+  <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">📥 Descargar Resultado</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px">
+    <button onclick="downloadResult('html')" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);color:var(--blue);border-radius:7px;padding:8px 4px;font-size:10px;font-weight:700;cursor:pointer">🌐 HTML</button>
+    <button onclick="downloadResult('print')" style="background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.25);color:var(--green);border-radius:7px;padding:8px 4px;font-size:10px;font-weight:700;cursor:pointer">🖨 PDF</button>
+    <button onclick="downloadResult('csv')" style="background:rgba(240,136,62,.1);border:1px solid rgba(240,136,62,.25);color:var(--orange);border-radius:7px;padding:8px 4px;font-size:10px;font-weight:700;cursor:pointer">📋 CSV</button>
+    <button onclick="downloadResult('json')" style="background:rgba(163,113,247,.1);border:1px solid rgba(163,113,247,.25);color:var(--purple);border-radius:7px;padding:8px 4px;font-size:10px;font-weight:700;cursor:pointer">📦 JSON</button>
+  </div>
+</div>
 
 <!-- ══ RESULTADO ══ -->
 <div id="result"></div>
@@ -726,6 +741,7 @@ function calcular(){
     cif,arPct:arPct*100,itbPct:itbPct*100,honPct:honPct*100,
     arancel,itbms,itbmsTasa,hon,tasa,uso,agente,extras,landed,landed_g,factor,
     gastosRows, honNfac:gv('hon-nfac'), idFiscal:gv('id-fiscal'),
+    nfacTesoro:gv('nfac-tesoro'), cantEquipos:parseInt(gv('cant-equipos'))||1,
     cartones:parseInt(gv('cartones'))||0, estatus:gv('estatus'),
     viaTransporte:gv('via-transporte')||'SEA',
     terminoEmb:gv('termino-emb')||'CIF',
@@ -821,6 +837,7 @@ function calcular(){
 
   document.getElementById('btn-proc').style.display='block';
   document.getElementById('btn-proc').scrollIntoView({behavior:'smooth',block:'center'});
+  document.getElementById('download-btns').style.display='block';
   toast('✅ Costo Único calculado','green');
 }
 
@@ -936,12 +953,15 @@ async function procesar(){
       sc1:{
         cif:d.cif, landed:d.landed, factor:d.factor,
         arancel:d.arancel, itbms:d.itbms, itbmsTasa:d.itbmsTasa,
-        hon:d.hon, tasa:d.tasa, uso:d.uso
+        hon:d.hon, tasa:d.tasa, uso:d.uso, agente:d.agente||0,
+        extras:d.extras||0,
+        noMerc: Math.round((d.arancel+(d.hon||0)+(d.tasa||0)+(d.uso||0)+(d.agente||0)+(d.itbmsTasa||0)+(d.extras||0))*100)/100
       }
     },
     pais: d.pais, ciudad: d.ciudad,
     tipoEquipo: d.tipoEmb, cartones: d.cartones,
-    idFiscal: d.idFiscal, estatus: d.estatus,
+    cantEquipos: d.cantEquipos||1,
+    idFiscal: d.idFiscal, nfacTesoro: d.nfacTesoro||'', estatus: d.estatus,
     viaTransporte: d.viaTransporte||'SEA',
     terminoEmb: d.terminoEmb||'CIF',
     tipoProveedor: d.tipoProveedor||'ZL',
@@ -989,9 +1009,9 @@ function _showSuccessOverlay(nro, desc, cif, desembolso, factor){
       +'Factor de Importación: <strong style="color:#d97706">'+Number(factor||0).toFixed(2)+'%</strong>'
     +'</div>'
     +'<div style="font-size:11px;color:#636c76;margin-bottom:20px">☁️ Guardado en la nube automáticamente</div>'
-    +'<button onclick="document.getElementById(\'_succOverlay\').remove();window.location.href=\'index.html\'" '
-      +'style="width:100%;background:linear-gradient(135deg,#22c55e,#2563eb);border:none;border-radius:14px;padding:16px;color:#fff;font-size:15px;font-weight:800;cursor:pointer;letter-spacing:.02em;box-shadow:0 4px 20px rgba(34,197,94,.4);margin-bottom:10px">🏠 Inicio</button>'
-    +'<button onclick="_marcarPendienteStandalone(\''+nro+'\');document.getElementById(\'_succOverlay\').remove();window.location.href=\'index.html\'" '
+    +'<button onclick="document.getElementById(\'_succOverlay\').remove();localStorage.removeItem(\'_unico_estado2\');if(window.opener&&!window.opener.closed){window.opener.focus();}window.close()" '
+      +'style="width:100%;background:linear-gradient(135deg,#22c55e,#2563eb);border:none;border-radius:14px;padding:16px;color:#fff;font-size:15px;font-weight:800;cursor:pointer;letter-spacing:.02em;box-shadow:0 4px 20px rgba(34,197,94,.4);margin-bottom:10px">🏠 Cerrar y Volver</button>'
+    +'<button onclick="_marcarPendienteStandalone(\''+nro+'\');document.getElementById(\'_succOverlay\').remove();localStorage.removeItem(\'_unico_estado2\');if(window.opener&&!window.opener.closed){window.opener.focus();}window.close()" '
       +'style="width:100%;background:rgba(210,153,34,.12);border:1.5px solid rgba(210,153,34,.5);border-radius:14px;padding:11px;color:#d29922;font-size:12px;font-weight:700;cursor:pointer;">🟡 Marcar como Pendiente (factura por confirmar)</button>'
     +'</div>';
   document.body.appendChild(div);
@@ -1022,11 +1042,12 @@ function buildInvLines(d){
   // factura de reembolso, pero fiscalmente son de Grupo Primavera.
   // categoria='impuesto' permite buscarlos en tendencias por "impuesto".
   var tn={prov:'TESORO NACIONAL',categoria:'impuesto',montoHomologado:null,_autoGasto:true};
-  if(d.arancel>0.001) lines.push(Object.assign({},tn,{tipoFac:'liquidacion',deptCat:'GASTOS',costo:R2(d.arancel),oc:'Liquidación / DAI',nfac:idFac}));
-  if(d.itbms>0.001)   lines.push(Object.assign({},tn,{tipoFac:'itbms',      deptCat:'GASTOS',costo:R2(d.itbms),  oc:'ITBM (s/CIF + Arancel)',nfac:idFac}));
-  if(d.tasa>0.001)    lines.push(Object.assign({},tn,{tipoFac:'tasa',        deptCat:'GASTOS',costo:R2(d.tasa),      oc:'Tasa Aduana',nfac:idFac}));
-  if(d.itbmsTasa>0.001) lines.push(Object.assign({},tn,{tipoFac:'itbms',      deptCat:'GASTOS',costo:R2(d.itbmsTasa), oc:'ITBM s/Tasa',nfac:idFac}));
-  if(d.uso>0.001)     lines.push(Object.assign({},tn,{tipoFac:'uso_sistema', deptCat:'GASTOS',costo:R2(d.uso),    oc:'Uso del Sistema',nfac:idFac}));
+  var nfacTN = d.nfacTesoro || d.idFiscal || '';
+  if(d.arancel>0.001) lines.push(Object.assign({},tn,{tipoFac:'liquidacion',deptCat:'GASTOS',costo:R2(d.arancel),oc:'Liquidación / DAI',nfac:nfacTN}));
+  if(d.itbms>0.001)   lines.push(Object.assign({},tn,{tipoFac:'itbms',      deptCat:'GASTOS',costo:R2(d.itbms),  oc:'ITBM (s/CIF + Arancel)',nfac:nfacTN}));
+  if(d.tasa>0.001)    lines.push(Object.assign({},tn,{tipoFac:'tasa',        deptCat:'GASTOS',costo:R2(d.tasa),      oc:'Tasa Aduana',nfac:nfacTN}));
+  if(d.itbmsTasa>0.001) lines.push(Object.assign({},tn,{tipoFac:'itbms',      deptCat:'GASTOS',costo:R2(d.itbmsTasa), oc:'ITBM s/Tasa',nfac:nfacTN}));
+  if(d.uso>0.001)     lines.push(Object.assign({},tn,{tipoFac:'uso_sistema', deptCat:'GASTOS',costo:R2(d.uso),    oc:'Uso del Sistema',nfac:nfacTN}));
 
   // ── CORREDOR (honorarios + otros gastos que él factura) ──────
   // Factura del corredor = su comisión + reembolso de impuestos.
@@ -1304,7 +1325,109 @@ function downloadTemplate(type){
 }
 
 // ═══════════════════════════════════════════════
-// PERSISTENCIA — guarda TODO incluyendo plantilla
+// DESCARGA DE RESULTADOS — múltiples formatos
+// ═══════════════════════════════════════════════
+function downloadResult(fmt){
+  if(!lastCalc){ toast('⚠️ Calcula primero.','red'); return; }
+  var d=lastCalc;
+  var nro=d.nro||'UNICO';
+  var fecha=d.fecha||new Date().toISOString().slice(0,10);
+  var fileName='Costo_Unico_'+nro+'_'+fecha;
+
+  if(fmt==='html'){
+    var resultDiv=document.getElementById('result');
+    var htmlContent='<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Escenario Único – '+nro+'</title>'
+      +'<style>body{font-family:-apple-system,sans-serif;background:#0d1117;color:#e6edf3;padding:24px;max-width:600px;margin:0 auto}'
+      +'*{box-sizing:border-box}h1{font-size:16px;margin-bottom:16px;color:#a371f7}'
+      +'table{width:100%;border-collapse:collapse;margin:8px 0}td,th{padding:6px 10px;border:1px solid #30363d;font-size:12px}'
+      +'th{background:#1c2230;color:#8b949e;text-transform:uppercase;font-size:10px}'
+      +'</style></head><body>'
+      +'<h1>🔒 Escenario Único — '+nro+'</h1>'
+      +'<p style="font-size:11px;color:#8b949e;margin-bottom:16px">'+d.desc+' · '+fecha+'</p>'
+      +'<table><tr><th>Concepto</th><th>Valor</th></tr>'
+      +'<tr><td>Valor CIF</td><td style="text-align:right;font-family:monospace">$'+Number(d.cif).toLocaleString('en-US',{minimumFractionDigits:2})+'</td></tr>'
+      +'<tr><td>Arancel (DAI '+d.arPct.toFixed(2)+'%)</td><td style="text-align:right;font-family:monospace;color:#f85149">$'+Number(d.arancel).toLocaleString('en-US',{minimumFractionDigits:2})+'</td></tr>'
+      +'<tr><td>ITBMS</td><td style="text-align:right;font-family:monospace;color:#58a6ff">$'+Number(d.itbms).toLocaleString('en-US',{minimumFractionDigits:2})+'</td></tr>'
+      +'<tr><td>Honorarios Corredor</td><td style="text-align:right;font-family:monospace;color:#a371f7">$'+Number(d.hon).toLocaleString('en-US',{minimumFractionDigits:2})+'</td></tr>'
+      +'<tr><td>Tasa Aduana</td><td style="text-align:right;font-family:monospace">$'+Number(d.tasa).toLocaleString('en-US',{minimumFractionDigits:2})+'</td></tr>'
+      +'<tr><td>ITBMS s/Tasa</td><td style="text-align:right;font-family:monospace">$'+Number(d.itbmsTasa||0).toLocaleString('en-US',{minimumFractionDigits:2})+'</td></tr>'
+      +'<tr><td>Uso del Sistema</td><td style="text-align:right;font-family:monospace">$'+Number(d.uso||0).toLocaleString('en-US',{minimumFractionDigits:2})+'</td></tr>'
+      +'<tr><td>Gastos Adicionales</td><td style="text-align:right;font-family:monospace">$'+Number(d.extras||0).toLocaleString('en-US',{minimumFractionDigits:2})+'</td></tr>'
+      +'<tr style="font-weight:800"><td style="color:#3fb950">Costo Landed Total</td><td style="text-align:right;font-family:monospace;color:#3fb950">$'+Number(d.landed).toLocaleString('en-US',{minimumFractionDigits:2})+'</td></tr>'
+      +'<tr><td style="color:#8b949e">Landed Global (c/ITBMS)</td><td style="text-align:right;font-family:monospace;color:#f0883e">$'+Number(d.landed_g).toLocaleString('en-US',{minimumFractionDigits:2})+'</td></tr>'
+      +'<tr><td>Factor Importación</td><td style="text-align:right;font-family:monospace;color:#f0883e">'+d.factor.toFixed(2)+'%</td></tr>'
+      +'</table>'
+      +'<p style="font-size:10px;color:#8b949e;margin-top:16px">Corredor: '+d.corName+' · '+d.provCor+'</p>'
+      +'<p style="font-size:10px;color:#8b949e">Generado: '+new Date().toLocaleString('es-PA')+'</p>'
+      +'</body></html>';
+    var a=document.createElement('a');
+    a.href='data:text/html;charset=utf-8,'+encodeURIComponent(htmlContent);
+    a.download=fileName+'.html'; a.click();
+    toast('📥 HTML descargado','green');
+
+  } else if(fmt==='print'){
+    var w=window.open('','_blank','width=700,height=900');
+    var resultHTML=document.getElementById('result').innerHTML;
+    w.document.write('<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Escenario Único – '+nro+'</title>'
+      +'<style>body{font-family:-apple-system,sans-serif;background:#0d1117;color:#e6edf3;padding:24px}'
+      +'*{box-sizing:border-box}@media print{body{background:#fff;color:#000}}</style>'
+      +'</head><body>'
+      +'<h2 style="color:#a371f7;margin-bottom:4px">🔒 Escenario Único — '+nro+'</h2>'
+      +'<p style="font-size:12px;color:#8b949e;margin-bottom:16px">'+d.desc+' · '+fecha+'</p>'
+      +resultHTML+'</body></html>');
+    w.document.close();
+    setTimeout(function(){ w.print(); },500);
+    toast('🖨 Ventana de impresión abierta','green');
+
+  } else if(fmt==='csv'){
+    var rows=[
+      ['Concepto','Valor USD'],
+      ['N° Embarque', nro],
+      ['Descripción', d.desc||''],
+      ['Fecha', fecha],
+      ['Corredor', d.corName||''],
+      ['Proveedor Corredor', d.provCor||''],
+      ['N° Factura Tesoro Nacional', d.nfacTesoro||''],
+      ['Cant. Equipos', d.cantEquipos||1],
+      ['', ''],
+      ['Valor CIF', d.cif.toFixed(2)],
+      ['Arancel DAI ('+d.arPct.toFixed(2)+'%)', d.arancel.toFixed(2)],
+      ['ITBMS (s/CIF+Arancel)', d.itbms.toFixed(2)],
+      ['Honorarios Corredor ('+d.honPct.toFixed(2)+'%)', d.hon.toFixed(2)],
+      ['Tasa Aduana', (d.tasa||0).toFixed(2)],
+      ['ITBMS s/Tasa', (d.itbmsTasa||0).toFixed(2)],
+      ['Uso del Sistema', (d.uso||0).toFixed(2)],
+      ['Gastos Adicionales', (d.extras||0).toFixed(2)],
+      ['', ''],
+      ['COSTO LANDED TOTAL', d.landed.toFixed(2)],
+      ['Landed Global (c/ITBMS)', d.landed_g.toFixed(2)],
+      ['Factor Importación %', d.factor.toFixed(2)],
+    ];
+    var csv=rows.map(function(r){return r.map(function(c){return '"'+(String(c||'').replace(/"/g,'""'))+'"';}).join(',');}).join('\r\n');
+    var a=document.createElement('a');
+    a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);
+    a.download=fileName+'.csv'; a.click();
+    toast('📋 CSV descargado','green');
+
+  } else if(fmt==='json'){
+    var obj={
+      embarque:{nro:nro,desc:d.desc,fecha:fecha,corredor:d.corName,proveedor:d.provCor,
+        pais:d.pais,ciudad:d.ciudad,tipoEquipo:d.tipoEmb,cantEquipos:d.cantEquipos||1,
+        cartones:d.cartones,nfacTesoro:d.nfacTesoro||''},
+      costos:{cif:d.cif,arancel:d.arancel,itbms:d.itbms,honorarios:d.hon,
+        tasa:d.tasa,itbmsTasa:d.itbmsTasa||0,uso:d.uso||0,
+        gastosAdicionales:d.extras||0},
+      resultado:{landedTotal:d.landed,landedGlobal:d.landed_g,factorImportacion:d.factor},
+      generado:new Date().toISOString()
+    };
+    var a=document.createElement('a');
+    a.href='data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify(obj,null,2));
+    a.download=fileName+'.json'; a.click();
+    toast('📦 JSON descargado','green');
+  }
+}
+
+
 // ═══════════════════════════════════════════════
 var _saveTimer=null;
 function _showSaveIndicator(){
@@ -1328,7 +1451,7 @@ function saveState(){
     // Incluir invLines (plantilla) en el estado guardado
     localStorage.setItem('_unico_estado2',JSON.stringify({
       corredor:gv('corredor'),provCor:gv('prov-cor'),nombreCor:gv('nombre-cor'),
-      nro:gv('nro'),idFiscal:gv('id-fiscal'),desc:gv('desc'),
+      nro:gv('nro'),idFiscal:gv('id-fiscal'),nfacTesoro:gv('nfac-tesoro'),cantEquipos:gv('cant-equipos'),desc:gv('desc'),
     viaTransporte:gv('via-transporte'),terminoEmb:gv('termino-emb'),tipoProveedor:gv('tipo-proveedor'),
       pais:gv('pais'),ciudad:gv('ciudad'),tipoEmb:gv('tipo-emb'),
       cartones:gv('cartones'),fecha:gv('fecha'),estatus:gv('estatus'),
@@ -1360,7 +1483,7 @@ function loadState(){
     var corEl=document.getElementById('corredor');
     if(corEl&&e.corredor) corEl.value=e.corredor;
     su('prov-cor',e.provCor); su('nombre-cor',e.nombreCor);
-    su('nro',e.nro); su('id-fiscal',e.idFiscal); su('desc',e.desc);
+    su('nro',e.nro); su('id-fiscal',e.idFiscal); su('nfac-tesoro',e.nfacTesoro); su('cant-equipos',e.cantEquipos||'1'); su('desc',e.desc);
     if(e.viaTransporte) su('via-transporte',e.viaTransporte);
     if(e.terminoEmb) su('termino-emb',e.terminoEmb);
     if(e.tipoProveedor) su('tipo-proveedor',e.tipoProveedor);

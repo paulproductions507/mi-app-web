@@ -704,27 +704,27 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
         <div style="font-size:10px;color:var(--muted)">Factor arancelario detallado</div>
       </button>
       <button onclick="iniciarApp('histfact')"
-        style="background:linear-gradient(135deg,rgba(168,85,247,.12),rgba(168,85,247,.05));border:1px solid rgba(168,85,247,.3);border-radius:14px;padding:12px;text-align:left;cursor:pointer;transition:transform .15s,box-shadow .15s;display:flex;flex-direction:column;gap:3px"
-        onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(168,85,247,.2)'"
+        style="background:linear-gradient(135deg,rgba(245,158,11,.12),rgba(245,158,11,.05));border:1px solid rgba(245,158,11,.3);border-radius:14px;padding:12px;text-align:left;cursor:pointer;transition:transform .15s,box-shadow .15s;display:flex;flex-direction:column;gap:3px"
+        onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(245,158,11,.2)'"
         onmouseout="this.style.transform='';this.style.boxShadow=''">
         <span style="font-size:28px">🧾</span>
-        <div style="font-size:12px;font-weight:700;color:#a855f7">Historial Facturas</div>
+        <div style="font-size:12px;font-weight:700;color:#fbbf24">Historial Facturas</div>
         <div style="font-size:10px;color:var(--muted)">Facturas por embarque</div>
       </button>
       <button onclick="iniciarApp('unico')"
-        style="background:linear-gradient(135deg,rgba(163,113,247,.12),rgba(163,113,247,.05));border:1px solid rgba(163,113,247,.3);border-radius:14px;padding:12px;text-align:left;cursor:pointer;transition:transform .15s,box-shadow .15s;display:flex;flex-direction:column;gap:3px"
-        onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(163,113,247,.2)'"
+        style="background:linear-gradient(135deg,rgba(20,184,166,.12),rgba(20,184,166,.05));border:1px solid rgba(20,184,166,.3);border-radius:14px;padding:12px;text-align:left;cursor:pointer;transition:transform .15s,box-shadow .15s;display:flex;flex-direction:column;gap:3px"
+        onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(20,184,166,.2)'"
         onmouseout="this.style.transform='';this.style.boxShadow=''">
         <span style="font-size:28px">🔒</span>
-        <div style="font-size:12px;font-weight:700;color:#a371f7">Escenario Único</div>
+        <div style="font-size:12px;font-weight:700;color:#2dd4bf">Escenario Único</div>
         <div style="font-size:10px;color:var(--muted)">Sin comparación alternativa</div>
       </button>
       <button onclick="iniciarApp('histprovs')"
-        style="background:linear-gradient(135deg,rgba(163,113,247,.12),rgba(163,113,247,.05));border:1px solid rgba(163,113,247,.3);border-radius:14px;padding:12px;text-align:left;cursor:pointer;transition:transform .15s,box-shadow .15s;display:flex;flex-direction:column;gap:3px"
-        onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(163,113,247,.2)'"
+        style="background:linear-gradient(135deg,rgba(244,63,94,.12),rgba(244,63,94,.05));border:1px solid rgba(244,63,94,.3);border-radius:14px;padding:12px;text-align:left;cursor:pointer;transition:transform .15s,box-shadow .15s;display:flex;flex-direction:column;gap:3px"
+        onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(244,63,94,.2)'"
         onmouseout="this.style.transform='';this.style.boxShadow=''">
         <span style="font-size:28px">🏭</span>
-        <div style="font-size:12px;font-weight:700;color:#a371f7">Hist. Proveedores</div>
+        <div style="font-size:12px;font-weight:700;color:#fb7185">Hist. Proveedores</div>
         <div style="font-size:10px;color:var(--muted)">Embarques · Único incluido</div>
       </button>
       <button onclick="iniciarApp('facturas')"
@@ -8561,16 +8561,23 @@ function _renderGroupSections(data){
     var totalMerc  = mercLines.reduce(function(s,l){ return s+(l.costo||0); }, 0);
     var sc1u       = snap.sc1 || {};
     var isUnicoM   = !!(d.modoUnico || d.tipoEsc==='unico');
-    var totalNoMerc= isUnicoM ? (sc1u.noMerc||0)
+    // For Único: noMerc is the sum of all non-merchandise costs stored in snap.sc1.noMerc
+    // Fallback: compute from individual fields if noMerc not yet in snap
+    var sc1u_noMerc = isUnicoM
+      ? (sc1u.noMerc != null ? sc1u.noMerc
+          : ((sc1u.arancel||0)+(sc1u.hon||0)+(sc1u.tasa||0)+(sc1u.uso||0)+(sc1u.itbmsTasa||0)+(sc1u.agente||0)+(sc1u.extras||0)))
+      : 0;
+    var totalNoMerc= isUnicoM ? sc1u_noMerc
                     : isSab   ? (sc3.noMerc||0)
                               : (sc2.noMerc||0);
     var totalItbms = isUnicoM ? (sc1u.itbms||0)
                     : isSab   ? (sc3.itbmsHomol||0)
                               : ((sc2.itbms||0)+(sc2.itbmsTasaFinal||0)+(sc2.itbmsHon||0));
-    var landed     = isUnicoM ? ((sc1u.cif||0)+(sc1u.noMerc||0)+(sc1u.itbms||0))
+    // For Único: use the stored landed value directly from snap (do NOT re-add itbms — that's Global)
+    var landed     = isUnicoM ? (sc1u.landed||0)
                     : isSab   ? (sc3.landedG||sc3.landed1||0)
                               : (sc2.landedG||sc2.landed1||0);
-    var landedCosteable = totalMerc + totalNoMerc; // Sin ITBMS
+    var landedCosteable = isUnicoM ? (sc1u.landed||0) : (totalMerc + totalNoMerc); // Único: landed already IS costeable
     var fobHomol   = isSab ? (sc3.mercHomol||0) : 0; // Solo Sababa tiene FOB homologado
     var fmt2l = function(n){ return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
     var fmtKl = function(n){ return n>=1000?'$'+(n/1000).toFixed(1)+'k':fmt2l(n); };
@@ -8591,7 +8598,7 @@ function _renderGroupSections(data){
       +'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+d.fecha+' · '+(d.esc||'')+'</div>'
       +'</div>'
       +'<div style="text-align:right">'
-      +'<div style="font-size:10px;color:var(--muted)">Landed Global (incl. ITBMS)</div>'
+      +'<div style="font-size:10px;color:var(--muted)">'+(isUnicoM?'Landed Costeable':'Landed Global (incl. ITBMS)')+'</div>'
       +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:14px;font-weight:800;color:var(--orange-l)">'+fmtKl(landed)+'</div>'
       +'</div>'
       +'</div>'
@@ -8610,7 +8617,7 @@ function _renderGroupSections(data){
       +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:var(--blue-l)">'+fmtKl(totalItbms)+'</div>'
       +'</div>'
       +'<div style="background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.2);border-radius:7px;padding:8px;text-align:center">'
-      +'<div style="font-size:9px;color:var(--green-l);margin-bottom:3px;font-weight:700">LANDED COSTEABLE TOTAL</div>'
+      +'<div style="font-size:9px;color:var(--green-l);margin-bottom:3px;font-weight:700">'+(isUnicoM?'LANDED COSTEABLE':'LANDED COSTEABLE TOTAL')+'</div>'
       +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:13px;font-weight:800;color:var(--green-l)">'+fmtKl(landedCosteable)+'</div>'
       +'</div>'
       +'</div>'
