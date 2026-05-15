@@ -1384,7 +1384,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
   </div>
 
   <!-- ACTION BUTTONS -->
-  <div style="display:flex;gap:10px;margin-bottom:20px">
+  <div style="display:flex;gap:10px;margin-bottom:20px;padding-top:8px;border-top:1px solid var(--border)">
     <button class="btn btn-ghost" style="flex:1;background:rgba(63,185,80,.08);border-color:rgba(63,185,80,.25);color:var(--green-l)" onclick="_startProgress();procesarEmbarque()">
       ✅ Marcar como Procesado
     </button>
@@ -2992,6 +2992,8 @@ window._RUBROS_DEFAULT = [
   {val:'liquidacion',    lbl:'🏛️ Liquidación / Pago Arancelario'},
   {val:'itbms',          lbl:'🧾 ITBMS'},
   {val:'tasa',           lbl:'💵 Tasa / Uso del Sistema'},
+  {val:'formulario',     lbl:'📝 Formulario'},
+  {val:'manejo_liquid_grabada', lbl:'🖨️ Manejo de Liquidación Grabada'},
   {val:'honorarios',     lbl:'💼 Honorarios / Comisión Corredor'},
   {val:'acarreo',        lbl:'🚛 Acarreo (Transporte Local ZL→Destino)'},
   {val:'gastos_destino', lbl:'📦 Gastos de Destino (Port, Handling, Despacho)'},
@@ -8596,10 +8598,11 @@ function _renderGroupSections(data){
     var fmt2l = function(n){ return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
     var fmtKl = function(n){ return n>=1000?'$'+(n/1000).toFixed(1)+'k':fmt2l(n); };
 
-    // Prorratear costo no mercancía entre facturas de mercancía por peso relativo
+    // Prorratear costo no mercancía e ITBMS entre facturas de mercancía por peso relativo
     mercLines.forEach(function(l){
       l._pct = totalMerc>0 ? (l.costo||0)/totalMerc : 0;
       l._noMercPorcion = totalNoMerc * l._pct;
+      l._itbmsPorcion  = totalItbms  * l._pct;
       l._landedPorcion = (l.costo||0) + l._noMercPorcion;
     });
 
@@ -8612,11 +8615,11 @@ function _renderGroupSections(data){
       +'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+d.fecha+' · '+(d.esc||'')+'</div>'
       +'</div>'
       +'<div style="text-align:right">'
-      +'<div style="font-size:10px;color:var(--muted)">'+(isUnicoM?'Landed Costeable':'Landed Global (incl. ITBMS)')+'</div>'
+      +'<div style="font-size:10px;color:var(--muted)">'+(isUnicoM?'Landed Costeable':isSab?'Landed Global (comisión incl. ITBMS)':'Landed Global (incl. ITBMS)')+'</div>'
       +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:14px;font-weight:800;color:var(--orange-l)">'+fmtKl(landed)+'</div>'
       +'</div>'
       +'</div>'
-      // Resumen financiero del embarque
+      // Resumen financiero del embarque — para Sababa el ITBMS está incluido en la comisión, no se muestra por separado
       +'<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px">'
       +'<div style="background:var(--bg);border-radius:7px;padding:8px;text-align:center">'
       +'<div style="font-size:9px;color:var(--muted);margin-bottom:3px">CIF/FOB MERC.</div>'
@@ -8626,10 +8629,12 @@ function _renderGroupSections(data){
       +'<div style="font-size:9px;color:var(--muted);margin-bottom:3px">COSTO NO MERC.</div>'
       +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:var(--orange-l)">'+fmtKl(totalNoMerc)+'</div>'
       +'</div>'
-      +'<div style="background:var(--bg);border-radius:7px;padding:8px;text-align:center">'
-      +'<div style="font-size:9px;color:var(--muted);margin-bottom:3px">ITBMS</div>'
-      +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:var(--blue-l)">'+fmtKl(totalItbms)+'</div>'
-      +'</div>'
+      +(!isSab?
+        '<div style="background:var(--bg);border-radius:7px;padding:8px;text-align:center">'
+        +'<div style="font-size:9px;color:var(--muted);margin-bottom:3px">ITBMS</div>'
+        +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:var(--blue-l)">'+fmtKl(totalItbms)+'</div>'
+        +'</div>'
+      :'')
       +'<div style="background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.2);border-radius:7px;padding:8px;text-align:center">'
       +'<div style="font-size:9px;color:var(--green-l);margin-bottom:3px;font-weight:700">FACTOR IMPORT.</div>'
       +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:13px;font-weight:800;color:var(--green-l)">'+(isUnicoM&&sc1u.factor!=null?Number(sc1u.factor).toFixed(2)+'%':(totalMerc>0?((landedCosteable/totalMerc-1)*100).toFixed(2)+'%':'—'))+'</div>'
@@ -8654,7 +8659,7 @@ function _renderGroupSections(data){
           +'<div style="font-size:9px;color:var(--muted)">'+pctStr+' del total</div>'
           +'</div>'
           +'</div>'
-          // Porción no mercancía
+          // Porción no mercancía + ITBMS proporcional
           +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;border-top:1px solid rgba(48,54,61,.3);padding-top:6px">'
           +'<div style="display:flex;justify-content:space-between;align-items:center">'
           +'<span style="font-size:9px;color:var(--muted)">+ No Merc. ('+pctStr+')</span>'
@@ -8664,6 +8669,12 @@ function _renderGroupSections(data){
           +'<span style="font-size:9px;color:var(--muted)">Costo Landed Costeable</span>'
           +'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:10px;font-weight:700;color:var(--green-l)">'+fmt2l(l._landedPorcion)+'</span>'
           +'</div>'
+          +(totalItbms>0&&!isSab?
+            +'<div style="display:flex;justify-content:space-between;align-items:center">'
+            +'<span style="font-size:9px;color:var(--blue-l)">ITBMS ('+pctStr+')</span>'
+            +'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:10px;font-weight:600;color:var(--blue-l)">'+fmt2l(l._itbmsPorcion)+'</span>'
+            +'</div>'
+          :'')
           +'</div>'
           +'</div>';
       }).join('')
@@ -8671,8 +8682,8 @@ function _renderGroupSections(data){
 
       // Facturas de gastos — agrupadas por Proveedor → N° factura → líneas
       +(gastoLines.length ? (function(){
-        var tipoIcons={flete:'🚢',acarreo:'🚛',honorarios:'💼',itbms:'🧾',gastos:'📋',liquidacion:'🏛️',tasa:'💵',uso_sistema:'💻',nota_credito:'🏷️',descuento:'🏷️',gastos_destino:'📦',seguro:'🛡️',almacenaje:'🏪',inspeccion:'🔍',dmce:'📝'};
-        var tipoNombres={flete:'Flete Internacional',acarreo:'Acarreo',honorarios:'Honorarios Corredor',itbms:'ITBMS',liquidacion:'Liquidación / DAI',tasa:'Tasa Aduana',uso_sistema:'Uso del Sistema',nota_credito:'Nota de Crédito / Descuento',descuento:'Descuento',gastos_destino:'Gastos Destino',seguro:'Seguro',almacenaje:'Almacenaje',inspeccion:'Inspección',dmce:'DMCE',gastos:'Otros Gastos'};
+        var tipoIcons={flete:'🚢',acarreo:'🚛',honorarios:'💼',itbms:'🧾',gastos:'📋',liquidacion:'🏛️',tasa:'💵',uso_sistema:'💻',nota_credito:'🏷️',descuento:'🏷️',gastos_destino:'📦',seguro:'🛡️',almacenaje:'🏪',inspeccion:'🔍',dmce:'📝',formulario:'📝',manejo_liquid_grabada:'🖨️'};
+        var tipoNombres={flete:'Flete Internacional',acarreo:'Acarreo',honorarios:'Honorarios Corredor',itbms:'ITBMS',liquidacion:'Liquidación / DAI',tasa:'Tasa Aduana',uso_sistema:'Uso del Sistema',nota_credito:'Nota de Crédito / Descuento',descuento:'Descuento',gastos_destino:'Gastos Destino',seguro:'Seguro',almacenaje:'Almacenaje',inspeccion:'Inspección',dmce:'DMCE',formulario:'Formulario',manejo_liquid_grabada:'Manejo Liquidación Grabada',gastos:'Otros Gastos'};
         var totalGastos=gastoLines.reduce(function(s,l){return s+(l.costo||0);},0);
         // Group by provider first
         var byProv={};
@@ -8713,15 +8724,44 @@ function _renderGroupSections(data){
               +'<div id="'+nid+'" style="display:none">'+dlines+'</div></div>';
           }).join('');
           return '<div style="background:var(--s1);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;overflow:hidden">'
+            // Header: provider name + invoice number visible together + total + chevron
             +'<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;cursor:pointer;background:var(--s2)" onclick="var b=document.getElementById(\''+pid+'\');var o=b.style.display!==\'none\';b.style.display=o?\'none\':\'block\';this.querySelector(\'.gc5\').textContent=o?\'▶\':\'▼\'">'
-            +'<div>'
+            +'<div style="min-width:0;flex:1">'
             +'<div style="font-size:12px;font-weight:700;color:var(--text)">🏢 '+grp.prov+'</div>'
-            +'<div style="font-size:9px;color:var(--muted);margin-top:2px">'+grp.lines.length+' concepto'+(grp.lines.length!==1?'s':'')+'</div>'
+            // Show all unique invoice numbers right below provider name
+            +(Object.keys(byNfac).filter(function(k){return k!=='—';}).length>0
+              ? '<div style="font-size:9px;color:var(--muted);margin-top:2px">📄 '+Object.keys(byNfac).filter(function(k){return k!=='—';}).join(' · ')+'</div>'
+              : '<div style="font-size:9px;color:var(--muted2);margin-top:2px">'+grp.lines.length+' concepto'+(grp.lines.length!==1?'s':'')+'</div>')
             +'</div>'
-            +'<div style="display:flex;align-items:center;gap:8px">'
+            +'<div style="display:flex;align-items:center;gap:8px;flex-shrink:0;margin-left:8px">'
             +'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:13px;font-weight:800;color:'+provColor+'">'+fmt2l(grp.total)+'</span>'
             +'<span class="gc5" style="font-size:11px;color:var(--muted)">▼</span></div></div>'
-            +'<div id="'+pid+'">'+nfacBlocks+'</div></div>';
+            // Body: directly show rubros (no sub-accordion per invoice)
+            +'<div id="'+pid+'">'
+            +grp.lines.map(function(l){
+              var isLineNeg=(l.costo||0)<0;
+              var rNombre=tipoNombres[l.tipoFac||'gastos']||l.tipoFac||'Gasto';
+              // For honorarios: show % if available via oc field
+              var rLabel=rNombre;
+              if(l.oc&&l.oc.includes('%')) rLabel=rNombre+' <span style="color:var(--muted);font-size:9px">('+l.oc.match(/[\d.]+%/)?.[0]+')</span>';
+              // For nota_credito: try to compute % discount against nfac total
+              var discPct='';
+              if((l.tipoFac==='nota_credito'||l.tipoFac==='descuento')&&l.costo<0){
+                // Find the positive total of this provider's non-credit lines for %
+                var posTotal=grp.lines.filter(function(x){return (x.costo||0)>0;}).reduce(function(s,x){return s+(x.costo||0);},0);
+                if(posTotal>0){
+                  var dp=(Math.abs(l.costo)/posTotal*100).toFixed(1);
+                  discPct=' <span style="background:rgba(63,185,80,.15);border:1px solid rgba(63,185,80,.25);color:var(--green-l);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700">-'+dp+'%</span>';
+                }
+              }
+              return '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 14px;font-size:11px;border-top:1px solid rgba(255,255,255,.04)">'
+                +'<span style="color:'+(isLineNeg?'var(--green-l)':'var(--muted)')+'">'+(tipoIcons[l.tipoFac||'gastos']||'📋')+' '+rNombre+discPct+'</span>'
+                +'<div style="text-align:right;flex-shrink:0;margin-left:8px">'
+                +'<span style="font-family:\'IBM Plex Mono\',monospace;font-weight:700;color:'+(isLineNeg?'var(--green-l)':'var(--orange-l)')+'">'+fmt2l(l.costo)+'</span>'
+                +(l.nfac&&l.nfac!=='—'?'<div style="font-size:9px;color:var(--muted)">Fact: '+l.nfac+'</div>':'')
+                +'</div></div>';
+            }).join('')
+            +'</div></div>';
         }).join('');
         return '<div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-top:10px">'
           +'<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;background:var(--s2)">'
@@ -11865,7 +11905,24 @@ function renderTopProvs(){
 // ── ESC CARD for showTendDetail ──
 function _buildEscCard(d){
   var fmt = function(n){ return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
-  var sc3d = (d.snap&&d.snap.sc3)||{};
+  // Único entries have no comparativo — show info card only
+  var isUnicoCard = !!(d.modoUnico || d.tipoEsc==='unico');
+  if(isUnicoCard){
+    var sc1u = (d.snap&&d.snap.sc1)||{};
+    var ndStyle = 'color:#8b949e;font-style:italic';
+    return '<div style="background:#f8f9fa;border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px;margin-bottom:14px">'
+      +'<div style="font-size:10px;font-weight:700;color:#2dd4bf;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">🔒 Escenario Único — Sin Comparativo</div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px">'
+      +'<div style="background:rgba(255,255,255,.6);border-radius:8px;padding:10px;text-align:center"><div style="font-size:9px;color:#64748b;font-weight:700;text-transform:uppercase;margin-bottom:3px">CIF Mercancía</div><div style="font-family:monospace;font-size:15px;font-weight:800;color:#15803d">'+fmt(d.cif||0)+'</div></div>'
+      +'<div style="background:rgba(255,255,255,.6);border-radius:8px;padding:10px;text-align:center"><div style="font-size:9px;color:#64748b;font-weight:700;text-transform:uppercase;margin-bottom:3px">Costo Landed</div><div style="font-family:monospace;font-size:15px;font-weight:800;color:#2dd4bf">'+fmt(sc1u.landed||0)+'</div></div>'
+      +'</div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">'
+      +'<div style="background:rgba(255,255,255,.6);border-radius:8px;padding:8px;text-align:center"><div style="font-size:9px;color:#64748b;margin-bottom:2px">Esc.#2 CIF</div><div style="font-family:monospace;font-size:12px;font-weight:700;'+ndStyle+'">N/A</div></div>'
+      +'<div style="background:rgba(255,255,255,.6);border-radius:8px;padding:8px;text-align:center"><div style="font-size:9px;color:#64748b;margin-bottom:2px">Esc.#3 Sababa</div><div style="font-family:monospace;font-size:12px;font-weight:700;'+ndStyle+'">N/A</div></div>'
+      +'<div style="background:rgba(255,255,255,.6);border-radius:8px;padding:8px;text-align:center"><div style="font-size:9px;color:#64748b;margin-bottom:2px">Factor Import.</div><div style="font-family:monospace;font-size:12px;font-weight:700;color:#f97316">'+(sc1u.factor!=null?sc1u.factor.toFixed(2)+'%':'—')+'</div></div>'
+      +'</div>'
+      +'</div>';
+  }
   var sc2d = (d.snap&&d.snap.sc2)||{};
   var sc1d = (d.snap&&d.snap.sc1)||{};
   var escEl = d.esc||'—';
