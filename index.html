@@ -1383,12 +1383,10 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
   </div>
 
   <!-- ACTION BUTTONS -->
-  <div style="display:flex;gap:8px;margin-bottom:20px;padding-top:10px;border-top:1px solid var(--border)">
-    <button class="btn btn-ghost" style="padding:8px 12px;font-size:11px;background:rgba(63,185,80,.08);border-color:rgba(63,185,80,.25);color:var(--green-l)" onclick="_startProgress();procesarEmbarque()">
-      ✅ Procesar
-    </button>
-    <button id="btn-aplicar-cambios" class="btn" style="padding:8px 12px;font-size:11px;flex:1;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.25);color:#f97316;opacity:.45;pointer-events:none;transition:all .25s" onclick="calc();if(typeof syncSC3fromSC1==='function')syncSC3fromSC1();setTimeout(function(){if(typeof calcSab2==='function')calcSab2();},80);_showToast('✅ Cambios aplicados','green',1500)">✓ Aplicar</button>
-    <button class="btn btn-green" style="display:none;flex:2;padding:8px 12px;font-size:11px" onclick="_startProgress();calcAndShow()">⚡ Calcular →</button>
+  <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:20px;padding-top:10px;border-top:1px solid var(--border)">
+    <button id="btn-aplicar-cambios" class="btn" style="width:100%;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.25);color:#f97316;opacity:.45;pointer-events:none;transition:all .25s;padding:9px;font-size:12px" onclick="calc();if(typeof syncSC3fromSC1==='function')syncSC3fromSC1();setTimeout(function(){if(typeof calcSab2==='function')calcSab2();},80);_showToast('✅ Cambios aplicados','green',1500)">✓ Aplicar cambios</button>
+    <button class="btn btn-ghost" style="width:100%;background:rgba(63,185,80,.08);border-color:rgba(63,185,80,.25);color:var(--green-l);padding:9px;font-size:12px" onclick="_startProgress();procesarEmbarque()">✅ Procesar embarque</button>
+    <button class="btn btn-green" style="display:none;width:100%;padding:9px;font-size:12px" onclick="_startProgress();calcAndShow()">⚡ Calcular — Ver Dashboard →</button>
   </div>
 
 </div>
@@ -7765,7 +7763,8 @@ function _buildHistProvRows(){
     var escLabel=(esc.toLowerCase().includes('cif')||esc.toLowerCase().includes('express'))?'CIF Express'
                 :(esc.toLowerCase().includes('sababa')||esc.toLowerCase().includes('sab'))?'Sababa'
                 :(esc.toLowerCase().includes('único')||esc.toLowerCase().includes('unico')||d.modoUnico||d.tipoEsc==='unico')?'Único':'Liq. Aduanal';
-    var isHomol=escLabel==='Sababa'; var dIdx=tendData.indexOf(d);
+    var isHomol = (escLabel==='Sababa') && !!(d.snap && d.snap.sc3 && ((d.snap.sc3.mercHomol||0)>0 || (d.snap.sc3.comision||0)>0));
+    var dIdx=tendData.indexOf(d);
     var isUnico2 = !!(d.modoUnico || d.tipoEsc==='unico');
     lines.forEach(function(l){
       var tf=l.tipoFac||'mercancia';
@@ -8681,12 +8680,12 @@ function _renderGroupSections(data){
           +'<span style="font-size:9px;color:var(--muted)">Costo Landed Costeable</span>'
           +'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:10px;font-weight:700;color:var(--green-l)">'+fmt2l(l._landedPorcion)+'</span>'
           +'</div>'
-          +(totalItbms>0&&!hideItbms?
-            +'<div style="display:flex;justify-content:space-between;align-items:center">'
-            +'<span style="font-size:9px;color:var(--blue-l)">ITBMS ('+pctStr+')</span>'
-            +'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:10px;font-weight:600;color:var(--blue-l)">'+fmt2l(l._itbmsPorcion)+'</span>'
-            +'</div>'
-          :'')
+          +(totalItbms>0&&!hideItbms
+            ? '<div style="display:flex;justify-content:space-between;align-items:center">'
+              +'<span style="font-size:9px;color:var(--blue-l)">ITBMS ('+pctStr+')</span>'
+              +'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:10px;font-weight:600;color:var(--blue-l)">'+fmt2l(isNaN(l._itbmsPorcion)?0:l._itbmsPorcion)+'</span>'
+              +'</div>'
+            : '')
           +'</div>'
           +'</div>';
       }).join('')
@@ -11918,7 +11917,9 @@ function renderTopProvs(){
 function _buildEscCard(d){
   var fmt = function(n){ return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
   // Único entries have no comparativo — show info card only
-  var isUnicoCard = !!(d.modoUnico || d.tipoEsc==='unico');
+  var isUnicoCard = !!(d.modoUnico || d.tipoEsc==='unico'
+    || (d.esc||'').toLowerCase().includes('único') || (d.esc||'').toLowerCase().includes('unico')
+    || (d.snap && d.snap.sc1 && !d.snap.sc2 && !d.snap.sc3));
   if(isUnicoCard){
     var sc1u = (d.snap&&d.snap.sc1)||{};
     var ndStyle = 'color:#8b949e;font-style:italic';
@@ -13222,6 +13223,21 @@ function _renderModComp() {
 }
 
 function _modCompShowSnap(snap, nro, desc, fecha) {
+  // Guard: if this is a Único snap (only sc1, no sc2/sc3), show message instead
+  if(snap && snap.sc1 && !snap.sc2 && !snap.sc3){
+    const result = document.getElementById('_modCompResult');
+    if(result) result.innerHTML = `
+      <div style="background:linear-gradient(135deg,#0d1f35,#161b22);border:1px solid rgba(45,212,191,.3);border-radius:14px;padding:24px;text-align:center;margin-bottom:14px">
+        <div style="font-size:32px;margin-bottom:12px">🔒</div>
+        <div style="font-size:16px;font-weight:800;color:#2dd4bf;margin-bottom:6px">${nro}</div>
+        <div style="font-size:12px;color:#8b949e;margin-bottom:16px">${desc||''} · Escenario Único</div>
+        <div style="font-size:11px;color:#8b949e;background:rgba(45,212,191,.07);border:1px solid rgba(45,212,191,.15);border-radius:8px;padding:12px">
+          Este embarque fue procesado como <strong style="color:#2dd4bf">Escenario Único</strong> — una sola ruta de importación sin comparativo alternativo.<br><br>
+          No aplica comparación con CIF Express ni Sababa.
+        </div>
+      </div>`;
+    return;
+  }
   const D = _calcEngine(snap);
   if (!D) return;
   const result = document.getElementById('_modCompResult');
@@ -13551,6 +13567,28 @@ function _showActivityMsg(msg, color, duration){
 
 // ── SIDEBAR PIN ──
 let _sidebarPinned = false;
+// ── Sidebar hover strip (hover left edge to open) ──
+(function(){
+  var strip = document.createElement('div');
+  strip.id = '_sidebar-hover-strip';
+  strip.style.cssText = 'position:fixed;left:0;top:0;width:14px;height:100vh;z-index:299;cursor:e-resize;';
+  strip.addEventListener('mouseenter', function(){
+    if(!_sidebarPinned) openSidebar();
+  });
+  document.body.appendChild(strip);
+  // Close sidebar when mouse leaves both the sidebar and the strip
+  document.addEventListener('DOMContentLoaded', function(){
+    var sb = document.getElementById('sidebar');
+    if(!sb) return;
+    sb.addEventListener('mouseleave', function(e){
+      if(_sidebarPinned) return;
+      // Only close if not moving to strip
+      var toEl = e.relatedTarget;
+      if(toEl && (toEl.id==='_sidebar-hover-strip' || sb.contains(toEl))) return;
+      closeSidebar();
+    });
+  });
+})();
 function toggleSidebarPin(){
   _sidebarPinned = !_sidebarPinned;
   const sidebar = document.getElementById('sidebar');
