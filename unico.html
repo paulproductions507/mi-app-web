@@ -277,15 +277,8 @@ datalist option{background:var(--s2);color:var(--text)}
     </div>
     <div class="r2">
       <div class="field"><label>Fecha del Embarque</label><input type="date" id="fecha"></div>
-      <div class="field">
-        <label>Estatus</label>
-        <select id="estatus">
-          <option value="Nuevo">🔵 Nuevo</option>
-          <option value="En tránsito">🟡 En tránsito</option>
-          <option value="En aduana">🟠 En aduana</option>
-          <option value="Procesado">✅ Procesado</option>
-        </select>
-      </div>
+      <!-- Estatus se asigna automáticamente: Nuevo al crear, Procesado al procesar -->
+      <input type="hidden" id="estatus" value="Nuevo">
     </div>
   </div>
 </div>
@@ -335,9 +328,14 @@ datalist option{background:var(--s2);color:var(--text)}
   <div class="card-hd">💼 Honorarios del Corredor</div>
   <div class="card-bd">
     <div class="computed-row purple">
-      <div class="field" style="margin:0"><label id="hon-lbl">Factor % (sobre CIF)</label><input type="number" id="hon-pct" value="1" step="0.01" min="0"></div>
+      <div class="field" style="margin:0"><label id="hon-lbl">Factor % (sobre CIF)</label><input type="number" id="hon-pct" value="1" step="0.01" min="0" oninput="calcLive()"></div>
       <div class="computed-arrow">→</div>
-      <div class="field" style="margin:0"><label style="color:var(--purple)">Honorarios Calculados (USD)</label><input type="number" id="hon-monto" oninput="calcLive()" style="color:var(--purple);font-weight:700;border-color:rgba(163,113,247,.3)"></div>
+      <div class="field" style="margin:0">
+        <label style="color:var(--purple)">Honorarios Calculados (USD) <span style="font-weight:400;font-size:9px;color:var(--blue)">✏️ editable</span></label>
+        <input type="number" id="hon-monto" oninput="_markManual('hon-monto');calcLive()" step="0.01"
+          style="color:var(--purple);font-weight:700;border-color:rgba(163,113,247,.3)"
+          title="Puedes editar este valor manualmente para ajustar al centavo">
+      </div>
     </div>
     <div class="field">
       <label>N° Factura Honorarios</label>
@@ -375,6 +373,13 @@ datalist option{background:var(--s2);color:var(--text)}
   <div class="sum-row total"><span>Costo Landed</span><span id="s-landed">$0.00</span></div>
   <div class="sum-row"><span class="sum-label">ITBMS (desembolso)</span><span class="sum-val" id="s-itbms" style="color:var(--blue)">$0.00</span></div>
   <div class="sum-row"><span class="sum-label">Factor Importación</span><span class="sum-val" id="s-factor" style="color:var(--green)">0.00%</span></div>
+</div>
+
+<!-- ══ GUARDAR CAMBIOS ══ -->
+<div style="margin-bottom:12px">
+  <button onclick="_guardarCambiosUnico()" style="width:100%;background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.3);color:var(--green);border-radius:10px;padding:10px;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
+    💾 Guardar Cambios
+  </button>
 </div>
 
 <!-- ══ BOTONES PRINCIPALES ══ -->
@@ -613,7 +618,7 @@ function calcLive(){
   // Auto-calculated values
   var arAuto      = R(cif*arPct);
   var itbAuto     = Math.ceil((cif+arAuto)*itbPct*100)/100;
-  var itbTasaAuto = Math.ceil(tasa*itbPct*100)/100;
+  var itbTasaAuto = Math.round(tasa*itbPct*100)/100;
   var honAuto     = R(cif*honPct);
 
   // Respect manual edits — only update if user hasn't touched the field
@@ -1438,6 +1443,11 @@ function _showSaveIndicator(){
   el.style.opacity='1';
   clearTimeout(el._hideTimer);
   el._hideTimer=setTimeout(function(){ el.style.opacity='0'; },2500);
+}
+
+function _guardarCambiosUnico(){
+  saveState();
+  toast('💾 Cambios guardados correctamente','green');
 }
 
 function saveState(){
