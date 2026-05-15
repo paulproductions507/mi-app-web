@@ -1358,11 +1358,10 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
   </div>
 
   <!-- COMPARATIVO SETTINGS -->
-  <div class="card" style="margin-bottom:12px">
-    <div class="card-hd" style="cursor:pointer;user-select:none" onclick="_toggleSection('card-body-5___comparativo','card-chev-5___comparativo',this)"><div class="dot b"></div><h3>5 · Comparativo</h3><span id="card-chev-5___comparativo" style="margin-left:auto;font-size:11px;color:var(--muted)">▼</span>
-    <div class="card-bd">
+  <div class="card" style="margin-bottom:8px">
+    <div class="card-hd" style="cursor:pointer;user-select:none" onclick="_toggleSection('card-body-5___comparativo','card-chev-5___comparativo',this)"><div class="dot b"></div><h3>5 · Comparativo</h3><span id="card-chev-5___comparativo" style="margin-left:auto;font-size:11px;color:var(--muted)">▼</span></div>
+    <div class="card-bd" id="card-body-5___comparativo">
       <!-- Escenario Único se maneja exclusivamente desde su propio tab 🔒 Único -->
-
       <div id="blk-solo-comp">
         <div class="field"><label>Comparar contra</label>
           <div class="seg">
@@ -1384,12 +1383,12 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
   </div>
 
   <!-- ACTION BUTTONS -->
-  <div style="display:flex;gap:10px;margin-bottom:20px;padding-top:8px;border-top:1px solid var(--border)">
-    <button class="btn btn-ghost" style="flex:1;background:rgba(63,185,80,.08);border-color:rgba(63,185,80,.25);color:var(--green-l)" onclick="_startProgress();procesarEmbarque()">
-      ✅ Marcar como Procesado
+  <div style="display:flex;gap:8px;margin-bottom:20px;padding-top:10px;border-top:1px solid var(--border)">
+    <button class="btn btn-ghost" style="padding:8px 12px;font-size:11px;background:rgba(63,185,80,.08);border-color:rgba(63,185,80,.25);color:var(--green-l)" onclick="_startProgress();procesarEmbarque()">
+      ✅ Procesar
     </button>
-    <button id="btn-aplicar-cambios" class="btn" style="flex:1;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.25);color:#f97316;opacity:.45;pointer-events:none;transition:all .25s" onclick="calc();if(typeof syncSC3fromSC1==='function')syncSC3fromSC1();setTimeout(function(){if(typeof calcSab2==='function')calcSab2();},80);_showToast('✅ Cambios aplicados','green',1500)">✓ Aplicar</button>
-    <button class="btn btn-green" style="display:none;flex:2" onclick="_startProgress();calcAndShow()">⚡ Calcular — Ver Dashboard →</button>
+    <button id="btn-aplicar-cambios" class="btn" style="padding:8px 12px;font-size:11px;flex:1;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.25);color:#f97316;opacity:.45;pointer-events:none;transition:all .25s" onclick="calc();if(typeof syncSC3fromSC1==='function')syncSC3fromSC1();setTimeout(function(){if(typeof calcSab2==='function')calcSab2();},80);_showToast('✅ Cambios aplicados','green',1500)">✓ Aplicar</button>
+    <button class="btn btn-green" style="display:none;flex:2;padding:8px 12px;font-size:11px" onclick="_startProgress();calcAndShow()">⚡ Calcular →</button>
   </div>
 
 </div>
@@ -3228,7 +3227,10 @@ function showSplashNav(){
   if(hero){ hero.style.opacity='0'; hero.style.transform='translateY(-30px)'; }
   // Populate KPI chips from tendData
   const fmt=n=>{ if(!n)return'—'; if(n>=1000000)return'$'+(n/1000000).toFixed(1)+'M'; if(n>=1000)return'$'+(n/1000).toFixed(0)+'k'; return'$'+n.toFixed(0); };
-  const _nonUnico=tendData.filter(d=>!(d.modoUnico||d.tipoEsc==='unico'));
+  const _isUnicoD = d => !!(d.modoUnico || d.tipoEsc==='unico'
+    || (d.esc||'').toLowerCase().includes('único') || (d.esc||'').toLowerCase().includes('unico')
+    || (d.snap && d.snap.sc1 && !d.snap.sc2 && !d.snap.sc3));
+  const _nonUnico=tendData.filter(d=>!_isUnicoD(d));
   const totalAhorro=_nonUnico.reduce((s,d)=>s+(d.ahorro||0),0);
   const totalCIF=tendData.reduce((s,d)=>s+(d.cif||0),0);
   const totalFact=tendData.reduce((s,d)=>s+(d.snap?.invLines||d.invLines||[]).filter(l=>(l.tipoFac||"mercancia")==="mercancia").length,0);
@@ -7881,13 +7883,15 @@ function _renderHistProvList(){
       '</div>'+
       // Row 2: depto + esc badge + homol badge
       '<div style="display:flex;align-items:center;gap:5px;margin-bottom:6px;flex-wrap:wrap"><span style="font-size:10px;color:var(--muted);font-weight:600">'+r.depto+'</span>'+eB+hB+'</div>'+
-      // Row 3: Embarque + Factura + OC original
+      // Row 3: Embarque + Factura + OC/piezas/bultos (hidden for service providers)
       '<div style="display:flex;gap:8px;font-size:10px;color:var(--muted);flex-wrap:wrap;align-items:center;margin-bottom:'+(hasHomolInfo?'4px':'0')+'">'+
         '<span>📋 <strong style="color:var(--text)">'+r.nro+'</strong></span>'+
         (r.numFact!=='—'?'<span>🧾 Fact: <strong style="color:var(--text)">'+r.numFact+'</strong></span>':'')+
-        (r.oc!=='—'?'<span>OC: <strong style="color:var(--text)">'+r.oc+'</strong></span>':'')+
-        (r.seccion==='merc'&&r.piezas>0?'<span>🔢 <strong style="color:var(--blue-l)">'+r.piezas.toLocaleString()+' pzas</strong></span>':r.seccion==='merc'?'<span style="color:var(--muted)">— pzas</span>':'')+
-        (r.bultos>0?'<span>📦 <strong style="color:var(--text)">'+r.bultos+' ctn</strong></span>':'<span style="color:var(--muted)">— ctn</span>')+
+        (r.seccion==='merc'?(
+          (r.oc!=='—'?'<span>OC: <strong style="color:var(--text)">'+r.oc+'</strong></span>':'')+
+          (r.piezas>0?'<span>🔢 <strong style="color:var(--blue-l)">'+r.piezas.toLocaleString()+' pzas</strong></span>':'<span style="color:var(--muted)">— pzas</span>')+
+          (r.bultos>0?'<span>📦 <strong style="color:var(--text)">'+r.bultos+' ctn</strong></span>':'<span style="color:var(--muted)">— ctn</span>')
+        ):'')+
         '<span>📅 '+r.fecha+'</span>'+
       '</div>'+
       // Row 4 (only if homologado): OC Homol + Monto Homol — visually separated
@@ -8571,12 +8575,20 @@ function _renderGroupSections(data){
     var sc2   = snap.sc2 || {};
     var isSab = (d.esc||'').toLowerCase().includes('sababa')||(d.esc||'').toLowerCase().includes('sab');
     var isCif = (d.esc||'').toLowerCase().includes('cif')||(d.esc||'').toLowerCase().includes('express');
+    // ITBMS display rule:
+    // - Embarques CON homologación activa (sc3.mercHomol > 0 o sc3.comision > 0) → OCULTAR ITBMS
+    //   (incluido dentro de la comisión Sababa, tanto ZL como EXT homologado)
+    // - Liquidación, CIF Express, Único → MOSTRAR ITBMS (desembolso real)
+    var hasHomolActiva = !isUnicoM && isSab && ((sc3.mercHomol||0) > 0 || (sc3.comision||0) > 0 || (sc3.itbmsHomol||0) > 0);
+    var hideItbms = hasHomolActiva; // only hide when Sababa has real homologation data
     var lines = (d.invLines && d.invLines.length ? d.invLines : (snap.invLines||[]));
     var mercLines  = lines.filter(function(l){ return (l.tipoFac||'mercancia')==='mercancia'; });
     var gastoLines = lines.filter(function(l){ return l.tipoFac && l.tipoFac!=='mercancia'; });
     var totalMerc  = mercLines.reduce(function(s,l){ return s+(l.costo||0); }, 0);
     var sc1u       = snap.sc1 || {};
-    var isUnicoM   = !!(d.modoUnico || d.tipoEsc==='unico');
+    var isUnicoM   = !!(d.modoUnico || d.tipoEsc==='unico'
+      || (d.esc||'').toLowerCase().includes('único') || (d.esc||'').toLowerCase().includes('unico')
+      || (snap.sc1 && !snap.sc2 && !snap.sc3));
     // For Único: noMerc is the sum of all non-merchandise costs stored in snap.sc1.noMerc
     // Fallback: compute from individual fields if noMerc not yet in snap
     var sc1u_noMerc = isUnicoM
@@ -8615,7 +8627,7 @@ function _renderGroupSections(data){
       +'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+d.fecha+' · '+(d.esc||'')+'</div>'
       +'</div>'
       +'<div style="text-align:right">'
-      +'<div style="font-size:10px;color:var(--muted)">'+(isUnicoM?'Landed Costeable':isSab?'Landed Global (comisión incl. ITBMS)':'Landed Global (incl. ITBMS)')+'</div>'
+      +'<div style="font-size:10px;color:var(--muted)">'+(isUnicoM?'Landed Costeable':hideItbms?'Landed Global (comisión incl. ITBMS)':'Landed Global (incl. ITBMS)')+'</div>'
       +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:14px;font-weight:800;color:var(--orange-l)">'+fmtKl(landed)+'</div>'
       +'</div>'
       +'</div>'
@@ -8629,7 +8641,7 @@ function _renderGroupSections(data){
       +'<div style="font-size:9px;color:var(--muted);margin-bottom:3px">COSTO NO MERC.</div>'
       +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:var(--orange-l)">'+fmtKl(totalNoMerc)+'</div>'
       +'</div>'
-      +(!isSab?
+      +(!hideItbms?
         '<div style="background:var(--bg);border-radius:7px;padding:8px;text-align:center">'
         +'<div style="font-size:9px;color:var(--muted);margin-bottom:3px">ITBMS</div>'
         +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:var(--blue-l)">'+fmtKl(totalItbms)+'</div>'
@@ -8669,7 +8681,7 @@ function _renderGroupSections(data){
           +'<span style="font-size:9px;color:var(--muted)">Costo Landed Costeable</span>'
           +'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:10px;font-weight:700;color:var(--green-l)">'+fmt2l(l._landedPorcion)+'</span>'
           +'</div>'
-          +(totalItbms>0&&!isSab?
+          +(totalItbms>0&&!hideItbms?
             +'<div style="display:flex;justify-content:space-between;align-items:center">'
             +'<span style="font-size:9px;color:var(--blue-l)">ITBMS ('+pctStr+')</span>'
             +'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:10px;font-weight:600;color:var(--blue-l)">'+fmt2l(l._itbmsPorcion)+'</span>'
@@ -12908,8 +12920,13 @@ window.onload=function(){
 function abrirModuloComparativo_idx(idx) {
   const d = tendData[idx];
   if (!d) return;
+  // Detect Único by multiple signals (field may differ based on when it was saved)
+  const esc = (d.esc||'').toLowerCase();
+  const isUnico = !!(d.modoUnico || d.tipoEsc==='unico'
+    || esc.includes('único') || esc.includes('unico')
+    || (d.snap && d.snap.sc1 && !d.snap.sc2 && !d.snap.sc3)); // solo sc1 = Único
   // Embarques Único no tienen comparativo — mostrar Detalle de Facturas directamente
-  if (d.modoUnico || d.tipoEsc === 'unico') {
+  if (isUnico) {
     if (typeof abrirFacturasEmbarque === 'function') {
       abrirFacturasEmbarque(idx);
     }
@@ -13807,6 +13824,18 @@ body:not(.sidebar-pinned) #app-wrapper {
     // Modal 1 — tab normal
     var o1 = document.createElement('div');
     o1.id = 'tab-modal-overlay';
+    // clicking the dark backdrop closes the modal
+    o1.addEventListener('click', function(e){
+      if(e.target === o1) { if(typeof window.closeTabModal==='function') window.closeTabModal(); }
+    });
+    document.addEventListener('keydown', function(e){
+      if(e.key==='Escape'){
+        var o2open = document.getElementById('tab-modal-overlay2');
+        if(o2open && o2open.classList.contains('open')){ if(typeof closeTabModal2==='function') closeTabModal2(); return; }
+        var o1open = document.getElementById('tab-modal-overlay');
+        if(o1open && o1open.classList.contains('open')){ if(typeof window.closeTabModal==='function') window.closeTabModal(); }
+      }
+    }, {passive:true});
     o1.innerHTML =
       '<div id="tab-modal-drawer">' +
         '<div id="tab-modal-header">' +
@@ -13904,7 +13933,7 @@ body:not(.sidebar-pinned) #app-wrapper {
     body.innerHTML = '';
     overlay.classList.remove('open');
     overlay.removeAttribute('data-tab');
-    document.body.style.overflow = '';
+    document.body.style.overflow = ''; // always restore scroll
 
     // Leer el último tab normal activo (variable en scope del IIFE)
     var activePaneId = window._lastNonModalTabGlobal || '';
