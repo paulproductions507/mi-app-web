@@ -1382,12 +1382,12 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
     </div>
   </div>
 
-  <!-- ACTION BUTTONS -->
-  <div style="display:flex;gap:8px;margin-bottom:16px;padding-top:10px;border-top:1px solid var(--border)">
+  <!-- ACTION BUTTONS — sticky on mobile so they're always accessible -->
+  <div id="sim-action-bar" style="display:flex;gap:8px;margin-bottom:16px;padding-top:10px;border-top:1px solid var(--border);position:sticky;bottom:0;background:var(--s1);z-index:10;padding-bottom:8px;padding-left:2px;padding-right:2px">
     <button id="btn-aplicar-cambios" class="btn" style="flex:0 0 auto;background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.2);color:#f97316;opacity:.45;pointer-events:none;transition:all .25s;padding:6px 14px;font-size:11px;border-radius:6px;font-weight:600" onclick="calc();if(typeof syncSC3fromSC1==='function')syncSC3fromSC1();setTimeout(function(){if(typeof calcSab2==='function')calcSab2();},80);_showToast('✅ Cambios aplicados','green',1500)">✓ Aplicar</button>
     <div style="flex:1"></div>
-    <button class="btn btn-ghost" style="flex:0 0 auto;background:rgba(63,185,80,.08);border:1px solid rgba(63,185,80,.2);color:var(--green-l);padding:6px 14px;font-size:11px;border-radius:6px;font-weight:600" onclick="_startProgress();procesarEmbarque()">✅ Procesar</button>
-    <button class="btn btn-green" style="display:none;flex:0 0 auto;padding:6px 14px;font-size:11px;border-radius:6px" onclick="_startProgress();calcAndShow()">⚡ Calcular</button>
+    <button id="btn-procesar-sim" class="btn btn-ghost" style="flex:0 0 auto;background:rgba(63,185,80,.08);border:1px solid rgba(63,185,80,.2);color:var(--green-l);padding:6px 14px;font-size:11px;border-radius:6px;font-weight:600" onclick="_startProgress();procesarEmbarque()">✅ Procesar</button>
+    <button id="btn-calcular-sim" class="btn btn-green" style="display:none;flex:0 0 auto;padding:6px 14px;font-size:11px;border-radius:6px" onclick="_startProgress();calcAndShow()">⚡ Calcular</button>
   </div>
 
 </div>
@@ -7942,11 +7942,8 @@ function renderDashboardKPIs(data){
   if(_kpiFixed) saveTendData();
   const totalAhorro=all.reduce((s,d)=>s+(d.ahorro||0),0);
   // ── Valor Mercancía: valores correctos ──
-  // sc1.base = valor mercancía puro de la factura del proveedor:
-  //   • ZL/CIF: es el valor CIF de la factura (flete ya incluido por el proveedor)
-  //   • EXT FOB: es el FOB (valor sin flete ni seguro)
-  //   → en ambos casos es el "valor compra" real, NO incluye flete/seguro añadido
-  // d.cif = CIF calculado (incluye flete+seguro para FOB EXT — NO usar para valor mercancía)
+  // sc1.base = valor mercancía puro de la factura del proveedor (FOB o CIF según término)
+  // sc3.mercHomol = valor mercancía homologado (Sababa ÷1.07) — SOLO para embarques Sababa con homologación real
   const totalCIF = all.reduce((s,d)=>{
     const sc1 = d.snap?.sc1 || {};
     return s + (sc1.base > 0 ? sc1.base : (d.cif||0));
@@ -7955,8 +7952,9 @@ function renderDashboardKPIs(data){
     const sc3 = d.snap?.sc3 || {};
     const sc1 = d.snap?.sc1 || {};
     const baseVal = sc1.base > 0 ? sc1.base : (d.cif||0);
-    if((sc3.mercHomol||0) > 0) return s + sc3.mercHomol;
-    return s + baseVal;
+    // Only use mercHomol if it's a genuinely homologated Sababa record with real data
+    const isRealHomol = (sc3.mercHomol||0) > 0 && (sc3.comision||0) > 0;
+    return s + (isRealHomol ? sc3.mercHomol : baseVal);
   }, 0);
   const _showHomol = window._kpiShowHomol === true;
   const cifToShow = _showHomol ? totalHomol : totalCIF;
@@ -8002,9 +8000,13 @@ function renderDashboardKPIs(data){
       </div>
       <div class="kpi-card b">
         <span class="kpi-icon">💼</span>
-        <div class="kpi-lbl">Valor Mercancía ${_showHomol?'(Homologado)':'(Original CIF)'}</div>
+        <div class="kpi-lbl">Valor Mercancía ${_showHomol?'Homologado':'Original'}</div>
         <div class="kpi-val">${fmtK(cifToShow)}</div>
-        <div class="kpi-sub">${pctAhorroCIF}% de ahorro sobre valor merc.</div>
+        <div class="kpi-sub" style="font-size:9px;line-height:1.4">
+          ${_showHomol
+            ? all.filter(d=>(d.snap?.sc3?.mercHomol||0)>0&&(d.snap?.sc3?.comision||0)>0).map(d=>`${d.nro}: $${Number(d.snap.sc3.mercHomol).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}`).join(' · ') || 'Sin registros homologados'
+            : `${all.length} embarques · ${pctAhorroCIF}% ahorro`}
+        </div>
         <div style="margin-top:6px">
           <button onclick="window._kpiShowHomol=!window._kpiShowHomol;renderDashboardKPIs()"
             style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.2);color:var(--blue-l);border-radius:5px;padding:2px 8px;font-size:9px;cursor:pointer;font-weight:600">
