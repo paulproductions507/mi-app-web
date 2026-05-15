@@ -1383,10 +1383,10 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
   </div>
 
   <!-- ACTION BUTTONS -->
-  <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:20px;padding-top:10px;border-top:1px solid var(--border)">
-    <button id="btn-aplicar-cambios" class="btn" style="width:100%;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.25);color:#f97316;opacity:.45;pointer-events:none;transition:all .25s;padding:9px;font-size:12px" onclick="calc();if(typeof syncSC3fromSC1==='function')syncSC3fromSC1();setTimeout(function(){if(typeof calcSab2==='function')calcSab2();},80);_showToast('✅ Cambios aplicados','green',1500)">✓ Aplicar cambios</button>
-    <button class="btn btn-ghost" style="width:100%;background:rgba(63,185,80,.08);border-color:rgba(63,185,80,.25);color:var(--green-l);padding:9px;font-size:12px" onclick="_startProgress();procesarEmbarque()">✅ Procesar embarque</button>
-    <button class="btn btn-green" style="display:none;width:100%;padding:9px;font-size:12px" onclick="_startProgress();calcAndShow()">⚡ Calcular — Ver Dashboard →</button>
+  <div style="display:flex;gap:8px;margin-bottom:20px;padding-top:10px;border-top:1px solid var(--border);max-width:100%">
+    <button id="btn-aplicar-cambios" class="btn" style="flex:1;min-width:0;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.25);color:#f97316;opacity:.45;pointer-events:none;transition:all .25s;padding:9px 8px;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" onclick="calc();if(typeof syncSC3fromSC1==='function')syncSC3fromSC1();setTimeout(function(){if(typeof calcSab2==='function')calcSab2();},80);_showToast('✅ Cambios aplicados','green',1500)">✓ Aplicar</button>
+    <button class="btn btn-ghost" style="flex:1;min-width:0;background:rgba(63,185,80,.08);border-color:rgba(63,185,80,.25);color:var(--green-l);padding:9px 8px;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" onclick="_startProgress();procesarEmbarque()">✅ Procesar</button>
+    <button class="btn btn-green" style="display:none;flex:1;min-width:0;padding:9px 8px;font-size:11px" onclick="_startProgress();calcAndShow()">⚡ Calcular</button>
   </div>
 
 </div>
@@ -2990,7 +2990,7 @@ window._RUBROS_DEFAULT = [
   {val:'itbms',          lbl:'🧾 ITBMS'},
   {val:'tasa',           lbl:'💵 Tasa / Uso del Sistema'},
   {val:'formulario',     lbl:'📝 Formulario'},
-  {val:'manejo_liquid_grabada', lbl:'🖨️ Manejo de Liquidación Grabada'},
+  {val:'manejo_liquid_grabava', lbl:'🖨️ Manejo de Liquidación Grabava'},
   {val:'honorarios',     lbl:'💼 Honorarios / Comisión Corredor'},
   {val:'acarreo',        lbl:'🚛 Acarreo (Transporte Local ZL→Destino)'},
   {val:'gastos_destino', lbl:'📦 Gastos de Destino (Port, Handling, Despacho)'},
@@ -3051,9 +3051,12 @@ function _rubrosAgregar(){
   _showToast('✅ Rubro agregado — presiona Guardar','green',2000);
 }
 function _rubrosGuardar(){
+  // Search in modal clone first (config opened via tab-modal), then document
+  var _root = document.getElementById('tab-modal-body') || document;
+  var _getEl = function(id){ return (_root.querySelector ? _root.querySelector('#'+id) : null) || document.getElementById(id); };
   window._RUBROS_GASTO.forEach(function(r,i){
-    var vEl=document.getElementById('rubro-val-'+i);
-    var lEl=document.getElementById('rubro-lbl-'+i);
+    var vEl=_getEl('rubro-val-'+i);
+    var lEl=_getEl('rubro-lbl-'+i);
     if(vEl) r.val=vEl.value.trim().replace(/\s+/g,'_').toLowerCase();
     if(lEl) r.lbl=lEl.value.trim();
   });
@@ -3061,7 +3064,7 @@ function _rubrosGuardar(){
   try{ localStorage.setItem('_rubros_gasto',JSON.stringify(window._RUBROS_GASTO)); } catch(e){}
   _rubrosRender();
   _rubrosActualizarMaps();
-  _showToast('✅ Rubros guardados en este dispositivo','green',2500);
+  _showToast('✅ Rubros guardados','green',2500);
 }
 function _rubrosRestaurar(){
   if(!confirm('¿Restaurar rubros predeterminados? Se perderán los cambios.')) return;
@@ -7945,9 +7948,12 @@ function renderDashboardKPIs(data){
     const lines = d.snap?.invLines || d.invLines || [];
     return s + lines.filter(l=>(l.tipoFac||'mercancia')==='mercancia').reduce((ls,l)=>ls+(l.costo||0),0);
   },0);
-  // Usar el que el usuario eligió (default: real)
+  // totalCIF = d.cif from snap — the CIF used for calculation (homologated base for Sababa)
+  // totalCIFReal = sum of actual invoice lines — the real original purchase total
+  // Default (_showHomol=false): show homologated (totalCIF) — this is what the empresa pays
+  // Toggle (_showHomol=true): show original invoice total (totalCIFReal)
   const _showHomol = window._kpiShowHomol === true;
-  const cifToShow = _showHomol ? totalCIF : (totalCIFReal > 0 ? totalCIFReal : totalCIF);
+  const cifToShow = _showHomol ? (totalCIFReal > 0 ? totalCIFReal : totalCIF) : totalCIF;
   const pctAhorroCIF=totalCIF>0?(totalAhorro/totalCIF*100).toFixed(1):'0';
   const totalFact=all.reduce((s,d)=>{
     const lines=(d.snap?.invLines||d.invLines||[]);
@@ -7996,7 +8002,7 @@ function renderDashboardKPIs(data){
         <div style="margin-top:6px">
           <button onclick="window._kpiShowHomol=!window._kpiShowHomol;renderDashboardKPIs()"
             style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.2);color:var(--blue-l);border-radius:5px;padding:2px 8px;font-size:9px;cursor:pointer;font-weight:600">
-            ${_showHomol?'📊 Ver valor original':'📊 Ver homologado'}
+            ${_showHomol?'📊 Ver homologado':'📊 Ver valor original'}
           </button>
         </div>
       </div>
@@ -8693,8 +8699,8 @@ function _renderGroupSections(data){
 
       // Facturas de gastos — agrupadas por Proveedor → N° factura → líneas
       +(gastoLines.length ? (function(){
-        var tipoIcons={flete:'🚢',acarreo:'🚛',honorarios:'💼',itbms:'🧾',gastos:'📋',liquidacion:'🏛️',tasa:'💵',uso_sistema:'💻',nota_credito:'🏷️',descuento:'🏷️',gastos_destino:'📦',seguro:'🛡️',almacenaje:'🏪',inspeccion:'🔍',dmce:'📝',formulario:'📝',manejo_liquid_grabada:'🖨️'};
-        var tipoNombres={flete:'Flete Internacional',acarreo:'Acarreo',honorarios:'Honorarios Corredor',itbms:'ITBMS',liquidacion:'Liquidación / DAI',tasa:'Tasa Aduana',uso_sistema:'Uso del Sistema',nota_credito:'Nota de Crédito / Descuento',descuento:'Descuento',gastos_destino:'Gastos Destino',seguro:'Seguro',almacenaje:'Almacenaje',inspeccion:'Inspección',dmce:'DMCE',formulario:'Formulario',manejo_liquid_grabada:'Manejo Liquidación Grabada',gastos:'Otros Gastos'};
+        var tipoIcons={flete:'🚢',acarreo:'🚛',honorarios:'💼',itbms:'🧾',gastos:'📋',liquidacion:'🏛️',tasa:'💵',uso_sistema:'💻',nota_credito:'🏷️',descuento:'🏷️',gastos_destino:'📦',seguro:'🛡️',almacenaje:'🏪',inspeccion:'🔍',dmce:'📝',formulario:'📝',manejo_liquid_grabada:'🖨️',manejo_liquid_grabava:'🖨️'};
+        var tipoNombres={flete:'Flete Internacional',acarreo:'Acarreo',honorarios:'Honorarios Corredor',itbms:'ITBMS',liquidacion:'Liquidación / DAI',tasa:'Tasa Aduana',uso_sistema:'Uso del Sistema',nota_credito:'Nota de Crédito / Descuento',descuento:'Descuento',gastos_destino:'Gastos Destino',seguro:'Seguro',almacenaje:'Almacenaje',inspeccion:'Inspección',dmce:'DMCE',formulario:'Formulario',manejo_liquid_grabada:'Manejo Liquidación Grabada',manejo_liquid_grabava:'Manejo Liquidación Grabava',gastos:'Otros Gastos'};
         var totalGastos=gastoLines.reduce(function(s,l){return s+(l.costo||0);},0);
         // Group by provider first
         var byProv={};
@@ -13226,16 +13232,24 @@ function _modCompShowSnap(snap, nro, desc, fecha) {
   // Guard: if this is a Único snap (only sc1, no sc2/sc3), show message instead
   if(snap && snap.sc1 && !snap.sc2 && !snap.sc3){
     const result = document.getElementById('_modCompResult');
-    if(result) result.innerHTML = `
-      <div style="background:linear-gradient(135deg,#0d1f35,#161b22);border:1px solid rgba(45,212,191,.3);border-radius:14px;padding:24px;text-align:center;margin-bottom:14px">
-        <div style="font-size:32px;margin-bottom:12px">🔒</div>
-        <div style="font-size:16px;font-weight:800;color:#2dd4bf;margin-bottom:6px">${nro}</div>
-        <div style="font-size:12px;color:#8b949e;margin-bottom:16px">${desc||''} · Escenario Único</div>
-        <div style="font-size:11px;color:#8b949e;background:rgba(45,212,191,.07);border:1px solid rgba(45,212,191,.15);border-radius:8px;padding:12px">
-          Este embarque fue procesado como <strong style="color:#2dd4bf">Escenario Único</strong> — una sola ruta de importación sin comparativo alternativo.<br><br>
-          No aplica comparación con CIF Express ni Sababa.
-        </div>
-      </div>`;
+    if(result) {
+      var _uid = '_unico_msg_'+Date.now();
+      result.innerHTML = `
+        <div id="${_uid}" style="background:linear-gradient(135deg,#0d1f35,#161b22);border:1px solid rgba(45,212,191,.3);border-radius:14px;padding:24px;text-align:center;margin-bottom:14px;transition:opacity .5s ease">
+          <div style="font-size:32px;margin-bottom:12px">🔒</div>
+          <div style="font-size:16px;font-weight:800;color:#2dd4bf;margin-bottom:6px">${nro}</div>
+          <div style="font-size:12px;color:#8b949e;margin-bottom:16px">${desc||''} · Escenario Único</div>
+          <div style="font-size:11px;color:#8b949e;background:rgba(45,212,191,.07);border:1px solid rgba(45,212,191,.15);border-radius:8px;padding:12px">
+            Este embarque fue procesado como <strong style="color:#2dd4bf">Escenario Único</strong> — una sola ruta de importación sin comparativo alternativo. No aplica comparación con CIF Express ni Sababa.
+          </div>
+          <div style="margin-top:10px;font-size:10px;color:rgba(45,212,191,.4)">Se cerrará automáticamente en unos segundos...</div>
+        </div>`;
+      // Auto-dismiss after 4 seconds with fade
+      setTimeout(function(){
+        var el = document.getElementById(_uid);
+        if(el){ el.style.opacity='0'; setTimeout(function(){ if(el.parentElement) el.parentElement.innerHTML='<div style="padding:20px;text-align:center;color:var(--muted);font-size:12px">Selecciona otro embarque del historial.</div>'; },500); }
+      }, 4000);
+    }
     return;
   }
   const D = _calcEngine(snap);
