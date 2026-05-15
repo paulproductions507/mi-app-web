@@ -1382,12 +1382,11 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
     </div>
   </div>
 
-  <!-- ACTION BUTTONS — sticky on mobile so they're always accessible -->
-  <div id="sim-action-bar" style="display:flex;gap:8px;margin-bottom:16px;padding-top:10px;border-top:1px solid var(--border);position:sticky;bottom:0;background:var(--s1);z-index:10;padding-bottom:8px;padding-left:2px;padding-right:2px">
-    <button id="btn-aplicar-cambios" class="btn" style="flex:0 0 auto;background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.2);color:#f97316;opacity:.45;pointer-events:none;transition:all .25s;padding:6px 14px;font-size:11px;border-radius:6px;font-weight:600" onclick="calc();if(typeof syncSC3fromSC1==='function')syncSC3fromSC1();setTimeout(function(){if(typeof calcSab2==='function')calcSab2();},80);_showToast('✅ Cambios aplicados','green',1500)">✓ Aplicar</button>
-    <div style="flex:1"></div>
-    <button id="btn-procesar-sim" class="btn btn-ghost" style="flex:0 0 auto;background:rgba(63,185,80,.08);border:1px solid rgba(63,185,80,.2);color:var(--green-l);padding:6px 14px;font-size:11px;border-radius:6px;font-weight:600" onclick="_startProgress();procesarEmbarque()">✅ Procesar</button>
-    <button id="btn-calcular-sim" class="btn btn-green" style="display:none;flex:0 0 auto;padding:6px 14px;font-size:11px;border-radius:6px" onclick="_startProgress();calcAndShow()">⚡ Calcular</button>
+  <!-- ACTION BUTTONS — sticky so always visible while scrolling -->
+  <div id="sim-action-bar" style="display:flex;gap:8px;margin-bottom:16px;padding:8px 0 4px;border-top:1px solid var(--border);position:sticky;bottom:0;background:var(--s1);z-index:10">
+    <button id="btn-aplicar-cambios" class="btn" style="flex:1;background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.2);color:#f97316;opacity:.45;pointer-events:none;transition:all .25s;padding:7px 10px;font-size:11px;font-weight:600" onclick="calc();if(typeof syncSC3fromSC1==='function')syncSC3fromSC1();setTimeout(function(){if(typeof calcSab2==='function')calcSab2();},80);_showToast('✅ Cambios aplicados','green',1500)">✓ Aplicar</button>
+    <button id="btn-procesar-sim" class="btn btn-ghost" style="flex:1;background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.25);color:var(--green-l);padding:7px 10px;font-size:11px;font-weight:700" onclick="_startProgress();procesarEmbarque()">✅ Procesar</button>
+    <button id="btn-calcular-sim" class="btn btn-green" style="display:none;flex:1;padding:7px 10px;font-size:11px" onclick="_startProgress();calcAndShow()">⚡ Calcular</button>
   </div>
 
 </div>
@@ -7941,22 +7940,22 @@ function renderDashboardKPIs(data){
   });
   if(_kpiFixed) saveTendData();
   const totalAhorro=all.reduce((s,d)=>s+(d.ahorro||0),0);
-  // ── Valor Mercancía: valores correctos ──
-  // sc1.base = valor mercancía puro de la factura del proveedor (FOB o CIF según término)
-  // sc3.mercHomol = valor mercancía homologado (Sababa ÷1.07) — SOLO para embarques Sababa con homologación real
+  // ── Valor Mercancía ──
+  // Original  = suma de líneas de factura de mercancía (valor CIF/FOB real del proveedor)
+  // Homologado = SOLO sc3.mercHomol de embarques Sababa genuinamente homologados
+  //              (registros sin sc3 real se EXCLUYEN del homologado — no se mezclan)
   const totalCIF = all.reduce((s,d)=>{
+    const lines = d.snap?.invLines || d.invLines || [];
+    const mercSum = lines.filter(l=>(l.tipoFac||'mercancia')==='mercancia').reduce((a,l)=>a+(l.costo||0),0);
+    // Use invoice lines sum if available; fallback to sc1.base; last resort d.cif
     const sc1 = d.snap?.sc1 || {};
-    return s + (sc1.base > 0 ? sc1.base : (d.cif||0));
+    return s + (mercSum > 0 ? mercSum : (sc1.base > 0 ? sc1.base : (d.cif||0)));
   }, 0);
-  const totalHomol = all.reduce((s,d)=>{
-    const sc3 = d.snap?.sc3 || {};
-    const sc1 = d.snap?.sc1 || {};
-    const baseVal = sc1.base > 0 ? sc1.base : (d.cif||0);
-    // Only use mercHomol if it's a genuinely homologated Sababa record with real data
-    const isRealHomol = (sc3.mercHomol||0) > 0 && (sc3.comision||0) > 0;
-    return s + (isRealHomol ? sc3.mercHomol : baseVal);
-  }, 0);
-  const _showHomol = window._kpiShowHomol === true;
+  // Homologado: ONLY records with confirmed Sababa homologation (sc3.mercHomol AND sc3.comision both > 0)
+  const homolRecords = all.filter(d=>(d.snap?.sc3?.mercHomol||0)>0 && (d.snap?.sc3?.comision||0)>0);
+  const totalHomol = homolRecords.reduce((s,d)=>s+(d.snap.sc3.mercHomol||0), 0);
+  const hasHomolData = homolRecords.length > 0;
+  const _showHomol = window._kpiShowHomol === true && hasHomolData;
   const cifToShow = _showHomol ? totalHomol : totalCIF;
   const pctAhorroCIF=totalCIF>0?(totalAhorro/totalCIF*100).toFixed(1):'0';
   const totalFact=all.reduce((s,d)=>{
@@ -8002,17 +8001,13 @@ function renderDashboardKPIs(data){
         <span class="kpi-icon">💼</span>
         <div class="kpi-lbl">Valor Mercancía ${_showHomol?'Homologado':'Original'}</div>
         <div class="kpi-val">${fmtK(cifToShow)}</div>
-        <div class="kpi-sub" style="font-size:9px;line-height:1.4">
-          ${_showHomol
-            ? all.filter(d=>(d.snap?.sc3?.mercHomol||0)>0&&(d.snap?.sc3?.comision||0)>0).map(d=>`${d.nro}: $${Number(d.snap.sc3.mercHomol).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}`).join(' · ') || 'Sin registros homologados'
-            : `${all.length} embarques · ${pctAhorroCIF}% ahorro`}
-        </div>
-        <div style="margin-top:6px">
+        <div class="kpi-sub">${all.length} embarques · ${pctAhorroCIF}% ahorro</div>
+        ${hasHomolData ? `<div style="margin-top:6px">
           <button onclick="window._kpiShowHomol=!window._kpiShowHomol;renderDashboardKPIs()"
             style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.2);color:var(--blue-l);border-radius:5px;padding:2px 8px;font-size:9px;cursor:pointer;font-weight:600">
             ${_showHomol?'📊 Ver original':'📊 Ver homologado'}
           </button>
-        </div>
+        </div>` : ''}
       </div>
       <div class="kpi-card o">
         <span class="kpi-icon">🏷️</span>
@@ -13262,7 +13257,7 @@ function _modCompShowSnap(snap, nro, desc, fecha) {
       setTimeout(function(){
         var el = document.getElementById(_uid);
         if(el){ el.style.opacity='0'; setTimeout(function(){ if(el.parentElement) el.parentElement.innerHTML='<div style="padding:20px;text-align:center;color:var(--muted);font-size:12px">Selecciona otro embarque del historial.</div>'; },500); }
-      }, 4000);
+      }, 10000);
     }
     return;
   }
@@ -13599,8 +13594,8 @@ let _sidebarPinned = false;
 (function(){
   var strip = document.createElement('div');
   strip.id = '_sidebar-hover-strip';
-  // Invisible strip — no width, no visual impact, trigger on mouse entering left 20px of viewport
   strip.style.cssText = 'position:fixed;left:0;top:0;width:20px;height:100vh;z-index:298;';
+  // Only open on hover when sidebar is NOT pinned
   strip.addEventListener('mouseenter', function(){
     if(!_sidebarPinned) openSidebar();
   });
@@ -13643,7 +13638,7 @@ document.addEventListener('DOMContentLoaded', function(){
   // Restore sidebar pin state — default to pinned if no preference saved
   try{
     const saved = localStorage.getItem('sim_sidebar_pinned');
-    const shouldPin = saved === null ? true : saved === '1'; // pinned by default
+    const shouldPin = saved === null ? true : saved === '1'; // pinned by default always
     if(shouldPin){
       setTimeout(function(){
         const sidebar=document.getElementById('sidebar');
