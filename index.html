@@ -7771,13 +7771,10 @@ function _buildHistProvRows(){
         var siMatch=Object.keys(_PROV_SI).find(function(k){ return k.toUpperCase()===provKey; });
         if(siMatch) prov=_PROV_SI[siMatch];
       }
-      // Tipo ZL/IMP: para Único usar el campo tipoProv de la línea; para otros usar nombre
-      var tipoP;
-      if(isUnico2){
-        tipoP = (l.tipoProv||l.tipoProveedor||'ZL').toUpperCase()==='IMP'?'IMP':'ZL';
-      } else {
-        tipoP = prov.toUpperCase().startsWith('S.I')?'IMP':'ZL';
-      }
+      // Tipo ZL/IMP: para Único usar tipoProv de la línea; para otros usar nombre
+      var tipoP = isUnico2
+        ? ((l.tipoProv||l.tipoProveedor||'ZL').toUpperCase()==='IMP' ? 'IMP' : 'ZL')
+        : (prov.toUpperCase().startsWith('S.I') ? 'IMP' : 'ZL');
       var base={prov,oc:l.oc||l.nfac||'—',numFact:l.numFact||l.nroFact||l.nfac||l.factura||'—',ocHomologada:l.ocHomologada||'',montoHomologado:l.montoHomologado||0,
         depto:(l.deptCat||l.dept||'Sin categoría').toUpperCase(),
         piezas:l.piezas||0,bultos:l.bultos||0,costo:l.costo||0,
@@ -8562,14 +8559,17 @@ function _renderGroupSections(data){
     var mercLines  = lines.filter(function(l){ return (l.tipoFac||'mercancia')==='mercancia'; });
     var gastoLines = lines.filter(function(l){ return l.tipoFac && l.tipoFac!=='mercancia'; });
     var totalMerc  = mercLines.reduce(function(s,l){ return s+(l.costo||0); }, 0);
-    var sc1u = snap.sc1||{};
-    var isUnicoM = !!(d.modoUnico||d.tipoEsc==='unico');
-    var totalNoMerc = isUnicoM ? (sc1u.noMerc||0)
-                                : isSab ? (sc3.noMerc||0) : (sc2.noMerc||0);
-    var totalItbms  = isUnicoM ? (sc1u.itbms||0)
-                                : isSab ? (sc3.itbmsHomol||0) : ((sc2.itbms||0)+(sc2.itbmsTasaFinal||0)+(sc2.itbmsHon||0));
-    var landed      = isUnicoM ? ((sc1u.cif||0)+(sc1u.noMerc||0)+(sc1u.itbms||0))
-                                : isSab ? (sc3.landedG||sc3.landed1||0) : (sc2.landedG||sc2.landed1||0);
+    var sc1u       = snap.sc1 || {};
+    var isUnicoM   = !!(d.modoUnico || d.tipoEsc==='unico');
+    var totalNoMerc= isUnicoM ? (sc1u.noMerc||0)
+                    : isSab   ? (sc3.noMerc||0)
+                              : (sc2.noMerc||0);
+    var totalItbms = isUnicoM ? (sc1u.itbms||0)
+                    : isSab   ? (sc3.itbmsHomol||0)
+                              : ((sc2.itbms||0)+(sc2.itbmsTasaFinal||0)+(sc2.itbmsHon||0));
+    var landed     = isUnicoM ? ((sc1u.cif||0)+(sc1u.noMerc||0)+(sc1u.itbms||0))
+                    : isSab   ? (sc3.landedG||sc3.landed1||0)
+                              : (sc2.landedG||sc2.landed1||0);
     var landedCosteable = totalMerc + totalNoMerc; // Sin ITBMS
     var fobHomol   = isSab ? (sc3.mercHomol||0) : 0; // Solo Sababa tiene FOB homologado
     var fmt2l = function(n){ return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
@@ -12444,16 +12444,16 @@ async function procesarUnico(){
   const tipoProv2 = document.getElementById('unico_tipoprov')?.value || ud.tipoProveedor || 'ZL';
   (window._unicoInvLines||[]).filter(l=>l.tipoFac==='mercancia').forEach(l=>{
     unicoInvLines.push({
-      tipoFac:'mercancia',
-      deptCat: l.deptCat||'MERCANCIA',
-      prov:    l.prov,
-      costo:   R(l.costo),
-      nfac:    l.nfac,
-      numFact: l.nfac,
-      oc:      l.oc || l.nfac || ('Emb.'+nro),
-      bultos:  l.bultos||0,
-      piezas:  l.piezas||0,
-      tipoProv: tipoProv2,
+      tipoFac:   'mercancia',
+      deptCat:   l.deptCat||'MERCANCIA',
+      prov:      l.prov,
+      costo:     R(l.costo),
+      nfac:      l.nfac,
+      numFact:   l.nfac,
+      oc:        l.oc || l.nfac || ('Emb.'+nro),
+      bultos:    l.bultos||0,
+      piezas:    l.piezas||0,
+      tipoProv:  tipoProv2,
       montoHomologado: null
     });
   });
