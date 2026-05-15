@@ -927,7 +927,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       <div class="tab on" onclick="switchTab('sim',this)">📋 Liq. Aduanal</div>
       <div class="tab" onclick="switchTab('cifexp',this)">⚡ CIF Express</div>
       <div class="tab" onclick="switchTab('sababa',this)">🤝 Sababa</div>
-      <div class="tab" onclick="switchTab('unico',this)" style="color:#a371f7;font-weight:700">🔒 Esc. Único</div>
+      <div class="tab" onclick="switchTab('unico',this)" style="color:#a371f7;font-weight:700;display:none">🔒 Esc. Único</div>
       <div class="tab" onclick="switchTab('facturas',this)">🧾 Proveedores</div>
       <div class="tab" onclick="abrirModuloComparativo()" style="color:var(--blue-l)">📊 Comparativo</div>
       <div class="tab" onclick="switchTab('aranceles',this)">📦 Aranceles</div>
@@ -3226,7 +3226,8 @@ function showSplashNav(){
   if(hero){ hero.style.opacity='0'; hero.style.transform='translateY(-30px)'; }
   // Populate KPI chips from tendData
   const fmt=n=>{ if(!n)return'—'; if(n>=1000000)return'$'+(n/1000000).toFixed(1)+'M'; if(n>=1000)return'$'+(n/1000).toFixed(0)+'k'; return'$'+n.toFixed(0); };
-  const totalAhorro=tendData.reduce((s,d)=>s+(d.ahorro||0),0);
+  const _nonUnico=tendData.filter(d=>!(d.modoUnico||d.tipoEsc==='unico'));
+  const totalAhorro=_nonUnico.reduce((s,d)=>s+(d.ahorro||0),0);
   const totalCIF=tendData.reduce((s,d)=>s+(d.cif||0),0);
   const totalFact=tendData.reduce((s,d)=>s+(d.snap?.invLines||d.invLines||[]).filter(l=>(l.tipoFac||"mercancia")==="mercancia").length,0);
   const skE=document.getElementById('sk-embarques'); if(skE) skE.textContent=tendData.length||'—';
@@ -7786,7 +7787,8 @@ function _buildHistProvRows(){
       } else {
         // Servicio: normalizar rubro
         var rk=tf==='flete'?'flete':tf==='honorarios'||tf==='comision'?'honorarios':
-               tf==='acarreo'?'acarreo':tf==='itbms'?'itbms':tf==='mv'||tf==='mastervalue'?'mv':'gastos';
+               tf==='acarreo'?'acarreo':tf==='itbms'?'itbms':tf==='mv'||tf==='mastervalue'?'mv':
+               tf==='nota_credito'||tf==='descuento'?'nota_credito':'gastos';
         rows.push(Object.assign({},base,{seccion:'serv',rubro:rk,piezas:0,bultos:0}));
       }
     });
@@ -7857,30 +7859,42 @@ function _renderHistProvList(){
     '</div>';
     return;
   }
-  var rubroLabels={flete:'🚢 Flete',honorarios:'💼 Honorarios',acarreo:'📦 Acarreo',itbms:'🧾 ITBMS',mv:'💰 Master Value',gastos:'📋 Otros Gastos'};
+  var rubroLabels={flete:'🚢 Flete',honorarios:'💼 Honorarios',acarreo:'📦 Acarreo',itbms:'🧾 ITBMS',mv:'💰 Master Value',nota_credito:'🏷️ Nota de Crédito',gastos:'📋 Otros Gastos'};
   listEl.innerHTML=f.map(function(r){
+    var isNegCosto = r.costo < 0;
     var tB=r.seccion==='serv'
-      ?'<span style="background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.3);color:#fbbf24;border-radius:4px;padding:1px 7px;font-size:9px;font-weight:700">'+(rubroLabels[r.rubro]||'📋 Gasto')+'</span>'
+      ?(isNegCosto
+        ?'<span style="background:rgba(63,185,80,.15);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:4px;padding:1px 7px;font-size:9px;font-weight:700">🏷️ Nota de Crédito</span>'
+        :'<span style="background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.3);color:#fbbf24;border-radius:4px;padding:1px 7px;font-size:9px;font-weight:700">'+(rubroLabels[r.rubro]||'📋 Gasto')+'</span>')
       :(r.tipo==='ZL'?'<span style="background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:4px;padding:1px 7px;font-size:9px;font-weight:700">ZL</span>':'<span style="background:rgba(240,136,62,.15);border:1px solid rgba(240,136,62,.3);color:var(--orange-l);border-radius:4px;padding:1px 7px;font-size:9px;font-weight:700">IMP</span>');
-    var eB=r.esc==='CIF Express'?'<span style="background:rgba(248,209,34,.1);border:1px solid rgba(248,209,34,.2);color:#f8d122;border-radius:4px;padding:1px 6px;font-size:9px;font-weight:600">CIF</span>':r.esc==='Sababa'?'<span style="background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.2);color:#a855f7;border-radius:4px;padding:1px 6px;font-size:9px;font-weight:600">SAB</span>':'<span style="background:rgba(139,148,158,.1);border:1px solid rgba(139,148,158,.2);color:var(--muted);border-radius:4px;padding:1px 6px;font-size:9px;font-weight:600">LIQ</span>';
+    var eB=r.esc==='CIF Express'?'<span style="background:rgba(248,209,34,.1);border:1px solid rgba(248,209,34,.2);color:#f8d122;border-radius:4px;padding:1px 6px;font-size:9px;font-weight:600">CIF</span>':r.esc==='Sababa'?'<span style="background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.2);color:#a855f7;border-radius:4px;padding:1px 6px;font-size:9px;font-weight:600">SAB</span>':r.esc==='Único'?'<span style="background:rgba(45,212,191,.1);border:1px solid rgba(45,212,191,.2);color:#2dd4bf;border-radius:4px;padding:1px 6px;font-size:9px;font-weight:600">UNI</span>':'<span style="background:rgba(139,148,158,.1);border:1px solid rgba(139,148,158,.2);color:var(--muted);border-radius:4px;padding:1px 6px;font-size:9px;font-weight:600">LIQ</span>';
     var hB=r.homol?'<span style="background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.2);color:var(--green-l);border-radius:4px;padding:1px 6px;font-size:9px;font-weight:600">HOMOL</span>':'';
-    var clr=r.tipo==='ZL'?'var(--blue-l)':'var(--orange-l)';
+    var clr=isNegCosto?'var(--green-l)':r.tipo==='ZL'?'var(--blue-l)':'var(--orange-l)';
+    var hasHomolInfo = r.ocHomologada || r.montoHomologado>0;
     return '<div style="background:var(--s1);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:7px;cursor:pointer" onclick="abrirFacturasEmbarque('+r._dIdx+')">'+
+      // Row 1: tipo badge + proveedor + monto
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">'+
         '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0">'+tB+'<span style="font-size:12px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+r.prov+'</span></div>'+
         '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:13px;font-weight:800;color:'+clr+';flex-shrink:0;margin-left:8px">'+fmt2(r.costo)+'</span>'+
       '</div>'+
-      '<div style="display:flex;align-items:center;gap:5px;margin-bottom:5px;flex-wrap:wrap"><span style="font-size:10px;color:var(--muted);font-weight:600">'+r.depto+'</span>'+eB+hB+'</div>'+
-      '<div style="display:flex;gap:8px;font-size:10px;color:var(--muted);flex-wrap:wrap;align-items:center">'+
+      // Row 2: depto + esc badge + homol badge
+      '<div style="display:flex;align-items:center;gap:5px;margin-bottom:6px;flex-wrap:wrap"><span style="font-size:10px;color:var(--muted);font-weight:600">'+r.depto+'</span>'+eB+hB+'</div>'+
+      // Row 3: Embarque + Factura + OC original
+      '<div style="display:flex;gap:8px;font-size:10px;color:var(--muted);flex-wrap:wrap;align-items:center;margin-bottom:'+(hasHomolInfo?'4px':'0')+'">'+
         '<span>📋 <strong style="color:var(--text)">'+r.nro+'</strong></span>'+
         (r.numFact!=='—'?'<span>🧾 Fact: <strong style="color:var(--text)">'+r.numFact+'</strong></span>':'')+
         (r.oc!=='—'?'<span>OC: <strong style="color:var(--text)">'+r.oc+'</strong></span>':'')+
-        (r.ocHomologada?'<span>OC Homol: <strong style="color:#f08632">'+r.ocHomologada+'</strong></span>':'')+
-        (r.montoHomologado>0?'<span>🟠 Homol: <strong style="color:#f08632">$'+r.montoHomologado.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</strong></span>':'')+
         (r.seccion==='merc'&&r.piezas>0?'<span>🔢 <strong style="color:var(--blue-l)">'+r.piezas.toLocaleString()+' pzas</strong></span>':r.seccion==='merc'?'<span style="color:var(--muted)">— pzas</span>':'')+
         (r.bultos>0?'<span>📦 <strong style="color:var(--text)">'+r.bultos+' ctn</strong></span>':'<span style="color:var(--muted)">— ctn</span>')+
         '<span>📅 '+r.fecha+'</span>'+
-      '</div></div>';
+      '</div>'+
+      // Row 4 (only if homologado): OC Homol + Monto Homol — visually separated
+      (hasHomolInfo?
+        '<div style="display:flex;gap:8px;font-size:10px;flex-wrap:wrap;align-items:center;border-top:1px dashed rgba(240,136,62,.25);padding-top:4px;margin-top:2px">'+
+          (r.ocHomologada?'<span style="color:var(--muted)">OC Homol: <strong style="color:#f08632">'+r.ocHomologada+'</strong></span>':'')+
+          (r.montoHomologado>0?'<span style="color:var(--muted)">🟠 Homol: <strong style="color:#f08632">$'+r.montoHomologado.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</strong></span>':'')+
+        '</div>':'')+
+      '</div>';
   }).join('');
 }
 
@@ -8617,8 +8631,8 @@ function _renderGroupSections(data){
       +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:var(--blue-l)">'+fmtKl(totalItbms)+'</div>'
       +'</div>'
       +'<div style="background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.2);border-radius:7px;padding:8px;text-align:center">'
-      +'<div style="font-size:9px;color:var(--green-l);margin-bottom:3px;font-weight:700">'+(isUnicoM?'LANDED COSTEABLE':'LANDED COSTEABLE TOTAL')+'</div>'
-      +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:13px;font-weight:800;color:var(--green-l)">'+fmtKl(landedCosteable)+'</div>'
+      +'<div style="font-size:9px;color:var(--green-l);margin-bottom:3px;font-weight:700">FACTOR IMPORT.</div>'
+      +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:13px;font-weight:800;color:var(--green-l)">'+(isUnicoM&&sc1u.factor!=null?Number(sc1u.factor).toFixed(2)+'%':(totalMerc>0?((landedCosteable/totalMerc-1)*100).toFixed(2)+'%':'—'))+'</div>'
       +'</div>'
       +'</div>'
       +'</div>'
@@ -8655,36 +8669,59 @@ function _renderGroupSections(data){
       }).join('')
       : '<div style="padding:12px;color:var(--muted);font-size:11px;text-align:center">Sin facturas de mercancía.</div>')
 
-      // Facturas de gastos — agrupadas por N° factura (totalizado + desglose al tap)
+      // Facturas de gastos — agrupadas por Proveedor → N° factura → líneas
       +(gastoLines.length ? (function(){
-        var tipoIcons={flete:'🚢',acarreo:'🌐',honorarios:'👔',itbms:'🧾',gastos:'📋',liquidacion:'🏛️',tasa:'💵',uso_sistema:'💻'};
+        var tipoIcons={flete:'🚢',acarreo:'🚛',honorarios:'💼',itbms:'🧾',gastos:'📋',liquidacion:'🏛️',tasa:'💵',uso_sistema:'💻',nota_credito:'🏷️',descuento:'🏷️',gastos_destino:'📦',seguro:'🛡️',almacenaje:'🏪',inspeccion:'🔍',dmce:'📝'};
+        var tipoNombres={flete:'Flete Internacional',acarreo:'Acarreo',honorarios:'Honorarios Corredor',itbms:'ITBMS',liquidacion:'Liquidación / DAI',tasa:'Tasa Aduana',uso_sistema:'Uso del Sistema',nota_credito:'Nota de Crédito / Descuento',descuento:'Descuento',gastos_destino:'Gastos Destino',seguro:'Seguro',almacenaje:'Almacenaje',inspeccion:'Inspección',dmce:'DMCE',gastos:'Otros Gastos'};
         var totalGastos=gastoLines.reduce(function(s,l){return s+(l.costo||0);},0);
-        var byNfac={};
+        // Group by provider first
+        var byProv={};
         gastoLines.forEach(function(l){
-          var k=l.nfac||l.numFact||'Sin N° Factura';
-          if(!byNfac[k]){byNfac[k]={nfac:k,lines:[],noMercT:0,itbmsT:0,total:0};}
-          byNfac[k].lines.push(l);
-          if(l.tipoFac==='itbms') byNfac[k].itbmsT+=(l.costo||0);
-          else byNfac[k].noMercT+=(l.costo||0);
-          byNfac[k].total+=(l.costo||0);
+          var pk=(l.prov||'Sin Proveedor').trim();
+          if(!byProv[pk]) byProv[pk]={prov:pk,lines:[],total:0};
+          byProv[pk].lines.push(l);
+          byProv[pk].total+=(l.costo||0);
         });
-        var inner=Object.values(byNfac).map(function(grp,gi){
-          var gid2='_nfg_'+gi+'_'+Date.now();
-          var dlines=grp.lines.map(function(l){
-            return '<div style="display:flex;justify-content:space-between;padding:5px 12px;font-size:10px;border-top:1px solid rgba(255,255,255,.05)">'
-              +'<span style="color:var(--muted)">'+(tipoIcons[l.tipoFac]||'📋')+' '+(l.oc||l.prov||l.tipoFac)+'</span>'
-              +'<span style="font-family:\'IBM Plex Mono\',monospace;color:var(--orange-l)">'+fmt2l(l.costo)+'</span></div>';
+        var inner=Object.values(byProv).map(function(grp,pi){
+          var pid='_pg_'+pi+'_'+Date.now();
+          var isNeg=grp.total<0;
+          var provColor=isNeg?'var(--green-l)':'var(--orange-l)';
+          // Sub-group lines by N° factura
+          var byNfac={};
+          grp.lines.forEach(function(l){
+            var k=l.nfac||l.numFact||'—';
+            if(!byNfac[k]) byNfac[k]={nfac:k,lines:[],total:0};
+            byNfac[k].lines.push(l);
+            byNfac[k].total+=(l.costo||0);
+          });
+          var nfacBlocks=Object.values(byNfac).map(function(nfgrp,ni){
+            var nid=pid+'_n'+ni;
+            var dlines=nfgrp.lines.map(function(l){
+              var isLineNeg=(l.costo||0)<0;
+              var lColor=isLineNeg?'var(--green-l)':'var(--muted)';
+              var rNombre=tipoNombres[l.tipoFac||'gastos']||l.tipoFac||'Gasto';
+              return '<div style="display:flex;justify-content:space-between;padding:4px 12px;font-size:10px;border-top:1px solid rgba(255,255,255,.04)">'
+                +'<span style="color:'+lColor+'">'+(tipoIcons[l.tipoFac||'gastos']||'📋')+' '+rNombre+'</span>'
+                +'<span style="font-family:\'IBM Plex Mono\',monospace;font-weight:700;color:'+(isLineNeg?'var(--green-l)':'var(--orange-l)')+'">'+fmt2l(l.costo)+'</span></div>';
+            }).join('');
+            return '<div style="background:rgba(255,255,255,.02);border-radius:6px;margin:4px 0;overflow:hidden">'
+              +'<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 12px;cursor:pointer;border-top:1px solid rgba(255,255,255,.04)" onclick="var b=document.getElementById(\''+nid+'\');var o=b.style.display!==\'none\';b.style.display=o?\'none\':\'block\';this.querySelector(\'.nc5\').textContent=o?\'▶\':\'▼\'">'
+              +'<div style="font-size:10px;color:var(--muted)">📄 Fact: <strong style="color:var(--text)">'+nfgrp.nfac+'</strong></div>'
+              +'<div style="display:flex;align-items:center;gap:6px">'
+              +'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:11px;font-weight:700;color:'+(nfgrp.total<0?'var(--green-l)':'var(--orange-l)')+'">'+fmt2l(nfgrp.total)+'</span>'
+              +'<span class="nc5" style="font-size:10px;color:var(--muted)">▶</span></div></div>'
+              +'<div id="'+nid+'" style="display:none">'+dlines+'</div></div>';
           }).join('');
           return '<div style="background:var(--s1);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;overflow:hidden">'
-            +'<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;cursor:pointer" onclick="var b=document.getElementById(\''+gid2+'\');var o=b.style.display!==\'none\';b.style.display=o?\'none\':\'block\';this.querySelector(\'.gc4\').textContent=o?\'▶\':\'▼\'">'
-            +'<div><div style="font-size:11px;font-weight:700;color:var(--text)">📄 '+grp.nfac+'</div>'
-            +'<div style="font-size:9px;color:var(--muted);margin-top:2px">'
-            +(grp.noMercT>0?'No Merc: <b>'+fmt2l(grp.noMercT)+'</b>  ':'')+' '+(grp.itbmsT>0?'ITBMS: <b>'+fmt2l(grp.itbmsT)+'</b>':'')
-            +'</div></div>'
+            +'<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;cursor:pointer;background:var(--s2)" onclick="var b=document.getElementById(\''+pid+'\');var o=b.style.display!==\'none\';b.style.display=o?\'none\':\'block\';this.querySelector(\'.gc5\').textContent=o?\'▶\':\'▼\'">'
+            +'<div>'
+            +'<div style="font-size:12px;font-weight:700;color:var(--text)">🏢 '+grp.prov+'</div>'
+            +'<div style="font-size:9px;color:var(--muted);margin-top:2px">'+grp.lines.length+' concepto'+(grp.lines.length!==1?'s':'')+'</div>'
+            +'</div>'
             +'<div style="display:flex;align-items:center;gap:8px">'
-            +'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:13px;font-weight:800;color:var(--orange-l)">'+fmt2l(grp.total)+'</span>'
-            +'<span class="gc4" style="font-size:11px;color:var(--muted)">▶</span></div></div>'
-            +'<div id="'+gid2+'" style="display:none">'+dlines+'</div></div>';
+            +'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:13px;font-weight:800;color:'+provColor+'">'+fmt2l(grp.total)+'</span>'
+            +'<span class="gc5" style="font-size:11px;color:var(--muted)">▼</span></div></div>'
+            +'<div id="'+pid+'">'+nfacBlocks+'</div></div>';
         }).join('');
         return '<div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-top:10px">'
           +'<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;background:var(--s2)">'
@@ -12814,6 +12851,13 @@ window.onload=function(){
 function abrirModuloComparativo_idx(idx) {
   const d = tendData[idx];
   if (!d) return;
+  // Embarques Único no tienen comparativo — mostrar Detalle de Facturas directamente
+  if (d.modoUnico || d.tipoEsc === 'unico') {
+    if (typeof abrirFacturasEmbarque === 'function') {
+      abrirFacturasEmbarque(idx);
+    }
+    return;
+  }
   abrirModuloComparativo();
   setTimeout(function() {
     const nro = d.nro || '—';
