@@ -8185,10 +8185,11 @@ function _renderGastosNoMerc(all){
     gastos_orig: { label:'Gastos Origen y Destino', icon:'🌐', color:'var(--blue-l)',   total:0 },
     honorarios:  { label:'Honorarios / Comisión',   icon:'👔', color:'#a855f7',         total:0,
                    subs:{
-                     cif:0,           // CIF Express honorarios
-                     unico:0,         // Escenario Único - 1% corredor
-                     sababaHomol:0,   // Sababa comisión bruta homologada (incl. ITBMS costeable)
-                     sababaLiq:0,     // Sababa liquidación (Único) - gastos del escenario
+                     cifExon:0,       // CIF: Comisión Exonerado
+                     cifLiq:0,        // CIF: Comisión Liquidación
+                     unico:0,         // Escenario Único
+                     sababaHomol:0,   // Sababa: Comisión Homologado (bruta incl. ITBMS)
+                     sababaLiq:0,     // Sababa: Liquidación
                      otros:0
                    }
                  },
@@ -8243,12 +8244,22 @@ function _renderGastosNoMerc(all){
           case 'acarreo':      rubros.gastos_orig.total += l.costo||0; break;
           case 'honorarios':
             rubros.honorarios.total += l.costo||0;
-            // Classify the sub-bucket
-            if(isSab && !isUnico)    rubros.honorarios.subs.sababaHomol += l.costo||0;
-            else if(isUnico && isSabLine) rubros.honorarios.subs.sababaLiq += l.costo||0;
-            else if(isCif)           rubros.honorarios.subs.cif          += l.costo||0;
-            else if(isUnico)         rubros.honorarios.subs.unico        += l.costo||0;
-            else                     rubros.honorarios.subs.otros        += l.costo||0;
+            if(isSab && !isUnico){
+              // Sababa: Comisión Homologado
+              rubros.honorarios.subs.sababaHomol += l.costo||0;
+            } else if(isUnico && isSabLine){
+              // Sababa: Liquidación (Único con Sababa)
+              rubros.honorarios.subs.sababaLiq += l.costo||0;
+            } else if(isCif){
+              // CIF: Exonerado vs Liquidación (sc2.exon)
+              var isExon = (snap.sc2 && snap.sc2.exon !== false);
+              if(isExon) rubros.honorarios.subs.cifExon += l.costo||0;
+              else       rubros.honorarios.subs.cifLiq  += l.costo||0;
+            } else if(isUnico){
+              rubros.honorarios.subs.unico += l.costo||0;
+            } else {
+              rubros.honorarios.subs.otros += l.costo||0;
+            }
             break;
           case 'liquidacion':  rubros.otros.total       += l.costo||0; break;
           case 'tasa':         rubros.otros.total       += l.costo||0; break;
@@ -8282,10 +8293,12 @@ function _renderGastosNoMerc(all){
 
     } else if(isCif){
       // ── Fallback CIF Express (sin invLines — formato antiguo) ──
+      var cifIsExon = (sc2.exon !== false);
       rubros.flete.total                += sc2.flete||0;
       rubros.gastos_orig.total          += sc2.gastos||0;
       rubros.honorarios.total           += sc2.hon||0;
-      rubros.honorarios.subs.cif        += sc2.hon||0;
+      if(cifIsExon) rubros.honorarios.subs.cifExon += sc2.hon||0;
+      else          rubros.honorarios.subs.cifLiq  += sc2.hon||0;
       rubros.mv.total                   += sc2.mv||0;
       totalItbms                        += (sc2.itbms||0) + (sc2.itbmsTasaFinal||0) + (sc2.itbmsHon||0);
       totalNoMerc                       += sc2.noMerc||0;
@@ -8331,11 +8344,12 @@ function _renderGastosNoMerc(all){
   const honSubs = hon.subs || {};
 
   const honSubRows = [
-    honSubs.cif         > 0.01 ? `<div style="display:flex;justify-content:space-between;padding:6px 14px 6px 38px;font-size:11px;border-bottom:1px solid rgba(48,54,61,.2)"><span style="color:var(--muted)">⚡ CIF Express</span><span style="font-family:'IBM Plex Mono',monospace;color:#a855f7">${fmt2(honSubs.cif)}</span></div>` : '',
-    honSubs.unico       > 0.01 ? `<div style="display:flex;justify-content:space-between;padding:6px 14px 6px 38px;font-size:11px;border-bottom:1px solid rgba(48,54,61,.2)"><span style="color:var(--muted)">🔒 Escenario Único</span><span style="font-family:'IBM Plex Mono',monospace;color:#a855f7">${fmt2(honSubs.unico)}</span></div>` : '',
-    honSubs.sababaHomol > 0.01 ? `<div style="display:flex;justify-content:space-between;padding:6px 14px 6px 38px;font-size:11px;border-bottom:1px solid rgba(48,54,61,.2)"><span style="color:var(--muted)">🟠 Sababa Homologado <span style="font-size:9px">(comisión bruta incl. ITBMS)</span></span><span style="font-family:'IBM Plex Mono',monospace;color:#a855f7">${fmt2(honSubs.sababaHomol)}</span></div>` : '',
-    honSubs.sababaLiq   > 0.01 ? `<div style="display:flex;justify-content:space-between;padding:6px 14px 6px 38px;font-size:11px;border-bottom:1px solid rgba(48,54,61,.2)"><span style="color:var(--muted)">🟡 Sababa Liquidación <span style="font-size:9px">(1% + acarreo + otros)</span></span><span style="font-family:'IBM Plex Mono',monospace;color:#a855f7">${fmt2(honSubs.sababaLiq)}</span></div>` : '',
-    honSubs.otros       > 0.01 ? `<div style="display:flex;justify-content:space-between;padding:6px 14px 6px 38px;font-size:11px;border-bottom:1px solid rgba(48,54,61,.2)"><span style="color:var(--muted)">📋 Otros</span><span style="font-family:'IBM Plex Mono',monospace;color:#a855f7">${fmt2(honSubs.otros)}</span></div>` : '',
+    honSubs.cifExon     > 0.01 ? `<div style="display:flex;justify-content:space-between;padding:7px 14px 7px 38px;font-size:11px;border-bottom:1px solid rgba(48,54,61,.2)"><span style="color:var(--muted)">⚡ CIF: Comisión Exonerado</span><span style="font-family:'IBM Plex Mono',monospace;color:#a855f7">${fmt2(honSubs.cifExon)}</span></div>` : '',
+    honSubs.cifLiq      > 0.01 ? `<div style="display:flex;justify-content:space-between;padding:7px 14px 7px 38px;font-size:11px;border-bottom:1px solid rgba(48,54,61,.2)"><span style="color:var(--muted)">⚡ CIF: Comisión Liquidación</span><span style="font-family:'IBM Plex Mono',monospace;color:#a855f7">${fmt2(honSubs.cifLiq)}</span></div>` : '',
+    honSubs.unico       > 0.01 ? `<div style="display:flex;justify-content:space-between;padding:7px 14px 7px 38px;font-size:11px;border-bottom:1px solid rgba(48,54,61,.2)"><span style="color:var(--muted)">🔒 Escenario Único</span><span style="font-family:'IBM Plex Mono',monospace;color:#a855f7">${fmt2(honSubs.unico)}</span></div>` : '',
+    honSubs.sababaHomol > 0.01 ? `<div style="display:flex;justify-content:space-between;padding:7px 14px 7px 38px;font-size:11px;border-bottom:1px solid rgba(48,54,61,.2)"><span style="color:var(--muted)">🟠 Sababa: Comisión Homologado</span><span style="font-family:'IBM Plex Mono',monospace;color:#a855f7">${fmt2(honSubs.sababaHomol)}</span></div>` : '',
+    honSubs.sababaLiq   > 0.01 ? `<div style="display:flex;justify-content:space-between;padding:7px 14px 7px 38px;font-size:11px;border-bottom:1px solid rgba(48,54,61,.2)"><span style="color:var(--muted)">🟡 Sababa: Liquidación</span><span style="font-family:'IBM Plex Mono',monospace;color:#a855f7">${fmt2(honSubs.sababaLiq)}</span></div>` : '',
+    honSubs.otros       > 0.01 ? `<div style="display:flex;justify-content:space-between;padding:7px 14px 7px 38px;font-size:11px;border-bottom:1px solid rgba(48,54,61,.2)"><span style="color:var(--muted)">📋 Otros</span><span style="font-family:'IBM Plex Mono',monospace;color:#a855f7">${fmt2(honSubs.otros)}</span></div>` : '',
   ].filter(Boolean).join('');
   const hasHonSubs = honSubRows.length > 0;
 
