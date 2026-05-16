@@ -6475,6 +6475,17 @@ function procesarEmbarque(){
     window._excluirMasterValue = false;
   }
 
+  // ── ALERTA: Flete $0 en embarque FOB/FOC ──
+  // Si el embarque es tipo FOB o la nave/corredor es externa y el flete calculado = 0, alertar
+  const _snapFlete = (_snap.sc1?.flete||0) + (_snap.sc2?.flete||0) + (_snap.sc3?.flete||0);
+  const _invFlete  = (window._lastInvLines||[]).filter(function(l){return l.tipoFac==='flete';})
+                      .reduce(function(s,l){return s+(l.costo||0);},0);
+  const _tipoEnvio = (document.getElementById('s1_tipo_envio')?.value||'').toUpperCase();
+  const _isFOB     = _tipoEnvio.includes('FOB') || _tipoEnvio.includes('FOC') || _tipoEnvio.includes('EXT');
+  if(_isFOB && _snapFlete < 0.01 && _invFlete < 0.01){
+        const _continuar = confirm('⚠️ ALERTA — FLETE $0.00\n\nEste embarque es tipo ' + (_tipoEnvio||'FOB/EXT') + ' pero no tiene flete registrado.\n\nSi el flete fue incluido como línea de gasto, verifica que el tipo sea "Flete Internacional".\n\n• OK → Proceder de todas formas (caso FOC extraordinario)\n• Cancelar → Regresar a registrar el flete correctamente');  if(!_continuar) return;
+  }
+
   // ── VALIDACIÓN: Asignación de contenedores múltiples ──
   const _valCont = _validarAsignacionContenedores();
   if(!_valCont.ok){
@@ -8188,8 +8199,8 @@ function _renderGastosNoMerc(all){
                  },
     otros:       { label:'Otros Gastos',                 icon:'📋', color:'var(--muted2)',   total:0 },
   };
-  // Sub-desglose de Sababa Liquidación
-  const sababaLiqSubs = { honorarios:0, acarreo:0, otros:0, notaCredito:0 };
+  // Sub-desglose de Sababa Liquidación — incluye formulario como sub-rubro propio
+  const sababaLiqSubs = { honorarios:0, acarreo:0, formulario:0, otros:0, notaCredito:0 };
   // ITBMS fiscal — NO costeable, va SEPARADO de Costo No Mercancía
   let totalItbms = 0;
   const itbmsSubs = {}; // key: oc/descripcion, value: monto acumulado
@@ -8228,84 +8239,159 @@ function _renderGastosNoMerc(all){
     const hasGastos = gastoLines.length > 0;
 
     if(hasGastos){
-      // ── Fuente real: facturas registradas en el embarque ──
-      // Aplica a TODOS los escenarios que tienen invLines (CIF, Sababa, Único)
-      // Para Liq. Aduanal con invLines reales, también los tomamos.
+      // ── REGLAS POR ESCENARIO ──
+      // Cada tipoFac se enruta según el escenario del embarque:
+      //   isSab (Sababa Homologado): flete→flete, gastos→gastos_orig, honorarios→sababaHomol
+      //   isUnico (Escenario Único — puede ser Sababa o CIF liquidación):
+      //     honorarios(corredor)→sababaLiq, acarreo→sababaLiq, formulario→sababaLiq,
+      //     otros/gastos→sababaLiq, nota_credito→resta sababaLiq,
+      //     liquidacion/tasa/uso_sistema→tesoro
+      //   isCif (CIF Express Exonerado o Liquidación):
+      //     honorarios→cifExon o cifLiq, flete→flete, gastos→gastos_orig, tesoro→tasa+uso
       gastoLines.forEach(function(l){
-        const provUp     = (l.prov||'').toUpperCase();
-        const isSabLine  = provUp.includes('SABABA');
-        const isMVLine   = provUp.includes('MASTER VALUE') || provUp.includes('MASTER_VALUE');
+        const provUp  = (l.prov||'').toUpperCase();
+        const ocUp    = (l.oc||'').toUpperCase();
+        const isSabLine = provUp.includes('SABABA') || ocUp.includes('SABABA');
+        const isCifLine = provUp.includes('CIF') || provUp.includes('QUANTUM') || provUp.includes('EXPRESS');
+        const isMVLine  = provUp.includes('MASTER VALUE') || provUp.includes('MASTER_VALUE');
+        const amt = l.costo||0;
+
         switch(l.tipoFac){
-          case 'flete':        rubros.flete.total       += l.costo||0; break;
-          case 'acarreo':
-            rubros.gastos_orig.total += l.costo||0;
-            if(isUnico) sababaLiqSubs.acarreo += l.costo||0;
+
+          // ── FLETE ──
+          // Siempre va a flete, cualquier escenario
+          case 'flete':
+            rubros.flete.total += amt;
             break;
-          case 'honorarios':
-            rubros.honorarios.total += l.costo||0;
-            if(isSab && !isUnico){
-              // Sababa: Comisión Homologado
-              rubros.honorarios.subs.sababaHomol += l.costo||0;
-            } else if(isUnico && isSabLine){
-              // Sababa: Liquidación — sub-desglose honorarios
-              rubros.honorarios.subs.sababaLiq += l.costo||0;
-              sababaLiqSubs.honorarios += l.costo||0;
-            } else if(isCif){
-              var isExon = (snap.sc2 && snap.sc2.exon !== false);
-              if(isExon) rubros.honorarios.subs.cifExon += l.costo||0;
-              else       rubros.honorarios.subs.cifLiq  += l.costo||0;
-            } else if(isUnico){
-              rubros.honorarios.subs.unico += l.costo||0;
+
+          // ── GASTOS ORIGEN Y DESTINO ──
+          // Solo para Sababa Homologado y CIF Express (NO Escenario Único)
+          case 'gastos_destino':
+            rubros.gastos_orig.total += amt;
+            break;
+
+          // ── ACARREO ──
+          // Escenario Único → va dentro de Sababa: Liquidación
+          // Todos los demás → Gastos Origen y Destino
+          case 'acarreo':
+            if(isUnico){
+              rubros.honorarios.total += amt;
+              rubros.honorarios.subs.sababaLiq += amt;
+              sababaLiqSubs.acarreo += amt;
             } else {
-              rubros.honorarios.subs.otros += l.costo||0;
+              rubros.gastos_orig.total += amt;
             }
             break;
+
+          // ── HONORARIOS / COMISIÓN ──
+          // isSab (Homologado)  → sababaHomol
+          // isUnico + Sababa    → sababaLiq (honorarios 1% corredor)
+          // isUnico + CIF       → sababaLiq (honorarios corredor CIF)
+          // isCif Exonerado     → cifExon
+          // isCif Liquidación   → cifLiq
+          case 'honorarios':
+            rubros.honorarios.total += amt;
+            if(isSab && !isUnico){
+              rubros.honorarios.subs.sababaHomol += amt;
+            } else if(isUnico){
+              rubros.honorarios.subs.sababaLiq += amt;
+              sababaLiqSubs.honorarios += amt;
+            } else if(isCif){
+              var isExon = (snap.sc2 && snap.sc2.exon !== false);
+              if(isExon) rubros.honorarios.subs.cifExon += amt;
+              else       rubros.honorarios.subs.cifLiq  += amt;
+            } else {
+              rubros.honorarios.subs.otros += amt;
+            }
+            break;
+
+          // ── TESORO NACIONAL ──
+          // Liquidación/DAI: solo Escenario Único (CIF Exonerado no paga arancel)
+          // Tasa + Uso Sistema: Escenario Único Y CIF Express (ambos lo tienen)
+          // ITBMS del pago arancelario → línea ITBMS separada (no costeable)
           case 'liquidacion':
-            // Pago arancelario — COSTEABLE, va a Tesoro costeable en No Mercancía
-            rubros.tesoro.total += l.costo||0;
-            rubros.tesoro.subs.liquidacion += l.costo||0;
+          case 'manejo_liquid_grabava':
+          case 'manejo_liquid_grabada':
+            rubros.tesoro.total += amt;
+            rubros.tesoro.subs.liquidacion += amt;
             break;
           case 'tasa':
-            // Tasa aduana — COSTEABLE
-            rubros.tesoro.total += l.costo||0;
-            rubros.tesoro.subs.tasa += l.costo||0;
+            rubros.tesoro.total += amt;
+            rubros.tesoro.subs.tasa += amt;
             break;
           case 'uso_sistema':
-            // Uso sistema — COSTEABLE
-            rubros.tesoro.total += l.costo||0;
-            rubros.tesoro.subs.usoSistema += l.costo||0;
+            rubros.tesoro.total += amt;
+            rubros.tesoro.subs.usoSistema += amt;
             break;
-          case 'dmce':         rubros.otros.total += l.costo||0; break;
-          case 'nota_credito':
+
+          // ── FORMULARIO ──
+          // Escenario Único → sub-rubro propio dentro de Sababa: Liquidación
+          // Otros → tesoro o rubros.otros según contexto
+          case 'formulario':
             if(isUnico){
-              const ncAmt = Math.abs(l.costo||0);
+              rubros.honorarios.total += amt;
+              rubros.honorarios.subs.sababaLiq += amt;
+              sababaLiqSubs.formulario += amt;
+            } else {
+              rubros.tesoro.total += amt;
+              rubros.tesoro.subs.usoSistema += amt;
+            }
+            break;
+
+          // ── NOTA DE CRÉDITO / DESCUENTO ──
+          // Resta del total de honorarios (afecta Sababa Liq y el total global)
+          case 'nota_credito':
+          case 'descuento':
+            if(isUnico){
+              const ncAmt = Math.abs(amt);
               sababaLiqSubs.notaCredito += ncAmt;
-              // Restar la nota de crédito del total de honorarios para que totalNoMerc sea correcto
               rubros.honorarios.total -= ncAmt;
               rubros.honorarios.subs.sababaLiq -= ncAmt;
             }
             break;
+
+          // ── OTROS GASTOS ──
+          // Escenario Único → dentro de Sababa: Liquidación
+          // Resto → rubros.otros
           case 'gastos':
-            if(isMVLine) rubros.mv.total += l.costo||0;
-            else if(isUnico){
-              rubros.honorarios.total += l.costo||0;
-              rubros.honorarios.subs.sababaLiq += l.costo||0;
-              sababaLiqSubs.otros += l.costo||0;
+          case 'otros':
+          case 'seguro':
+          case 'almacenaje':
+          case 'inspeccion':
+            if(isMVLine){
+              rubros.mv.total += amt;
+            } else if(isUnico){
+              rubros.honorarios.total += amt;
+              rubros.honorarios.subs.sababaLiq += amt;
+              sababaLiqSubs.otros += amt;
             } else {
-              rubros.otros.total += l.costo||0;
+              rubros.otros.total += amt;
             }
             break;
+
+          // ── DMCE ──
+          case 'dmce':
+            rubros.otros.total += amt;
+            break;
+
+          // ── MASTER VALUE ──
+          case 'mastervalue':
+          case 'master_value':
+            rubros.mv.total += amt;
+            break;
+
+          // ── ITBMS ──
+          // ITBMS Sababa costeable → parte de honorarios (va en No Mercancía)
+          // Todo otro ITBMS → línea fiscal separada (NO costeable, NO en totalNoMerc)
           case 'itbms':
             if(isSabLine){
-              // ITBMS Sababa costeable — parte de la comisión bruta en No Mercancía
-              rubros.honorarios.total += l.costo||0;
-              if(isSab && !isUnico) rubros.honorarios.subs.sababaHomol += l.costo||0;
-              else                  rubros.honorarios.subs.sababaLiq   += l.costo||0;
+              rubros.honorarios.total += amt;
+              if(isSab && !isUnico) rubros.honorarios.subs.sababaHomol += amt;
+              else                  rubros.honorarios.subs.sababaLiq   += amt;
             } else {
-              totalItbms += l.costo||0;
-              // Track by description for desglose
+              totalItbms += amt;
               var itbKey = (l.oc||l.numFact||'ITBMS').replace('ITBM ','ITBMS ');
-              itbmsSubs[itbKey] = (itbmsSubs[itbKey]||0) + (l.costo||0);
+              itbmsSubs[itbKey] = (itbmsSubs[itbKey]||0) + amt;
             }
             break;
         }
@@ -8372,6 +8458,11 @@ function _renderGastosNoMerc(all){
       var usoFalt  = Math.max(0, Math.round((cifUsoSnap  - cifUsoInv)*100)/100);
       if(tasaFalt > 0.005){ rubros.tesoro.total += tasaFalt; rubros.tesoro.subs.tasa += tasaFalt; }
       if(usoFalt  > 0.005){ rubros.tesoro.total += usoFalt;  rubros.tesoro.subs.usoSistema += usoFalt; }
+      // Complementar flete desde snap si invLines tiene flete = $0
+      var cifFleteInv = gastoLines.filter(function(l){return l.tipoFac==='flete';}).reduce(function(s,l){return s+(l.costo||0);},0);
+      var cifFleteSnap = sc2.flete||0;
+      var fleteFalt = Math.max(0, Math.round((cifFleteSnap - cifFleteInv)*100)/100);
+      if(fleteFalt > 0.005){ rubros.flete.total += fleteFalt; }
     }
     if(isUnico){
       var u1TasaInv = gastoLines.filter(function(l){return l.tipoFac==='tasa';}).reduce(function(s,l){return s+(l.costo||0);},0);
@@ -8407,14 +8498,15 @@ function _renderGastosNoMerc(all){
     honSubs.cifLiq      > 0.01 ? `<div style="display:flex;justify-content:space-between;padding:7px 14px 7px 38px;font-size:11px;border-bottom:1px solid rgba(48,54,61,.2)"><span style="color:var(--muted)">⚡ CIF: Comisión Liquidación</span><span style="font-family:'IBM Plex Mono',monospace;color:#a855f7">${fmt2(honSubs.cifLiq)}</span></div>` : '',
     honSubs.unico       > 0.01 ? `<div style="display:flex;justify-content:space-between;padding:7px 14px 7px 38px;font-size:11px;border-bottom:1px solid rgba(48,54,61,.2)"><span style="color:var(--muted)">🔒 Escenario Único</span><span style="font-family:'IBM Plex Mono',monospace;color:#a855f7">${fmt2(honSubs.unico)}</span></div>` : '',
     honSubs.sababaHomol > 0.01 ? `<div style="display:flex;justify-content:space-between;padding:7px 14px 7px 38px;font-size:11px;border-bottom:1px solid rgba(48,54,61,.2)"><span style="color:var(--muted)">🟠 Sababa: Comisión Homologado</span><span style="font-family:'IBM Plex Mono',monospace;color:#a855f7">${fmt2(honSubs.sababaHomol)}</span></div>` : '',
-    (sababaLiqSubs.honorarios + sababaLiqSubs.acarreo + sababaLiqSubs.otros) > 0.01 ? (()=>{
+    (sababaLiqSubs.honorarios + sababaLiqSubs.acarreo + sababaLiqSubs.formulario + sababaLiqSubs.otros) > 0.01 ? (()=>{
       const uid2 = '_sabaliq_'+Date.now();
       // Total neto = honorarios + acarreo + otros - notaCredito
-      const sababaLiqTotal = sababaLiqSubs.honorarios + sababaLiqSubs.acarreo + sababaLiqSubs.otros - sababaLiqSubs.notaCredito;
+      const sababaLiqTotal = sababaLiqSubs.honorarios + sababaLiqSubs.acarreo + sababaLiqSubs.formulario + sababaLiqSubs.otros - sababaLiqSubs.notaCredito;
       const subDetail = [
         sababaLiqSubs.honorarios > 0.01 ? `<div style="display:flex;justify-content:space-between;padding:5px 14px 5px 56px;font-size:10px;border-bottom:1px solid rgba(48,54,61,.15)"><span style="color:var(--muted2)">📄 Honorarios (1% corredor)</span><span style="font-family:'IBM Plex Mono',monospace;color:#c084fc">${fmt2(sababaLiqSubs.honorarios)}</span></div>` : '',
-        sababaLiqSubs.acarreo   > 0.01 ? `<div style="display:flex;justify-content:space-between;padding:5px 14px 5px 56px;font-size:10px;border-bottom:1px solid rgba(48,54,61,.15)"><span style="color:var(--muted2)">🚚 Acarreo</span><span style="font-family:'IBM Plex Mono',monospace;color:#c084fc">${fmt2(sababaLiqSubs.acarreo)}</span></div>` : '',
-        sababaLiqSubs.otros     > 0.01 ? `<div style="display:flex;justify-content:space-between;padding:5px 14px 5px 56px;font-size:10px;border-bottom:1px solid rgba(48,54,61,.15)"><span style="color:var(--muted2)">📋 Otros Gastos</span><span style="font-family:'IBM Plex Mono',monospace;color:#c084fc">${fmt2(sababaLiqSubs.otros)}</span></div>` : '',
+        sababaLiqSubs.acarreo     > 0.01 ? `<div style="display:flex;justify-content:space-between;padding:5px 14px 5px 56px;font-size:10px;border-bottom:1px solid rgba(48,54,61,.15)"><span style="color:var(--muted2)">🚚 Acarreo</span><span style="font-family:'IBM Plex Mono',monospace;color:#c084fc">${fmt2(sababaLiqSubs.acarreo)}</span></div>` : '',
+        sababaLiqSubs.formulario  > 0.01 ? `<div style="display:flex;justify-content:space-between;padding:5px 14px 5px 56px;font-size:10px;border-bottom:1px solid rgba(48,54,61,.15)"><span style="color:var(--muted2)">📝 Formulario</span><span style="font-family:'IBM Plex Mono',monospace;color:#c084fc">${fmt2(sababaLiqSubs.formulario)}</span></div>` : '',
+        sababaLiqSubs.otros       > 0.01 ? `<div style="display:flex;justify-content:space-between;padding:5px 14px 5px 56px;font-size:10px;border-bottom:1px solid rgba(48,54,61,.15)"><span style="color:var(--muted2)">📋 Otros Gastos</span><span style="font-family:'IBM Plex Mono',monospace;color:#c084fc">${fmt2(sababaLiqSubs.otros)}</span></div>` : '',
         sababaLiqSubs.notaCredito > 0.01 ? `<div style="display:flex;justify-content:space-between;padding:5px 14px 5px 56px;font-size:10px"><span style="color:var(--muted2)">🏷 Nota de Crédito (descuento)</span><span style="font-family:'IBM Plex Mono',monospace;color:#4ade80">-${fmt2(sababaLiqSubs.notaCredito)}</span></div>` : '',
       ].filter(Boolean).join('');
       return `<div style="border-bottom:1px solid rgba(48,54,61,.2)">
@@ -12831,7 +12923,23 @@ function calcUnicoFull(){
 // ── Procesar Escenario Único al historial ──
 async function procesarUnico(){
   const ud = window._unicoData;
-  if(!ud || !ud.cif){ _showToast('⚠️ Calcula primero el Escenario Único.','red',3000); return; }
+  // ── ALERTA: Flete $0 en embarque FOB/FOC ──
+  const _uSnapFlete = (window._lastSnap?.sc1?.flete||0);
+  const _uInvFlete  = (window._unicoInvLines||[]).filter(function(l){return l.tipoFac==='flete';})
+                       .reduce(function(s,l){return s+(l.costo||0);},0);
+  const _uTipoEnvio = (document.getElementById('unico_tipo_envio')?.value||document.getElementById('s1_tipo_envio')?.value||'').toUpperCase();
+  const _uIsFOB     = _uTipoEnvio.includes('FOB') || _uTipoEnvio.includes('FOC') || _uTipoEnvio.includes('EXT');
+  if(_uIsFOB && _uSnapFlete < 0.01 && _uInvFlete < 0.01){
+    const _uCont = confirm(
+      '⚠️ ALERTA — FLETE $0.00\n\n' +
+      'Este embarque Escenario Único es tipo FOB/FOC pero no tiene flete registrado.\n\n' +
+      '• OK → Proceder de todas formas\n' +
+      '• Cancelar → Regresar a registrar el flete'
+    );
+    if(!_uCont) return;
+  }
+
+    if(!ud || !ud.cif){ _showToast('⚠️ Calcula primero el Escenario Único.','red',3000); return; }
   const nro = ud.nro || '';
   if(!nro){
     if(!confirm('⚠️ No hay N° de Embarque. ¿Continuar sin número?')) return;
