@@ -1,0 +1,1531 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mercancía en Tránsito — ZLC Panamá</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --bg:#0d1117;--s1:#161b22;--s2:#21262d;--border:#30363d;
+  --text:#e6edf3;--muted:#8b949e;--muted2:#6e7681;
+  --green:#3fb950;--green-l:#56d364;--green-dim:rgba(63,185,80,.1);
+  --blue:#58a6ff;--blue-l:#79c0ff;--blue-dim:rgba(88,166,255,.1);
+  --orange:#f08632;--orange-l:#ffa657;--orange-dim:rgba(240,134,50,.1);
+  --red:#f85149;--red-l:#ff7b72;
+  --purple:#a371f7;--teal:#2dd4bf;
+  --font:'IBM Plex Sans','Inter',system-ui,sans-serif;
+  --mono:'IBM Plex Mono',monospace;
+}
+/* ── TEMAS ── */
+body.t-light{--bg:#f6f8fa;--s1:#fff;--s2:#f0f2f4;--border:#d0d7de;--text:#1f2328;--muted:#656d76;--muted2:#6e7681;--green:#1a7f37;--green-l:#1a7f37;--green-dim:rgba(26,127,55,.08);--blue:#0969da;--blue-l:#0969da;--blue-dim:rgba(9,105,218,.08);--orange:#bc4c00;--orange-l:#bc4c00;--red:#cf222e;--red-l:#cf222e;--teal:#0969da;--purple:#8250df;}
+body.t-petroleum{--bg:#0a1520;--s1:#0f2030;--s2:#162840;--border:#1e3a55;--text:#c8dae8;--muted:#6b8fa8;--muted2:#4a6f88;--green:#00b894;--green-l:#00cec9;--green-dim:rgba(0,184,148,.1);--blue:#74b9ff;--blue-l:#74b9ff;--blue-dim:rgba(116,185,255,.1);--orange:#fdcb6e;--orange-l:#e17055;--red:#e17055;--red-l:#e17055;--teal:#00cec9;--purple:#a29bfe;}
+body.t-turquesa{--bg:#071a1a;--s1:#0d2626;--s2:#123030;--border:#1a4040;--text:#b2dfdb;--muted:#5a9090;--muted2:#3d6b6b;--green:#00e5cc;--green-l:#1de9b6;--green-dim:rgba(0,229,204,.1);--blue:#80cbc4;--blue-l:#b2ebf2;--blue-dim:rgba(128,203,196,.1);--orange:#ffab40;--orange-l:#ff8f00;--red:#ef5350;--red-l:#ef9a9a;--teal:#00e5cc;--purple:#ce93d8;}
+body.t-navy{--bg:#070d1a;--s1:#0d1b2e;--s2:#122240;--border:#1a2f50;--text:#ccd6f6;--muted:#8892b0;--muted2:#6272a4;--green:#64ffda;--green-l:#64ffda;--green-dim:rgba(100,255,218,.1);--blue:#57cbff;--blue-l:#57cbff;--blue-dim:rgba(87,203,255,.1);--orange:#ffb347;--orange-l:#ffd700;--red:#ff6e6e;--red-l:#ff6e6e;--teal:#64ffda;--purple:#bd93f9;}
+/* Theme picker dropdown */
+.theme-btn{position:relative;}
+.theme-menu{position:absolute;top:100%;right:0;margin-top:4px;background:var(--s1);border:1px solid var(--border);border-radius:8px;padding:4px;z-index:500;display:none;min-width:130px;box-shadow:0 8px 24px rgba(0,0,0,.4);}
+.theme-btn:hover .theme-menu,.theme-menu:hover{display:block;}
+.theme-opt{padding:7px 12px;border-radius:5px;cursor:pointer;font-size:11px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:8px;}
+.theme-opt:hover{background:var(--s2);}
+.theme-opt.active{color:var(--teal);}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;font-size:13px;line-height:1.5;}
+::-webkit-scrollbar{width:6px;height:6px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+
+/* HEADER */
+.hdr{background:var(--s1);border-bottom:1px solid var(--border);padding:0 16px;height:52px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
+.hdr-brand{display:flex;align-items:center;gap:10px;}
+.hdr-brand-icon{width:32px;height:32px;background:linear-gradient(135deg,var(--teal),#0ea5e9);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;}
+.hdr-title{font-size:13px;font-weight:800;color:var(--teal);letter-spacing:-.01em;}
+.hdr-sub{font-size:10px;color:var(--muted);margin-top:1px;}
+.hdr-actions{display:flex;align-items:center;gap:8px;}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:var(--s2);color:var(--text);transition:all .15s;white-space:nowrap;}
+.btn:hover{background:var(--s1);border-color:var(--muted);}
+.btn-teal{background:rgba(45,212,191,.12);border-color:rgba(45,212,191,.35);color:var(--teal);}
+.btn-teal:hover{background:rgba(45,212,191,.2);}
+.btn-green{background:var(--green-dim);border-color:rgba(63,185,80,.35);color:var(--green-l);}
+.btn-green:hover{background:rgba(63,185,80,.18);}
+.btn-red{background:rgba(248,81,73,.1);border-color:rgba(248,81,73,.3);color:var(--red-l);}
+.btn-blue{background:var(--blue-dim);border-color:rgba(88,166,255,.3);color:var(--blue-l);}
+
+/* LAYOUT */
+.page{max-width:1100px;margin:0 auto;padding:16px;}
+
+/* STATS BAR */
+.stats-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;}
+.stat-card{background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:12px 14px;}
+.stat-label{font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;}
+.stat-val{font-family:var(--mono);font-size:18px;font-weight:800;}
+.stat-sub{font-size:10px;color:var(--muted);margin-top:2px;}
+
+/* FILTERS */
+.filters{background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px;}
+.filter-grid{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.filter-grid select,.filter-grid input{background:var(--s2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 8px;font-size:11px;font-family:var(--font);}
+.filter-grid select:focus,.filter-grid input:focus{outline:none;border-color:var(--teal);}
+
+/* RECORDS GRID */
+.records-list{display:flex;flex-direction:column;gap:8px;}
+.record-card{background:var(--s1);border:1px solid var(--border);border-radius:10px;overflow:hidden;transition:border-color .15s;}
+.record-card:hover{border-color:var(--muted);}
+.record-header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;cursor:pointer;background:var(--s2);user-select:none;}
+.record-header:hover{background:rgba(255,255,255,.03);}
+.rec-left{display:flex;align-items:center;gap:10px;flex:1;min-width:0;}
+.rec-tipo{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;}
+.rec-tipo.zl{background:rgba(88,166,255,.15);}
+.rec-tipo.ext{background:rgba(240,134,50,.15);}
+.rec-info{min-width:0;}
+.rec-prov{font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.rec-meta{font-size:10px;color:var(--muted);margin-top:1px;display:flex;gap:8px;flex-wrap:wrap;}
+.rec-right{display:flex;align-items:center;gap:10px;flex-shrink:0;}
+.rec-monto{font-family:var(--mono);font-size:13px;font-weight:700;}
+.rec-status{font-size:9px;font-weight:700;padding:2px 7px;border-radius:4px;border:1px solid;}
+
+/* RECORD BODY */
+.record-body{display:none;padding:14px;border-top:1px solid var(--border);}
+.record-body.open{display:block;}
+.rec-section{margin-bottom:12px;}
+.rec-sec-title{font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border);}
+.field-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.field-grid.col2{grid-template-columns:repeat(2,1fr);}
+.field-grid.col1{grid-template-columns:1fr;}
+.field-item label{display:block;font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px;}
+.field-item input,.field-item select,.field-item textarea{
+  width:100%;background:var(--s2);border:1px solid var(--border);color:var(--text);
+  border-radius:6px;padding:6px 8px;font-size:11px;font-family:var(--font);
+}
+.field-item input:focus,.field-item select:focus,.field-item textarea:focus{outline:none;border-color:var(--teal);}
+.field-item input[type=date]{color-scheme:dark;}
+.field-item input.monto-field{font-family:var(--mono);font-weight:700;color:var(--green-l);border-color:rgba(63,185,80,.3);}
+
+/* TIMELINE */
+.timeline{display:flex;align-items:flex-start;gap:0;position:relative;padding:8px 0;}
+.tl-step{flex:1;text-align:center;position:relative;}
+.tl-step:not(:last-child)::after{content:'';position:absolute;top:11px;left:50%;width:100%;height:2px;background:var(--border);z-index:0;}
+.tl-dot{width:22px;height:22px;border-radius:50%;border:2px solid var(--border);background:var(--bg);display:flex;align-items:center;justify-content:center;margin:0 auto;position:relative;z-index:1;font-size:9px;}
+.tl-dot.done{background:var(--green);border-color:var(--green);}
+.tl-dot.active{background:var(--teal);border-color:var(--teal);box-shadow:0 0 0 3px rgba(45,212,191,.2);}
+.tl-dot.pending{background:var(--s2);border-color:var(--border);}
+.tl-label{font-size:8px;color:var(--muted);margin-top:4px;line-height:1.3;}
+.tl-date{font-size:8px;color:var(--teal);font-family:var(--mono);}
+
+/* DAYS COUNTER */
+.days-chip{display:inline-flex;align-items:center;gap:4px;background:var(--blue-dim);border:1px solid rgba(88,166,255,.25);border-radius:20px;padding:3px 9px;font-size:10px;font-weight:700;color:var(--blue-l);}
+.days-chip.warn{background:rgba(240,134,50,.12);border-color:rgba(240,134,50,.3);color:var(--orange-l);}
+.days-chip.late{background:rgba(248,81,73,.1);border-color:rgba(248,81,73,.3);color:var(--red-l);}
+.days-chip.done{background:var(--green-dim);border-color:rgba(63,185,80,.3);color:var(--green-l);}
+
+/* STATUS COLORS */
+.status-pendiente{color:#8b949e;border-color:rgba(139,148,158,.3);background:rgba(139,148,158,.08);}
+.status-transito{color:var(--blue-l);border-color:rgba(88,166,255,.3);background:var(--blue-dim);}
+.status-aduana{color:var(--orange-l);border-color:rgba(240,134,50,.3);background:var(--orange-dim);}
+.status-retenido{color:var(--red-l);border-color:rgba(248,81,73,.3);background:rgba(248,81,73,.1);}
+.status-recibido{color:var(--green-l);border-color:rgba(63,185,80,.3);background:var(--green-dim);}
+.status-programado{color:var(--purple);border-color:rgba(163,113,247,.3);background:rgba(163,113,247,.1);}
+.status-disponible{color:var(--teal);border-color:rgba(45,212,191,.3);background:rgba(45,212,191,.1);}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:9999;display:none;align-items:center;justify-content:center;padding:16px;}
+.modal-overlay.open{display:flex;}
+.modal{background:var(--s1);border:1px solid var(--border);border-radius:14px;max-width:680px;width:100%;max-height:90vh;overflow-y:auto;padding:20px;}
+.modal-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
+.modal-title{font-size:14px;font-weight:800;color:var(--text);}
+.modal-close{background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;line-height:1;}
+.modal-close:hover{color:var(--text);}
+
+/* TABS */
+.tab-btns{display:flex;gap:4px;margin-bottom:12px;background:var(--s2);border-radius:8px;padding:4px;}
+.tab-btn{flex:1;padding:7px;border:none;border-radius:6px;background:none;color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;}
+.tab-btn.active{background:var(--s1);color:var(--text);border:1px solid var(--border);}
+
+/* TOAST */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);z-index:99999;background:rgba(63,185,80,.97);color:#fff;border-radius:10px;padding:10px 20px;font-size:12px;font-weight:700;opacity:0;transition:all .3s;pointer-events:none;white-space:nowrap;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+/* EMPTY STATE */
+.empty{text-align:center;padding:48px 24px;color:var(--muted);}
+.empty-icon{font-size:40px;margin-bottom:12px;opacity:.5;}
+.empty-txt{font-size:13px;}
+
+/* TIPO BADGE */
+.tipo-badge{font-size:9px;font-weight:700;padding:1px 6px;border-radius:3px;}
+.tipo-zl{background:var(--blue-dim);color:var(--blue-l);border:1px solid rgba(88,166,255,.25);}
+.tipo-ext{background:var(--orange-dim);color:var(--orange-l);border:1px solid rgba(240,134,50,.25);}
+.tipo-sab{background:rgba(163,113,247,.1);color:var(--purple);border:1px solid rgba(163,113,247,.25);}
+.tipo-cif{background:rgba(248,209,34,.08);color:#f8d122;border:1px solid rgba(248,209,34,.2);}
+
+@media(max-width:680px){
+  .stats-bar{grid-template-columns:repeat(2,1fr);}
+  .field-grid{grid-template-columns:1fr 1fr;}
+  .field-grid.col2{grid-template-columns:1fr;}
+}
+@media(max-width:420px){
+  .stats-bar{grid-template-columns:1fr 1fr;}
+  .field-grid,.field-grid.col2{grid-template-columns:1fr;}
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="hdr">
+  <div class="hdr-brand">
+    <div class="hdr-brand-icon">🚢</div>
+    <div>
+      <div class="hdr-title">Mercancía en Tránsito</div>
+      <div class="hdr-sub">ZLC Panamá · Control logístico</div>
+    </div>
+  </div>
+  <div class="hdr-actions">
+    <button class="btn btn-teal" onclick="abrirModalNuevo()">+ Nuevo</button>
+    <span id="sb-badge" style="font-size:10px;font-weight:700;padding:4px 10px;border-radius:6px;background:rgba(139,148,158,.1);border:1px solid rgba(139,148,158,.25);color:var(--muted)">☁️ Conectando...</span>
+    <button class="btn" style="background:rgba(248,209,34,.1);border-color:rgba(248,209,34,.3);color:#f8d122" onclick="window.open('planeacion.html','_planeacion','width=1200,height=860,resizable=yes,scrollbars=yes')">📋 Planeación</button>
+    <button class="btn" onclick="document.getElementById('imp-ext').click()" title="Importar EXTERIOR_2026.xlsx">📥 Exterior</button>
+    <button class="btn" onclick="document.getElementById('imp-zl').click()" title="Importar CUADRO_ZONA_LIBRE.xlsx">📥 Zona Libre</button>
+    <button class="btn btn-blue" onclick="exportarExcel()">📊 Excel</button>
+    <div class="theme-btn">
+      <button class="btn">🎨 Tema ▾</button>
+      <div class="theme-menu" id="theme-menu-tr">
+        <div class="theme-opt" onclick="setTheme('')">⬛ Oscuro</div>
+        <div class="theme-opt" onclick="setTheme('t-light')">⬜ Claro</div>
+        <div class="theme-opt" onclick="setTheme('t-petroleum')">🛢 Petróleo</div>
+        <div class="theme-opt" onclick="setTheme('t-turquesa')">🩵 Turquesa</div>
+        <div class="theme-opt" onclick="setTheme('t-navy')">🌊 Marino</div>
+      </div>
+    </div>
+    <button class="btn" onclick="volverIndex()">← Volver</button>
+    <!-- Hidden file inputs -->
+    <input type="file" id="imp-ext" accept=".xlsx,.xls" style="display:none" onchange="importarExterior(this)">
+    <input type="file" id="imp-zl"  accept=".xlsx,.xls" style="display:none" onchange="importarZonaLibre(this)">
+  </div>
+</header>
+
+<div class="page">
+
+  <!-- STATS -->
+  <div class="stats-bar" id="stats-bar">
+    <div class="stat-card">
+      <div class="stat-label">Registros Activos</div>
+      <div class="stat-val" id="st-total" style="color:var(--teal)">0</div>
+      <div class="stat-sub">En seguimiento</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Valor CIF/FOB Total</div>
+      <div class="stat-val" id="st-valor" style="color:var(--green-l)">$0</div>
+      <div class="stat-sub">Mercancía en ruta</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">En Tránsito</div>
+      <div class="stat-val" id="st-transito" style="color:var(--blue-l)">0</div>
+      <div class="stat-sub">Embarcados</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Con Alertas</div>
+      <div class="stat-val" id="st-alertas" style="color:var(--orange-l)">0</div>
+      <div class="stat-sub">Retenidos / Demorados</div>
+    </div>
+  </div>
+
+  <!-- FILTERS -->
+  <div class="filters">
+    <div class="filter-grid">
+      <input type="text" id="f-buscar" placeholder="🔍 Buscar proveedor, depto, contenedor..." style="flex:1;min-width:180px" oninput="renderLista()">
+      <select id="f-tipo" onchange="renderLista()">
+        <option value="">Tipo: Todos</option>
+        <option value="ZL">Zona Libre</option>
+        <option value="EXT">Importación</option>
+      </select>
+      <select id="f-depto" onchange="renderLista()">
+        <option value="">Depto: Todos</option>
+      </select>
+      <select id="f-estatus" onchange="renderLista()">
+        <option value="">Estatus: Todos</option>
+        <option value="Pendiente">Pendiente</option>
+        <option value="En tránsito">En tránsito</option>
+        <option value="En aduana">En aduana</option>
+        <option value="Retenido">Retenido</option>
+        <option value="Disponible">Disponible</option>
+        <option value="Programado">Programado</option>
+        <option value="Recibido">Recibido</option>
+      </select>
+      <select id="f-comprador" onchange="renderLista()">
+        <option value="">Comprador: Todos</option>
+      </select>
+      <button class="btn" onclick="limpiarFiltros()">✕ Limpiar</button>
+    </div>
+  </div>
+
+  <!-- LIST -->
+  <div class="records-list" id="records-list">
+    <div class="empty"><div class="empty-icon">🚢</div><div class="empty-txt">No hay registros.<br>Presiona "+ Nuevo Registro" para comenzar.</div></div>
+  </div>
+
+</div>
+
+<!-- MODAL NUEVO/EDITAR -->
+<div class="modal-overlay" id="modal-overlay" onclick="if(event.target===this)cerrarModal()">
+<div class="modal" id="modal-content">
+  <div class="modal-hdr">
+    <div class="modal-title" id="modal-title">🚢 Nuevo Registro</div>
+    <button class="modal-close" onclick="cerrarModal()">×</button>
+  </div>
+
+  <!-- TIPO SELECTOR -->
+  <div class="tab-btns" id="tab-tipo">
+    <button class="tab-btn active" id="tb-zl" onclick="setTipo('ZL',this)">🏭 Zona Libre</button>
+    <button class="tab-btn" id="tb-ext" onclick="setTipo('EXT',this)">✈️ Importación / Exterior</button>
+  </div>
+
+  <!-- DATOS COMUNES -->
+  <div class="rec-section">
+    <div class="rec-sec-title">📋 Identificación</div>
+    <div class="field-grid">
+      <div class="field-item">
+        <label>Proveedor *</label>
+        <input type="text" id="m-proveedor" placeholder="Nombre del proveedor">
+      </div>
+      <div class="field-item">
+        <label>Departamento *</label>
+        <select id="m-depto"></select>
+      </div>
+      <div class="field-item">
+        <label>Comprador</label>
+        <select id="m-comprador"><option value="">— Sin asignar —</option></select>
+      </div>
+    </div>
+    <div class="field-grid" style="margin-top:8px">
+      <div class="field-item">
+        <label>País de Origen</label>
+        <select id="m-pais">
+          <option value="">— Selecciona —</option>
+          <option>China</option><option>EE.UU.</option><option>Italia</option><option>España</option>
+          <option>Francia</option><option>Turquía</option><option>India</option><option>Vietnam</option>
+          <option>Bangladés</option><option>México</option><option>Colombia</option><option>Brasil</option>
+          <option>Otro</option>
+        </select>
+      </div>
+      <div class="field-item">
+        <label>Ciudad / Puerto Origen</label>
+        <input type="text" id="m-origen" placeholder="Ej: Shanghái, Guangzhou">
+      </div>
+      <div class="field-item">
+        <label>Estatus de Carga</label>
+        <select id="m-estatus">
+          <option value="Pendiente">Pendiente</option>
+          <option value="En tránsito">En tránsito</option>
+          <option value="En aduana">En aduana</option>
+          <option value="Retenido">Retenido</option>
+          <option value="Disponible">Disponible</option>
+          <option value="Programado">Programado</option>
+          <option value="Recibido">Recibido</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- VALORES -->
+  <div class="rec-section">
+    <div class="rec-sec-title">💰 Valor e Identificación</div>
+    <div class="field-grid">
+      <div class="field-item">
+        <label>Valor CIF/FOB (USD) *</label>
+        <input type="number" id="m-valor" class="monto-field" placeholder="0.00" step="0.01" min="0">
+        <p style="font-size:9px;color:var(--muted);margin-top:3px">✏️ Editable — puede ser proforma</p>
+      </div>
+      <div class="field-item">
+        <label># Factura / Proforma</label>
+        <input type="text" id="m-factura" placeholder="Ej: INV-2026-001">
+      </div>
+      <div class="field-item">
+        <label>Observaciones</label>
+        <input type="text" id="m-obs" placeholder="Notas, alertas...">
+      </div>
+    </div>
+  </div>
+
+  <!-- CAMPOS IMPORTACIÓN -->
+  <div id="sec-importacion">
+    <div class="rec-section">
+      <div class="rec-sec-title">🚢 Logística — Importación</div>
+      <div class="field-grid col2">
+        <div class="field-item">
+          <label># Contenedor</label>
+          <input type="text" id="m-contenedor" placeholder="Ej: MAGU5407544">
+        </div>
+        <div class="field-item">
+          <label>Tipo de Equipo</label>
+          <select id="m-equipo">
+            <option value="">— Selecciona —</option>
+            <option>1×20</option><option>1×40</option><option>2×40</option>
+            <option>1×45</option><option>LCL</option><option>Aéreo</option>
+          </select>
+        </div>
+      </div>
+      <div class="field-grid col2" style="margin-top:8px">
+        <div class="field-item">
+          <label>Corredor / Agente</label>
+          <input type="text" id="m-corredor-ext" placeholder="Nombre del corredor">
+        </div>
+        <div class="field-item">
+          <label>Vía de Transporte</label>
+          <select id="m-via">
+            <option value="SEA">🚢 Marítimo</option>
+            <option value="AIR">✈️ Aéreo</option>
+            <option value="LAND">🚛 Terrestre</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="rec-section">
+      <div class="rec-sec-title">📅 Fechas — Importación</div>
+      <div class="field-grid" style="grid-template-columns:repeat(3,1fr)">
+        <div class="field-item">
+          <label>Despacho Puerto Origen</label>
+          <input type="date" id="m-f-despacho-ext">
+        </div>
+        <div class="field-item">
+          <label>ETA Puerto Destino</label>
+          <input type="date" id="m-f-eta">
+        </div>
+        <div class="field-item">
+          <label>Fecha Recibido</label>
+          <input type="date" id="m-f-recibido-ext">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CAMPOS ZONA LIBRE -->
+  <div id="sec-zonalib" style="display:none">
+    <div class="rec-section">
+      <div class="rec-sec-title">🏭 Logística — Zona Libre</div>
+      <div class="field-grid col2">
+        <div class="field-item">
+          <label>Escenario</label>
+          <select id="m-esc-zl">
+            <option value="">— Sin definir —</option>
+            <option value="Sababa">Sababa Imports</option>
+            <option value="CIF Express">CIF Express</option>
+            <option value="Liq. Aduanal">Liq. Aduanal</option>
+          </select>
+        </div>
+        <div class="field-item">
+          <label>Corredor</label>
+          <input type="text" id="m-corredor-zl" placeholder="Nombre del corredor">
+        </div>
+      </div>
+    </div>
+    <div class="rec-section">
+      <div class="rec-sec-title">📅 Fechas — Zona Libre</div>
+      <div class="field-grid" style="grid-template-columns:repeat(3,1fr)">
+        <div class="field-item">
+          <label>Fecha de Pedido</label>
+          <input type="date" id="m-f-pedido">
+        </div>
+        <div class="field-item">
+          <label>Aprobado por Comprador</label>
+          <input type="date" id="m-f-aprobado">
+        </div>
+        <div class="field-item">
+          <label>Entrega a Bodega (Corredor)</label>
+          <input type="date" id="m-f-bodega">
+        </div>
+        <div class="field-item">
+          <label>Despachado</label>
+          <input type="date" id="m-f-despachado">
+        </div>
+        <div class="field-item">
+          <label>Recibido en Destino</label>
+          <input type="date" id="m-f-recibido-zl">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ACTIONS -->
+  <div style="display:flex;gap:8px;margin-top:16px">
+    <button class="btn btn-green" id="btn-guardar-modal" onclick="guardarRegistro()" style="flex:2;padding:10px;font-size:12px">💾 Guardar Registro</button>
+    <button class="btn" onclick="cerrarModal()" style="flex:1;padding:10px;font-size:12px">Cancelar</button>
+  </div>
+</div>
+</div>
+
+<!-- IMPORT PREVIEW MODAL -->
+<div class="modal-overlay" id="import-overlay" onclick="if(event.target===this)cerrarImport()">
+<div class="modal" id="import-modal" style="max-width:780px">
+  <div class="modal-hdr">
+    <div class="modal-title" id="import-title">📥 Vista Previa — Importación</div>
+    <button class="modal-close" onclick="cerrarImport()">×</button>
+  </div>
+
+  <!-- IMPORT STATS -->
+  <div id="import-stats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px"></div>
+
+  <!-- NAME FIXES -->
+  <div id="import-fixes-wrap" style="display:none;margin-bottom:12px">
+    <div style="font-size:10px;font-weight:700;color:var(--orange-l);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">
+      ⚠️ Nombres corregidos automáticamente — confirma antes de importar
+    </div>
+    <div id="import-fixes" style="display:flex;flex-direction:column;gap:4px;max-height:120px;overflow-y:auto"></div>
+  </div>
+
+  <!-- PREVIEW TABLE -->
+  <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">
+    Vista previa — primeras filas a importar
+  </div>
+  <div id="import-preview" style="overflow-x:auto;max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;margin-bottom:14px">
+    <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:600px">
+      <thead id="import-thead"></thead>
+      <tbody id="import-tbody"></tbody>
+    </table>
+  </div>
+
+  <!-- DUPLICATE POLICY -->
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:10px;background:var(--s2);border-radius:8px;font-size:11px">
+    <span style="color:var(--muted)">Si el proveedor+departamento ya existe:</span>
+    <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
+      <input type="radio" name="dup-policy" value="update" checked> Actualizar datos
+    </label>
+    <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
+      <input type="radio" name="dup-policy" value="skip"> Ignorar duplicados
+    </label>
+    <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
+      <input type="radio" name="dup-policy" value="add"> Agregar igualmente
+    </label>
+  </div>
+
+  <div style="display:flex;gap:8px">
+    <button class="btn btn-green" id="btn-confirm-import" onclick="confirmarImport()" style="flex:2;padding:10px;font-size:12px">✅ Confirmar Importación</button>
+    <button class="btn" onclick="cerrarImport()" style="flex:1;padding:10px;font-size:12px">Cancelar</button>
+  </div>
+</div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════
+// DATA — LocalStorage persistence
+// ═══════════════════════════════════════════════
+var STORAGE_KEY = '_transito_v1';
+var DEPTOS_KEY  = '_sim_deptos';
+var COMPRADORES_KEY = '_transito_compradores';
+var RUBROS_KEY = '_rubros_gasto';
+
+var data = [];       // registros de tránsito
+var compradores = []; // lista de compradores
+var _editIdx = null;  // índice en edición
+var _tipoActual = 'ZL';
+
+function loadData(){
+  try{ data = JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]'); } catch(e){ data=[]; }
+  try{ compradores = JSON.parse(localStorage.getItem(COMPRADORES_KEY)||'[]'); } catch(e){ compradores=[]; }
+}
+function saveData(){
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch(e){}
+  // Notify parent window (index.html) if open
+  if(window.opener && !window.opener.closed){
+    try{ window.opener._transitoData = data; } catch(e){}
+  }
+}
+function saveCompradores(){
+  try{ localStorage.setItem(COMPRADORES_KEY, JSON.stringify(compradores)); } catch(e){}
+}
+
+// ═══════════════════════════════════════════════
+// DEPTOS — read from index.html config or defaults
+// ═══════════════════════════════════════════════
+function getDeptos(){
+  try{
+    var saved = localStorage.getItem(DEPTOS_KEY);
+    if(saved){ var arr=JSON.parse(saved); if(arr&&arr.length) return arr.map(function(d){return d.nombre||d;}); }
+  }catch(e){}
+  return ['HOGAR','JUGUETERÍA','DEPTO. LOTES','ROPA INTERIOR - DAMAS','NIÑOS','NIÑAS','CABALLEROS','DEPORTES',
+          'BISUTERÍA','ACC. CABALLERO','CARTERAS','NAVIDAD','FERRETERÍA','SUMINISTRO','REGALÍAS','OTRO'];
+}
+
+// ═══════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════
+function init(){
+  loadData();
+  poblarSelects();
+  renderLista();
+  renderStats();
+}
+
+function poblarSelects(){
+  var deptos = getDeptos();
+  // Filter dropdowns
+  var fDepto = document.getElementById('f-depto');
+  fDepto.innerHTML = '<option value="">Depto: Todos</option>';
+  deptos.forEach(function(d){ fDepto.innerHTML += '<option>'+d+'</option>'; });
+
+  // Modal depto
+  var mDepto = document.getElementById('m-depto');
+  mDepto.innerHTML = '<option value="">— Selecciona —</option>';
+  deptos.forEach(function(d){ mDepto.innerHTML += '<option>'+d+'</option>'; });
+
+  // Compradores
+  var fcmp = document.getElementById('f-comprador');
+  var mcmp = document.getElementById('m-comprador');
+  fcmp.innerHTML = '<option value="">Comprador: Todos</option>';
+  mcmp.innerHTML = '<option value="">— Sin asignar —</option>';
+  compradores.forEach(function(c){
+    fcmp.innerHTML += '<option>'+c+'</option>';
+    mcmp.innerHTML += '<option>'+c+'</option>';
+  });
+}
+
+// ═══════════════════════════════════════════════
+// TIPO SELECTOR
+// ═══════════════════════════════════════════════
+function setTipo(tipo, btn){
+  _tipoActual = tipo;
+  document.querySelectorAll('.tab-btn').forEach(function(b){ b.classList.remove('active'); });
+  btn.classList.add('active');
+  document.getElementById('sec-importacion').style.display = tipo==='EXT' ? 'block' : 'none';
+  document.getElementById('sec-zonalib').style.display     = tipo==='ZL'  ? 'block' : 'none';
+}
+
+// ═══════════════════════════════════════════════
+// MODAL
+// ═══════════════════════════════════════════════
+function abrirModalNuevo(){
+  _editIdx = null;
+  document.getElementById('modal-title').textContent = '🚢 Nuevo Registro en Tránsito';
+  limpiarModal();
+  setTipo('ZL', document.getElementById('tb-zl'));
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function abrirModalEditar(idx){
+  _editIdx = idx;
+  var r = data[idx];
+  if(!r) return;
+  document.getElementById('modal-title').textContent = '✏️ Editar Registro';
+  limpiarModal();
+  // Tipo
+  if(r.tipo==='EXT'){
+    setTipo('EXT', document.getElementById('tb-ext'));
+  } else {
+    setTipo('ZL', document.getElementById('tb-zl'));
+  }
+  // Fill fields
+  sv('m-proveedor', r.proveedor||'');
+  sv('m-depto', r.depto||'');
+  sv('m-comprador', r.comprador||'');
+  sv('m-pais', r.pais||'');
+  sv('m-origen', r.origen||'');
+  sv('m-estatus', r.estatus||'Pendiente');
+  sv('m-valor', r.valor||'');
+  sv('m-factura', r.factura||'');
+  sv('m-obs', r.obs||'');
+  // EXT
+  sv('m-contenedor', r.contenedor||'');
+  sv('m-equipo', r.equipo||'');
+  sv('m-corredor-ext', r.corredorExt||'');
+  sv('m-via', r.via||'SEA');
+  sv('m-f-despacho-ext', r.fDespachoExt||'');
+  sv('m-f-eta', r.fEta||'');
+  sv('m-f-recibido-ext', r.fRecibidoExt||'');
+  // ZL
+  sv('m-esc-zl', r.escZl||'');
+  sv('m-corredor-zl', r.corredorZl||'');
+  sv('m-f-pedido', r.fPedido||'');
+  sv('m-f-aprobado', r.fAprobado||'');
+  sv('m-f-bodega', r.fBodega||'');
+  sv('m-f-despachado', r.fDespachado||'');
+  sv('m-f-recibido-zl', r.fRecibidoZl||'');
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function cerrarModal(){
+  document.getElementById('modal-overlay').classList.remove('open');
+}
+
+function limpiarModal(){
+  ['m-proveedor','m-origen','m-valor','m-factura','m-obs','m-contenedor','m-corredor-ext','m-corredor-zl',
+   'm-f-despacho-ext','m-f-eta','m-f-recibido-ext','m-f-pedido','m-f-aprobado','m-f-bodega','m-f-despachado','m-f-recibido-zl']
+  .forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
+  ['m-depto','m-comprador','m-pais','m-estatus','m-equipo','m-via','m-esc-zl'].forEach(function(id){
+    var el=document.getElementById(id); if(el){ el.selectedIndex=0; }
+  });
+}
+
+function sv(id, val){ var el=document.getElementById(id); if(el) el.value=val||''; }
+function gv(id){ var el=document.getElementById(id); return el?el.value.trim():''; }
+
+// ═══════════════════════════════════════════════
+// GUARDAR
+// ═══════════════════════════════════════════════
+function guardarRegistro(){
+  var prov = gv('m-proveedor');
+  var depto = gv('m-depto');
+  var valor = parseFloat(gv('m-valor'))||0;
+  if(!prov){ showToast('⚠️ Ingresa el nombre del proveedor','orange'); return; }
+  if(!depto){ showToast('⚠️ Selecciona el departamento','orange'); return; }
+
+  var registro = {
+    id: _editIdx!==null ? data[_editIdx].id : Date.now(),
+    tipo: _tipoActual,
+    proveedor: prov,
+    depto: depto,
+    comprador: gv('m-comprador'),
+    pais: gv('m-pais'),
+    origen: gv('m-origen'),
+    estatus: gv('m-estatus')||'Pendiente',
+    valor: valor,
+    factura: gv('m-factura'),
+    obs: gv('m-obs'),
+    ts: Date.now(),
+    // EXT
+    contenedor: gv('m-contenedor'),
+    equipo: gv('m-equipo'),
+    corredorExt: gv('m-corredor-ext'),
+    via: gv('m-via')||'SEA',
+    fDespachoExt: gv('m-f-despacho-ext'),
+    fEta: gv('m-f-eta'),
+    fRecibidoExt: gv('m-f-recibido-ext'),
+    // ZL
+    escZl: gv('m-esc-zl'),
+    corredorZl: gv('m-corredor-zl'),
+    fPedido: gv('m-f-pedido'),
+    fAprobado: gv('m-f-aprobado'),
+    fBodega: gv('m-f-bodega'),
+    fDespachado: gv('m-f-despachado'),
+    fRecibidoZl: gv('m-f-recibido-zl'),
+  };
+
+  if(_editIdx !== null){ data[_editIdx] = registro; }
+  else { data.unshift(registro); }
+
+  saveData();
+  cerrarModal();
+  renderLista();
+  renderStats();
+  showToast(_editIdx!==null ? '✅ Registro actualizado' : '✅ Registro guardado');
+}
+
+// ═══════════════════════════════════════════════
+// ELIMINAR
+// ═══════════════════════════════════════════════
+function eliminar(idx){
+  if(!confirm('¿Eliminar este registro?')) return;
+  data.splice(idx,1);
+  saveData();
+  renderLista();
+  renderStats();
+  showToast('🗑 Registro eliminado','red');
+}
+
+// ═══════════════════════════════════════════════
+// DÍAS TRANSCURRIDOS
+// ═══════════════════════════════════════════════
+function diasDesde(fecha){
+  if(!fecha) return null;
+  var hoy = new Date(); hoy.setHours(0,0,0,0);
+  var f = new Date(fecha+'T00:00:00');
+  return Math.round((hoy-f)/(1000*60*60*24));
+}
+function diasHasta(fecha){
+  if(!fecha) return null;
+  var hoy = new Date(); hoy.setHours(0,0,0,0);
+  var f = new Date(fecha+'T00:00:00');
+  return Math.round((f-hoy)/(1000*60*60*24));
+}
+function chipDias(etiqueta, dias, invertido){
+  if(dias===null) return '';
+  var cls, txt;
+  if(invertido){ // tiempo restante (ETA)
+    if(dias<0){ cls='late'; txt=Math.abs(dias)+'d atrasado'; }
+    else if(dias<=5){ cls='warn'; txt=dias+'d para ETA'; }
+    else{ cls=''; txt=dias+'d para ETA'; }
+  } else {
+    if(dias>30){ cls='late'; txt=dias+'d en tránsito'; }
+    else if(dias>14){ cls='warn'; txt=dias+'d en tránsito'; }
+    else{ cls=''; txt=dias+'d en tránsito'; }
+  }
+  return '<span class="days-chip '+cls+'">⏱ '+txt+'</span>';
+}
+
+// ═══════════════════════════════════════════════
+// TIMELINE
+// ═══════════════════════════════════════════════
+function buildTimelineEXT(r){
+  var pasos = [
+    {lbl:'Pedido',        fecha:'',              done:true},
+    {lbl:'Despacho',      fecha:r.fDespachoExt,  done:!!r.fDespachoExt},
+    {lbl:'En tránsito',   fecha:'',              done:r.estatus==='En tránsito'||r.estatus==='En aduana'||r.estatus==='Recibido'},
+    {lbl:'ETA destino',   fecha:r.fEta,          done:!!r.fEta&&diasDesde(r.fEta)>=0},
+    {lbl:'Recibido',      fecha:r.fRecibidoExt,  done:!!r.fRecibidoExt},
+  ];
+  var activo = pasos.reduce(function(a,p,i){ return p.done?i:a; },0);
+  return buildTimeline(pasos, activo);
+}
+function buildTimelineZL(r){
+  var pasos = [
+    {lbl:'Pedido',        fecha:r.fPedido,      done:!!r.fPedido},
+    {lbl:'Aprobado',      fecha:r.fAprobado,    done:!!r.fAprobado},
+    {lbl:'A bodega',      fecha:r.fBodega,      done:!!r.fBodega},
+    {lbl:'Despachado',    fecha:r.fDespachado,  done:!!r.fDespachado},
+    {lbl:'Recibido',      fecha:r.fRecibidoZl,  done:!!r.fRecibidoZl},
+  ];
+  var activo = pasos.reduce(function(a,p,i){ return p.done?i:a; },0);
+  return buildTimeline(pasos, activo);
+}
+function buildTimeline(pasos, activo){
+  return '<div class="timeline">'
+    + pasos.map(function(p,i){
+        var cls = p.done ? (i===activo&&!pasos[i+1]?.done?'active':'done') : 'pending';
+        return '<div class="tl-step">'
+          +'<div class="tl-dot '+cls+'">'+(p.done?'✓':'')+'</div>'
+          +'<div class="tl-label">'+p.lbl+'</div>'
+          +(p.fecha?'<div class="tl-date">'+p.fecha.slice(5)+'</div>':'')
+          +'</div>';
+      }).join('')
+    +'</div>';
+}
+
+// ═══════════════════════════════════════════════
+// STATUS STYLE
+// ═══════════════════════════════════════════════
+var STATUS_MAP = {
+  'Pendiente':'status-pendiente','En tránsito':'status-transito','En aduana':'status-aduana',
+  'Retenido':'status-retenido','Recibido':'status-recibido','Programado':'status-programado',
+  'Disponible':'status-disponible'
+};
+function statusCls(s){ return STATUS_MAP[s]||'status-pendiente'; }
+
+// ═══════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════
+function getFiltrados(){
+  var qB=(document.getElementById('f-buscar')?.value||'').toLowerCase().trim();
+  var qT=document.getElementById('f-tipo')?.value||'';
+  var qD=document.getElementById('f-depto')?.value||'';
+  var qE=document.getElementById('f-estatus')?.value||'';
+  var qC=document.getElementById('f-comprador')?.value||'';
+  return data.filter(function(r){
+    if(qT && r.tipo!==qT) return false;
+    if(qD && r.depto!==qD) return false;
+    if(qE && r.estatus!==qE) return false;
+    if(qC && r.comprador!==qC) return false;
+    if(qB){
+      var haystack=[r.proveedor,r.depto,r.contenedor,r.factura,r.comprador,r.pais,r.origen,r.obs].join(' ').toLowerCase();
+      if(!haystack.includes(qB)) return false;
+    }
+    return true;
+  });
+}
+
+function renderLista(){
+  var f = getFiltrados();
+  var el = document.getElementById('records-list');
+  if(!f.length){
+    el.innerHTML='<div class="empty"><div class="empty-icon">🔍</div><div class="empty-txt">Sin resultados con los filtros actuales.</div></div>';
+    return;
+  }
+  el.innerHTML = f.map(function(r){
+    var idx = data.indexOf(r);
+    var tipoCls = r.tipo==='EXT'?'ext':'zl';
+    var tipoIcon = r.tipo==='EXT'?'✈️':'🏭';
+    var tipoBadge = r.tipo==='EXT'
+      ?'<span class="tipo-badge tipo-ext">IMP</span>'
+      :'<span class="tipo-badge tipo-zl">ZL</span>';
+    var escBadge = r.escZl?'<span class="tipo-badge '+(r.escZl==='Sababa'?'tipo-sab':'tipo-cif')+'">'+r.escZl+'</span>':'';
+    var statusCl = statusCls(r.estatus);
+    var val = r.valor>0?'$'+Number(r.valor).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'—';
+
+    // Days chip
+    var dChip = '';
+    if(r.tipo==='EXT' && r.fDespachoExt && r.estatus!=='Recibido'){
+      dChip = chipDias('', diasDesde(r.fDespachoExt), false);
+    } else if(r.tipo==='EXT' && r.fEta && r.estatus!=='Recibido'){
+      dChip = chipDias('', diasHasta(r.fEta), true);
+    } else if(r.tipo==='ZL' && r.fPedido && r.estatus!=='Recibido'){
+      dChip = chipDias('', diasDesde(r.fPedido), false);
+    }
+
+    // Timeline
+    var timeline = r.tipo==='EXT' ? buildTimelineEXT(r) : buildTimelineZL(r);
+
+    // Extra info
+    var extraMeta = [];
+    if(r.tipo==='EXT'){
+      if(r.contenedor) extraMeta.push('📦 '+r.contenedor);
+      if(r.equipo) extraMeta.push(r.equipo);
+      if(r.fEta) extraMeta.push('ETA: '+r.fEta);
+      if(r.corredorExt) extraMeta.push('✉ '+r.corredorExt);
+    } else {
+      if(r.fPedido) extraMeta.push('Pedido: '+r.fPedido.slice(5));
+      if(r.fDespachado) extraMeta.push('Desp: '+r.fDespachado.slice(5));
+      if(r.corredorZl) extraMeta.push('✉ '+r.corredorZl);
+    }
+    if(r.comprador) extraMeta.push('👤 '+r.comprador);
+    if(r.pais) extraMeta.push('🌍 '+r.pais);
+
+    var bodyId = '_rec_body_'+idx;
+    var chevId = '_rec_chev_'+idx;
+
+    return '<div class="record-card">'
+      // HEADER
+      +'<div class="record-header" onclick="toggleRec(\''+bodyId+'\',\''+chevId+'\')">'
+        +'<div class="rec-left">'
+          +'<div class="rec-tipo '+tipoCls+'">'+tipoIcon+'</div>'
+          +'<div class="rec-info">'
+            +'<div class="rec-prov">'+r.proveedor+' <span style="font-weight:400;color:var(--muted)">— '+r.depto+'</span> '+tipoBadge+escBadge+'</div>'
+            +'<div class="rec-meta">'
+              +extraMeta.map(function(m){return'<span>'+m+'</span>';}).join('')
+              +(dChip?'<span>'+dChip+'</span>':'')
+            +'</div>'
+          +'</div>'
+        +'</div>'
+        +'<div class="rec-right">'
+          +'<div class="rec-monto" style="color:var(--green-l)">'+val+'</div>'
+          +'<div class="rec-status '+statusCl+'">'+r.estatus+'</div>'
+          +'<span id="'+chevId+'" style="color:var(--muted);font-size:11px">▶</span>'
+        +'</div>'
+      +'</div>'
+      // BODY
+      +'<div class="record-body" id="'+bodyId+'">'
+        // Timeline
+        +'<div class="rec-section">'
+          +'<div class="rec-sec-title">📍 Control de Tiempos</div>'
+          +timeline
+        +'</div>'
+        // Quick edit row
+        +'<div class="rec-section">'
+          +'<div class="rec-sec-title">⚡ Acciones Rápidas</div>'
+          +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
+            +'<select onchange="cambiarEstatus('+idx+',this.value)" style="background:var(--s2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 8px;font-size:11px">'
+              +'<option value="">— Cambiar estatus —</option>'
+              +'<option>Pendiente</option><option>En tránsito</option><option>En aduana</option>'
+              +'<option>Retenido</option><option>Disponible</option><option>Programado</option><option>Recibido</option>'
+            +'</select>'
+            +'<div style="display:flex;gap:4px;align-items:center">'
+              +'<span style="font-size:10px;color:var(--muted)">Valor:</span>'
+              +'<input type="number" step="0.01" value="'+(r.valor||0)+'" onchange="cambiarValor('+idx+',this.value)" style="width:110px;background:var(--s2);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:6px;padding:5px 8px;font-size:11px;font-family:var(--mono);font-weight:700">'
+            +'</div>'
+            +(r.obs?'<span style="font-size:10px;color:var(--orange-l)">⚠️ '+r.obs+'</span>':'')
+          +'</div>'
+        +'</div>'
+        // Buttons
+        +'<div style="display:flex;gap:6px">'
+          +'<button class="btn btn-blue" onclick="abrirModalEditar('+idx+')" style="font-size:11px">✏️ Editar</button>'
+          +'<button class="btn btn-red" onclick="eliminar('+idx+')" style="font-size:11px">🗑 Eliminar</button>'
+        +'</div>'
+      +'</div>'
+    +'</div>';
+  }).join('');
+}
+
+function toggleRec(bodyId, chevId){
+  var b=document.getElementById(bodyId);
+  var c=document.getElementById(chevId);
+  if(!b) return;
+  var open = b.classList.contains('open');
+  b.classList.toggle('open',!open);
+  if(c) c.textContent = open?'▶':'▼';
+}
+
+function cambiarEstatus(idx, val){
+  if(!val) return;
+  data[idx].estatus = val;
+  saveData(); renderLista(); renderStats();
+  showToast('✅ Estatus actualizado');
+}
+
+// ═══════════════════════════════════════════════
+// STATS
+// ═══════════════════════════════════════════════
+function renderStats(){
+  var activos = data.filter(function(r){ return r.estatus!=='Recibido'; });
+  var totalValor = activos.reduce(function(s,r){ return s+(r.valor||0);},0);
+  var enTransito = activos.filter(function(r){ return r.estatus==='En tránsito'; }).length;
+  var alertas = activos.filter(function(r){ return r.estatus==='Retenido'||_esDemorado(r); }).length;
+  document.getElementById('st-total').textContent = activos.length;
+  document.getElementById('st-valor').textContent = totalValor>=1000?'$'+(totalValor/1000).toFixed(1)+'k':'$'+totalValor.toFixed(0);
+  document.getElementById('st-transito').textContent = enTransito;
+  document.getElementById('st-alertas').textContent = alertas;
+}
+function _esDemorado(r){
+  if(r.tipo==='EXT' && r.fEta){ return diasHasta(r.fEta)<0; }
+  if(r.tipo==='ZL' && r.fPedido){ return diasDesde(r.fPedido)>30; }
+  return false;
+}
+
+// ═══════════════════════════════════════════════
+// FILTROS
+// ═══════════════════════════════════════════════
+function limpiarFiltros(){
+  ['f-buscar','f-tipo','f-depto','f-estatus','f-comprador'].forEach(function(id){
+    var el=document.getElementById(id); if(el) el.value='';
+  });
+  renderLista();
+}
+
+// ═══════════════════════════════════════════════
+// EXPORT EXCEL
+// ═══════════════════════════════════════════════
+function exportarExcel(){
+  if(!data.length){ showToast('Sin datos para exportar','orange'); return; }
+  var header=['Tipo','Proveedor','Depto','Comprador','País','Origen','Estatus','Valor FOB/CIF','Factura','Contenedor','Equipo','Vía',
+    'F.Despacho Ext','ETA','F.Recibido Ext','Escenario ZL','F.Pedido','F.Aprobado','F.Bodega','F.Despachado','F.Recibido ZL','Corredor','Observaciones'];
+  var rows = data.map(function(r){
+    return [r.tipo,r.proveedor,r.depto,r.comprador,r.pais,r.origen,r.estatus,r.valor,r.factura,
+      r.contenedor,r.equipo,r.via,r.fDespachoExt,r.fEta,r.fRecibidoExt,
+      r.escZl,r.fPedido,r.fAprobado,r.fBodega,r.fDespachado,r.fRecibidoZl,
+      r.tipo==='EXT'?r.corredorExt:r.corredorZl,r.obs];
+  });
+  var csv=[header].concat(rows).map(function(row){
+    return row.map(function(c){ return '"'+(String(c||'').replace(/"/g,'""'))+'"'; }).join(',');
+  }).join('\r\n');
+  var a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);
+  a.download='MercanciaEnTransito_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click();
+  showToast('📊 Exportado correctamente');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// IMPORT ENGINE — EXTERIOR 2026 & ZONA LIBRE
+// ═══════════════════════════════════════════════════════════════
+
+// ── Estatus que se EXCLUYEN (mercancía ya recibida) ──
+var EXCLUIR_EXT = new Set([
+  'RECIBIDO EN CDF','RECIBIDO EN WESTLAND'
+]);
+var EXCLUIR_ZL = new Set([
+  'Recibido en Bodega del CDF','Recibido en Westland'
+]);
+
+// ── Mapeo de estatus EXTERIOR → estatus interno ──
+var MAP_EST_EXT = {
+  'EN TRANSITO MARÍTIMO':           'En tránsito',
+  'EN COORDINACIÓN DE BOOKING':     'Pendiente',
+  'INSTRUCCIONES ENVIADAS AL PROVEEDOR PARA ENTREGAR': 'Pendiente',
+  'PENDIENTE DE PAGO':              'Pendiente',
+  'NUEVA SOLICITUD':                'Pendiente',
+  'EN COORDINACIÓN DE ENTREGA/ RECOGIDA': 'Programado',
+  'PAGADO / EN COORDINACIÓN':       'Programado',
+  'RECIBIDA LA CARGA EN CONSOLIDADOR/ ESPERANDO MÁS CARGA': 'En tránsito',
+  'EN PROCESO. LA CARGA NO ESTÁ LISTA': 'Pendiente',
+  'EN ESPERA DE CONFIRMACION DE LLEGADA': 'En tránsito',
+  'DISPONIBLE EN RECINTO / PROGRAMADO': 'Disponible',
+  'PROGRAMADO PARA ENTREGA CDF':    'Programado',
+  'PROGRAMADO PARA ENTREGA WESTLAND':'Programado',
+  'EN TRÁMITE':                     'En tránsito',
+  'PENDIENTE FACTURA':              'Pendiente',
+  'BACK ORDER':                     'Pendiente',
+  'RETENIDO INSPECCIÓN UNITEC':     'Retenido',
+  'RETENIDO POR CORRECCIÓN':        'Retenido',
+  'RETENIDO POR PRICE TRANSFER -USA -INSPECCION': 'Retenido',
+  'EN COORDINACIÓN DE ENTREGA/ RECOGIDA': 'Programado',
+  'FACTURA SOLICITADA':             'Pendiente',
+  'CAMBIO DE FECHA / ROLL OVER':    'Pendiente',
+};
+
+// ── Mapeo de estatus ZL → estatus interno ──
+var MAP_EST_ZL = {
+  'Pendiente por Aprobación (Comprador)': 'Pendiente',
+  'Aprobado por el Comprador':            'Pendiente',
+  'Aprobado por el Gerente de Compras':   'Programado',
+  'Facturado por el Proveedor':           'Programado',
+  'En Bodega del Suplidor':               'Programado',
+  'En proceso de Trámites':               'En tránsito',
+  'Cancelado por el Comprador':           'Retenido',
+  'Pedido Futuro':                        'Pendiente',
+};
+
+// ── Pending import state ──
+var _pendingImport = [];
+var _importTipo    = '';
+
+// ── Date formatter ──
+function fmtDate(v){
+  if(!v) return '';
+  if(v instanceof Date) return v.toISOString().slice(0,10);
+  if(typeof v === 'number'){
+    // Excel serial date
+    var d = new Date(Math.round((v - 25569)*86400*1000));
+    return d.toISOString().slice(0,10);
+  }
+  if(typeof v === 'string' && v.match(/^\d{4}-\d{2}-\d{2}/)) return v.slice(0,10);
+  return String(v);
+}
+
+// ── Normalize provider name (trim + collapse spaces) ──
+function normProv(s){
+  if(!s) return '';
+  return String(s).trim().replace(/\s+/g,' ').replace(/\s*\d+X\d+\s*/gi,' ').trim();
+}
+
+// ── Simple fuzzy name matcher against known providers ──
+function fuzzyMatch(name, candidates){
+  var n = name.toUpperCase().replace(/[^A-Z0-9]/g,' ').trim();
+  var best = null, bestScore = 0;
+  candidates.forEach(function(c){
+    var cc = c.toUpperCase().replace(/[^A-Z0-9]/g,' ').trim();
+    // Exact
+    if(cc === n) { bestScore = 1; best = c; return; }
+    // One contains the other
+    var score = 0;
+    if(cc.includes(n) || n.includes(cc)){
+      score = Math.min(n.length,cc.length)/Math.max(n.length,cc.length);
+    } else {
+      // Token overlap
+      var tokA = n.split(' ').filter(Boolean);
+      var tokB = cc.split(' ').filter(Boolean);
+      var matches = tokA.filter(function(t){ return tokB.indexOf(t)!==-1; }).length;
+      score = matches > 0 ? (matches*2)/(tokA.length+tokB.length) : 0;
+    }
+    if(score > bestScore && score >= 0.6){ bestScore = score; best = c; }
+  });
+  return best && bestScore < 1 ? {original:name, suggested:best, score:bestScore} : null;
+}
+
+// ── Get known provider names from existing data ──
+function getKnownProviders(){
+  var names = new Set();
+  data.forEach(function(r){ if(r.proveedor) names.add(r.proveedor); });
+  // Also from tendData if available via opener
+  try{
+    var td = window.opener ? window.opener.tendData : null;
+    if(td) td.forEach(function(d){
+      var lines = (d.snap&&d.snap.invLines)||d.invLines||[];
+      lines.forEach(function(l){ if(l.prov) names.add(l.prov); });
+    });
+  }catch(e){}
+  return Array.from(names);
+}
+
+// ─────────────────────────────────────────────
+// IMPORTAR EXTERIOR
+// ─────────────────────────────────────────────
+function importarExterior(input){
+  var file = input.files[0]; input.value='';
+  if(!file){ return; }
+  var reader = new FileReader();
+  reader.onload = function(e){
+    try{
+      var wb = XLSX.read(e.target.result, {type:'array', cellDates:true});
+      var ws = wb.Sheets[wb.SheetNames[0]];
+      var rows = XLSX.utils.sheet_to_json(ws, {raw:false, defval:''});
+
+      var registros = [];
+      var conocidos = getKnownProviders();
+      var fixes = [];
+
+      rows.forEach(function(r){
+        var estatus = (r['RECIBIDO EN CDF']||'').toString().trim().toUpperCase();
+        // Exclude received
+        if(EXCLUIR_EXT.has(estatus)) return;
+        // Skip viajes (text rows that look like trip notes)
+        if(estatus.startsWith('VIAJE ')) return;
+
+        var provRaw = normProv(r['PROVEEDOR']);
+        if(!provRaw) return;
+
+        // Fuzzy name fix
+        var fix = fuzzyMatch(provRaw, conocidos);
+        if(fix){ fixes.push(fix); provRaw = fix.suggested; }
+
+        var estatusInterno = MAP_EST_EXT[r['RECIBIDO EN CDF']?.toString().trim()] || 'En tránsito';
+
+        registros.push({
+          tipo: 'EXT',
+          proveedor: provRaw,
+          depto: (r['DEPARTAMENTO']||'').toString().trim().toUpperCase(),
+          comprador: r['COMPRADOR']||'',
+          pais: (r['ORIGEN']||'').toString().split('-')[0].trim(),
+          origen: r['ORIGEN']||'',
+          estatus: estatusInterno,
+          estatusOriginal: r['RECIBIDO EN CDF']||'',
+          valor: parseFloat((r['VALOR FOB']||'').toString().replace(/[^0-9.]/g,''))||0,
+          valorHomologado: parseFloat((r['VALOR HOMOLOGADO']||'').toString().replace(/[^0-9.]/g,''))||0,
+          factura: r['# FACTURA']||'',
+          contenedor: r['# CONTENEDOR']||'',
+          equipo: '',
+          corredorExt: r['AGENTE']||'',
+          via: 'SEA',
+          fDespachoExt: fmtDate(r['ETD']||r['FECHA CONSOLIDADOR']||''),
+          fEta: fmtDate(r['ETA']||''),
+          fRecibidoExt: '',
+          obs: r['RESULTADO']||r['VIAJES']||'',
+          _fuente: 'EXTERIOR',
+          id: Date.now() + Math.random(),
+          ts: Date.now(),
+        });
+      });
+
+      mostrarPreview('EXT', registros, fixes, 'EXTERIOR 2026');
+    } catch(err){
+      showToast('❌ Error leyendo archivo: '+err.message,'red');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ─────────────────────────────────────────────
+// IMPORTAR ZONA LIBRE
+// ─────────────────────────────────────────────
+function importarZonaLibre(input){
+  var file = input.files[0]; input.value='';
+  if(!file){ return; }
+  var reader = new FileReader();
+  reader.onload = function(e){
+    try{
+      var wb = XLSX.read(e.target.result, {type:'array', cellDates:true});
+      // Use "Sababa ZL" sheet (primary ZL data)
+      var sheetName = wb.SheetNames.find(function(s){
+        return s.toLowerCase().includes('sababa zl') || s.toLowerCase().includes('zona libre');
+      }) || wb.SheetNames[0];
+
+      var ws = wb.Sheets[sheetName];
+      // Header is row 4 — skip first 3 rows
+      var rows = XLSX.utils.sheet_to_json(ws, {raw:false, defval:'', range:3});
+
+      var registros = [];
+      var conocidos = getKnownProviders();
+      var fixes = [];
+
+      rows.forEach(function(r){
+        var estatus = (r['Estatus']||'').toString().trim();
+        // Exclude received
+        if(EXCLUIR_ZL.has(estatus)) return;
+        if(estatus.toLowerCase().includes('recibido')) return;
+
+        var provRaw = normProv(r['Proveedores']);
+        if(!provRaw) return;
+
+        // Fuzzy name fix
+        var fix = fuzzyMatch(provRaw, conocidos);
+        if(fix){ fixes.push(fix); provRaw = fix.suggested; }
+
+        var estatusInterno = MAP_EST_ZL[estatus] || 'Pendiente';
+
+        registros.push({
+          tipo: 'ZL',
+          proveedor: provRaw,
+          depto: (r['Departamento']||'').toString().trim().toUpperCase(),
+          comprador: r['Comprador']||'',
+          pais: 'Zona Libre',
+          origen: 'Zona Libre de Colón',
+          estatus: estatusInterno,
+          estatusOriginal: estatus,
+          valor: parseFloat((r['Monto Inicial']||'0').toString().replace(/[^0-9.]/g,''))||0,
+          valorFinal: parseFloat((r['Monto Final']||'0').toString().replace(/[^0-9.]/g,''))||0,
+          factura: r['# Factura']||'',
+          contenedor: '',
+          equipo: 'Camión',
+          escZl: r['Tipo']&&r['Tipo'].toString().includes('Exterior') ? 'CIF Express' : 'Sababa',
+          corredorZl: '',
+          fPedido: fmtDate(r['Fecha de Pedido']||''),
+          fAprobado: fmtDate(r['Fecha de aprobado Comprador']||''),
+          fBodega: fmtDate(r['Fecha de Entrega en Bodega Sababa']||''),
+          fDespachado: '',
+          fRecibidoZl: fmtDate(r['Fecha de recibido en CDF']||''),
+          obs: '',
+          _fuente: 'ZL',
+          id: Date.now() + Math.random(),
+          ts: Date.now(),
+        });
+      });
+
+      mostrarPreview('ZL', registros, fixes, 'Zona Libre');
+    } catch(err){
+      showToast('❌ Error leyendo archivo: '+err.message,'red');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ─────────────────────────────────────────────
+// MOSTRAR PREVIEW
+// ─────────────────────────────────────────────
+function mostrarPreview(tipo, registros, fixes, label){
+  _pendingImport = registros;
+  _importTipo    = tipo;
+
+  // Stats
+  var excluidos = tipo==='EXT'
+    ? '(Excluidos: Recibido en CDF + Westland)'
+    : '(Excluidos: Recibido en Bodega CDF)';
+  var nuevos  = registros.filter(function(r){ return !_existeEnData(r); }).length;
+  var dupls   = registros.length - nuevos;
+
+  document.getElementById('import-stats').innerHTML = [
+    {lbl:'A importar',    val:registros.length, color:'var(--teal)'},
+    {lbl:'Nuevos',        val:nuevos,            color:'var(--green-l)'},
+    {lbl:'Duplicados',    val:dupls,             color:'var(--orange-l)'},
+    {lbl:'Correc. nombre',val:fixes.length,      color:'var(--purple)'},
+  ].map(function(s){
+    return '<div style="background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">'
+      +'<div style="font-size:9px;color:var(--muted);text-transform:uppercase;font-weight:700;margin-bottom:4px">'+s.lbl+'</div>'
+      +'<div style="font-family:var(--mono);font-size:18px;font-weight:800;color:'+s.color+'">'+s.val+'</div>'
+      +'</div>';
+  }).join('');
+
+  // Name fixes
+  var fixWrap = document.getElementById('import-fixes-wrap');
+  var fixEl   = document.getElementById('import-fixes');
+  if(fixes.length){
+    fixWrap.style.display='block';
+    fixEl.innerHTML = fixes.map(function(f){
+      return '<div style="display:flex;align-items:center;gap:8px;font-size:11px;padding:5px 8px;background:var(--s2);border-radius:6px">'
+        +'<span style="color:var(--red-l);text-decoration:line-through">'+f.original+'</span>'
+        +'<span style="color:var(--muted)">→</span>'
+        +'<span style="color:var(--green-l);font-weight:700">'+f.suggested+'</span>'
+        +'<span style="color:var(--muted);font-size:9px">('+Math.round(f.score*100)+'% similar)</span>'
+        +'</div>';
+    }).join('');
+  } else {
+    fixWrap.style.display='none';
+  }
+
+  // Preview table — show first 8 rows
+  var cols = tipo==='EXT'
+    ? ['proveedor','depto','comprador','estatus','valor','contenedor','fEta','obs']
+    : ['proveedor','depto','comprador','estatus','valor','fPedido','fAprobado','escZl'];
+  var colLabels = tipo==='EXT'
+    ? ['Proveedor','Depto','Comprador','Estatus','Valor FOB','Contenedor','ETA','Obs']
+    : ['Proveedor','Depto','Comprador','Estatus','Valor','F.Pedido','F.Aprobado','Escenario'];
+
+  document.getElementById('import-thead').innerHTML =
+    '<tr style="background:var(--s2)">'
+    + colLabels.map(function(l){ return '<th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted);white-space:nowrap;border-bottom:1px solid var(--border)">'+l+'</th>'; }).join('')
+    + '</tr>';
+
+  var preview8 = registros.slice(0,8);
+  document.getElementById('import-tbody').innerHTML = preview8.map(function(r, i){
+    var isNew = !_existeEnData(r);
+    return '<tr style="border-bottom:1px solid rgba(48,54,61,.4);background:'+(i%2?'rgba(255,255,255,.01)':'')+(isNew?'':';opacity:.6')+'\">'
+      + cols.map(function(c){
+          var v = r[c]||'';
+          if(c==='valor') v = v>0?'$'+Number(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'—';
+          return '<td style="padding:6px 10px;font-size:11px;color:var(--text);white-space:nowrap">'+v+'</td>';
+        }).join('')
+      + '</tr>';
+  }).join('');
+
+  document.getElementById('import-title').textContent = '📥 Vista Previa — '+label+' ('+registros.length+' registros activos)';
+  document.getElementById('import-overlay').classList.add('open');
+}
+
+function cerrarImport(){
+  document.getElementById('import-overlay').classList.remove('open');
+  _pendingImport = [];
+}
+
+// ─────────────────────────────────────────────
+// CONFIRMAR IMPORTACIÓN
+// ─────────────────────────────────────────────
+function _existeEnData(r){
+  return data.some(function(d){
+    return d.proveedor===r.proveedor && d.depto===r.depto && d._fuente===r._fuente;
+  });
+}
+
+function confirmarImport(){
+  var policy = document.querySelector('input[name="dup-policy"]:checked')?.value || 'update';
+  var added=0, updated=0, skipped=0;
+
+  _pendingImport.forEach(function(r){
+    var idx = data.findIndex(function(d){
+      return d.proveedor===r.proveedor && d.depto===r.depto && d._fuente===r._fuente;
+    });
+
+    if(idx === -1){
+      // New record
+      r.id = Date.now() + Math.random();
+      r.ts = Date.now();
+      data.unshift(r);
+      added++;
+    } else if(policy === 'update'){
+      // Preserve manual edits to value if user touched it
+      var existingValor = data[idx].valor;
+      var wasEdited = data[idx]._valorEditado;
+      Object.assign(data[idx], r);
+      if(wasEdited) data[idx].valor = existingValor; // keep manual value
+      data[idx].ts = Date.now();
+      updated++;
+    } else if(policy === 'add'){
+      r.id = Date.now() + Math.random();
+      r.ts = Date.now();
+      data.unshift(r);
+      added++;
+    } else {
+      skipped++;
+    }
+  });
+
+  saveData();
+  cerrarImport();
+  renderLista();
+  renderStats();
+  poblarSelects();
+
+  var msg = '✅ Importado: '+added+' nuevos';
+  if(updated) msg += ', '+updated+' actualizados';
+  if(skipped) msg += ', '+skipped+' ignorados';
+  showToast(msg);
+}
+
+// ── Mark value as manually edited ──
+function cambiarValor(idx, val){
+  data[idx].valor = parseFloat(val)||0;
+  data[idx]._valorEditado = true; // protect from import overwrite
+  saveData(); renderStats();
+}
+function showToast(msg, type){
+  var t=document.getElementById('toast');
+  t.textContent=msg;
+  t.style.background=type==='red'?'rgba(248,81,73,.97)':type==='orange'?'rgba(240,134,50,.97)':'rgba(63,185,80,.97)';
+  t.classList.add('show');
+  setTimeout(function(){ t.classList.remove('show'); },2800);
+}
+
+// ═══════════════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════════════
+function volverIndex(){
+  if(window.opener&&!window.opener.closed){ window.opener.focus(); window.close(); }
+  else { window.location.href='index.html'; }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SUPABASE ENGINE — patrón idéntico a unico.html (sin postMessage)
+// Tabla: transito_registros  { registro_id TEXT PK, datos JSONB, updated_at }
+// ═══════════════════════════════════════════════════════════════
+var _SB_URL = 'https://kgrunsunahooitmqzaaq.supabase.co';
+var _SB_KEY = 'sb_publishable_pRDW1CDvw8iKlSy8oTz5uA_v0GA4GkA';
+var _SB_TABLE = 'transito_registros';
+var _sb = null;
+var _sbTimer = null;
+
+function _sbBadge(state){
+  var b=document.getElementById('sb-badge');
+  if(!b) return;
+  if(state==='ok'){
+    b.textContent='☁️ Nube ✓';
+    b.style.background='rgba(63,185,80,.12)';
+    b.style.borderColor='rgba(63,185,80,.3)';
+    b.style.color='#56d364';
+  } else if(state==='saving'){
+    b.textContent='☁️ Guardando...';
+    b.style.background='rgba(88,166,255,.12)';
+    b.style.borderColor='rgba(88,166,255,.3)';
+    b.style.color='#79c0ff';
+  } else {
+    b.textContent='☁️ Sin nube';
+    b.style.background='rgba(248,81,73,.08)';
+    b.style.borderColor='rgba(248,81,73,.25)';
+    b.style.color='#ff7b72';
+  }
+}
+
+function initSB(){
+  try{
+    if(window.supabase){
+      _sb = window.supabase.createClient(_SB_URL, _SB_KEY);
+      _sbBadge('ok');
+      _sbCargar();
+    } else {
+      _sbBadge('err');
+    }
+  }catch(e){
+    console.warn('SB init transito:', String(e));
+    _sbBadge('err');
+  }
+}
+
+// Auto-save con debounce 2s
+function _sbAutoSave(){
+  if(_sbTimer) clearTimeout(_sbTimer);
+  _sbTimer = setTimeout(_sbGuardar, 2000);
+}
+
+async function _sbGuardar(){
+  if(!_sb) return;
+  _sbBadge('saving');
+  try{
+    if(!data.length){ _sbBadge('ok'); return; }
+    var payloads = data.map(function(r){
+      return {
+        registro_id: String(r.id),
+        datos: r,
+        updated_at: new Date().toISOString()
+      };
+    });
+    var res = await _sb.from(_SB_TABLE).upsert(payloads, {onConflict:'registro_id'});
+    if(res.error){
+      console.warn('SB save transito:', res.error.message||res.error.code||'error');
+      _sbBadge('err');
+    } else {
+      _sbBadge('ok');
+    }
+  }catch(e){
+    console.warn('SB save transito:', String(e));
+    _sbBadge('err');
+  }
+}
+
+async function _sbCargar(){
+  if(!_sb) return;
+  try{
+    var res = await _sb
+      .from(_SB_TABLE)
+      .select('datos, updated_at')
+      .order('updated_at', {ascending:false});
+    if(res.error){
+      console.warn('SB cargar transito:', res.error.message||res.error.code||'error');
+      return;
+    }
+    var rows = res.data || [];
+    if(rows.length){
+      var cloudTs = new Date(rows[0].updated_at).getTime();
+      var localTs = 0;
+      try{
+        var ld = JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]');
+        localTs = ld.length && ld[0].ts ? ld[0].ts : 0;
+      }catch(e){}
+      if(cloudTs > localTs || data.length === 0){
+        data = rows.map(function(r){ return r.datos; }).filter(Boolean);
+        try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }catch(e){}
+        renderLista();
+        renderStats();
+        showToast('☁️ Datos cargados de la nube');
+      }
+    }
+  }catch(e){
+    console.warn('SB cargar transito:', String(e));
+  }
+}
+
+// Patch saveData to trigger cloud save
+function saveData(){
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }catch(e){}
+  _sbAutoSave();
+}
+
+// ── TEMAS ──
+function setTheme(t){
+  document.body.className=t;
+  try{ localStorage.setItem('_tema_transito', t); }catch(e){}
+}
+(function(){ try{ var t=localStorage.getItem('_tema_transito'); if(t) document.body.className=t; }catch(e){} })();
+
+// ── INIT ──
+document.addEventListener('DOMContentLoaded', function(){
+  init();
+  initSB();
+});
+</script>
+</body>
+</html>
