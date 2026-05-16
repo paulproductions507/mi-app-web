@@ -422,7 +422,7 @@ body[style*="color-scheme: light"] #portal-content tr td[style*="background:#1c2
 .splash-bg{position:absolute;inset:0;overflow:hidden;opacity:.18;pointer-events:none;}
 .splash-bg span{position:absolute;font-family:'IBM Plex Mono',monospace;color:#ffffff;animation:floatSym linear infinite;white-space:nowrap;text-shadow:0 0 12px rgba(63,185,80,.6);}
 @keyframes floatSym{0%{transform:translateY(105vh);opacity:0;}5%{opacity:1;}90%{opacity:.8;}100%{transform:translateY(-15vh);opacity:0;}}
-.splash-icon{width:88px;height:88px;background:linear-gradient(135deg,var(--green-l),var(--blue-l));border-radius:22px;display:flex;align-items:center;justify-content:center;font-size:44px;margin-bottom:16px;box-shadow:0 0 60px rgba(63,185,80,.25);animation:pulse 2s ease-in-out infinite;}
+.splash-icon{width:120px;height:120px;background:linear-gradient(135deg,var(--green-l),var(--blue-l));border-radius:28px;display:flex;align-items:center;justify-content:center;font-size:64px;margin-bottom:20px;box-shadow:0 0 80px rgba(63,185,80,.35);animation:pulse 2s ease-in-out infinite;}
 @keyframes pulse{0%,100%{box-shadow:0 0 60px rgba(63,185,80,.25);}50%{box-shadow:0 0 80px rgba(63,185,80,.5);}}
 .splash-title{font-size:clamp(20px,4vw,30px);font-weight:700;color:#e6edf3;text-align:center;letter-spacing:-.02em;margin-bottom:8px;line-height:1.25;}
 .splash-sub{font-size:13px;color:var(--muted);text-align:center;letter-spacing:.05em;text-transform:uppercase;margin-bottom:80px;}
@@ -3407,6 +3407,10 @@ function iniciarApp(tab){
     if(tab==='sim'){
       // Already showing tab-sim (it starts with 'on'), nothing to do
       window._lastNonModalTabGlobal = 'sim';
+      // Ensure the sim tab-pane is visible
+      document.querySelectorAll('.tab-pane').forEach(function(p){ p.classList.remove('on'); });
+      var simPane = document.getElementById('tab-sim'); if(simPane) simPane.classList.add('on');
+      document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('on'); if(t.textContent.trim().includes('Liq. Aduanal')) t.classList.add('on'); });
       return;
     }
 
@@ -10554,7 +10558,7 @@ function renderInvLines(){
         +'</div>'
         +'<div style="display:flex;gap:5px;align-items:center;margin-bottom:6px">'
         +'<input type="text" value="'+(l.numFact||l.nfac||'')+'" placeholder="N° Factura Suplidor" id="nfact-merc-'+i+'" onchange="invLines['+i+'].numFact=this.value;invLines['+i+'].nfac=this.value;" oninput="invLines['+i+'].numFact=this.value;invLines['+i+'].nfac=this.value;" style="flex:1;background:var(--s2);border:1px solid rgba(88,166,255,.2);border-radius:5px;padding:5px 8px;color:var(--text);font-size:11px">'
-        +'<button onclick="(function(i){invLines[i].numFact=document.getElementById(\'nfact-merc-\'+i)?.value||invLines[i].numFact||\'\';;invLines[i].nfac=invLines[i].numFact;var b=this;b.textContent=\'✓ Guardado\';b.style.background=\'rgba(63,185,80,.3)\';if(typeof _showToast===\'function\') _showInlineToast(b,\'✅ Factura guardada\');setTimeout(function(){b.textContent=\'💾\';b.style.background=\'rgba(63,185,80,.12)\';},1500);})('+i+')" style="flex-shrink:0;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:5px;padding:5px 10px;font-size:11px;cursor:pointer" title="Guardar N° Factura">💾</button>'
+        +'<button onclick="(function(i){invLines[i].numFact=document.getElementById(\'nfact-merc-\'+i)?.value||invLines[i].numFact||\'\';;invLines[i].nfac=invLines[i].numFact;var b=this;b.textContent=\'✓ Guardado\';b.style.background=\'rgba(63,185,80,.3)\';if(typeof _showInlineToast===\'function\') _showInlineToast(b,\'✅ Factura guardada\');setTimeout(function(){b.textContent=\'💾\';b.style.background=\'rgba(63,185,80,.12)\';},1500);})('+i+')" style="flex-shrink:0;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:5px;padding:5px 10px;font-size:11px;cursor:pointer" title="Guardar N° Factura">💾</button>'
         +'</div>'
         +'<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
         +'<div style="flex:1;min-width:0;position:relative"><input type="text" value="'+((l.prov||'').replace(/"/g,'&quot;'))+'" placeholder="'+(m&&!m.exact&&m.score<0.8?'⚠ Escribe el nombre correcto...':'Escribe proveedor para buscar...')+'" list="prov-datalist" onchange="onInvProvChange('+i+',this.value)" oninput="invLines['+i+'].prov=this.value" style="width:100%;background:var(--s2);border:1px solid '+provBorder+';border-radius:6px;padding:6px 10px;color:'+((!m||m.score<0.25)?'var(--red-l)':'var(--text)')+';font-size:12px;box-sizing:border-box'+((!m||m.score<0.25)?';font-weight:700':'')+'"></div>'
@@ -10619,8 +10623,11 @@ function renderInvLines(){
           +'<button onclick="(function(i){var val=document.getElementById(\'nfact-gasto-\'+i)?.value||invLines[i].numFact||\'\';invLines[i].numFact=val;invLines[i].nfac=val;'
           // Auto-propagar a líneas del mismo proveedor Sababa
           +'var prov=(invLines[i].prov||\'\').toUpperCase();if(prov.includes(\'SABABA\')){invLines.forEach(function(l,j){if(j!==i&&(l.prov||\'\').toUpperCase().includes(\'SABABA\')){l.numFact=val;l.nfac=val;var el=document.getElementById(\'nfact-gasto-\'+j);if(el)el.value=val;}});}'
-          +'var b=this;b.textContent=\'✓ Guardado\';b.style.background=\'rgba(63,185,80,.3)\';if(typeof _showToast===\'function\') _showInlineToast(b,\'✅ Factura guardada\');setTimeout(function(){b.textContent=\'💾\';b.style.background=\'rgba(63,185,80,.12)\';},1500);})('+i+')" '
-          +'style="flex-shrink:0;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;white-space:nowrap" title="Guardar N° Factura (se propaga a líneas del mismo proveedor)">💾</button>'
+          // Auto-propagar a TODOS los rubros de Tesoro Nacional
+          +'if(prov.includes(\'TESORO\')&&prov.includes(\'NACIONAL\')){var tnCount=0;invLines.forEach(function(l,j){if(j!==i&&(l.prov||\'\').toUpperCase().includes(\'TESORO\')&&(l.prov||\'\').toUpperCase().includes(\'NACIONAL\')){l.numFact=val;l.nfac=val;tnCount++;var el=document.getElementById(\'nfact-gasto-\'+j);if(el)el.value=val;}});var tnMsg=tnCount>0?\'✅ TN: propagada a \'+tnCount+\' rubro(s)\': \'✅ Factura guardada\';}'
+          +'var toastMsg=prov.includes(\'TESORO\')&&prov.includes(\'NACIONAL\')?(\'✅ Factura TN propagada a todos sus rubros\'):\'✅ Factura guardada\';'
+          +'var b=this;b.textContent=\'✓ Guardado\';b.style.background=\'rgba(63,185,80,.3)\';if(typeof _showInlineToast===\'function\') _showInlineToast(b,toastMsg);setTimeout(function(){b.textContent=\'💾\';b.style.background=\'rgba(63,185,80,.12)\';},1500);})('+i+')" '
+          +'style="flex-shrink:0;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;white-space:nowrap" title="Guardar N° Factura · Tesoro Nacional: se propaga automáticamente a todos sus rubros">💾</button>'
           +'</div>'
           +'</div>';
       }).join('');
@@ -13122,19 +13129,26 @@ function _enableAllApplyBtns(){
 }
 
 function _showInlineToast(btn, msg){
-  // Remove any existing inline toast
   var old = document.getElementById('_inline_toast');
   if(old) old.remove();
   var t = document.createElement('div');
   t.id = '_inline_toast';
   t.textContent = msg;
-    var rect=btn.getBoundingClientRect();
-  var left=rect.left+rect.width/2;
-  var top=rect.top-8;
-  t.style.cssText='position:fixed;z-index:999999;background:rgba(63,185,80,.97);color:#fff;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700;white-space:nowrap;pointer-events:none;box-shadow:0 4px 20px rgba(0,0,0,.5);transition:opacity .25s,transform .25s;opacity:0;transform:translateY(6px);left:'+left+'px;top:'+top+'px';
-  document.body.appendChild(t);
-  requestAnimationFrame(function(){t.style.opacity='1';t.style.transform='translateY(-36px)';});
-  setTimeout(function(){t.style.opacity='0';setTimeout(function(){if(t.parentNode)t.remove();},300);},2200);
+  var rect = btn ? btn.getBoundingClientRect() : null;
+  var vw = window.innerWidth, vh = window.innerHeight;
+  var useBottomCenter = !rect || rect.top < 80 || rect.top > vh - 80 || rect.left < 0 || rect.right > vw;
+  if(useBottomCenter){
+    t.style.cssText='position:fixed;z-index:9999999;background:rgba(63,185,80,.97);color:#fff;border-radius:10px;padding:10px 18px;font-size:13px;font-weight:700;white-space:nowrap;pointer-events:none;box-shadow:0 6px 28px rgba(0,0,0,.55);transition:opacity .3s,transform .3s;opacity:0;transform:translateX(-50%) translateY(10px);bottom:32px;left:50%';
+    document.body.appendChild(t);
+    requestAnimationFrame(function(){t.style.opacity='1';t.style.transform='translateX(-50%) translateY(0)';});
+  } else {
+    var left=Math.min(Math.max(rect.left+rect.width/2, 80), vw-80);
+    var top=rect.top - 8;
+    t.style.cssText='position:fixed;z-index:9999999;background:rgba(63,185,80,.97);color:#fff;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700;white-space:nowrap;pointer-events:none;box-shadow:0 4px 20px rgba(0,0,0,.5);transition:opacity .25s,transform .25s;opacity:0;transform:translateX(-50%) translateY(6px);left:'+left+'px;top:'+top+'px';
+    document.body.appendChild(t);
+    requestAnimationFrame(function(){t.style.opacity='1';t.style.transform='translateX(-50%) translateY(-36px)';});
+  }
+  setTimeout(function(){t.style.opacity='0';setTimeout(function(){if(t.parentNode)t.remove();},300);},2500);
 }
 function _showToast(msg, type='green', duration=2500){
   const colors={green:'rgba(63,185,80,.15)',blue:'rgba(88,166,255,.15)',red:'rgba(218,54,51,.15)',orange:'rgba(240,136,62,.15)'};
@@ -14382,6 +14396,11 @@ body:not(.sidebar-pinned) #app-wrapper {
   };
 
   /* ── Cerrar Modal 1 ── */
+  // Tabs de costeo: al cerrar su modal permanecen en la pantalla de costeo activa
+  var COSTEO_MODAL_TABS = ['facturas','cifexp','sababa','comparativo','aranceles'];
+  // Tabs informativos/config: al cerrar van al inicio
+  var INICIO_MODAL_TABS = ['tendencias','config','histprovs','histfact','resumen'];
+
   window.closeTabModal = function(){
     var overlay = document.getElementById('tab-modal-overlay');
     var body    = document.getElementById('tab-modal-body');
@@ -14392,36 +14411,44 @@ body:not(.sidebar-pinned) #app-wrapper {
     overlay.removeAttribute('data-tab');
     document.body.style.overflow = '';
 
-    // Todos los modales al cerrar → siempre ir al menú principal
-    if(typeof volverInicio === 'function') { volverInicio(); return; }
+    // Tabs informativos → ir al menú principal
+    if(INICIO_MODAL_TABS.indexOf(currentTab) !== -1){
+      if(typeof volverInicio === 'function') { volverInicio(); return; }
+    }
 
-    // Ocultar todos los panes y mostrar el de fondo
-    document.querySelectorAll('.tab-pane').forEach(function(p){ p.classList.remove('on'); });
-    var bgPane = document.getElementById('tab-'+activePaneId);
-    if(!bgPane) {
-      // No existe el pane — ir al inicio
+    // Tabs de costeo → quedarse en pantalla de costeo activa
+    // Determinar qué escenario mostrar: el activo antes de abrir el modal, default 'sim'
+    var targetPane = window._lastNonModalTabGlobal || 'sim';
+    // Si no hay pane de fondo válido, usar sim
+    var bgPane = document.getElementById('tab-'+targetPane);
+    if(!bgPane){ targetPane = 'sim'; bgPane = document.getElementById('tab-sim'); }
+    if(!bgPane){
       if(typeof volverInicio === 'function') { volverInicio(); return; }
       return;
     }
+
+    // Mostrar el pane de costeo
+    document.querySelectorAll('.tab-pane').forEach(function(p){ p.classList.remove('on'); });
     bgPane.classList.add('on');
 
-    // Sincronizar botón de tab resaltado
+    // Sincronizar tab resaltado con el escenario activo
     document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('on'); });
     var tabLabelsClose = {
       'sim':'Liq. Aduanal','cifexp':'CIF Express','sababa':'Sababa',
       'facturas':'Proveedores','tendencias':'Tendencias','aranceles':'Aranceles',
       'comparativo':'Comparativo','config':'Config','unico':'Único'
     };
-    var labelToMatch = tabLabelsClose[activePaneId] || activePaneId;
+    var labelToMatch = tabLabelsClose[targetPane] || targetPane;
     document.querySelectorAll('.tab').forEach(function(t){
       if(t.textContent.trim().includes(labelToMatch)) t.classList.add('on');
     });
 
-    // Render del tab activo de fondo si es necesario
-    if(activePaneId === 'cifexp'      && typeof updateCifExpDisplays==='function') updateCifExpDisplays();
-    if(activePaneId === 'facturas'    && typeof renderInvLines==='function') renderInvLines();
-    if(activePaneId === 'config'      && typeof renderConfig==='function') renderConfig();
-    if(activePaneId === 'tendencias'){
+    // Render del escenario activo si es necesario
+    if(targetPane === 'sim'      && typeof calc==='function') { /* calc runs on demand */ }
+    if(targetPane === 'cifexp'   && typeof updateCifExpDisplays==='function') updateCifExpDisplays();
+    if(targetPane === 'facturas' && typeof renderInvLines==='function') renderInvLines();
+    if(targetPane === 'config'   && typeof renderConfig==='function') renderConfig();
+    if(targetPane === 'tendencias'){
       setTimeout(function(){
         if(typeof renderTend==='function') renderTend();
         if(typeof renderDashboardKPIs==='function') renderDashboardKPIs();
