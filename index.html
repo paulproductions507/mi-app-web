@@ -8181,16 +8181,17 @@ function _renderGastosNoMerc(all){
 
   // ── Acumular costos No Mercancía de los escenarios elegidos (SC2/SC3) ──
   const rubros = {
-    flete:       { label:'Flete Internacional',           icon:'🚢', color:'var(--orange-l)', total:0 },
-    gastos_orig: { label:'Gastos Origen y Destino',       icon:'🌐', color:'var(--blue-l)',   total:0 },
-    honorarios:  { label:'Honorarios / Comisión',         icon:'👔', color:'#a855f7',         total:0 },
-    honorarios_itbms: { label:'ITBMS Costeable (Sababa)', icon:'🧾', color:'var(--orange-l)', total:0 },
-    mv:          { label:'Master Value',                  icon:'🔑', color:'var(--green-l)',  total:0 },
-    otros:       { label:'Otros Gastos',                  icon:'📋', color:'var(--muted2)',   total:0 },
+    flete:       { label:'Flete Internacional',     icon:'🚢', color:'var(--orange-l)', total:0 },
+    gastos_orig: { label:'Gastos Origen y Destino', icon:'🌐', color:'var(--blue-l)',   total:0 },
+    honorarios:  { label:'Honorarios / Comisión',   icon:'👔', color:'#a855f7',         total:0,
+                   // Sub-breakdown por escenario — para el desplegable
+                   subs:{ cif:0, unico:0, sababa:0, otros:0 } },
+    mv:          { label:'Master Value',             icon:'🔑', color:'var(--green-l)',  total:0 },
+    otros:       { label:'Otros Gastos',             icon:'📋', color:'var(--muted2)',   total:0 },
   };
-  // ITBMS fiscal (Tesoro Nacional) — separado del ITBMS costeable Sababa
+  // ITBMS fiscal (Tesoro Nacional ÚNICAMENTE) — separado
   let totalItbms = 0;
-  let totalItbmsCosteable = 0; // ITBMS homologado Sababa — va al costo, no es fiscal
+  // ITBMS Sababa (costeable) ya va dentro de rubros.honorarios — no es línea separada en el resumen
 
   // ── Acumular ahorro por rubro (comparando SC1 vs SC elegido) ──
   const ahorroRubros = {
@@ -8236,23 +8237,29 @@ function _renderGastosNoMerc(all){
         switch(l.tipoFac){
           case 'flete':        rubros.flete.total       += l.costo||0; break;
           case 'acarreo':      rubros.gastos_orig.total += l.costo||0; break;
-          case 'honorarios':   rubros.honorarios.total  += l.costo||0; break;
-          case 'liquidacion':  rubros.otros.total       += l.costo||0; break; // arancel Único
-          case 'tasa':         rubros.otros.total       += l.costo||0; break; // tasa aduana
+          case 'honorarios':
+            rubros.honorarios.total += l.costo||0;
+            if(isSab)        rubros.honorarios.subs.sababa += l.costo||0;
+            else if(isCif)   rubros.honorarios.subs.cif    += l.costo||0;
+            else if(isUnico) rubros.honorarios.subs.unico  += l.costo||0;
+            else             rubros.honorarios.subs.otros  += l.costo||0;
+            break;
+          case 'liquidacion':  rubros.otros.total       += l.costo||0; break;
+          case 'tasa':         rubros.otros.total       += l.costo||0; break;
           case 'uso_sistema':  rubros.otros.total       += l.costo||0; break;
           case 'dmce':         rubros.otros.total       += l.costo||0; break;
-          case 'nota_credito': rubros.otros.total       -= Math.abs(l.costo||0); break; // descuento
+          case 'nota_credito': rubros.otros.total       -= Math.abs(l.costo||0); break;
           case 'gastos':
             if(isMVLine) rubros.mv.total    += l.costo||0;
             else         rubros.otros.total += l.costo||0;
             break;
           case 'itbms':
             if(isSabLine){
-              // ITBMS Sababa costeable — va en No Mercancía (parte de comisión bruta)
-              totalItbmsCosteable           += l.costo||0;
-              rubros.honorarios_itbms.total += l.costo||0;
+              // ITBMS Sababa costeable — parte de la comisión bruta, va en No Mercancía con honorarios
+              rubros.honorarios.total          += l.costo||0;
+              rubros.honorarios.subs.sababa    += l.costo||0;
             } else {
-              // ITBMS fiscal (Tesoro Nacional: CIF Express, Único) — línea ITBMS separada
+              // ITBMS fiscal (Tesoro Nacional) — línea separada, NO entra en No Mercancía
               totalItbms += l.costo||0;
             }
             break;
@@ -8269,37 +8276,33 @@ function _renderGastosNoMerc(all){
 
     } else if(isCif){
       // ── Fallback CIF Express (sin invLines — formato antiguo) ──
-      // sc2.noMerc = honorarios + tasa + uso sistema + flete + gastos O/D (sin ITBMS)
-      rubros.flete.total       += sc2.flete||0;
-      rubros.gastos_orig.total += sc2.gastos||0;
-      rubros.honorarios.total  += sc2.hon||0;
-      rubros.mv.total          += sc2.mv||0;
-      totalItbms               += (sc2.itbms||0) + (sc2.itbmsTasaFinal||0) + (sc2.itbmsHon||0);
-      totalNoMerc              += sc2.noMerc||0; // ya excluye ITBMS fiscal
+      rubros.flete.total               += sc2.flete||0;
+      rubros.gastos_orig.total         += sc2.gastos||0;
+      rubros.honorarios.total          += sc2.hon||0;
+      rubros.honorarios.subs.cif       += sc2.hon||0;
+      rubros.mv.total                  += sc2.mv||0;
+      totalItbms                       += (sc2.itbms||0) + (sc2.itbmsTasaFinal||0) + (sc2.itbmsHon||0);
+      totalNoMerc                      += sc2.noMerc||0;
 
     } else if(isSab){
       // ── Fallback Sababa (sin invLines — formato antiguo) ──
-      // Comisión BRUTA = sc3.comision (10% total, incluye ITBMS Sababa adentro)
-      // El sistema empresarial lee la comisión completa en No Mercancía.
-      const comisionBruta = sc3.comision || 0; // 10% bruto completo
-      const itbmsHomol    = sc3.itbmsHomol || 0;
+      // Comisión BRUTA completa (incluye ITBMS Sababa) va toda en honorarios
+      const comisionBruta = sc3.comision || 0;
       rubros.flete.total            += sc3.flete||0;
       rubros.gastos_orig.total      += sc3.gastos||0;
-      rubros.honorarios.total       += Math.max(0, comisionBruta - itbmsHomol); // comisión neta corredor
-      rubros.honorarios_itbms.total += itbmsHomol; // ITBMS dentro de la comisión
+      rubros.honorarios.total       += comisionBruta;
+      rubros.honorarios.subs.sababa += comisionBruta;
       rubros.mv.total               += sc3.mv||0;
-      totalItbmsCosteable           += itbmsHomol;
-      // totalNoMerc Sababa = comisión bruta completa + flete + gastos O/D
       totalNoMerc += comisionBruta + (sc3.flete||0) + (sc3.gastos||0) + (sc3.mv||0);
 
     } else if(isUnico){
       // ── Fallback Escenario Único (sin invLines — formato antiguo) ──
-      // sc1 aquí SÍ son costos reales pagados (a diferencia de Liq. Aduanal Regular)
-      rubros.flete.total       += sc1.flete||0;
-      rubros.gastos_orig.total += (sc1.acarreo||0) + (sc1.gastos||0) + (sc1.agente||0) + (sc1.dmce||0);
-      rubros.honorarios.total  += sc1.hon||0;
-      totalItbms               += (sc1.itbms||0) + (sc1.itbmsTasaFinal||0);
-      totalNoMerc              += sc1.noMerc||0; // arancel+hon+tasa+form+flete+acarreo+dmce+agente
+      rubros.flete.total               += sc1.flete||0;
+      rubros.gastos_orig.total         += (sc1.acarreo||0) + (sc1.gastos||0) + (sc1.agente||0) + (sc1.dmce||0);
+      rubros.honorarios.total          += sc1.hon||0;
+      rubros.honorarios.subs.unico     += sc1.hon||0;
+      totalItbms                       += (sc1.itbms||0) + (sc1.itbmsTasaFinal||0);
+      totalNoMerc                      += sc1.noMerc||0;
 
     }
     // isLiqRef (Liq. Aduanal Regular sin invLines) → $0, no suma nada.
@@ -8318,16 +8321,47 @@ function _renderGastosNoMerc(all){
   });
 
   // ── Render rubros No Mercancía ──
+  const hon = rubros.honorarios;
+  const honSubs = hon.subs || {};
+  const honSubRows = [
+    honSubs.cif    > 0.01 ? `<div style="display:flex;justify-content:space-between;padding:6px 14px 6px 36px;font-size:11px"><span style="color:var(--muted)">⚡ CIF Express</span><span style="font-family:'IBM Plex Mono',monospace;color:#a855f7">${fmt2(honSubs.cif)}</span></div>` : '',
+    honSubs.unico  > 0.01 ? `<div style="display:flex;justify-content:space-between;padding:6px 14px 6px 36px;font-size:11px"><span style="color:var(--muted)">🔒 Escenario Único</span><span style="font-family:'IBM Plex Mono',monospace;color:#a855f7">${fmt2(honSubs.unico)}</span></div>` : '',
+    honSubs.sababa > 0.01 ? `<div style="display:flex;justify-content:space-between;padding:6px 14px 6px 36px;font-size:11px"><span style="color:var(--muted)">🟠 Sababa (comisión bruta incl. ITBMS)</span><span style="font-family:'IBM Plex Mono',monospace;color:#a855f7">${fmt2(honSubs.sababa)}</span></div>` : '',
+    honSubs.otros  > 0.01 ? `<div style="display:flex;justify-content:space-between;padding:6px 14px 6px 36px;font-size:11px"><span style="color:var(--muted)">📋 Otros</span><span style="font-family:'IBM Plex Mono',monospace;color:#a855f7">${fmt2(honSubs.otros)}</span></div>` : '',
+  ].filter(Boolean).join('');
+  const hasHonSubs = honSubRows.length > 0;
+
   const rubroRows = Object.values(rubros)
     .filter(r=>r.total>0.01)
-    .map(r=>`
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;border-bottom:1px solid rgba(48,54,61,.3)">
+    .map(function(r){
+      if(r === hon && hasHonSubs){
+        // Honorarios — collapsible con desglose por escenario
+        const uid = '_hon_detail_'+Date.now();
+        return `<div>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;border-bottom:1px solid rgba(48,54,61,.3);cursor:pointer;user-select:none"
+               onclick="var d=document.getElementById('${uid}');var c=this.querySelector('.hc');if(d.style.display==='none'){d.style.display='block';c.textContent='▼';}else{d.style.display='none';c.textContent='▶';}">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:13px">${r.icon}</span>
+              <span style="font-size:12px;color:var(--text)">${r.label}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:${r.color}">${fmt2(r.total)}</span>
+              <span class="hc" style="font-size:10px;color:var(--muted)">▶</span>
+            </div>
+          </div>
+          <div id="${uid}" style="display:none;background:rgba(168,85,247,.04);border-bottom:1px solid rgba(48,54,61,.2)">
+            ${honSubRows}
+          </div>
+        </div>`;
+      }
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;border-bottom:1px solid rgba(48,54,61,.3)">
         <div style="display:flex;align-items:center;gap:8px">
           <span style="font-size:13px">${r.icon}</span>
           <span style="font-size:12px;color:var(--text)">${r.label}</span>
         </div>
         <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:${r.color}">${fmt2(r.total)}</span>
-      </div>`).join('');
+      </div>`;
+    }).join('');
 
   // ── Render desglose del Ahorro ──
   const ahorroRows = Object.values(ahorroRubros)
@@ -8365,17 +8399,16 @@ function _renderGastosNoMerc(all){
     </div>
   </div>
 
-  <!-- ITBMS — colapsado por defecto -->
+  <!-- ITBMS Fiscal — Tesoro Nacional únicamente -->
   ${totalItbms>0?`
   <div style="border-top:1px solid var(--border)">
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;cursor:pointer;user-select:none;background:rgba(88,166,255,.04);-webkit-tap-highlight-color:rgba(0,0,0,0)"
-         ontouchstart="this.style.background='rgba(88,166,255,.1)'" ontouchend="this.style.background='rgba(88,166,255,.04)'"
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;cursor:pointer;user-select:none;background:rgba(88,166,255,.04)"
          onclick="var b=this.nextElementSibling;b.style.display=b.style.display==='none'?'block':'none';this.querySelector('.itb-chev').textContent=b.style.display==='none'?'▶':'▼'">
       <div style="display:flex;align-items:center;gap:8px">
         <span style="font-size:14px">🧾</span>
         <div>
-          <div style="font-size:11px;font-weight:700;color:var(--blue-l)">ITBMS Fiscal — CIF Express / Liq. Aduanal</div>
-          <div style="font-size:10px;color:var(--muted)">ITBMS s/Mercancía · s/Tasa · s/Honorarios (no entra al costo inventario)</div>
+          <div style="font-size:11px;font-weight:700;color:var(--blue-l)">ITBMS — Tesoro Nacional</div>
+          <div style="font-size:10px;color:var(--muted)">CIF Express · Escenario Único · Embarques grabados · NO entra al costo inventario</div>
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
@@ -8383,32 +8416,11 @@ function _renderGastosNoMerc(all){
         <span class="itb-chev" style="font-size:11px;color:var(--muted)">▶</span>
       </div>
     </div>
-    ${totalItbmsCosteable>0?`
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-top:1px solid rgba(240,136,62,.15);cursor:pointer;user-select:none" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
-      <div style="display:flex;align-items:center;gap:8px">
-        <span style="font-size:14px">🧾</span>
-        <div>
-          <div style="font-size:11px;font-weight:700;color:var(--orange-l)">ITBMS Costeable — Sababa</div>
-          <div style="font-size:10px;color:var(--muted)">ITBMS Homologado · entra al costo inventario · NO es fiscal</div>
-        </div>
-      </div>
-      <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:800;color:var(--orange-l)">${fmt2(totalItbmsCosteable)}</span>
-    </div>
-    <div style="display:none;padding:8px 16px 10px;background:rgba(240,136,62,.04);border-top:1px solid rgba(240,136,62,.1)">
-      <div style="font-size:10px;color:var(--muted)">Este ITBMS forma parte de la comisión Sababa y se aplica al costo de inventario. No se paga al Tesoro Nacional. Es la porción del 7% incluida dentro del 10% de comisión total.</div>
-    </div>
-    `:''}
-    <div style="display:none;background:rgba(88,166,255,.03)">
-      <!-- Landed Total (No Merc + ITBMS fiscal) -->
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:rgba(63,185,80,.05);border-top:1px solid rgba(63,185,80,.15)">
-        <div style="display:flex;align-items:center;gap:8px">
-          <span style="font-size:14px">📊</span>
-          <div>
-            <div style="font-size:11px;font-weight:700;color:var(--green-l)">Landed Total (No Merc + ITBMS fiscal)</div>
-            <div style="font-size:10px;color:var(--muted)">Costo total de la operación (ITBMS costeable ya incluido en No Mercancía)</div>
-          </div>
-        </div>
-        <span style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:800;color:var(--green-l)">${fmt2(totalNoMerc+totalItbms)}</span>
+    <div style="display:none;background:rgba(88,166,255,.03);padding:10px 16px;border-top:1px solid rgba(88,166,255,.1)">
+      <div style="font-size:10px;color:var(--muted)">Este ITBMS se paga al Tesoro Nacional. No forma parte del costo de inventario.<br>El ITBMS Sababa (costeable) ya está incluido dentro de la línea Honorarios / Comisión.</div>
+      <div style="display:flex;justify-content:space-between;margin-top:10px;padding-top:8px;border-top:1px solid rgba(88,166,255,.1)">
+        <span style="font-size:11px;font-weight:700;color:var(--green-l)">Landed Total (No Merc + ITBMS fiscal)</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:800;color:var(--green-l)">${fmt2(totalNoMerc+totalItbms)}</span>
       </div>
     </div>
   </div>`:''}
