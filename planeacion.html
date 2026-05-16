@@ -425,19 +425,17 @@ function getTend(){
   try{ return JSON.parse(localStorage.getItem('_tend_data')||'[]'); }catch(e){ return []; }
 }
 function syncTransito(){
-  // Collect all identifiers from matched suppliers
+  // Collect all identifiers from matched suppliers in new equipos model
   var nros=new Set(); var conts=new Set(); var facts=new Set();
   Object.values(weeks).forEach(function(wk){
     wk.days.forEach(function(day){
-      day.sections.forEach(function(sec){
-        sec.containers.forEach(function(cnt){
-          (cnt.suppliers||[]).forEach(function(s){
-            if(s.matched){
-              if(s.nroEmb)  nros.add(s.nroEmb);
-              if(s.nroCont) conts.add(s.nroCont.toUpperCase());
-              if(s.nroFact) facts.add(s.nroFact);
-            }
-          });
+      (day.equipos||[]).forEach(function(eq){
+        (eq.suppliers||[]).forEach(function(s){
+          if(s.matched){
+            if(s.nroEmb)  nros.add(s.nroEmb);
+            if(s.nroCont) conts.add(s.nroCont.toUpperCase());
+            if(s.nroFact) facts.add(s.nroFact);
+          }
         });
       });
     });
@@ -457,6 +455,25 @@ function syncTransito(){
 }
 
 // ═══════════════════ SEMANA ═══════════════════
+// DATA MODEL: weeks[monday].days[di].equipos[ei] = {
+//   id, tipoEquipo, via, eta, origen, suppliers:[{...}]
+// }
+// tipoEquipo determines icon: camión=🚛, barco=🚢, avión=✈️, tren=🚆
+function getEquipoIcon(via, tipo){
+  var t=(tipo||'').toLowerCase(); var v=(via||'').toLowerCase();
+  if(v.includes('aer')||t.includes('aér')||t.includes('aereo')) return '✈️';
+  if(v.includes('ter')||t.includes('camion')||t.includes('furgon')||t.includes('terrestre')) return '🚛';
+  if(v.includes('sea')||v.includes('marit')||t.includes('contenedor')||t.includes('lcl')) return '🚢';
+  return '📦'; // genérico
+}
+function getEquipoColor(via, tipo){
+  var ico=getEquipoIcon(via,tipo);
+  if(ico==='✈️') return {bg:'rgba(163,113,247,.12)',border:'rgba(163,113,247,.4)',color:'var(--pu)'};
+  if(ico==='🚛') return {bg:'rgba(255,164,87,.12)',border:'rgba(255,164,87,.4)',color:'var(--or)'};
+  if(ico==='🚢') return {bg:'rgba(88,166,255,.12)',border:'rgba(88,166,255,.4)',color:'var(--bl)'};
+  return {bg:'rgba(139,148,158,.1)',border:'rgba(139,148,158,.3)',color:'var(--mt)'};
+}
+
 function mkWeek(mon){
   if(!weeks[mon]){
     weeks[mon]={
@@ -464,14 +481,33 @@ function mkWeek(mon){
       days:DAYS.map(function(lbl,i){
         return {
           date:aD(mon,i), label:lbl,
-          sections:[
-            {tipo:'EXT',containers:[{tipoCarga:'"40" CONTENEDOR',eta:'',suppliers:[]}]},
-            {tipo:'ZL', containers:[{tipoCarga:'CAMIONES / SABABA',eta:'',suppliers:[]}]}
-          ]
+          equipos:[] // free-form, user adds as many as needed
         };
       })
     };
     save();
+  }
+  // Migrate old format (sections) to new (equipos)
+  if(weeks[mon] && weeks[mon].days){
+    weeks[mon].days.forEach(function(day){
+      if(day.sections && !day.equipos){
+        day.equipos=[];
+        day.sections.forEach(function(sec){
+          sec.containers.forEach(function(cnt){
+            day.equipos.push({
+              id:Date.now()+Math.random(),
+              tipoEquipo:cnt.tipoCarga||'',
+              via:sec.tipo==='EXT'?'SEA':'LAND',
+              eta:cnt.eta||'',
+              origen:'',
+              suppliers:cnt.suppliers||[]
+            });
+          });
+        });
+        delete day.sections;
+      }
+      if(!day.equipos) day.equipos=[];
+    });
   }
   return weeks[mon];
 }
@@ -490,94 +526,73 @@ function render(){
 function renderGrid(wk){
   var t=document.getElementById('ptable');
   var h='';
-
-  // HEADER ROW
+  // Header
   h+='<tr>';
   wk.days.forEach(function(day,di){
-    h+='<td style="min-width:270px;max-width:340px">'
-      +'<div class="dh '+DCL[di]+'">'+day.label+'</div>'
-      +'<div class="dd">'+fD(day.date)+'</div></td>';
+    h+='<td style="min-width:270px;max-width:340px"><div class="dh '+DCL[di]+'">'+day.label+'</div><div class="dd">'+fD(day.date)+'</div></td>';
   });
-  h+='</tr>';
-
-  // CONTENT ROW
-  h+='<tr>';
+  h+='</tr><tr>';
   wk.days.forEach(function(day,di){
     h+='<td style="vertical-align:top;min-width:270px;max-width:340px">';
-    day.sections.forEach(function(sec){
-      var isc=sec.tipo==='EXT'?'se':'sz';
-      var ico=sec.tipo==='EXT'?'✈️':'🏭';
-      h+='<div class="sl '+isc+'">'+ico+' '+sec.tipo
-        +' <button onclick="addCnt(\''+cur+'\','+di+',\''+sec.tipo+'\')" '
-        +'style="background:none;border:none;color:inherit;cursor:pointer;font-size:11px;margin-left:auto">＋</button></div>';
-
-      sec.containers.forEach(function(cnt,ci){
-        var tot=sumFob(cnt);
-        h+='<div class="cb">'
-          +'<span class="cbg">'+cnt.suppliers.length+'</span>'
-          +'<input class="cin" value="'+esc(cnt.tipoCarga)+'" placeholder="tipo equipo" '
-          +'onchange="updCnt(\''+cur+'\','+di+',\''+sec.tipo+'\','+ci+',\'tipoCarga\',this.value)">'
-          +'<input class="cet" type="date" value="'+(cnt.eta||'')+'" '
-          +'onchange="updCnt(\''+cur+'\','+di+',\''+sec.tipo+'\','+ci+',\'eta\',this.value)">'
-          +'</div>';
-
-        // Mini col headers
-        h+='<div class="chrow">'
-          +'<span style="width:28px;flex-shrink:0;text-align:center">CTN</span>'
-          +'<span style="flex:1">SUPLIDOR / DEPTO</span>'
-          +'<span style="width:60px;flex-shrink:0;text-align:right">FOB</span>'
-          +'<span style="width:32px;flex-shrink:0;text-align:center">%</span></div>';
-
-        // Suppliers
-        cnt.suppliers.forEach(function(s,si){
-          var pct=tot>0?Math.round((parseFloat(s.fob)||0)/tot*100)+'%':'—';
-          var hasRef=s.nroEmb||s.nroCont||s.nroFact;
-          var rc=s.matched?' mat':(hasRef?' nro':'');
-          var nm=s.prov||s.proveedor||'—';
-          var dp=s.dept||s.depto||'';
-          // Build reference line showing all identifiers entered
-          var refs=[];
-          if(s.nroEmb)  refs.push('#'+s.nroEmb);
-          if(s.nroCont) refs.push('CNT:'+s.nroCont.slice(0,8));
-          if(s.nroFact) refs.push('FAC:'+s.nroFact.slice(0,10));
-          var refStr=refs.join(' · ');
-          var matchTag=s.matched?'<span style="color:var(--gn);font-size:8px">✅ '+s.matchCrit+'</span>':'';
-          h+='<div class="sr'+rc+'" onclick="editSup(\''+cur+'\','+di+',\''+sec.tipo+'\','+ci+','+si+')">'
-            +'<div class="sct">'+(s.ctns||'—')+'</div>'
-            +'<div class="snm"><div class="sna" title="'+esc(nm)+'">'+nm+'</div>'
-            +'<div class="sde">'+dp+(refStr?' · '+refStr:'')+'</div>'
-            +(s.matched?'<div style="font-size:8px;color:var(--gn);margin-top:1px">✅ '+s.matchCrit+'</div>':'')
-            +'</div>'
-            +'<div class="sfb">'+(parseFloat(s.fob)>0?fK(s.fob):'—')+'</div>'
-            +'<div class="spc">'+pct+'</div></div>';
-        });
-
-        // Total bar
-        h+='<div class="tr2"><span class="tl2">'+cnt.suppliers.length+' sup · '+sumCtns(cnt)+' ctns</span>'
-          +'<span class="tv">'+fK(tot)+'</span></div>';
-
-        // Add slot
-        h+='<div class="as" onclick="abrirMod(\''+cur+'\','+di+',\''+sec.tipo+'\','+ci+')">＋ Agregar suplidor</div>';
+    (day.equipos||[]).forEach(function(eq,ei){
+      var clr=getEquipoColor(eq.via,eq.tipoEquipo);
+      var ico=getEquipoIcon(eq.via,eq.tipoEquipo);
+      var tot=sumFobEq(eq);
+      h+='<div style="background:'+clr.bg+';border-top:2px solid '+clr.border+';padding:5px 8px;display:flex;align-items:center;gap:5px;border-bottom:1px solid var(--bd)">'
+        +'<span style="font-size:14px;flex-shrink:0">'+ico+'</span>'
+        +'<select onchange="updEq(\''+cur+'\','+di+','+ei+',\'via\',this.value)" style="background:none;border:none;color:'+clr.color+';font-size:9px;font-weight:700;cursor:pointer;flex-shrink:0">'
+        +'<option value="SEA"'+(eq.via==='SEA'?' selected':'')+'>🚢 Marítimo</option>'
+        +'<option value="LAND"'+(eq.via==='LAND'?' selected':'')+'>🚛 Terrestre</option>'
+        +'<option value="AIR"'+(eq.via==='AIR'?' selected':'')+'>✈️ Aéreo</option>'
+        +'</select>'
+        +'<input class="cin" value="'+esc(eq.tipoEquipo)+'" placeholder="# contenedor / tipo" onchange="updEq(\''+cur+'\','+di+','+ei+',\'tipoEquipo\',this.value)" style="flex:1;color:'+clr.color+';font-weight:600;font-size:10px">'
+        +'<input class="cet" type="date" value="'+(eq.eta||'')+'" title="ETA" onchange="updEq(\''+cur+'\','+di+','+ei+',\'eta\',this.value)">'
+        +'<button onclick="delEq(\''+cur+'\','+di+','+ei+')" style="background:none;border:none;color:var(--mt);cursor:pointer;font-size:12px;padding:0 2px">✕</button>'
+        +'</div>'
+        +'<div style="display:flex;background:var(--s2);border-bottom:1px solid var(--bd)">'
+        +'<span style="width:34px;flex-shrink:0;text-align:center;font-size:9px;font-weight:700;color:var(--mt);padding:3px">CTN</span>'
+        +'<span style="flex:1;font-size:9px;font-weight:700;color:var(--mt);padding:3px">SUPLIDOR / DEPTO</span>'
+        +'<span style="width:72px;flex-shrink:0;text-align:right;font-size:9px;font-weight:700;color:var(--mt);padding:3px">FOB</span>'
+        +'<span style="width:36px;flex-shrink:0;text-align:center;font-size:9px;font-weight:700;color:var(--mt);padding:3px">%</span></div>';
+      (eq.suppliers||[]).forEach(function(s,si){
+        var pct=tot>0?Math.round((parseFloat(s.fob)||0)/tot*100)+'%':'—';
+        var rc=s.matched?' mat':((s.nroEmb||s.nroCont||s.nroFact)?' nro':'');
+        var nm=s.prov||s.proveedor||'—';
+        var refs=[];
+        if(s.nroEmb) refs.push('#'+s.nroEmb);
+        if(s.nroCont) refs.push(s.nroCont.slice(0,10));
+        h+='<div class="sr'+rc+'" onclick="editSup(\''+cur+'\','+di+','+ei+','+si+')">'
+          +'<div class="sct">'+(s.ctns||'—')+'</div>'
+          +'<div class="snm"><div class="sna" title="'+esc(nm)+'">'+nm+'</div>'
+          +'<div class="sde">'+(s.dept||s.depto||'')+(refs.length?' · '+refs.join(' '):'')+(s.matched?' ✅':'')+'</div></div>'
+          +'<div class="sfb">'+(parseFloat(s.fob)>0?fK(s.fob):'—')+'</div>'
+          +'<div class="spc">'+pct+'</div></div>';
       });
+      h+='<div class="tr2"><span class="tl2">'+eq.suppliers.length+' sup · '+sumCtnsEq(eq)+' ctns</span><span class="tv">'+fK(tot)+'</span></div>';
+      h+='<div class="as" onclick="abrirMod(\''+cur+'\','+di+','+ei+')">＋ Agregar suplidor</div>';
     });
-    h+='</td>';
+    h+='<div style="padding:8px 6px;border-top:2px dashed rgba(48,54,61,.4);display:flex;gap:5px">'
+      +'<button onclick="addEq(\''+cur+'\','+di+',\'SEA\')" class="btn" style="flex:1;font-size:10px;padding:5px 4px">🚢 + Mar</button>'
+      +'<button onclick="addEq(\''+cur+'\','+di+',\'LAND\')" class="btn" style="flex:1;font-size:10px;padding:5px 4px">🚛 + Tierra</button>'
+      +'<button onclick="addEq(\''+cur+'\','+di+',\'AIR\')" class="btn" style="flex:1;font-size:10px;padding:5px 4px">✈️ + Aire</button>'
+      +'</div>'
+      +'</td>';
   });
   h+='</tr>';
-
   t.innerHTML=h;
 }
+
+// ── Helpers para nuevo modelo ──
+function sumFobEq(eq){ return (eq.suppliers||[]).reduce(function(s,x){return s+(parseFloat(x.fob)||0);},0); }
+function sumCtnsEq(eq){ return (eq.suppliers||[]).reduce(function(s,x){return s+(parseInt(x.ctns)||0);},0); }
 
 function renderKPIs(wk){
   var prov=0,fob=0,cnts=0,bultos=0,match=0;
   wk.days.forEach(function(day){
-    day.sections.forEach(function(sec){
-      cnts+=sec.containers.length;
-      sec.containers.forEach(function(cnt){
-        prov+=cnt.suppliers.length;
-        fob+=sumFob(cnt);
-        bultos+=sumCtns(cnt);
-        match+=(cnt.suppliers||[]).filter(function(s){return s.matched;}).length;
-      });
+    cnts+=(day.equipos||[]).length;
+    (day.equipos||[]).forEach(function(eq){
+      prov+=eq.suppliers.length; fob+=sumFobEq(eq); bultos+=sumCtnsEq(eq);
+      match+=eq.suppliers.filter(function(s){return s.matched;}).length;
     });
   });
   var pct=prov>0?Math.round(match/prov*100):0;
@@ -593,12 +608,10 @@ function renderKPIs(wk){
 function renderDepts(wk){
   var dm={};
   wk.days.forEach(function(day){
-    day.sections.forEach(function(sec){
-      sec.containers.forEach(function(cnt){
-        (cnt.suppliers||[]).forEach(function(s){
-          var d=((s.dept||s.depto||'Sin depto')).toUpperCase().trim();
-          dm[d]=(dm[d]||0)+(parseFloat(s.fob)||0);
-        });
+    (day.equipos||[]).forEach(function(eq){
+      (eq.suppliers||[]).forEach(function(s){
+        var d=((s.dept||s.depto||'Sin depto')).toUpperCase().trim();
+        dm[d]=(dm[d]||0)+(parseFloat(s.fob)||0);
       });
     });
   });
@@ -609,8 +622,7 @@ function renderDepts(wk){
   ents.forEach(function(e){
     var pct=tot>0?((e[1]/tot)*100).toFixed(1):0;
     var w=Math.max(2,Math.round(parseFloat(pct)*1.7));
-    h+='<tr><td style="font-weight:600">'+e[0]+'</td>'
-      +'<td style="font-family:var(--mo);color:var(--gn)">'+fF(e[1])+'</td>'
+    h+='<tr><td style="font-weight:600">'+e[0]+'</td><td style="font-family:var(--mo);color:var(--gn)">'+fF(e[1])+'</td>'
       +'<td style="font-family:var(--mo);color:var(--mt)">'+pct+'%</td>'
       +'<td style="padding:6px 10px!important"><div class="db" style="width:'+w+'px"></div></td></tr>';
   });
@@ -618,22 +630,26 @@ function renderDepts(wk){
   document.getElementById('depts').innerHTML=h;
 }
 
-// ═══════════════════ CONTAINER MGMT ═══════════════════
-function addCnt(wk,di,tipo){
-  var sec=weeks[wk].days[di].sections.find(function(s){return s.tipo===tipo;});
-  if(!sec) return;
-  sec.containers.push({tipoCarga:'',eta:'',suppliers:[]});
+// ═══════════════════ EQUIPO MGMT ═══════════════════
+function addEq(wk,di,via){
+  if(!weeks[wk]||!weeks[wk].days[di]) return;
+  if(!weeks[wk].days[di].equipos) weeks[wk].days[di].equipos=[];
+  weeks[wk].days[di].equipos.push({id:Date.now(),tipoEquipo:'',via:via,eta:'',origen:'',suppliers:[]});
   save(); render();
 }
-function updCnt(wk,di,tipo,ci,field,val){
-  var sec=weeks[wk].days[di].sections.find(function(s){return s.tipo===tipo;});
-  if(sec&&sec.containers[ci]) sec.containers[ci][field]=val;
-  save();
+function delEq(wk,di,ei){
+  if(!confirm('¿Eliminar este equipo y sus suplidores?')) return;
+  weeks[wk].days[di].equipos.splice(ei,1);
+  save(); render();
+}
+function updEq(wk,di,ei,field,val){
+  var eq=weeks[wk].days[di].equipos[ei];
+  if(eq){ eq[field]=val; save(); render(); }
 }
 
 // ═══════════════════ SUPPLIER MODAL ═══════════════════
-function abrirMod(wk,di,tipo,ci){
-  ctx={wk:wk,di:di,tipo:tipo,ci:ci,si:null};
+function abrirMod(wk,di,ei){
+  ctx={wk:wk,di:di,ei:ei,si:null};
   document.getElementById('emodT').textContent='➕ Agregar Proveedor';
   document.getElementById('bDel').style.display='none';
   document.getElementById('ebox').classList.remove('on');
@@ -643,11 +659,10 @@ function abrirMod(wk,di,tipo,ci){
   document.getElementById('eEq').value='';
   document.getElementById('emod').classList.add('open');
 }
-function editSup(wk,di,tipo,ci,si){
-  ctx={wk:wk,di:di,tipo:tipo,ci:ci,si:si};
-  var sec=weeks[wk].days[di].sections.find(function(s){return s.tipo===tipo;});
-  if(!sec) return;
-  var s=sec.containers[ci].suppliers[si];
+function editSup(wk,di,ei,si){
+  ctx={wk:wk,di:di,ei:ei,si:si};
+  var eq=weeks[wk].days[di].equipos[ei];
+  var s=eq&&eq.suppliers[si];
   if(!s) return;
   document.getElementById('emodT').textContent='✏️ Editar — '+(s.prov||s.proveedor||'');
   document.getElementById('bDel').style.display='';
@@ -663,161 +678,56 @@ function editSup(wk,di,tipo,ci,si){
   document.getElementById('eEta').value=s.eta||'';
   document.getElementById('eObs').value=s.obs||'';
   document.getElementById('eEq').value=s.equipo||'';
-  // Run cross-reference with whatever data is available
   if(s.nroEmb||s.nroCont||s.nroFact) chkCruce();
   document.getElementById('emod').classList.add('open');
 }
 function cerrarMod(){ document.getElementById('emod').classList.remove('open'); }
 
 // ═══════════════════ CRUCE 3 CRITERIOS ═══════════════════
-// Prioridad: ① N°Embarque → ② N°Contenedor → ③ N°Factura/OC
-// Busca en: historial de index.html (tendData) Y en módulo tránsito
 function chkCruce(){
   var nro=(document.getElementById('eNro').value||'').trim();
   var cnt2=(document.getElementById('eCont').value||'').trim().toUpperCase();
   var fact=(document.getElementById('eFact').value||'').trim();
-
-  // Reset match boxes
-  var box=document.getElementById('ebox');
-  var box2=document.getElementById('ebox2');
+  var box=document.getElementById('ebox'); var box2=document.getElementById('ebox2');
   box.classList.remove('on'); box2.classList.remove('on');
-
-  // ─── Buscar en historial (tendData) ───
-  var td=getTend();
-  var histMatch=null; var histCrit='';
-
-  if(!histMatch && nro && nro.length>=2){
-    histMatch=td.find(function(d){ return String(d.nro||'').trim()===nro; });
-    if(histMatch) histCrit='① N°Embarque';
-  }
-  if(!histMatch && cnt2 && cnt2.length>=4){
-    histMatch=td.find(function(d){
-      var lines=(d.snap&&d.snap.invLines)||d.invLines||[];
-      return lines.some(function(l){
-        return (l.contenedor||l.ncontenedor||'').toUpperCase()===cnt2;
-      }) || String(d.contenedor||d.nroContenedor||'').toUpperCase()===cnt2;
-    });
-    if(histMatch) histCrit='② N°Contenedor';
-  }
-  if(!histMatch && fact && fact.length>=3){
-    histMatch=td.find(function(d){
-      var lines=(d.snap&&d.snap.invLines)||d.invLines||[];
-      return lines.some(function(l){
-        return String(l.nfac||l.numFact||l.factura||l.oc||'').trim()===fact;
-      });
-    });
-    if(histMatch) histCrit='③ N°Factura/OC';
-  }
-
-  if(histMatch){
-    box.classList.add('on');
-    document.getElementById('eml').textContent='✅ '+histCrit+' · Emb. '+histMatch.nro+' — '+(histMatch.esc||'');
-    document.getElementById('emv').textContent=(histMatch.desc||'')+'  ·  '+(histMatch.fecha||'');
-    var pe=document.getElementById('eProv');
-    if(!pe.value.trim()) pe.value=histMatch.desc||'';
-    if(!document.getElementById('eNro').value) document.getElementById('eNro').value=histMatch.nro||'';
-  }
-
-  // ─── Buscar en Tránsito (complementario) ───
-  var tr=getTr();
-  var trMatch=null; var trCrit='';
-
-  if(!trMatch && cnt2 && cnt2.length>=4){
-    trMatch=tr.find(function(r){ return (r.contenedor||'').toUpperCase()===cnt2; });
-    if(trMatch) trCrit='② N°Contenedor';
-  }
-  if(!trMatch && fact && fact.length>=3){
-    trMatch=tr.find(function(r){ return String(r.factura||'').trim()===fact; });
-    if(trMatch) trCrit='③ N°Factura/OC';
-  }
-  if(!trMatch && nro && nro.length>=2){
-    trMatch=tr.find(function(r){ return String(r.nroEmb||'').trim()===nro; });
-    if(trMatch) trCrit='① N°Embarque';
-  }
-
-  if(trMatch){
-    box2.classList.add('on');
-    document.getElementById('eml2').textContent='📦 '+trCrit+' · Tránsito: '+trMatch.proveedor+' — '+trMatch.estatus;
-    document.getElementById('emv2').textContent=(trMatch.depto||'')+'  ·  ETA: '+(trMatch.fEta||'—')+'  ·  $'+Number(trMatch.valor||0).toLocaleString('en-US',{maximumFractionDigits:0});
-    // Auto-fill if fields empty
-    var pe=document.getElementById('eProv');
-    if(!pe.value.trim()) pe.value=trMatch.proveedor||'';
-    var de=document.getElementById('eDept');
-    if(!de.value.trim()) de.value=trMatch.depto||'';
-    var fb=document.getElementById('eFob');
-    if(!fb.value) fb.value=trMatch.valor||'';
-    var et=document.getElementById('eEta');
-    if(!et.value) et.value=trMatch.fEta||'';
-  }
+  var td=getTend(); var histMatch=null; var histCrit='';
+  if(!histMatch&&nro&&nro.length>=2){ histMatch=td.find(function(d){return String(d.nro||'').trim()===nro;}); if(histMatch) histCrit='① N°Embarque'; }
+  if(!histMatch&&cnt2&&cnt2.length>=4){ histMatch=td.find(function(d){ var lines=(d.snap&&d.snap.invLines)||d.invLines||[]; return lines.some(function(l){return (l.contenedor||'').toUpperCase()===cnt2;})||String(d.contenedor||'').toUpperCase()===cnt2; }); if(histMatch) histCrit='② N°Contenedor'; }
+  if(!histMatch&&fact&&fact.length>=3){ histMatch=td.find(function(d){ var lines=(d.snap&&d.snap.invLines)||d.invLines||[]; return lines.some(function(l){return String(l.nfac||l.factura||'').trim()===fact;}); }); if(histMatch) histCrit='③ N°Factura'; }
+  if(histMatch){ box.classList.add('on'); document.getElementById('eml').textContent='✅ '+histCrit+' · Emb. '+histMatch.nro+' — '+(histMatch.esc||''); document.getElementById('emv').textContent=(histMatch.desc||'')+'  ·  '+(histMatch.fecha||''); var pe=document.getElementById('eProv'); if(!pe.value.trim()) pe.value=histMatch.desc||''; }
+  var tr=getTr(); var trMatch=null; var trCrit='';
+  if(!trMatch&&cnt2&&cnt2.length>=4){ trMatch=tr.find(function(r){return (r.contenedor||'').toUpperCase()===cnt2;}); if(trMatch) trCrit='② Contenedor'; }
+  if(!trMatch&&fact&&fact.length>=3){ trMatch=tr.find(function(r){return String(r.factura||'').trim()===fact;}); if(trMatch) trCrit='③ Factura'; }
+  if(!trMatch&&nro&&nro.length>=2){ trMatch=tr.find(function(r){return String(r.nroEmb||'').trim()===nro;}); if(trMatch) trCrit='① Embarque'; }
+  if(trMatch){ box2.classList.add('on'); document.getElementById('eml2').textContent='📦 '+trCrit+' · '+trMatch.proveedor+' — '+trMatch.estatus; document.getElementById('emv2').textContent=(trMatch.depto||'')+'  ·  ETA: '+(trMatch.fEta||'—')+'  ·  $'+Number(trMatch.valor||0).toLocaleString('en-US',{maximumFractionDigits:0}); var pe2=document.getElementById('eProv'); if(!pe2.value.trim()) pe2.value=trMatch.proveedor||''; var de=document.getElementById('eDept'); if(!de.value.trim()) de.value=trMatch.depto||''; var fb=document.getElementById('eFob'); if(!fb.value) fb.value=trMatch.valor||''; var et=document.getElementById('eEta'); if(!et.value) et.value=trMatch.fEta||''; }
 }
 
 function saveSup(){
   if(!ctx) return;
   var prov=(document.getElementById('eProv').value||'').trim();
   if(!prov){ toast('⚠️ Ingresa el nombre del proveedor','#f97316'); return; }
-
   var nro=(document.getElementById('eNro').value||'').trim();
   var cont=(document.getElementById('eCont').value||'').trim().toUpperCase();
   var fact=(document.getElementById('eFact').value||'').trim();
-
-  // Determine match: any of the three criteria found in historial
   var matched=false; var matchCrit=''; var matchNro='';
   var td=getTend();
-
-  if(!matched && nro){
-    var f=td.find(function(d){return String(d.nro||'').trim()===nro;});
-    if(f){ matched=true; matchCrit='N°Embarque'; matchNro=f.nro; }
-  }
-  if(!matched && cont && cont.length>=4){
-    var f2=td.find(function(d){
-      var lines=(d.snap&&d.snap.invLines)||d.invLines||[];
-      return lines.some(function(l){return (l.contenedor||'').toUpperCase()===cont;})
-        || String(d.contenedor||'').toUpperCase()===cont;
-    });
-    if(f2){ matched=true; matchCrit='N°Contenedor'; matchNro=f2.nro; }
-  }
-  if(!matched && fact){
-    var f3=td.find(function(d){
-      var lines=(d.snap&&d.snap.invLines)||d.invLines||[];
-      return lines.some(function(l){return String(l.nfac||l.numFact||l.factura||l.oc||'').trim()===fact;});
-    });
-    if(f3){ matched=true; matchCrit='N°Factura'; matchNro=f3.nro; }
-  }
-
-  var sup={
-    prov:prov,
-    dept:(document.getElementById('eDept').value||'').trim(),
-    fob:parseFloat(document.getElementById('eFob').value)||0,
-    ctns:parseInt(document.getElementById('eCtns').value)||0,
-    eta:document.getElementById('eEta').value||'',
-    obs:(document.getElementById('eObs').value||'').trim(),
-    equipo:document.getElementById('eEq').value||'',
-    nroEmb:nro,
-    nroCont:cont,
-    nroFact:fact,
-    matched:matched,
-    matchCrit:matchCrit,
-    matchNro:matchNro
-  };
-
-  var sec=weeks[ctx.wk].days[ctx.di].sections.find(function(s){return s.tipo===ctx.tipo;});
-  if(!sec) return;
-  if(ctx.si===null){ sec.containers[ctx.ci].suppliers.push(sup); }
-  else { sec.containers[ctx.ci].suppliers[ctx.si]=sup; }
+  if(!matched&&nro){ var f=td.find(function(d){return String(d.nro||'').trim()===nro;}); if(f){matched=true;matchCrit='N°Embarque';matchNro=f.nro;} }
+  if(!matched&&cont&&cont.length>=4){ var f2=td.find(function(d){ var lines=(d.snap&&d.snap.invLines)||d.invLines||[]; return lines.some(function(l){return (l.contenedor||'').toUpperCase()===cont;})||String(d.contenedor||'').toUpperCase()===cont; }); if(f2){matched=true;matchCrit='N°Contenedor';matchNro=f2.nro;} }
+  if(!matched&&fact){ var f3=td.find(function(d){ var lines=(d.snap&&d.snap.invLines)||d.invLines||[]; return lines.some(function(l){return String(l.nfac||l.factura||'').trim()===fact;}); }); if(f3){matched=true;matchCrit='N°Factura';matchNro=f3.nro;} }
+  var sup={prov:prov,dept:(document.getElementById('eDept').value||'').trim(),fob:parseFloat(document.getElementById('eFob').value)||0,ctns:parseInt(document.getElementById('eCtns').value)||0,eta:document.getElementById('eEta').value||'',obs:(document.getElementById('eObs').value||'').trim(),equipo:document.getElementById('eEq').value||'',nroEmb:nro,nroCont:cont,nroFact:fact,matched:matched,matchCrit:matchCrit,matchNro:matchNro};
+  var eq=weeks[ctx.wk].days[ctx.di].equipos[ctx.ei];
+  if(!eq) return;
+  if(ctx.si===null){ eq.suppliers.push(sup); } else { eq.suppliers[ctx.si]=sup; }
   save(); render(); cerrarMod();
-
-  var msg=matched
-    ? '✅ Cruzado por '+matchCrit+(matchNro?' — Emb. '+matchNro:'')
-    : '💾 Proveedor guardado · Sin cruce en historial';
-  toast(msg, matched?'rgba(63,185,80,.97)':'rgba(88,166,255,.9)');
+  toast(matched?'✅ Cruzado: '+matchCrit+(matchNro?' — Emb. '+matchNro:''):'💾 Proveedor guardado',matched?'rgba(63,185,80,.97)':'rgba(88,166,255,.9)');
 }
 
 function delSup(){
   if(!ctx||ctx.si===null) return;
   if(!confirm('¿Eliminar este proveedor del plan?')) return;
-  var sec=weeks[ctx.wk].days[ctx.di].sections.find(function(s){return s.tipo===ctx.tipo;});
-  if(!sec) return;
-  sec.containers[ctx.ci].suppliers.splice(ctx.si,1);
+  var eq=weeks[ctx.wk].days[ctx.di].equipos[ctx.ei];
+  if(!eq) return;
+  eq.suppliers.splice(ctx.si,1);
   save(); render(); cerrarMod();
   toast('🗑 Eliminado','#f85149');
 }
