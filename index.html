@@ -708,7 +708,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
         onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(245,158,11,.2)'"
         onmouseout="this.style.transform='';this.style.boxShadow=''">
         <span style="font-size:28px">🧾</span>
-        <div style="font-size:12px;font-weight:700;color:#fbbf24">Historial Facturas</div>
+        <div style="font-size:12px;font-weight:700;color:#fbbf24">Historial Embarques</div>
         <div style="font-size:10px;color:var(--muted)">Facturas por embarque</div>
       </button>
       <button onclick="iniciarApp('unico')"
@@ -2104,7 +2104,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
   <!-- QUICK ACCESS BUTTONS + EXCEL -->
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
     <button onclick="renderDashboardKPIs()" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:8px;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer">📊 Dashboard KPIs</button>
-    <button onclick="renderHistFact()" style="background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.3);color:#a855f7;border-radius:8px;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer">🧾 Historial Facturas</button>
+    <button onclick="renderHistFact()" style="background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.3);color:#a855f7;border-radius:8px;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer">📋 Historial Embarques</button>
     <button onclick="renderResumenRapido()" style="background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.3);color:#22d3ee;border-radius:8px;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer">⚡ Resumen Rápido</button>
     <button onclick="exportDashboardExcel()" style="margin-left:auto;background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:8px;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer">📊 Excel</button>
   </div>
@@ -7552,7 +7552,7 @@ function renderTend(){
       el.textContent=(varPct2>0?'+':'')+varPct2.toFixed(1)+'%';
       el.style.color=varPct2>0?'var(--green-l)':'var(--red-l)';
     }
-    const rows2=[...filteredData].reverse().map((d,ri)=>{
+    const rows2=[...filteredData].map((d,ri)=>{
       const idx=tendData.indexOf(d);
       const pct=d.cif>0?(d.ahorro/d.cif*100).toFixed(2)+'%':'—';
       const isPend = d.status === 'pendiente'; const isParcial = d.status === 'parcial';
@@ -7683,9 +7683,9 @@ function renderTend(){
 
   // History table — agrupado por Año → Mes (acordeones)
   const currentYM = new Date().toISOString().slice(0,7); // "2026-05"
-  // Agrupar por año y mes
+  // Agrupar por año y mes — filteredData ya viene ordenado mayor→menor por N°
   const byYear = {};
-  [...filteredData].reverse().forEach((d)=>{
+  [...filteredData].forEach((d)=>{
     const idx=tendData.indexOf(d);
     const dt=new Date(d.fecha||'2000-01-01');
     const yr=dt.getFullYear();
@@ -7984,10 +7984,13 @@ function _renderHistProvList(){
     var clr=isNegCosto?'var(--green-l)':r.tipo==='ZL'?'var(--blue-l)':'var(--orange-l)';
     var hasHomolInfo = r.ocHomologada || r.montoHomologado>0;
     return '<div style="background:var(--s1);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:7px;cursor:pointer" onclick="abrirFacturasEmbarque('+r._dIdx+')">'+
-      // Row 1: tipo badge + proveedor + monto
+      // Row 1: tipo badge + proveedor + monto + comparativo button
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">'+
         '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0">'+tB+'<span style="font-size:12px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+r.prov+'</span></div>'+
-        '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:13px;font-weight:800;color:'+clr+';flex-shrink:0;margin-left:8px">'+fmt2(r.costo)+'</span>'+
+        '<div style="display:flex;align-items:center;gap:5px;flex-shrink:0;margin-left:8px">'+
+          '<button onclick="event.stopPropagation();abrirModuloComparativo_idx('+r._dIdx+')" title="Ver comparativo de escenarios" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);color:var(--blue-l);border-radius:5px;padding:2px 7px;font-size:9px;font-weight:700;cursor:pointer;white-space:nowrap">📊 Comp.</button>'+
+          '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:13px;font-weight:800;color:'+clr+'">'+fmt2(r.costo)+'</span>'+
+        '</div>'+
       '</div>'+
       // Row 2: depto + esc badge + homol badge
       '<div style="display:flex;align-items:center;gap:5px;margin-bottom:6px;flex-wrap:wrap"><span style="font-size:10px;color:var(--muted);font-weight:600">'+r.depto+'</span>'+eB+hB+'</div>'+
@@ -8206,66 +8209,92 @@ function _renderGastosNoMerc(all){
     const sc2  = snap.sc2 || {};
     const sc3  = snap.sc3 || {};
     const escElegido = d.esc || '';
-    const isCif = escElegido.toLowerCase().includes('cif') || escElegido.toLowerCase().includes('express');
-    const isSab = escElegido.toLowerCase().includes('sababa') || escElegido.toLowerCase().includes('sab');
+    const isCif   = escElegido.toLowerCase().includes('cif') || escElegido.toLowerCase().includes('express');
+    const isSab   = escElegido.toLowerCase().includes('sababa') || escElegido.toLowerCase().includes('sab');
+    const isUnico = !!(d.modoUnico || d.tipoEsc==='unico'
+                    || escElegido.toLowerCase().includes('único')
+                    || escElegido.toLowerCase().includes('unico')
+                    || (snap.sc1 && !snap.sc2 && !snap.sc3));
+    // Liq. Aduanal Regular = ninguno de los anteriores. Sus números en sc1 son REFERENCIA, no pago real.
+    const isLiqRef = !isCif && !isSab && !isUnico;
 
-    // ── Fuente de verdad: invLines de gastos (valores reales registrados) ──
-    // Si existen líneas de gastos, son la fuente primaria (evita doble conteo con snap).
-    // Si no existen (embarque antiguo sin invLines), caer al snap como fallback.
-    const lines = d.invLines || (snap.invLines)||[];
-    const gastoLines = lines.filter(l=>l.tipoFac&&l.tipoFac!=='mercancia'&&!l._autoGasto);
-    const hasGastos  = gastoLines.length > 0;
+    // ── Fuente primaria: invLines reales registradas ──
+    const lines     = d.invLines || snap.invLines || [];
+    const gastoLines= lines.filter(l=>l.tipoFac && l.tipoFac!=='mercancia' && !l._autoGasto);
+    const hasGastos = gastoLines.length > 0;
 
     if(hasGastos){
-      // Fuente: invLines — los valores que realmente se registraron
-      gastoLines.forEach(l=>{
-        const provUp = (l.prov||'').toUpperCase();
-        const isSababaLine = provUp.includes('SABABA');
-        const isMasterVal  = provUp.includes('MASTER VALUE') || provUp.includes('MASTER_VALUE');
+      // ── Fuente real: facturas registradas en el embarque ──
+      // Aplica a TODOS los escenarios que tienen invLines (CIF, Sababa, Único)
+      // Para Liq. Aduanal con invLines reales, también los tomamos.
+      gastoLines.forEach(function(l){
+        const provUp     = (l.prov||'').toUpperCase();
+        const isSabLine  = provUp.includes('SABABA');
+        const isMVLine   = provUp.includes('MASTER VALUE') || provUp.includes('MASTER_VALUE');
         switch(l.tipoFac){
           case 'flete':      rubros.flete.total       += l.costo||0; break;
           case 'acarreo':    rubros.gastos_orig.total += l.costo||0; break;
           case 'honorarios': rubros.honorarios.total  += l.costo||0; break;
           case 'gastos':
-            if(isMasterVal) rubros.mv.total    += l.costo||0;
-            else            rubros.otros.total += l.costo||0;
+            if(isMVLine)   rubros.mv.total    += l.costo||0;
+            else           rubros.otros.total += l.costo||0;
             break;
           case 'itbms':
-            if(isSababaLine){
-              // ITBMS Sababa = costeable (entra al inventario, NO es fiscal)
+            if(isSabLine){
+              // ITBMS Sababa costeable — va en No Mercancía (parte de comisión bruta)
               totalItbmsCosteable           += l.costo||0;
               rubros.honorarios_itbms.total += l.costo||0;
             } else {
-              totalItbms += l.costo||0; // ITBMS fiscal (Tesoro, CIF Express)
+              // ITBMS fiscal (CIF Express, Único → Tesoro Nacional) — línea ITBMS separada
+              totalItbms += l.costo||0;
             }
             break;
         }
       });
-      // totalNoMerc = gastos no ITBMS fiscal + ITBMS costeable Sababa
-      totalNoMerc += gastoLines.reduce((s,l)=>{
+      // totalNoMerc = todo lo real EXCEPTO ITBMS fiscal (Tesoro Nacional)
+      totalNoMerc += gastoLines.reduce(function(s,l){
+        // Excluir ITBMS fiscal (no Sababa)
         if(l.tipoFac==='itbms' && !(l.prov||'').toUpperCase().includes('SABABA')) return s;
         return s + (l.costo||0);
       }, 0);
-    } else {
-      // Fallback snap (embarques sin invLines — formato antiguo)
-      if(isCif){
-        rubros.flete.total       += sc2.flete||0;
-        rubros.gastos_orig.total += sc2.gastos||0;
-        rubros.honorarios.total  += sc2.hon||0;
-        rubros.mv.total          += sc2.mv||0;
-        totalItbms               += (sc2.itbms||0) + (sc2.itbmsTasaFinal||0) + (sc2.itbmsHon||0);
-        totalNoMerc              += sc2.noMerc||0;
-      } else if(isSab){
-        const comBrutaFb = sc3.comBruta || Math.max(0,(sc3.comision||0)-(sc3.itbmsHomol||0));
-        rubros.flete.total            += sc3.flete||0;
-        rubros.gastos_orig.total      += sc3.gastos||0;
-        rubros.honorarios.total       += comBrutaFb;
-        rubros.honorarios_itbms.total += sc3.itbmsHomol||0;
-        rubros.mv.total               += sc3.mv||0;
-        totalItbmsCosteable           += sc3.itbmsHomol||0;
-        totalNoMerc                   += sc3.noMerc||0;
-      }
+
+    } else if(isCif){
+      // ── Fallback CIF Express (sin invLines — formato antiguo) ──
+      // sc2.noMerc = honorarios + tasa + uso sistema + flete + gastos O/D (sin ITBMS)
+      rubros.flete.total       += sc2.flete||0;
+      rubros.gastos_orig.total += sc2.gastos||0;
+      rubros.honorarios.total  += sc2.hon||0;
+      rubros.mv.total          += sc2.mv||0;
+      totalItbms               += (sc2.itbms||0) + (sc2.itbmsTasaFinal||0) + (sc2.itbmsHon||0);
+      totalNoMerc              += sc2.noMerc||0; // ya excluye ITBMS fiscal
+
+    } else if(isSab){
+      // ── Fallback Sababa (sin invLines — formato antiguo) ──
+      // Comisión BRUTA = sc3.comision (10% total, incluye ITBMS Sababa adentro)
+      // El sistema empresarial lee la comisión completa en No Mercancía.
+      const comisionBruta = sc3.comision || 0; // 10% bruto completo
+      const itbmsHomol    = sc3.itbmsHomol || 0;
+      rubros.flete.total            += sc3.flete||0;
+      rubros.gastos_orig.total      += sc3.gastos||0;
+      rubros.honorarios.total       += Math.max(0, comisionBruta - itbmsHomol); // comisión neta corredor
+      rubros.honorarios_itbms.total += itbmsHomol; // ITBMS dentro de la comisión
+      rubros.mv.total               += sc3.mv||0;
+      totalItbmsCosteable           += itbmsHomol;
+      // totalNoMerc Sababa = comisión bruta completa + flete + gastos O/D
+      totalNoMerc += comisionBruta + (sc3.flete||0) + (sc3.gastos||0) + (sc3.mv||0);
+
+    } else if(isUnico){
+      // ── Fallback Escenario Único (sin invLines — formato antiguo) ──
+      // sc1 aquí SÍ son costos reales pagados (a diferencia de Liq. Aduanal Regular)
+      rubros.flete.total       += sc1.flete||0;
+      rubros.gastos_orig.total += (sc1.acarreo||0) + (sc1.gastos||0) + (sc1.agente||0) + (sc1.dmce||0);
+      rubros.honorarios.total  += sc1.hon||0;
+      totalItbms               += (sc1.itbms||0) + (sc1.itbmsTasaFinal||0);
+      totalNoMerc              += sc1.noMerc||0; // arancel+hon+tasa+form+flete+acarreo+dmce+agente
+
     }
+    // isLiqRef (Liq. Aduanal Regular sin invLines) → $0, no suma nada.
+    // Sus números en sc1 son cotización de referencia comparativa, no pagos reales.
 
     // ── Ahorro por rubro (SC1 como base de comparación) ──
     const ahorroLiq  = (sc1.arancel||0) - (isCif?(sc2.arancel||0):(isSab?0:0));
