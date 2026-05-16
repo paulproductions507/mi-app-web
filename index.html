@@ -8219,8 +8219,10 @@ function _renderGastosNoMerc(all){
     const isLiqRef = !isCif && !isSab && !isUnico;
 
     // ── Fuente primaria: invLines reales registradas ──
+    // Incluye líneas auto-calculadas (_autoGasto) Y líneas manuales de facturas reales.
+    // _autoGasto marca líneas del sistema (honorarios Único, tasa, ITBMS) — son costos reales.
     const lines     = d.invLines || snap.invLines || [];
-    const gastoLines= lines.filter(l=>l.tipoFac && l.tipoFac!=='mercancia' && !l._autoGasto);
+    const gastoLines= lines.filter(function(l){ return l.tipoFac && l.tipoFac!=='mercancia'; });
     const hasGastos = gastoLines.length > 0;
 
     if(hasGastos){
@@ -8232,12 +8234,17 @@ function _renderGastosNoMerc(all){
         const isSabLine  = provUp.includes('SABABA');
         const isMVLine   = provUp.includes('MASTER VALUE') || provUp.includes('MASTER_VALUE');
         switch(l.tipoFac){
-          case 'flete':      rubros.flete.total       += l.costo||0; break;
-          case 'acarreo':    rubros.gastos_orig.total += l.costo||0; break;
-          case 'honorarios': rubros.honorarios.total  += l.costo||0; break;
+          case 'flete':        rubros.flete.total       += l.costo||0; break;
+          case 'acarreo':      rubros.gastos_orig.total += l.costo||0; break;
+          case 'honorarios':   rubros.honorarios.total  += l.costo||0; break;
+          case 'liquidacion':  rubros.otros.total       += l.costo||0; break; // arancel Único
+          case 'tasa':         rubros.otros.total       += l.costo||0; break; // tasa aduana
+          case 'uso_sistema':  rubros.otros.total       += l.costo||0; break;
+          case 'dmce':         rubros.otros.total       += l.costo||0; break;
+          case 'nota_credito': rubros.otros.total       -= Math.abs(l.costo||0); break; // descuento
           case 'gastos':
-            if(isMVLine)   rubros.mv.total    += l.costo||0;
-            else           rubros.otros.total += l.costo||0;
+            if(isMVLine) rubros.mv.total    += l.costo||0;
+            else         rubros.otros.total += l.costo||0;
             break;
           case 'itbms':
             if(isSabLine){
@@ -8245,16 +8252,18 @@ function _renderGastosNoMerc(all){
               totalItbmsCosteable           += l.costo||0;
               rubros.honorarios_itbms.total += l.costo||0;
             } else {
-              // ITBMS fiscal (CIF Express, Único → Tesoro Nacional) — línea ITBMS separada
+              // ITBMS fiscal (Tesoro Nacional: CIF Express, Único) — línea ITBMS separada
               totalItbms += l.costo||0;
             }
             break;
         }
       });
-      // totalNoMerc = todo lo real EXCEPTO ITBMS fiscal (Tesoro Nacional)
+      // totalNoMerc = todo lo real EXCEPTO ITBMS fiscal (Tesoro Nacional - no Sababa)
       totalNoMerc += gastoLines.reduce(function(s,l){
-        // Excluir ITBMS fiscal (no Sababa)
+        // Solo excluir ITBMS fiscal (Tesoro Nacional) — no Sababa
         if(l.tipoFac==='itbms' && !(l.prov||'').toUpperCase().includes('SABABA')) return s;
+        // Notas de crédito restan
+        if(l.tipoFac==='nota_credito') return s - Math.abs(l.costo||0);
         return s + (l.costo||0);
       }, 0);
 
