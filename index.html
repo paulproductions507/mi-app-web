@@ -3735,7 +3735,7 @@ function calc(){
       sc3_mercHomol    = sc3_baseAjustada / DIV;
       const _sc3Exento  = v('s2_exento') || 0;
       const _sc3Gravado = Math.max(0, sc3_mercHomol - _sc3Exento);
-      sc3_itbmsHomol   = Math.round(_sc3Gravado * (sc3_itbPct || itbPct) * 100) / 100;
+      sc3_itbmsHomol   = Math.round(_sc3Gravado * itbPct * 100) / 100;
       const comisionAuto = sc3_baseAjustada * sc3_comPct;  // CORRECTO: baseAjust × % (no pagFinal)
       const comisionEl = document.getElementById('sc_comision_display');
       if(compar==='sababa'){
@@ -11060,12 +11060,21 @@ function applyInvToForm(){
 
   // PAGO_REALIZADO se mapea automáticamente al cargar el archivo (no al aplicar)
 
-  _showToast('✅ ' + fmt(total) + ' aplicado → Escenario Regular', 'green', 2200);
+  _showToast('✅ ' + fmt(total) + ' aplicado → Simulador', 'green', 2200);
   setTimeout(()=>{
-    const simTab=document.querySelector('.tab');
+    // Set target before closing so closeTabModal knows where to land
+    window._lastNonModalTabGlobal = 'sim';
+    // Close the Proveedores modal
     if(typeof closeTabModal==='function') closeTabModal();
-    switchTab('sim', simTab);
-    const cifEl=document.getElementById(termino==='FOB'?'s1_fob':'s1_cif');
+    // Navigate to sim tab directly using the original switchTab
+    var simTabEl = document.querySelector('.tab');
+    document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('on'));
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
+    var simPane = document.getElementById('tab-sim');
+    if(simPane) simPane.classList.add('on');
+    if(simTabEl) simTabEl.classList.add('on');
+    // Highlight the CIF/FOB field
+    var cifEl=document.getElementById(termino==='FOB'?'s1_fob':'s1_cif');
     if(cifEl){
       cifEl.style.transition='box-shadow .3s, border-color .3s';
       cifEl.style.borderColor='var(--green-l)';
