@@ -4528,8 +4528,8 @@ function _autoFillGastosProveedores(){
       add('liquidacion', 'TESORO NACIONAL',       'DMCE',    dmce);
       add('acarreo',     'ACARREO / TRANSPORTE',  'Acarreo', acarreo);
     }
-    // Gastos agente — vienen de plantilla, no auto-generados aquí
-    // (el usuario los sube con su proveedor real)
+    // Gastos agente/destino — auto-agregar si el usuario lo tiene en el form
+    if(agente > 0.005) add('gastos_destino', 'GASTOS DESTINO / ORIGEN', 'Gastos Destino/Origen', agente);
   }
 
   // ══════════════════════════════════════════════════════
@@ -4541,7 +4541,7 @@ function _autoFillGastosProveedores(){
     const corOC   = ud.corredor==='cifexp' ? 'Hon.CIF Único' : 'Hon.Sab Único';
     add('honorarios', corProv, corOC, ud.hon, ud.honNfac||'');
     if(ud.tasa>0) add('liquidacion', 'TESORO NACIONAL', 'Tasa Aduana', ud.tasa);
-    if(ud.agente>0) add('acarreo', 'ACARREO / TRANSPORTE', 'Gastos Origen/Destino', ud.agente);
+    if(ud.agente>0) add('gastos_destino', 'GASTOS DESTINO / ORIGEN', 'Gastos Origen/Destino', ud.agente);
     // Add extra gastos from unico-gastos-list
     document.querySelectorAll('#unico-gastos-list .unico-gasto-row').forEach(function(row){
       var sel = row.querySelector('select');
@@ -10558,7 +10558,7 @@ function renderInvLines(){
         +'</div>'
         +'<div style="display:flex;gap:5px;align-items:center;margin-bottom:6px">'
         +'<input type="text" value="'+(l.numFact||l.nfac||'')+'" placeholder="N° Factura Suplidor" id="nfact-merc-'+i+'" onchange="invLines['+i+'].numFact=this.value;invLines['+i+'].nfac=this.value;" oninput="invLines['+i+'].numFact=this.value;invLines['+i+'].nfac=this.value;" style="flex:1;background:var(--s2);border:1px solid rgba(88,166,255,.2);border-radius:5px;padding:5px 8px;color:var(--text);font-size:11px">'
-        +'<button onclick="(function(i){invLines[i].numFact=document.getElementById(\'nfact-merc-\'+i)?.value||invLines[i].numFact||\'\';;invLines[i].nfac=invLines[i].numFact;var b=this;b.textContent=\'✓ Guardado\';b.style.background=\'rgba(63,185,80,.3)\';if(typeof _showInlineToast===\'function\') _showInlineToast(b,\'✅ Factura guardada\');setTimeout(function(){b.textContent=\'💾\';b.style.background=\'rgba(63,185,80,.12)\';},1500);})('+i+')" style="flex-shrink:0;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:5px;padding:5px 10px;font-size:11px;cursor:pointer" title="Guardar N° Factura">💾</button>'
+        +'<button onclick="_guardarFactura('+i+',\'nfact-merc-\'+i,{btn:this})" style="flex-shrink:0;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer;transition:all .15s" title="Guardar N° Factura">💾</button>'
         +'</div>'
         +'<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
         +'<div style="flex:1;min-width:0;position:relative"><input type="text" value="'+((l.prov||'').replace(/"/g,'&quot;'))+'" placeholder="'+(m&&!m.exact&&m.score<0.8?'⚠ Escribe el nombre correcto...':'Escribe proveedor para buscar...')+'" list="prov-datalist" onchange="onInvProvChange('+i+',this.value)" oninput="invLines['+i+'].prov=this.value" style="width:100%;background:var(--s2);border:1px solid '+provBorder+';border-radius:6px;padding:6px 10px;color:'+((!m||m.score<0.25)?'var(--red-l)':'var(--text)')+';font-size:12px;box-sizing:border-box'+((!m||m.score<0.25)?';font-weight:700':'')+'"></div>'
@@ -10574,9 +10574,9 @@ function renderInvLines(){
 
   // ── Render gastos de servicio — aplicar a TODOS los contenedores ──
   const fmt=n=>'$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-  const tipoColors={liquidacion:'rgba(248,81,73,.15)',itbms:'rgba(88,166,255,.15)',tasa:'rgba(210,153,34,.15)',flete:'rgba(240,136,62,.15)',acarreo:'rgba(210,153,34,.15)',honorarios:'rgba(168,85,247,.15)',uso_sistema:'rgba(63,185,80,.15)',seguro:'rgba(88,166,255,.1)',almacenaje:'rgba(240,136,62,.1)',inspeccion:'rgba(248,81,73,.1)',dmce:'rgba(139,148,158,.15)',gastos:'rgba(139,148,158,.15)',otros:'rgba(139,148,158,.15)'};
-  const tipoIcons={liquidacion:'🏛️',itbms:'🧾',tasa:'💵',flete:'🚢',acarreo:'🚛',honorarios:'💼',uso_sistema:'💻',seguro:'🛡️',almacenaje:'🏪',inspeccion:'🔍',dmce:'📝',gastos:'📋',otros:'📋'};
-  const tipoLabels={liquidacion:'Liquidación / Pago Arancelario',itbms:'ITBMS',tasa:'Tasa / Uso del Sistema',flete:'Flete Internacional',acarreo:'Acarreo / Transporte',honorarios:'Honorarios / Comisión',uso_sistema:'Uso del Sistema (SIGA/SICE)',seguro:'Seguro de Carga',almacenaje:'Almacenaje',inspeccion:'Inspección / Reconocimiento',dmce:'DMCE',gastos:'Otros Gastos',otros:'Otros Gastos'};
+  const tipoColors={liquidacion:'rgba(248,81,73,.15)',itbms:'rgba(88,166,255,.15)',tasa:'rgba(210,153,34,.15)',flete:'rgba(240,136,62,.15)',acarreo:'rgba(210,153,34,.15)',gastos_destino:'rgba(99,179,237,.15)',honorarios:'rgba(168,85,247,.15)',uso_sistema:'rgba(63,185,80,.15)',seguro:'rgba(88,166,255,.1)',almacenaje:'rgba(240,136,62,.1)',inspeccion:'rgba(248,81,73,.1)',dmce:'rgba(139,148,158,.15)',gastos:'rgba(139,148,158,.15)',otros:'rgba(139,148,158,.15)'};
+  const tipoIcons={liquidacion:'🏛️',itbms:'🧾',tasa:'💵',flete:'🚢',acarreo:'🚛',gastos_destino:'📦',honorarios:'💼',uso_sistema:'💻',seguro:'🛡️',almacenaje:'🏪',inspeccion:'🔍',dmce:'📝',gastos:'📋',otros:'📋'};
+  const tipoLabels={liquidacion:'Liquidación / Pago Arancelario',itbms:'ITBMS',tasa:'Tasa / Uso del Sistema',flete:'Flete Internacional',acarreo:'Acarreo / Transporte',gastos_destino:'Gastos Destino / Origen',honorarios:'Honorarios / Comisión',uso_sistema:'Uso del Sistema (SIGA/SICE)',seguro:'Seguro de Carga',almacenaje:'Almacenaje',inspeccion:'Inspección / Reconocimiento',dmce:'DMCE',gastos:'Otros Gastos',otros:'Otros Gastos'};
   let gastosHTML;
   if(!gastoLines.length){
     gastosHTML = '<div style="text-align:center;padding:12px;color:var(--muted);font-size:11px">Calcula un embarque para ver los gastos de servicio auto-mapeados.</div>';
@@ -10620,14 +10620,7 @@ function renderInvLines(){
           +'onchange="invLines['+i+'].numFact=this.value;invLines['+i+'].nfac=this.value;" '
           +'oninput="invLines['+i+'].numFact=this.value;invLines['+i+'].nfac=this.value;" '
           +'style="flex:1;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:5px 10px;color:var(--text);font-size:11px;box-sizing:border-box">'
-          +'<button onclick="(function(i){var val=document.getElementById(\'nfact-gasto-\'+i)?.value||invLines[i].numFact||\'\';invLines[i].numFact=val;invLines[i].nfac=val;'
-          // Auto-propagar a líneas del mismo proveedor Sababa
-          +'var prov=(invLines[i].prov||\'\').toUpperCase();if(prov.includes(\'SABABA\')){invLines.forEach(function(l,j){if(j!==i&&(l.prov||\'\').toUpperCase().includes(\'SABABA\')){l.numFact=val;l.nfac=val;var el=document.getElementById(\'nfact-gasto-\'+j);if(el)el.value=val;}});}'
-          // Auto-propagar a TODOS los rubros de Tesoro Nacional
-          +'if(prov.includes(\'TESORO\')&&prov.includes(\'NACIONAL\')){var tnCount=0;invLines.forEach(function(l,j){if(j!==i&&(l.prov||\'\').toUpperCase().includes(\'TESORO\')&&(l.prov||\'\').toUpperCase().includes(\'NACIONAL\')){l.numFact=val;l.nfac=val;tnCount++;var el=document.getElementById(\'nfact-gasto-\'+j);if(el)el.value=val;}});var tnMsg=tnCount>0?\'✅ TN: propagada a \'+tnCount+\' rubro(s)\': \'✅ Factura guardada\';}'
-          +'var toastMsg=prov.includes(\'TESORO\')&&prov.includes(\'NACIONAL\')?(\'✅ Factura TN propagada a todos sus rubros\'):\'✅ Factura guardada\';'
-          +'var b=this;b.textContent=\'✓ Guardado\';b.style.background=\'rgba(63,185,80,.3)\';if(typeof _showInlineToast===\'function\') _showInlineToast(b,toastMsg);setTimeout(function(){b.textContent=\'💾\';b.style.background=\'rgba(63,185,80,.12)\';},1500);})('+i+')" '
-          +'style="flex-shrink:0;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;white-space:nowrap" title="Guardar N° Factura · Tesoro Nacional: se propaga automáticamente a todos sus rubros">💾</button>'
+          +'<button onclick="_guardarFactura('+i+',\'nfact-gasto-\'+i,{btn:this})" style="flex-shrink:0;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer;transition:all .15s" title="Guardar N° Factura · TN y Sababa: se propagan automáticamente">💾</button>'
           +'</div>'
           +'</div>';
       }).join('');
@@ -11178,7 +11171,7 @@ function loadInvFile(input){
 
     // Mapeo de rubros de servicio a tipoFac
     const _rubroToTipoFac = {
-      'flete':'flete','gastos_origen':'acarreo','gastos_destino':'acarreo',
+      'flete':'flete','gastos_origen':'gastos_destino','gastos_destino':'gastos_destino',
       'honorarios':'honorarios','itbms':'itbms','acarreo':'acarreo',
       'dmce':'liquidacion','comision':'honorarios','gastos':'gastos'
     };
@@ -13128,6 +13121,80 @@ function _enableAllApplyBtns(){
   });
 }
 
+
+// ── Guardar Factura con feedback visual fluido ──
+function _guardarFactura(idx, inputId, opts){
+  opts = opts || {};
+  var val = document.getElementById(inputId)?.value || invLines[idx].numFact || '';
+  val = val.trim();
+  if(!val){ _showToast('⚠️ Ingresa el número de factura primero','orange',2000); return; }
+
+  invLines[idx].numFact = val;
+  invLines[idx].nfac    = val;
+
+  var propagados = 0;
+  var prov = (invLines[idx].prov || '').toUpperCase();
+
+  // Propagar a Sababa
+  if(prov.includes('SABABA')){
+    invLines.forEach(function(l,j){
+      if(j!==idx && (l.prov||'').toUpperCase().includes('SABABA')){
+        l.numFact=val; l.nfac=val;
+        var el=document.getElementById('nfact-gasto-'+j)||document.getElementById('nfact-merc-'+j);
+        if(el) el.value=val;
+        propagados++;
+      }
+    });
+  }
+  // Propagar a Tesoro Nacional
+  if(prov.includes('TESORO') && prov.includes('NACIONAL')){
+    invLines.forEach(function(l,j){
+      if(j!==idx && (l.prov||'').toUpperCase().includes('TESORO') && (l.prov||'').toUpperCase().includes('NACIONAL')){
+        l.numFact=val; l.nfac=val;
+        var el=document.getElementById('nfact-gasto-'+j)||document.getElementById('nfact-merc-'+j);
+        if(el) el.value=val;
+        propagados++;
+      }
+    });
+  }
+
+  // Feedback: animar el campo y el botón
+  var inputEl = document.getElementById(inputId);
+  var btn = opts.btn;
+
+  if(inputEl){
+    inputEl.style.transition='border-color .2s,box-shadow .2s';
+    inputEl.style.borderColor='rgba(63,185,80,.7)';
+    inputEl.style.boxShadow='0 0 0 2px rgba(63,185,80,.2)';
+    setTimeout(function(){
+      inputEl.style.borderColor='';
+      inputEl.style.boxShadow='';
+    }, 2000);
+  }
+  if(btn){
+    btn.innerHTML='<span style="font-size:14px">✓</span>';
+    btn.style.background='rgba(63,185,80,.35)';
+    btn.style.borderColor='rgba(63,185,80,.6)';
+    btn.style.color='#3fb950';
+    btn.style.transform='scale(1.08)';
+    btn.style.transition='all .15s cubic-bezier(.175,.885,.32,1.275)';
+    setTimeout(function(){
+      btn.style.transform='scale(1)';
+      setTimeout(function(){
+        btn.innerHTML='💾';
+        btn.style.background='rgba(63,185,80,.12)';
+        btn.style.borderColor='rgba(63,185,80,.3)';
+        btn.style.color='var(--green-l)';
+      }, 1800);
+    }, 150);
+  }
+
+  var msg = propagados > 0
+    ? '✅ Guardada · propagada a '+propagados+' línea'+(propagados>1?'s':'')+' más'
+    : '✅ Factura guardada';
+  _showInlineToast(btn || inputEl, msg);
+}
+
 function _showInlineToast(btn, msg){
   var old = document.getElementById('_inline_toast');
   if(old) old.remove();
@@ -14184,6 +14251,28 @@ body:not(.sidebar-pinned) #app-wrapper {
 }
 
 /* 3. MODAL DRAWER — centrado, todas las otras pestañas */
+
+/* ── Botón guardar factura — micro-animación ── */
+.btn-save-fact {
+  flex-shrink: 0;
+  background: rgba(63,185,80,.12);
+  border: 1px solid rgba(63,185,80,.3);
+  color: var(--green-l);
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background .15s, border-color .15s, transform .15s cubic-bezier(.175,.885,.32,1.275), box-shadow .15s;
+}
+.btn-save-fact:active {
+  transform: scale(.94);
+}
+.btn-save-fact.saved {
+  background: rgba(63,185,80,.35);
+  border-color: rgba(63,185,80,.6);
+  transform: scale(1.08);
+}
+
 #tab-modal-overlay {
   display: none;
   position: fixed;
