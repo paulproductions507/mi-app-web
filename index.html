@@ -15,7 +15,7 @@
   --text:#e6edf3; --muted:#8b949e; --muted2:#6e7681;
   --accent:#58a6ff;
 }
-*{box-sizing:border-box;margin:0;padding:0;}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:13px;line-height:1.5;}
 
 /* HEADER */
@@ -665,7 +665,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
     <div class="splash-kpi-strip" id="splash-kpi-strip">
       <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-embarques">—</div><div class="splash-kpi-chip-lbl">Embarques</div></div>
       <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-ahorro">—</div><div class="splash-kpi-chip-lbl">Ahorro Total</div></div>
-      <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-cif">—</div><div class="splash-kpi-chip-lbl">CIF Total</div></div>
+      <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-cif">—</div><div class="splash-kpi-chip-lbl">Compras Mes</div></div>
       <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-facturas">—</div><div class="splash-kpi-chip-lbl">Facturas</div></div>
     </div>
 
@@ -1928,7 +1928,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
           <div style="font-size:10px;font-weight:700;color:var(--orange-l);text-transform:uppercase;letter-spacing:.07em">💸 Proveedores de Servicios — Auto-mapeados</div>
           <div style="font-size:10px;color:var(--muted);margin-top:2px">Tesoro Nacional · CIF Express Trámite · Sababa Imports · Agente Aduanal</div>
         </div>
-        <button onclick="_autoFillGastosProveedores()" title="Re-calcular gastos de servicio"
+        <button onclick="_autoFillGastosProveedores();renderInvLines();_showToast('🔄 Gastos de servicio actualizados','green',2000);" title="Recalcula y sincroniza todos los gastos de servicio desde el costeo activo"
           style="background:rgba(240,136,62,.1);border:1px solid rgba(240,136,62,.3);color:var(--orange-l);border-radius:6px;padding:3px 10px;font-size:11px;cursor:pointer;flex-shrink:0">🔄 Refrescar</button>
       </div>
       <div id="inv-gastos-lines" style="margin-bottom:10px">
@@ -3327,11 +3327,17 @@ function showSplashNav(){
     || (d.snap && d.snap.sc1 && !d.snap.sc2 && !d.snap.sc3));
   const _nonUnico=tendData.filter(d=>!_isUnicoD(d));
   const totalAhorro=_nonUnico.reduce((s,d)=>s+(d.ahorro||0),0);
-  const totalCIF=tendData.reduce((s,d)=>s+(d.cif||0),0);
+  // Mes actual — compras de mercancía
+  const _now=new Date(); const _curY=_now.getFullYear(); const _curM=_now.getMonth();
+  const _mesData=tendData.filter(d=>{ if(!d.fecha&&!d.date) return false; const fd=new Date(d.fecha||d.date); return fd.getFullYear()===_curY&&fd.getMonth()===_curM; });
+  const totalMesMerc=_mesData.reduce((s,d)=>{ const lines=(d.snap?.invLines||d.invLines||[]); return s+lines.filter(l=>(l.tipoFac||'mercancia')==='mercancia').reduce((a,l)=>a+(l.costo||0),0); },0);
   const totalFact=tendData.reduce((s,d)=>s+(d.snap?.invLines||d.invLines||[]).filter(l=>(l.tipoFac||"mercancia")==="mercancia").length,0);
+  const _mesStr=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][_curM];
   const skE=document.getElementById('sk-embarques'); if(skE) skE.textContent=tendData.length||'—';
   const skA=document.getElementById('sk-ahorro'); if(skA) skA.textContent=totalAhorro>0?fmt(totalAhorro):'—';
-  const skC=document.getElementById('sk-cif'); if(skC) skC.textContent=totalCIF>0?fmt(totalCIF):'—';
+  const skC=document.getElementById('sk-cif'); if(skC){ skC.textContent=totalMesMerc>0?fmt(totalMesMerc):'$0'; }
+  // Update label dynamically with month name
+  const skCChip=skC?.closest('.splash-kpi-chip'); if(skCChip){ const lbl=skCChip.querySelector('.splash-kpi-chip-lbl'); if(lbl) lbl.textContent='Compras '+_mesStr; }
   const skF=document.getElementById('sk-facturas'); if(skF) skF.textContent=totalFact>0?totalFact:'—';
   setTimeout(()=>{
     if(nav) nav.style.transform='translateX(-50%) translateY(0)';
@@ -10557,8 +10563,8 @@ function renderInvLines(){
         +'<div style="flex:1"><input type="number" value="'+(l.traspaso||'')+'" placeholder="Traspaso" oninput="invLines['+i+'].traspaso=parseFloat(this.value)||0;_autoSumTraspaso()" style="width:100%;background:var(--s2);border:1px solid rgba(63,185,80,.25);border-radius:5px;padding:5px 8px;color:var(--green-l);font-size:11px;font-family:\'IBM Plex Mono\',monospace"></div>'
         +'</div>'
         +'<div style="display:flex;gap:5px;align-items:center;margin-bottom:6px">'
-        +'<input type="text" value="'+(l.numFact||l.nfac||'')+'" placeholder="N° Factura Suplidor" id="nfact-merc-'+i+'" onchange="invLines['+i+'].numFact=this.value;invLines['+i+'].nfac=this.value;" oninput="invLines['+i+'].numFact=this.value;invLines['+i+'].nfac=this.value;" style="flex:1;background:var(--s2);border:1px solid rgba(88,166,255,.2);border-radius:5px;padding:5px 8px;color:var(--text);font-size:11px">'
-        +'<button onclick="_guardarFactura('+i+',\'nfact-merc-\'+i,{btn:this})" style="flex-shrink:0;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer;transition:all .15s" title="Guardar N° Factura">💾</button>'
+        +'<input type="text" value="'+(l.numFact||l.nfac||'')+'" placeholder="N° Factura Suplidor" id="nfact-merc-'+i+'" onchange="invLines['+i+'].numFact=this.value;invLines['+i+'].nfac=this.value;" oninput="invLines['+i+'].numFact=this.value;invLines['+i+'].nfac=this.value;" style="flex:1;background:'+(l._factSaved?'rgba(63,185,80,.08)':'var(--s2)')+';border:1px solid '+(l._factSaved?'rgba(63,185,80,.35)':'rgba(88,166,255,.2)')+';border-radius:5px;padding:5px 8px;color:'+(l._factSaved?'var(--green-l)':'var(--text)')+';font-size:11px;font-weight:'+(l._factSaved?'600':'400')+'">'
+        +(l._factSaved ? '<button onclick="_unlockFactInput(document.getElementById(\'nfact-merc-'+i+'\'),'+i+',this)" style="flex-shrink:0;background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer;transition:all .15s" title="Editar número de factura">✏️</button>' : '<button onclick="_guardarFactura('+i+',\'nfact-merc-'+i+'\',{btn:this})" style="flex-shrink:0;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer;transition:all .15s" title="Guardar N° Factura">💾</button>')
         +'</div>'
         +'<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
         +'<div style="flex:1;min-width:0;position:relative"><input type="text" value="'+((l.prov||'').replace(/"/g,'&quot;'))+'" placeholder="'+(m&&!m.exact&&m.score<0.8?'⚠ Escribe el nombre correcto...':'Escribe proveedor para buscar...')+'" list="prov-datalist" onchange="onInvProvChange('+i+',this.value)" oninput="invLines['+i+'].prov=this.value" style="width:100%;background:var(--s2);border:1px solid '+provBorder+';border-radius:6px;padding:6px 10px;color:'+((!m||m.score<0.25)?'var(--red-l)':'var(--text)')+';font-size:12px;box-sizing:border-box'+((!m||m.score<0.25)?';font-weight:700':'')+'"></div>'
@@ -10620,7 +10626,7 @@ function renderInvLines(){
           +'onchange="invLines['+i+'].numFact=this.value;invLines['+i+'].nfac=this.value;" '
           +'oninput="invLines['+i+'].numFact=this.value;invLines['+i+'].nfac=this.value;" '
           +'style="flex:1;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:5px 10px;color:var(--text);font-size:11px;box-sizing:border-box">'
-          +'<button onclick="_guardarFactura('+i+',\'nfact-gasto-\'+i,{btn:this})" style="flex-shrink:0;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer;transition:all .15s" title="Guardar N° Factura · TN y Sababa: se propagan automáticamente">💾</button>'
+          +(l._factSaved ? '<button onclick="_unlockFactInput(document.getElementById(\'nfact-gasto-'+i+'\'),'+i+',this)" style="flex-shrink:0;background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer;transition:all .15s" title="Editar n° de factura">✏️</button>' : '<button onclick="_guardarFactura('+i+',\'nfact-gasto-'+i+'\',{btn:this})" style="flex-shrink:0;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer;transition:all .15s" title="Guardar N° Factura · TN y Sababa: se propagan automáticamente">💾</button>')
           +'</div>'
           +'</div>';
       }).join('');
@@ -11171,7 +11177,13 @@ function loadInvFile(input){
 
     // Mapeo de rubros de servicio a tipoFac
     const _rubroToTipoFac = {
-      'flete':'flete','gastos_origen':'gastos_destino','gastos_destino':'gastos_destino',
+      'flete':'flete',
+      // Gastos destino/origen — todas las variantes de escritura
+      'gastos_destino':'gastos_destino','gastos_origen':'gastos_destino',
+      'gasto_destino':'gastos_destino','gasto_origen':'gastos_destino',
+      'gastos_de_destino':'gastos_destino','gastos_de_origen':'gastos_destino',
+      'destino':'gastos_destino','origen':'gastos_destino',
+      'gastos_origen_destino':'gastos_destino','gastos_destino_origen':'gastos_destino',
       'honorarios':'honorarios','itbms':'itbms','acarreo':'acarreo',
       'dmce':'liquidacion','comision':'honorarios','gastos':'gastos'
     };
@@ -11224,9 +11236,14 @@ function loadInvFile(input){
       } else if(tipoRaw === 'mercancia'){
         tipoFac = 'mercancia';
       }
-      // Sin columna TIPO (plantilla antigua) — detectar por nombre de proveedor
-      if(!tipoRaw && (provUp.startsWith('ETERNITY')||provUp.startsWith('FLETE')||provUp.startsWith('SEGURO'))){
-        tipoFac = 'flete';
+      // Sin columna TIPO (plantilla antigua) — detectar por nombre de proveedor o rubro
+      if(!tipoRaw){
+        const rubroUp = rubroRaw.toUpperCase();
+        if(provUp.startsWith('ETERNITY')||provUp.startsWith('FLETE')||provUp.startsWith('SEGURO')){
+          tipoFac = 'flete';
+        } else if(rubroUp.includes('DESTINO')||rubroUp.includes('ORIGEN')||rubroUp.includes('GASTO')){
+          tipoFac = 'gastos_destino'; deptCat = 'GASTOS';
+        }
       }
 
       const line={prov:provRaw, deptCat, costo, bultos, traspaso, piezas, oc:ocVal, nfac:nfacVal, tipoFac, numFact:nfacVal, ocHomologada:ocHomolVal, montoHomologado:montoHomol};
@@ -13125,12 +13142,14 @@ function _enableAllApplyBtns(){
 // ── Guardar Factura con feedback visual fluido ──
 function _guardarFactura(idx, inputId, opts){
   opts = opts || {};
-  var val = document.getElementById(inputId)?.value || invLines[idx].numFact || '';
+  var inputEl = document.getElementById(inputId);
+  var val = (inputEl ? inputEl.value : '') || invLines[idx].numFact || '';
   val = val.trim();
   if(!val){ _showToast('⚠️ Ingresa el número de factura primero','orange',2000); return; }
 
   invLines[idx].numFact = val;
   invLines[idx].nfac    = val;
+  invLines[idx]._factSaved = true;
 
   var propagados = 0;
   var prov = (invLines[idx].prov || '').toUpperCase();
@@ -13139,9 +13158,9 @@ function _guardarFactura(idx, inputId, opts){
   if(prov.includes('SABABA')){
     invLines.forEach(function(l,j){
       if(j!==idx && (l.prov||'').toUpperCase().includes('SABABA')){
-        l.numFact=val; l.nfac=val;
+        l.numFact=val; l.nfac=val; l._factSaved=true;
         var el=document.getElementById('nfact-gasto-'+j)||document.getElementById('nfact-merc-'+j);
-        if(el) el.value=val;
+        if(el){ el.value=val; _lockFactInput(el, j); }
         propagados++;
       }
     });
@@ -13150,43 +13169,35 @@ function _guardarFactura(idx, inputId, opts){
   if(prov.includes('TESORO') && prov.includes('NACIONAL')){
     invLines.forEach(function(l,j){
       if(j!==idx && (l.prov||'').toUpperCase().includes('TESORO') && (l.prov||'').toUpperCase().includes('NACIONAL')){
-        l.numFact=val; l.nfac=val;
+        l.numFact=val; l.nfac=val; l._factSaved=true;
         var el=document.getElementById('nfact-gasto-'+j)||document.getElementById('nfact-merc-'+j);
-        if(el) el.value=val;
+        if(el){ el.value=val; _lockFactInput(el, j); }
         propagados++;
       }
     });
   }
 
-  // Feedback: animar el campo y el botón
-  var inputEl = document.getElementById(inputId);
   var btn = opts.btn;
 
-  if(inputEl){
-    inputEl.style.transition='border-color .2s,box-shadow .2s';
-    inputEl.style.borderColor='rgba(63,185,80,.7)';
-    inputEl.style.boxShadow='0 0 0 2px rgba(63,185,80,.2)';
-    setTimeout(function(){
-      inputEl.style.borderColor='';
-      inputEl.style.boxShadow='';
-    }, 2000);
-  }
+  // Lock the input field — show as saved, pencil to edit
+  if(inputEl) _lockFactInput(inputEl, idx);
+
+  // Animate the save button → becomes pencil
   if(btn){
-    btn.innerHTML='<span style="font-size:14px">✓</span>';
-    btn.style.background='rgba(63,185,80,.35)';
-    btn.style.borderColor='rgba(63,185,80,.6)';
-    btn.style.color='#3fb950';
-    btn.style.transform='scale(1.08)';
-    btn.style.transition='all .15s cubic-bezier(.175,.885,.32,1.275)';
+    btn.innerHTML='✓';
+    btn.style.cssText += ';background:rgba(63,185,80,.35);border-color:rgba(63,185,80,.6);color:#3fb950;transform:scale(1.1);transition:all .15s cubic-bezier(.175,.885,.32,1.275)';
     setTimeout(function(){
       btn.style.transform='scale(1)';
       setTimeout(function(){
-        btn.innerHTML='💾';
-        btn.style.background='rgba(63,185,80,.12)';
-        btn.style.borderColor='rgba(63,185,80,.3)';
-        btn.style.color='var(--green-l)';
-      }, 1800);
-    }, 150);
+        // Transform save button into pencil edit button
+        btn.innerHTML='✏️';
+        btn.title='Editar número de factura';
+        btn.style.background='rgba(88,166,255,.12)';
+        btn.style.borderColor='rgba(88,166,255,.3)';
+        btn.style.color='var(--blue-l)';
+        btn.onclick = function(){ _unlockFactInput(inputEl, idx, btn); };
+      }, 600);
+    }, 200);
   }
 
   var msg = propagados > 0
@@ -13194,6 +13205,36 @@ function _guardarFactura(idx, inputId, opts){
     : '✅ Factura guardada';
   _showInlineToast(btn || inputEl, msg);
 }
+
+function _lockFactInput(el, idx){
+  if(!el) return;
+  el.readOnly = true;
+  el.style.transition = 'background .3s, border-color .3s, color .3s';
+  el.style.background = 'rgba(63,185,80,.08)';
+  el.style.borderColor = 'rgba(63,185,80,.35)';
+  el.style.color = 'var(--green-l)';
+  el.style.fontWeight = '600';
+}
+
+function _unlockFactInput(el, idx, btn){
+  if(!el) return;
+  el.readOnly = false;
+  el.style.background = '';
+  el.style.borderColor = '';
+  el.style.color = '';
+  el.style.fontWeight = '';
+  el.focus();
+  el.select();
+  if(btn){
+    btn.innerHTML = '💾';
+    btn.title = 'Guardar N° Factura';
+    btn.style.background = 'rgba(63,185,80,.12)';
+    btn.style.borderColor = 'rgba(63,185,80,.3)';
+    btn.style.color = 'var(--green-l)';
+    btn.onclick = function(){ _guardarFactura(idx, el.id, {btn:btn}); };
+  }
+}
+
 
 function _showInlineToast(btn, msg){
   var old = document.getElementById('_inline_toast');
@@ -14311,6 +14352,8 @@ body:not(.sidebar-pinned) #app-wrapper {
   animation: _tmPopIn .25s cubic-bezier(.34,1.56,.64,1);
   display: flex;
   flex-direction: column;
+  -webkit-tap-highlight-color: transparent;
+  isolation: isolate;
 }
 @keyframes _tmFadeIn { from{opacity:0} to{opacity:1} }
 @keyframes _tmPopIn  { from{opacity:0;transform:scale(.92) translateY(20px)} to{opacity:1;transform:none} }
