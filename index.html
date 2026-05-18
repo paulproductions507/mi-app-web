@@ -8099,6 +8099,16 @@ function _initFdProvDatalist(){
 }
 
 
+function _fdFilterSelect(q){
+  var sel = document.getElementById('fd-prov');
+  if(!sel) return;
+  q = (q||'').trim().toUpperCase();
+  var names = window._PROV_NAMES||[];
+  var filtered = q.length < 1 ? names : names.filter(function(n){ return n.toUpperCase().includes(q); });
+  sel.innerHTML = '<option value="">— Selecciona —</option>' +
+    filtered.map(function(n){ return '<option value="'+n.replace(/"/g,'&quot;')+'">'+n+'</option>'; }).join('');
+}
+
 function _fdProvSearch(input){
   var q = (input.value||'').trim().toUpperCase();
   var box = document.getElementById('fd-prov-results');
@@ -8234,8 +8244,11 @@ async function renderFactDisp(){
         '</div>'+
         '<div>'+
           '<label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px">Proveedor *</label>'+
-          '<input id="fd-prov" type="text" placeholder="Escribe para buscar..." autocomplete="off" oninput="_fdProvSearch(this)" onblur="setTimeout(function(){var d=document.getElementById(\'fd-prov-results\');if(d)d.style.display=\'none\';},200)" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;box-sizing:border-box">'+
-          '<div id="fd-prov-results" style="display:none;background:var(--s1);border:1px solid rgba(168,85,247,.4);border-radius:0 0 8px 8px;max-height:180px;overflow-y:auto;margin-top:2px"></div>'+
+          '<input id="fd-prov-search" type="text" placeholder="Buscar proveedor..." autocomplete="off" oninput="_fdFilterSelect(this.value)" style="width:100%;background:var(--s2);border:1px solid rgba(168,85,247,.4);border-radius:6px 6px 0 0;padding:7px 10px;color:var(--text);font-size:12px;box-sizing:border-box;margin-bottom:0">'+
+          '<select id="fd-prov" size="4" style="width:100%;background:var(--s2);border:1px solid rgba(168,85,247,.4);border-top:none;border-radius:0 0 6px 6px;padding:4px;color:var(--text);font-size:12px;box-sizing:border-box">'+
+          '<option value="">— Selecciona —</option>'+
+          (_PROV_NAMES||[]).map(function(n){ return '<option value="'+n.replace(/"/g,'&quot;')+'">'+n+'</option>'; }).join('')+
+          '</select>'+
         '</div>'+
         '<div>'+
           '<label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px">Monto (USD) *</label>'+
