@@ -1952,6 +1952,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       </div>
       <div id="inv-lines" style="margin-bottom:10px"></div>
       <datalist id="prov-datalist"></datalist>
+      <datalist id="fd-prov-datalist"></datalist>
 
       <!-- SECCIÓN 2: GASTOS DE SERVICIO (auto-mapeados) -->
       <div style="background:var(--s2);border-radius:8px;padding:8px 12px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">
@@ -8089,7 +8090,10 @@ function _initFdProvDatalist(){
   if(!dl) return;
   if(dl.dataset.loaded) return;
   dl.dataset.loaded = '1';
-  dl.innerHTML = (_PROV_NAMES||[]).map(function(n){
+  var names = (_PROV_NAMES||[]).filter(function(n){
+    return n && typeof n === 'string' && n.trim().length > 0 && n !== 'NaN';
+  });
+  dl.innerHTML = names.map(function(n){
     return '<option value="' + n.replace(/"/g,'&quot;') + '">';
   }).join('');
 }
@@ -8205,9 +8209,10 @@ async function renderFactDisp(){
         '</div>'+
         '<div>'+
           '<label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px">Proveedor *</label>'+
-          '<input id="fd-prov" type="text" placeholder="Escribe proveedor para buscar..." list="fd-prov-datalist" autocomplete="off" oninput="_initFdProvDatalist()" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;box-sizing:border-box">'+
-          +'<datalist id="fd-prov-datalist"></datalist>'
-          
+          '<select id="fd-prov" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;box-sizing:border-box">'+
+          '<option value="">— Selecciona proveedor —</option>'+
+          (_PROV_NAMES||[]).map(function(n){ return '<option value="'+n.replace(/"/g,'&quot;')+'">'+n.replace(/</g,'&lt;')+'</option>'; }).join('')+
+          '</select>'+
         '</div>'+
         '<div>'+
           '<label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px">Monto (USD) *</label>'+
@@ -15107,7 +15112,7 @@ body:not(.sidebar-pinned) #app-wrapper {
       setTimeout(function(){
         if(tabId==='config'    && typeof renderConfig==='function')    { renderConfig(); if(typeof renderDeptConfig==='function') renderDeptConfig(); }
         if(tabId==='histprovs' && typeof renderHistProv==='function')  renderHistProv();
-        if(tabId==='factdisp'){ renderFactDisp(); setTimeout(_initFdProvDatalist, 200); }
+        if(tabId==='factdisp'){ renderFactDisp(); _initFdProvDatalist(); }
         if(tabId==='tendencias' && typeof renderTend==='function'){
           (async function(){
             if(_sb){ await _pullTendFromCloud(); }
