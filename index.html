@@ -768,12 +768,12 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
         <div style="font-size:12px;font-weight:700;color:#a371f7">Facturas Disponibles</div>
         <div style="font-size:10px;color:var(--muted)">Gastos pendientes · Análisis mensual</div>
       </button>
-      <button onclick="iniciarApp('factdisp')"
+      <button onclick="iniciarApp('histprovs');setTimeout(function(){var s=document.getElementById('histprov-filter-tipo');if(s){s.value='Servicio';if(typeof _histProvSearch==='function')_histProvSearch();}},400)"
         style="background:linear-gradient(135deg,rgba(168,85,247,.12),rgba(168,85,247,.05));border:1px solid rgba(168,85,247,.3);border-radius:14px;padding:12px;text-align:left;cursor:pointer;transition:transform .15s,box-shadow .15s" onmousedown="this.style.transform='scale(.97)'" onmouseup="this.style.transform=''"
         ontouchstart="this.style.transform='scale(.97)'" ontouchend="this.style.transform=''">
-        <span style="font-size:28px">🗂️</span>
-        <div style="font-size:12px;font-weight:700;color:#a371f7">Facturas Disponibles</div>
-        <div style="font-size:10px;color:var(--muted)">Gastos pendientes · Por mes</div>
+        <span style="font-size:28px">🏭</span>
+        <div style="font-size:12px;font-weight:700;color:#a371f7">Hist. Prov. Servicio</div>
+        <div style="font-size:10px;color:var(--muted)">Facturas de gastos registradas</div>
       </button>
       <button onclick="iniciarApp('config')"
         style="background:linear-gradient(135deg,rgba(139,148,158,.12),rgba(139,148,158,.05));border:1px solid rgba(139,148,158,.3);border-radius:14px;padding:12px;text-align:left;cursor:pointer;transition:transform .15s,box-shadow .15s;display:flex;flex-direction:column;gap:3px"
@@ -8073,6 +8073,58 @@ function _fdCloseDrop(){
 }
 
 
+// ── Custom provider autocomplete for Facturas Disponibles ──
+function _fdProvAC(input){
+  var q = (input.value||'').trim().toUpperCase();
+  // Remove existing dropdown
+  var old = document.getElementById('_fdprov_drop');
+  if(old) old.remove();
+  if(q.length < 2) return;
+
+  // Filter from master list
+  var matches = (window._PROV_NAMES||[]).filter(function(n){
+    return n.toUpperCase().includes(q);
+  }).slice(0, 8);
+  if(!matches.length) return;
+
+  var drop = document.createElement('div');
+  drop.id = '_fdprov_drop';
+  drop.style.cssText = 'position:fixed;z-index:9999999;background:var(--s1);border:1px solid rgba(168,85,247,.4);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.5);overflow:hidden;';
+
+  matches.forEach(function(name){
+    var item = document.createElement('div');
+    item.style.cssText = 'padding:9px 14px;cursor:pointer;font-size:12px;color:var(--text);border-bottom:1px solid rgba(255,255,255,.05);';
+    item.textContent = name;
+    item.addEventListener('mousedown', function(e){
+      e.preventDefault();
+      input.value = name;
+      drop.remove();
+    });
+    item.addEventListener('touchstart', function(e){
+      e.preventDefault();
+      input.value = name;
+      drop.remove();
+    }, {passive:false});
+    item.addEventListener('mouseover', function(){ this.style.background='rgba(168,85,247,.15)'; });
+    item.addEventListener('mouseout',  function(){ this.style.background=''; });
+    drop.appendChild(item);
+  });
+
+  // Position below input
+  var rect = input.getBoundingClientRect();
+  drop.style.top   = (rect.bottom + 4) + 'px';
+  drop.style.left  = rect.left + 'px';
+  drop.style.width = rect.width + 'px';
+  document.body.appendChild(drop);
+
+  // Close on outside interaction
+  setTimeout(function(){
+    document.addEventListener('click', function rm(){ drop.remove(); document.removeEventListener('click',rm); });
+    document.addEventListener('touchstart', function rm(){ drop.remove(); document.removeEventListener('touchstart',rm); }, {passive:true});
+  }, 0);
+}
+
+
 // ══════════════════════════════════════════════════════════════════
 // MÓDULO: Facturas Disponibles — Registro Manual + Cruce Auto
 // ══════════════════════════════════════════════════════════════════
@@ -8183,7 +8235,7 @@ async function renderFactDisp(){
         '</div>'+
         '<div>'+
           '<label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px">Proveedor *</label>'+
-          '<input id="fd-prov" type="text" placeholder="Escribe proveedor para buscar..." list="prov-datalist" oninput="fillProvDatalist()" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;box-sizing:border-box">'+
+          '<input id="fd-prov" type="text" placeholder="Escribe proveedor para buscar..." autocomplete="off" oninput="_fdProvAC(this)" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;box-sizing:border-box">'+
         '</div>'+
         '<div>'+
           '<label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px">Monto (USD) *</label>'+
