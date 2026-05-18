@@ -8081,10 +8081,22 @@ function _fdProvAC(input){
   if(old) old.remove();
   if(q.length < 2) return;
 
-  // Filter from master list
-  var matches = (window._PROV_NAMES||[]).filter(function(n){
+  // Ensure master list is loaded
+  if(typeof fillProvDatalist === 'function') fillProvDatalist();
+
+  // Build combined list: _PROV_NAMES + names from tendData gastos
+  var nameSet = new Set(window._PROV_NAMES||[]);
+  (window.tendData||[]).forEach(function(d){
+    ((d.snap&&d.snap.invLines)||d.invLines||[]).forEach(function(l){
+      if(l.prov && l.tipoFac && l.tipoFac !== 'mercancia') nameSet.add(l.prov);
+    });
+  });
+  var allNames = Array.from(nameSet);
+
+  // Filter
+  var matches = allNames.filter(function(n){
     return n.toUpperCase().includes(q);
-  }).slice(0, 8);
+  }).slice(0, 10);
   if(!matches.length) return;
 
   var drop = document.createElement('div');
