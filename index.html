@@ -8099,6 +8099,31 @@ function _initFdProvDatalist(){
 }
 
 
+function _fdProvSearch(input){
+  var q = (input.value||'').trim().toUpperCase();
+  var box = document.getElementById('fd-prov-results');
+  if(!box) return;
+  box.innerHTML = '';
+  if(q.length < 2){ box.style.display='none'; return; }
+  var names = window._PROV_NAMES||[];
+  var matches = names.filter(function(n){ return n.toUpperCase().includes(q); }).slice(0,10);
+  if(!matches.length){ box.style.display='none'; return; }
+  box.style.display = 'block';
+  matches.forEach(function(name){
+    var d = document.createElement('div');
+    d.textContent = name;
+    d.style.cssText = 'padding:9px 12px;cursor:pointer;font-size:12px;color:var(--text);border-bottom:1px solid rgba(255,255,255,.05);';
+    d.onmousedown = d.ontouchstart = function(e){
+      e.preventDefault();
+      input.value = name;
+      box.style.display = 'none';
+    };
+    d.onmouseover = function(){ this.style.background='rgba(168,85,247,.15)'; };
+    d.onmouseout  = function(){ this.style.background=''; };
+    box.appendChild(d);
+  });
+}
+
 // ══════════════════════════════════════════════════════════════════
 // MÓDULO: Facturas Disponibles — Registro Manual + Cruce Auto
 // ══════════════════════════════════════════════════════════════════
@@ -8209,10 +8234,8 @@ async function renderFactDisp(){
         '</div>'+
         '<div>'+
           '<label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px">Proveedor *</label>'+
-          '<select id="fd-prov" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;box-sizing:border-box">'+
-          '<option value="">— Selecciona proveedor —</option>'+
-          (_PROV_NAMES||[]).map(function(n){ return '<option value="'+n.replace(/"/g,'&quot;')+'">'+n.replace(/</g,'&lt;')+'</option>'; }).join('')+
-          '</select>'+
+          '<input id="fd-prov" type="text" placeholder="Escribe para buscar..." autocomplete="off" oninput="_fdProvSearch(this)" onblur="setTimeout(function(){var d=document.getElementById(\'fd-prov-results\');if(d)d.style.display=\'none\';},200)" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;box-sizing:border-box">'+
+          '<div id="fd-prov-results" style="display:none;background:var(--s1);border:1px solid rgba(168,85,247,.4);border-radius:0 0 8px 8px;max-height:180px;overflow-y:auto;margin-top:2px"></div>'+
         '</div>'+
         '<div>'+
           '<label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px">Monto (USD) *</label>'+
