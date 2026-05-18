@@ -8107,7 +8107,7 @@ function _fdFilterSelect(q){
 
   // Build cache once from _PROV_NAMES + tendData
   if(!_fdAllProvNames || _fdAllProvNames.length === 0){
-    var nameSet = new Set(window._PROV_NAMES||[]);
+    var nameSet = new Set((typeof _PROV_NAMES!=="undefined" ? _PROV_NAMES : window._PROV_NAMES)||[]);
     (window.tendData||[]).forEach(function(d){
       ((d.snap&&d.snap.invLines)||d.invLines||[]).forEach(function(l){
         if(l.prov && typeof l.prov==='string' && l.prov.trim()) nameSet.add(l.prov.trim());
@@ -8149,6 +8149,34 @@ function _fdProvSearch(input){
     box.appendChild(d);
   });
 }
+
+function _fdBuildProvSelect(filter){
+  filter = (filter||'').trim().toUpperCase();
+  // Get names - _PROV_NAMES is always defined by the time this runs (same script)
+  var names = (typeof _PROV_NAMES!=="undefined" ? _PROV_NAMES : window._PROV_NAMES) || [];
+  if(filter) names = names.filter(function(n){ return n.toUpperCase().includes(filter); });
+  var opts = '<option value="">— Selecciona —</option>' +
+    names.map(function(n){
+      return '<option value="'+n.replace(/"/g,'&quot;')+'">'+n+'</option>';
+    }).join('');
+  return '<select id="fd-prov" size="5" '+
+    'style="width:100%;background:var(--s2);border:1px solid rgba(168,85,247,.4);'+
+    'border-top:none;border-radius:0 0 6px 6px;padding:4px;color:var(--text);'+
+    'font-size:12px;box-sizing:border-box">'+opts+'</select>';
+}
+
+function _fdProvSearchFilter(input){
+  var q = (input.value||'').trim().toUpperCase();
+  var sel = document.getElementById('fd-prov');
+  if(!sel) return;
+  var names = (typeof _PROV_NAMES!=="undefined" ? _PROV_NAMES : window._PROV_NAMES) || [];
+  var filtered = q ? names.filter(function(n){ return n.toUpperCase().includes(q); }) : names;
+  sel.innerHTML = '<option value="">— Selecciona —</option>' +
+    filtered.map(function(n){
+      return '<option value="'+n.replace(/"/g,'&quot;')+'">'+n+'</option>';
+    }).join('');
+}
+
 
 // ══════════════════════════════════════════════════════════════════
 // MÓDULO: Facturas Disponibles — Registro Manual + Cruce Auto
@@ -8260,11 +8288,8 @@ async function renderFactDisp(){
         '</div>'+
         '<div>'+
           '<label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px">Proveedor *</label>'+
-          '<input id="fd-prov-search" type="text" placeholder="Buscar proveedor..." autocomplete="off" oninput="_fdFilterSelect(this.value)" style="width:100%;background:var(--s2);border:1px solid rgba(168,85,247,.4);border-radius:6px 6px 0 0;padding:7px 10px;color:var(--text);font-size:12px;box-sizing:border-box;margin-bottom:0">'+
-          '<select id="fd-prov" size="4" style="width:100%;background:var(--s2);border:1px solid rgba(168,85,247,.4);border-top:none;border-radius:0 0 6px 6px;padding:4px;color:var(--text);font-size:12px;box-sizing:border-box">'+
-          '<option value="">— Selecciona —</option>'+
-          (_PROV_NAMES||[]).map(function(n){ return '<option value="'+n.replace(/"/g,'&quot;')+'">'+n+'</option>'; }).join('')+
-          '</select>'+
+          '<input id="fd-prov-search" type="text" placeholder="Buscar proveedor..." autocomplete="off" oninput="_fdProvSearchFilter(this)" style="width:100%;background:var(--s2);border:1px solid rgba(168,85,247,.4);border-radius:6px 6px 0 0;padding:7px 10px;color:var(--text);font-size:12px;box-sizing:border-box;margin-bottom:0">'+
+          (_fdBuildProvSelect())+
         '</div>'+
         '<div>'+
           '<label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px">Monto (USD) *</label>'+
@@ -8338,7 +8363,6 @@ async function renderFactDisp(){
         }).join('')
     )+
   '</div>';
-  _fdAllProvNames = null; _fdFilterSelect('');
 }
 
 async function _fdAgregar(){
