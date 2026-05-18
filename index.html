@@ -8318,6 +8318,15 @@ async function renderFactDisp(){
           '<input id="fd-notas" type="text" placeholder="Embarque relacionado, observación..." style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;box-sizing:border-box">'+
         '</div>'+
       '</div>'+
+      // ── Líneas de gastos internas ──
+      '<div style="margin-top:10px;margin-bottom:10px">'+
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'+
+          '<span style="font-size:10px;font-weight:700;color:#a371f7;text-transform:uppercase;letter-spacing:.05em">📋 Líneas de Gastos / Rubros internos</span>'+
+          '<button onclick="_fdAddLinea()" style="background:rgba(168,85,247,.15);border:1px solid rgba(168,85,247,.4);color:#a371f7;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer">＋ Agregar línea</button>'+
+        '</div>'+
+        '<div id="fd-lineas-container" style="display:flex;flex-direction:column;gap:6px"></div>'+
+        '<div id="fd-lineas-total" style="text-align:right;font-size:11px;color:var(--muted);margin-top:4px"></div>'+
+      '</div>'+
       '<button onclick="_fdAgregar()" style="background:#a371f7;border:none;color:#fff;border-radius:8px;padding:9px 20px;font-size:12px;font-weight:700;cursor:pointer;width:100%">➕ Agregar Factura</button>'+
     '</div>'+
 
@@ -8350,15 +8359,43 @@ async function renderFactDisp(){
               '</tr></thead>'+
               '<tbody>'+
               fs.map(function(f,i){
+                var hasLineas = f.lineas && f.lineas.length > 0;
+                var lineasHtml = '';
+                if(hasLineas){
+                  lineasHtml = '<tr id="fd-expand-'+f.id+'" style="display:none;background:rgba(168,85,247,.04)">'+
+                    '<td colspan="6" style="padding:0 12px 10px 28px">'+
+                      '<div style="font-size:10px;font-weight:700;color:#a371f7;text-transform:uppercase;letter-spacing:.04em;padding:8px 0 4px">📋 Líneas de Gastos Incluidas</div>'+
+                      '<table style="width:100%;border-collapse:collapse;font-size:10px">'+
+                        '<thead><tr style="background:rgba(168,85,247,.08)">'+
+                          '<th style="padding:4px 8px;text-align:left;color:var(--muted);font-weight:600">Descripción</th>'+
+                          '<th style="padding:4px 8px;text-align:left;color:var(--muted);font-weight:600">Rubro</th>'+
+                          '<th style="padding:4px 8px;text-align:right;color:var(--muted);font-weight:600">Monto</th>'+
+                          '<th style="padding:4px 8px;text-align:left;color:var(--muted);font-weight:600">Notas</th>'+
+                        '</tr></thead>'+
+                        '<tbody>'+
+                        f.lineas.map(function(l,li){
+                          return '<tr style="background:'+(li%2?'rgba(168,85,247,.04)':'transparent')+';border-bottom:1px solid rgba(168,85,247,.1)">'+
+                            '<td style="padding:4px 8px;color:var(--text)">'+( l.desc||'—')+'</td>'+
+                            '<td style="padding:4px 8px"><span style="background:rgba(168,85,247,.12);color:#a371f7;border-radius:4px;padding:1px 6px;font-size:9px;font-weight:600">'+(l.tipo||'—')+'</span></td>'+
+                            '<td style="padding:4px 8px;text-align:right;font-family:monospace;font-weight:700;color:var(--text)">'+fmt(l.monto||0)+'</td>'+
+                            '<td style="padding:4px 8px;color:var(--muted);font-size:9px">'+(l.notas||'')+'</td>'+
+                          '</tr>';
+                        }).join('')+
+                        '</tbody>'+
+                      '</table>'+
+                    '</td>'+
+                  '</tr>';
+                }
                 return '<tr style="background:'+(i%2?'var(--s1)':'var(--bg)')+';border-bottom:1px solid rgba(255,255,255,.04)">'+
                   '<td style="padding:8px 12px;font-family:monospace;font-size:10px;color:var(--text);font-weight:600">'+f.num+'</td>'+
                   '<td style="padding:8px 12px;color:var(--text)">'+f.prov+'<br><span style="font-size:9px;color:var(--muted)">'+f.notas+'</span></td>'+
                   '<td style="padding:8px 12px"><span style="background:'+(tipoColors[f.tipo]||'rgba(139,148,158,.15)')+';color:'+(tipoText[f.tipo]||'var(--muted)')+';border-radius:4px;padding:2px 7px;font-size:10px;font-weight:600">'+f.tipo+'</span></td>'+
                   '<td style="padding:8px 12px;text-align:right;font-family:monospace;font-weight:700;color:var(--text)">'+fmt(f.monto)+'</td>'+
                   '<td style="padding:8px 12px;text-align:center">'+
+                    (hasLineas ? '<button data-fid="'+f.id+'" onclick="_fdToggleLineas(this.dataset.fid,this)" style="background:rgba(168,85,247,.12);border:1px solid rgba(168,85,247,.3);color:#a371f7;border-radius:5px;padding:3px 8px;font-size:10px;cursor:pointer;margin-right:4px" title="Ver líneas de gasto">📋 '+f.lineas.length+'</button>' : '')+
                     '<button data-fid="'+f.id+'" onclick="_fdEliminar(this.dataset.fid)"  style="background:rgba(248,81,73,.12);border:1px solid rgba(248,81,73,.3);color:var(--red-l);border-radius:5px;padding:3px 8px;font-size:10px;cursor:pointer" title="Eliminar">🗑️</button>'+
                   '</td>'+
-                '</tr>';
+                '</tr>'+lineasHtml;
               }).join('')+
               '</tbody>'+
             '</table>'+
@@ -8367,6 +8404,76 @@ async function renderFactDisp(){
     )+
   '</div>';
 }
+
+// ── Funciones de Líneas de Gastos Internas ──
+function _fdToggleLineas(fid, btn){
+  var row = document.getElementById('fd-expand-'+fid);
+  if(!row) return;
+  var visible = row.style.display !== 'none';
+  row.style.display = visible ? 'none' : 'table-row';
+  if(btn) btn.style.background = visible ? 'rgba(168,85,247,.12)' : 'rgba(168,85,247,.3)';
+}
+
+
+function _fdGetRubrosOpts(selectedVal){
+  var rubros=(typeof _RUBROS_GASTO!=='undefined'?_RUBROS_GASTO:window._RUBROS_GASTO)||[];
+  return rubros.map(function(r){
+    var v=(r.val||r.lbl||'');
+    var sel=(v===selectedVal)?'selected':'';
+    return '<option value="'+v.replace(/"/g,'&quot;')+'" '+sel+'>'+(r.icon?r.icon+' ':'')+( r.lbl||v)+'</option>';
+  }).join('');
+}
+
+function _fdAddLinea(desc,monto,tipo,notas){
+  var c=document.getElementById('fd-lineas-container');
+  if(!c) return;
+  var id='fdl-'+Date.now().toString(36);
+  var rubrosOpts=_fdGetRubrosOpts(tipo||'');
+  var row=document.createElement('div');
+  row.className='fd-linea-row';
+  row.id=id;
+  row.style.cssText='display:grid;grid-template-columns:1fr 110px 1fr 1fr 36px;gap:5px;align-items:end;background:rgba(168,85,247,.06);border:1px solid rgba(168,85,247,.2);border-radius:8px;padding:8px;';
+  row.innerHTML=
+    '<div>'+
+      '<label style="font-size:9px;color:var(--muted);display:block;margin-bottom:2px">Descripción del Gasto</label>'+
+      '<input class="fd-l-desc" type="text" placeholder="Ej: Honorarios aduaneros..." value="'+(desc||'')+'" oninput="_fdUpdateLineasTotal()" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 8px;color:var(--text);font-size:11px;box-sizing:border-box">'+
+    '</div>'+
+    '<div>'+
+      '<label style="font-size:9px;color:var(--muted);display:block;margin-bottom:2px">Monto (USD)</label>'+
+      '<input class="fd-l-monto" type="number" placeholder="0.00" step="0.01" value="'+(monto||'')+'" oninput="_fdUpdateLineasTotal()" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 8px;color:var(--text);font-size:11px;box-sizing:border-box">'+
+    '</div>'+
+    '<div>'+
+      '<label style="font-size:9px;color:var(--muted);display:block;margin-bottom:2px">Rubro / Tipo</label>'+
+      '<select class="fd-l-tipo" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 8px;color:var(--text);font-size:11px;box-sizing:border-box">'+rubrosOpts+'</select>'+
+    '</div>'+
+    '<div>'+
+      '<label style="font-size:9px;color:var(--muted);display:block;margin-bottom:2px">Notas (opcional)</label>'+
+      '<input class="fd-l-notas" type="text" placeholder="Observaciones..." value="'+(notas||'')+'" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 8px;color:var(--text);font-size:11px;box-sizing:border-box">'+
+    '</div>'+
+    '<button onclick="_fdRemoveLinea(\''+id+'\')" style="background:rgba(248,81,73,.12);border:1px solid rgba(248,81,73,.3);color:var(--red-l);border-radius:5px;padding:0;width:32px;height:32px;font-size:14px;cursor:pointer;margin-top:14px;display:flex;align-items:center;justify-content:center" title="Eliminar línea">✕</button>';
+  c.appendChild(row);
+  _fdUpdateLineasTotal();
+}
+
+function _fdRemoveLinea(id){
+  var el=document.getElementById(id);
+  if(el) el.remove();
+  _fdUpdateLineasTotal();
+}
+
+function _fdUpdateLineasTotal(){
+  var c=document.getElementById('fd-lineas-container');
+  var t=document.getElementById('fd-lineas-total');
+  if(!c||!t) return;
+  var total=0;
+  c.querySelectorAll('.fd-l-monto').forEach(function(inp){ total+=parseFloat(inp.value||0)||0; });
+  if(total>0){
+    t.innerHTML='Suma de líneas: <strong style="color:#a371f7">$'+total.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</strong>';
+  } else {
+    t.innerHTML='';
+  }
+}
+
 
 async function _fdAgregar(){
   var num   =(document.getElementById('fd-num')?.value||'').trim();
@@ -8386,6 +8493,22 @@ async function _fdAgregar(){
     _showToast('⚠️ Ya existe una factura con ese número','orange',3000); return;
   }
 
+  // Recolectar líneas de gastos adicionales
+  var lineas = [];
+  var lineasContainer = document.getElementById('fd-lineas-container');
+  if(lineasContainer){
+    var filas = lineasContainer.querySelectorAll('.fd-linea-row');
+    filas.forEach(function(row){
+      var lDesc  = (row.querySelector('.fd-l-desc')?.value||'').trim();
+      var lMonto = parseFloat(row.querySelector('.fd-l-monto')?.value||'0')||0;
+      var lTipo  = (row.querySelector('.fd-l-tipo')?.value||'').trim();
+      var lNotas = (row.querySelector('.fd-l-notas')?.value||'').trim();
+      if(lDesc || lMonto>0){
+        lineas.push({ desc:lDesc, monto:lMonto, tipo:lTipo, notas:lNotas });
+      }
+    });
+  }
+
   data.push({
     id:   Date.now().toString(36)+Math.random().toString(36).slice(2,5),
     num:  num,
@@ -8394,6 +8517,7 @@ async function _fdAgregar(){
     monto:monto,
     tipo: tipo,
     notas:notas,
+    lineas:lineas,
     creadoEn:new Date().toISOString()
   });
   await _fdSave(data);
@@ -8415,11 +8539,12 @@ async function _fdExportXLSX(){
   var data=await _fdLoad();
   var usadas=_fdUsadas();
   var MESES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-  var rows=data.map(function(f){
+  var rows=[];
+  data.forEach(function(f){
     var d=new Date(f.fecha||'');
     var mes=isNaN(d)?'Sin fecha':(MESES[d.getMonth()]+' '+d.getFullYear());
     var estado=usadas.has(f.num.toUpperCase())?'Consumida':'Disponible';
-    return{
+    var baseRow = {
       'N° Factura':f.num,
       'Fecha Registro':f.fecha,
       'Mes':mes,
@@ -8429,8 +8554,25 @@ async function _fdExportXLSX(){
       'Estado':estado,
       'Notas':f.notas||''
     };
+    // If the invoice has internal lines, expand them as sub-rows
+    if(f.lineas && f.lineas.length > 0){
+      f.lineas.forEach(function(l,li){
+        rows.push(Object.assign({},baseRow,{
+          'N° Factura': li===0 ? f.num : '',
+          'Fecha Registro': li===0 ? f.fecha : '',
+          'Proveedor': li===0 ? f.prov : '',
+          'Estado': li===0 ? estado : '',
+          'Tipo': l.tipo||f.tipo,
+          'Monto': l.monto||0,
+          'Notas': l.desc ? '[Línea '+(li+1)+'] '+(l.desc||'')+(l.notas?' · '+l.notas:'') : (l.notas||'')
+        }));
+      });
+      return; // rows already pushed above
+    }
+    rows.push(baseRow);
   });
   // Sort by fecha desc, disponibles first
+  rows = rows.filter(Boolean);
   rows.sort(function(a,b){
     if(a.Estado!==b.Estado) return a.Estado==='Disponible'?-1:1;
     return (b['Fecha Registro']||'').localeCompare(a['Fecha Registro']||'');
