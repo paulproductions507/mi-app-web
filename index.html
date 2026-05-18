@@ -761,6 +761,20 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
         <div style="font-size:12px;font-weight:700;color:#f8d122">Planeación de Carga</div>
         <div style="font-size:10px;color:var(--muted)">Plan semanal · Cruce embarques</div>
       </button>
+      <button onclick="iniciarApp('factdisp')"
+        style="background:linear-gradient(135deg,rgba(168,85,247,.12),rgba(168,85,247,.05));border:1px solid rgba(168,85,247,.3);border-radius:14px;padding:12px;text-align:left;cursor:pointer;transition:transform .15s,box-shadow .15s" onmousedown="this.style.transform='scale(.97)'" onmouseup="this.style.transform=''"
+        ontouchstart="this.style.transform='scale(.97)'" ontouchend="this.style.transform=''">
+        <span style="font-size:28px">🗂️</span>
+        <div style="font-size:12px;font-weight:700;color:#a371f7">Facturas Disponibles</div>
+        <div style="font-size:10px;color:var(--muted)">Gastos pendientes · Análisis mensual</div>
+      </button>
+      <button onclick="iniciarApp('resumen')"
+        style="background:linear-gradient(135deg,rgba(88,166,255,.12),rgba(88,166,255,.05));border:1px solid rgba(88,166,255,.3);border-radius:14px;padding:12px;text-align:left;cursor:pointer;transition:transform .15s,box-shadow .15s" onmousedown="this.style.transform='scale(.97)'" onmouseup="this.style.transform=''"
+        ontouchstart="this.style.transform='scale(.97)'" ontouchend="this.style.transform=''">
+        <span style="font-size:28px">📊</span>
+        <div style="font-size:12px;font-weight:700;color:var(--blue-l)">Resumen Mensual</div>
+        <div style="font-size:10px;color:var(--muted)">Departamentos · KPIs · Análisis</div>
+      </button>
       <button onclick="iniciarApp('config')"
         style="background:linear-gradient(135deg,rgba(139,148,158,.12),rgba(139,148,158,.05));border:1px solid rgba(139,148,158,.3);border-radius:14px;padding:12px;text-align:left;cursor:pointer;transition:transform .15s,box-shadow .15s;display:flex;flex-direction:column;gap:3px"
         onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(139,148,158,.2)'"
@@ -1056,8 +1070,11 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
           <select id="s1_tipo_emb" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px;width:100%" onchange="_toggleContenedorField(this.value)">
             <option value="">— Selecciona —</option>
             <option value="Contenedor directo">Contenedor directo</option>
-            <option value="Camión">Camión</option>
+            <option value="Consolidado">Consolidado</option>
             <option value="Carga suelta">Carga suelta</option>
+            <option value="Camión">Camión</option>
+            <option value="Furgón">Furgón</option>
+            <option value="Avión">Avión</option>
           </select>
         </div>
         <div class="field"><label>Cantidad de Cartones</label>
@@ -1865,7 +1882,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       </div>
       <div class="field" style="margin-top:6px;padding:10px 12px;background:rgba(88,166,255,.06);border:1px solid rgba(88,166,255,.18);border-radius:8px">
         <label style="color:var(--blue-l);font-weight:600">🔵 Valor Exento Sababa (USD) <span style="font-size:9px;color:var(--muted);font-weight:400">— reduce ITBMS, no afecta valor mercancía</span></label>
-        <input type="number" id="s2_exento" value="" placeholder="0.00 (opcional)" step="0.01" oninput="calcSab2()" style="margin-top:4px;border-color:rgba(88,166,255,.3)">
+        <input type="number" id="s2_exento" value="" placeholder="0.00 (opcional)" step="0.01" oninput="window._sab2Exento=parseFloat(this.value)||0;calcSab2()" style="margin-top:4px;border-color:rgba(88,166,255,.3)">
         <div style="font-size:10px;color:var(--muted);margin-top:4px">ITBMS = (Homologado − Exento) × 7%</div>
       </div>
 
@@ -2783,10 +2800,10 @@ function setEquipo(val){
   const dmceEl=document.getElementById('s1_dmce');
   const noteEl=document.getElementById('acarreo-note');
   const dmceNote=document.getElementById('dmce-note');
-  // Auto-set vía de transporte based on equipo
-  const viaEl = document.getElementById('s1_via');
+  // Auto-set vía de transporte
+  const viaEl = document.getElementById('s1_via_transporte');
   if(viaEl){
-    if(val==='Contenedor'||val==='Consolidado'||val==='CargaSuelta') viaEl.value='MAR';
+    if(val==='Contenedor'||val==='Consolidado'||val==='CargaSuelta') viaEl.value='SEA';
     else if(val==='Camion'||val==='Furgon') viaEl.value='LAND';
     else if(val==='Avion') viaEl.value='AIR';
   }
@@ -3499,7 +3516,7 @@ function iniciarApp(tab){
       var _labels = {
         'cifexp':'⚡ CIF Express','sababa':'🤝 Sababa Imports',
         'facturas':'🧾 Proveedores','aranceles':'📦 Aranceles','tendencias':'📈 Tendencias',
-        'config':'⚙️ Configuración','histprovs':'🏭 Historial de Proveedores'
+        'config':'⚙️ Configuración','histprovs':'🏭 Historial de Proveedores','factdisp':'🗂️ Facturas Disponibles'
       };
       openTabModal(tab, _labels[tab] || tab);
     }
@@ -3755,7 +3772,7 @@ function calc(){
       // SIEMPRE usar pagFinal como baseAjustada para que homologado sea exacto
       sc3_baseAjustada = pagFinal;
       sc3_mercHomol    = sc3_baseAjustada / DIV;
-      const _sc3Exento  = v('s2_exento') || 0;
+      const _sc3Exento  = window._sab2Exento || v('s2_exento') || 0;
       const _sc3Gravado = Math.max(0, sc3_mercHomol - _sc3Exento);
       sc3_itbmsHomol   = Math.round(_sc3Gravado * itbPct * 100) / 100;
       const comisionAuto = sc3_baseAjustada * sc3_comPct;  // CORRECTO: baseAjust × % (no pagFinal)
@@ -3807,7 +3824,7 @@ function calc(){
     termino, tipo, equipo: document.getElementById('s1_equipo')?.value||'',
     CIF, FOB: v('s1_fob'), flete, arPct, itbPct,
     trasp: v('s1_traspaso')||0,
-    exentoSab: v('s2_exento')||0,
+    exentoSab: window._sab2Exento||v('s2_exento')||0,
     sc3ComPct: sc3_comPct,  // guardamos el % de comisión para recálculos on-the-fly
     sc1:{base:sc1_base, arancel:sc1_arancel, hon:sc1_hon, tasa, form1, acarreo, dmce, agente,
          itbms:sc1_itbms, itbmsTasaFinal:itbmsTasaFinal, noMerc:sc1_noMerc, landed1:sc1_landed1, landedG:sc1_landedG, factor:sc1_factor},
@@ -4352,7 +4369,7 @@ function calc(){
               <div class="ar-row"><span class="ar-lbl">Comisión Sababa (${v('sc_com')}% × total pago)</span><span class="ar-val" style="color:var(--orange-l)">${fmt(sc3_comision)}</span></div>
               <div style="margin-left:12px;padding:4px 8px;background:rgba(240,136,62,.06);border-radius:5px;margin-bottom:4px">
                 <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted)"><span>└ ITBMS del valor homol. (×7÷107)</span><span style="font-family:'IBM Plex Mono',monospace">${fmt(sc3_itbmsHomol)}</span></div>
-                <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--orange-l);font-weight:600"><span>└ Honorario neto Sababa</span><span style="font-family:'IBM Plex Mono',monospace">${fmt(sc3_comision - sc3_itbmsHomol)}</span></div>
+                <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--orange-l);font-weight:600"><span>└ Honorario neto Sababa <span style="font-size:9px;color:var(--orange-l)">(${sc3_mercHomol>0?((sc3_comision-sc3_itbmsHomol)/sc3_mercHomol*100).toFixed(2):"—"}%)</span></span><span style="font-family:'IBM Plex Mono',monospace">${fmt(sc3_comision - sc3_itbmsHomol)}</span></div>
               </div>
               <div class="ar-row" style="border-top:1px solid rgba(48,54,61,.5);margin-top:4px;padding-top:6px"><span class="ar-lbl" style="font-weight:700">Total Esc.#3 (Sababa)</span><span class="ar-val" style="color:var(--orange-l);font-weight:700">${fmt(sc1_base+sc3_comision+sc3_flete+sc3_gastos)}</span></div>
             </div>
@@ -4607,7 +4624,7 @@ function _autoFillGastosProveedores(){
       var tf  = sel ? sel.value : 'gastos';
       var amt = mto ? (parseFloat(mto.value)||0) : 0;
       var nf  = nfc ? (nfc.value||'') : '';
-      var provMap = {flete:'FLETE INTERNACIONAL',acarreo:'ACARREO / TRANSPORTE',honorarios:corProv,itbms:'TESORO NACIONAL',mv:'MASTER VALUE',otros:'OTROS GASTOS'};
+      var provMap = {flete:'FLETE INTERNACIONAL',acarreo:'ACARREO / TRANSPORTE',honorarios:corProv,itbms:'TESORO NACIONAL',mv:'MASTER VALUE, S.A.',otros:'OTROS GASTOS'};
       if(amt>0.005) add(tf, provMap[tf]||'OTROS GASTOS', tf.toUpperCase(), amt, nf);
     });
   }
@@ -4636,7 +4653,7 @@ function _autoFillGastosProveedores(){
     // MASTER VALUE — absorbe diferencia Liq vs CIF (arancel, DMCE, acarreo que CIF no paga)
     const mv2 = sc2.mv || 0;
     if(mv2 > 0.005){
-      add('gastos', 'MASTER VALUE', 'Diferencia Liq. vs CIF Express', mv2);
+      add('gastos', 'MASTER VALUE, S.A.', 'Diferencia Liq. vs CIF Express', mv2);
     } else if(mv2 < -0.005){
       // Master Value negativo — advertencia, NO se agrega, se avisa al usuario
       _showToast('⚠️ Master Value negativo ($' + Math.abs(mv2).toFixed(2) + ') — No se puede procesar con este valor. Revisa los parámetros.', 'red', 7000);
@@ -4682,14 +4699,31 @@ function _autoFillGastosProveedores(){
       mv3 = sc3.mv || 0;
     }
     if(mv3 > 0.005){
-      add('gastos', 'MASTER VALUE', 'Diferencia Liq. vs Sababa', mv3);
+      add('gastos', 'MASTER VALUE, S.A.', 'Diferencia Liq. vs Sababa', mv3);
     } else if(mv3 < -0.005){
       _showToast('⚠️ Master Value negativo ($' + Math.abs(mv3).toFixed(2) + ') — No se puede procesar con este valor. Revisa los parámetros.', 'red', 7000);
     }
   }
 
-  // ── Reconstruir invLines ──
+  // ── Reconstruir invLines — preservar facturas ya guardadas ──
+  // Guardar mapa de facturas guardadas antes de reconstruir
+  const _savedFacts = {};
+  invLines.forEach(function(l){
+    if(l._factSaved && l.numFact){
+      const key = (l.prov||'')+'|'+(l.tipoFac||'')+'|'+(l.oc||'');
+      _savedFacts[key] = {numFact:l.numFact, nfac:l.nfac, _factSaved:true};
+    }
+  });
   invLines = [...mercLines, ...userGastos, ...G];
+  // Restaurar facturas guardadas
+  invLines.forEach(function(l){
+    const key = (l.prov||'')+'|'+(l.tipoFac||'')+'|'+(l.oc||'');
+    if(_savedFacts[key]){
+      l.numFact = _savedFacts[key].numFact;
+      l.nfac    = _savedFacts[key].nfac;
+      l._factSaved = true;
+    }
+  });
   renderInvLines();
 
   if(G.length > 0){
@@ -5061,7 +5095,7 @@ function calcSab2(){
 
   // Homologación: base ajustada ÷ 1.07
   const mercHomol    = baseAjust / DIV;
-  const exentoSab    = v('s2_exento') || 0;  // Reduce ITBMS, no el valor mercancía
+  const exentoSab    = window._sab2Exento || v('s2_exento') || 0;  // Reduce ITBMS, no el valor mercancía
   const gravadoHomol = Math.max(0, mercHomol - exentoSab);
   const itbmsHomol   = Math.round(gravadoHomol * itbPct * 100) / 100;
 
@@ -5210,7 +5244,7 @@ function calcSab2(){
       <div class="cr tot"><span class="lbl">Total Factura Sababa</span><span style="color:var(--orange-l)">${fmt(pagFinal)}</span></div>
       <div style="height:8px"></div>
       ${fleteStd>0?`<div class="cr"><span class="lbl">+ Flete del embarque</span><span style="color:var(--orange-l);font-weight:600">${fmt(fleteStd)}</span></div>`:''}
-      <div class="cr"><span class="lbl">+ Comisión Sababa (${(comPct*100).toFixed(1)}% × Total Factura)${window.s2_comisionEditada?' ✏️':' (auto)'}</span><span style="color:var(--orange-l);font-weight:600">${fmt(comision)}</span></div>
+      <div class="cr"><span class="lbl">+ Comisión Sababa (${(comPct*100).toFixed(1)}% × Total Factura | ${mercHomol>0?(comision/mercHomol*100).toFixed(2):'0'}% s/Homol.)${window.s2_comisionEditada?' ✏️':' (auto)'}</span><span style="color:var(--orange-l);font-weight:600">${fmt(comision)}</span></div>
       <div style="margin-left:12px;padding:4px 8px;background:rgba(240,136,62,.06);border-radius:5px;margin-bottom:4px">
         <div class="cr" style="padding:2px 0"><span class="lbl" style="font-size:10px;color:var(--muted)">└ ITBMS del valor homol. (×7÷107)</span><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted)">${fmt(itbmsHomol)}</span></div>
         <div class="cr" style="padding:2px 0"><span class="lbl" style="font-size:10px;color:var(--orange-l);font-weight:600">└ Honorario neto Sababa</span><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--orange-l);font-weight:700">${fmt(comision - itbmsHomol)}</span></div>
@@ -5281,7 +5315,9 @@ function calcSab2(){
             <div class="ar-row"><span class="ar-lbl" style="color:var(--muted)">ITBMS del valor homologado</span><span class="ar-val" style="color:var(--muted)">${fmt(itbmsHomol)}</span></div>
             ${fleteStd>0?`<div class="ar-row"><span class="ar-lbl">Flete</span><span class="ar-val">${fmt(fleteStd)}</span></div>`:''}
             ${agente>0?`<div class="ar-row"><span class="ar-lbl">Gastos Orig./Dest.</span><span class="ar-val">${fmt(agente)}</span></div>`:''}
-            <div class="ar-row"><span class="ar-lbl">Comisión (${(comPct*100).toFixed(0)}% × factura total)</span><span class="ar-val" style="color:var(--orange-l);font-weight:600">${fmt(comision)}</span></div>
+            <div class="ar-row"><span class="ar-lbl">Comisión Sababa (${(comPct*100).toFixed(0)}% × factura)</span><span class="ar-val" style="color:var(--orange-l);font-weight:600">${fmt(comision)}</span></div>
+            <div class="ar-row" style="margin-left:10px;opacity:.85"><span class="ar-lbl" style="font-size:10px;color:var(--muted)">└ ITBMS del homologado (×7÷107)</span><span class="ar-val" style="font-size:10px;color:var(--muted)">${fmt(itbmsHomol)}</span></div>
+            <div class="ar-row" style="margin-left:10px"><span class="ar-lbl" style="font-size:10px;color:var(--orange-l);font-weight:600">└ Honorario neto Sababa <span style="font-size:9px;font-weight:400;color:var(--muted)">(${mercHomol>0?((comision-itbmsHomol)/mercHomol*100).toFixed(2):"—"}% s/Homologado)</span></span><span class="ar-val" style="font-size:10px;color:var(--orange-l);font-weight:700">${fmt(comision-itbmsHomol)}</span></div>
             <div style="margin-left:10px;padding:4px 8px;background:rgba(240,136,62,.07);border-radius:5px;margin-bottom:4px">
               <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted)"><span>└ ITBMS del valor homol. (×7÷107)</span><span style="font-family:'IBM Plex Mono',monospace">${fmt(itbmsEnComision)}</span></div>
               <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--orange-l);font-weight:600"><span>└ Honorario neto Sababa</span><span style="font-family:'IBM Plex Mono',monospace">${fmt(honorarioNeto)}</span></div>
@@ -6363,7 +6399,7 @@ function _migrarGastosDesdeSnap(d){
     if((sc3.gastos||0)>0.01)  gastos.push({tipoFac:'acarreo',    deptCat:'GASTOS', prov:'Gastos Origen/Destino', costo:Math.round((sc3.gastos||0)*100)/100,  oc:'auto-migrado'});
     if(comBrutaSab>0.01)      gastos.push({tipoFac:'honorarios', deptCat:'GASTOS', prov:'SABABA IMPORTS, S.A.',  costo:Math.round(comBrutaSab*100)/100,       oc:'auto-migrado', _desc:'Comisión Bruta'});
     if(itbmsHomolSab>0.01)    gastos.push({tipoFac:'itbms',      deptCat:'GASTOS', prov:'SABABA IMPORTS, S.A.',  costo:Math.round(itbmsHomolSab*100)/100,     oc:'auto-migrado', _desc:'ITBMS Homologado'});
-    if(mv3>0.01)              gastos.push({tipoFac:'gastos',      deptCat:'GASTOS', prov:'MASTER VALUE',          costo:Math.round(mv3*100)/100,               oc:'auto-migrado', _desc:'Diferencia Liq. vs Sababa'});
+    if(mv3>0.01)              gastos.push({tipoFac:'gastos',      deptCat:'GASTOS', prov:'MASTER VALUE, S.A.',          costo:Math.round(mv3*100)/100,               oc:'auto-migrado', _desc:'Diferencia Liq. vs Sababa'});
   }
 
   if(!gastos.length) return;
@@ -7926,6 +7962,435 @@ function renderHistProv(){
 }
 
 var _histProvTimer = null;
+// ── Autocomplete N° Factura desde Facturas Disponibles ──
+var _fdAcCache  = null;  // cached list for this session
+var _fdAcActive = -1;    // keyboard nav index
+
+async function _fdLoadCache(){
+  if(_fdAcCache !== null) return _fdAcCache;
+  _fdAcCache = await _fdLoad();
+  return _fdAcCache;
+}
+
+function _fdInvalidateCache(){
+  _fdAcCache = null;  // call after agregar/eliminar
+}
+
+async function _fdAutocomplete(input, lineIdx){
+  var q = (input.value||'').trim().toUpperCase();
+  _fdCloseDrop();
+  if(q.length < 1) return;
+
+  var usadas = _fdUsadas();
+  var all = await _fdLoadCache();
+  // Filter: not consumed, matches number or proveedor
+  var matches = all.filter(function(f){
+    if(usadas.has((f.num||'').toUpperCase())) return false;
+    return (f.num||'').toUpperCase().includes(q) ||
+           (f.prov||'').toUpperCase().includes(q);
+  }).slice(0, 8);
+
+  if(!matches.length) return;
+
+  var drop = document.createElement('div');
+  drop.id = 'fd-autocomplete-drop';
+  _fdAcActive = -1;
+
+  var fmt = function(n){ return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
+  var MESES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+  matches.forEach(function(f, idx){
+    var item = document.createElement('div');
+    item.className = 'fd-ac-item';
+    var d = new Date(f.fecha||'');
+    var mes = isNaN(d) ? '' : (MESES[d.getMonth()]+' '+d.getFullYear());
+    item.innerHTML =
+      '<span class="fd-ac-meta">'+fmt(f.monto)+'</span>'+
+      '<div class="fd-ac-num">'+f.num+'</div>'+
+      '<div class="fd-ac-prov">'+f.prov+' · '+f.tipo+(mes?' · '+mes:'')+'</div>';
+    item.addEventListener('mousedown', function(e){
+      e.preventDefault();
+      _fdSelectItem(input, lineIdx, f);
+    });
+    drop.appendChild(item);
+  });
+
+  // Position below the input
+  var rect = input.getBoundingClientRect();
+  drop.style.top  = (rect.bottom + 4) + 'px';
+  drop.style.left = rect.left + 'px';
+  drop.style.width = Math.max(rect.width, 280) + 'px';
+  document.body.appendChild(drop);
+
+  // Keyboard nav
+  input.onkeydown = function(e){
+    var items = drop.querySelectorAll('.fd-ac-item');
+    if(e.key==='ArrowDown'){
+      e.preventDefault();
+      _fdAcActive = Math.min(_fdAcActive+1, items.length-1);
+      items.forEach(function(el,i){ el.classList.toggle('active', i===_fdAcActive); });
+    } else if(e.key==='ArrowUp'){
+      e.preventDefault();
+      _fdAcActive = Math.max(_fdAcActive-1, 0);
+      items.forEach(function(el,i){ el.classList.toggle('active', i===_fdAcActive); });
+    } else if(e.key==='Enter' && _fdAcActive>=0){
+      e.preventDefault();
+      _fdSelectItem(input, lineIdx, matches[_fdAcActive]);
+    } else if(e.key==='Escape'){
+      _fdCloseDrop();
+    }
+  };
+
+  // Close on outside click
+  setTimeout(function(){
+    document.addEventListener('click', _fdCloseDrop, {once:true});
+  }, 0);
+}
+
+function _fdSelectItem(input, lineIdx, f){
+  // Fill the input with the invoice number
+  input.value = f.num;
+  // Update invLines
+  if(lineIdx !== null && lineIdx !== undefined && invLines[lineIdx]){
+    invLines[lineIdx].numFact = f.num;
+    invLines[lineIdx].nfac    = f.num;
+  }
+  _fdCloseDrop();
+  // Auto-trigger save animation to confirm selection
+  var btn = input.parentElement ? input.parentElement.querySelector('button[title*="Guardar"]') : null;
+  if(btn){
+    btn.style.background = 'rgba(168,85,247,.2)';
+    btn.style.borderColor = 'rgba(168,85,247,.5)';
+    setTimeout(function(){ btn.style.background=''; btn.style.borderColor=''; }, 800);
+  }
+  _showToast('🗂️ Factura '+f.num+' seleccionada — presiona 💾 para guardar', 'green', 3000);
+}
+
+function _fdCloseDrop(){
+  var d = document.getElementById('fd-autocomplete-drop');
+  if(d) d.remove();
+  _fdAcActive = -1;
+}
+
+
+// ══════════════════════════════════════════════════════════════════
+// MÓDULO: Facturas Disponibles — Registro Manual + Cruce Auto
+// ══════════════════════════════════════════════════════════════════
+var _FDKEY = '_FACTDISP_MASTER';
+
+// ── Supabase load: pull facturas from cloud, fallback to localStorage ──
+async function _fdLoad(){
+  // Try localStorage first for instant render
+  var local = [];
+  try{ local = JSON.parse(localStorage.getItem(_FDKEY)||'[]'); }catch(e){}
+  if(!_sb) return local;
+  try{
+    var res = await _sb.from('simulador_sesiones')
+      .select('datos').eq('nombre', _FDKEY).maybeSingle();
+    if(res.data && res.data.datos){
+      var cloud = JSON.parse(res.data.datos||'[]');
+      if(Array.isArray(cloud) && cloud.length >= local.length){
+        localStorage.setItem(_FDKEY, JSON.stringify(cloud));
+        return cloud;
+      }
+    }
+  }catch(e){ console.warn('factDisp pull error:', e.message); }
+  return local;
+}
+
+// ── Supabase save: write to cloud + localStorage ──
+async function _fdSave(d){
+  // Always write localStorage immediately
+  try{ localStorage.setItem(_FDKEY, JSON.stringify(d)); }catch(e){}
+  if(!_sb){ _showToast('⚠️ Sin conexión a nube — guardado solo local','orange',2500); return; }
+  try{
+    await _sb.from('simulador_sesiones').upsert({
+      nombre: _FDKEY,
+      datos: JSON.stringify(d),
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'nombre' });
+  }catch(e){
+    console.warn('factDisp save error:', e.message);
+    _showToast('⚠️ Error guardando en nube','orange',2000);
+  }
+}
+function _fdUsadas(){
+  var u=new Set();
+  (window.tendData||[]).forEach(function(d){
+    ((d.snap&&d.snap.invLines)||d.invLines||[]).forEach(function(l){
+      if(l.numFact&&l.numFact.trim()) u.add(l.numFact.trim().toUpperCase());
+      if(l.nfac&&l.nfac.trim())       u.add(l.nfac.trim().toUpperCase());
+    });
+  });
+  return u;
+}
+
+async function renderFactDisp(){
+  var body=document.getElementById('tab-modal-body');
+  if(!body) return;
+  // Show spinner while loading from cloud
+  body.innerHTML='<div style="text-align:center;padding:60px;color:var(--muted)"><div style="font-size:32px;margin-bottom:8px">☁️</div><div>Cargando desde nube...</div></div>';
+  var data=await _fdLoad();
+  var usadas=_fdUsadas();
+  var fmt=function(n){ return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
+  var MESES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+  // Only show disponibles (not found in processed shipments)
+  var disponibles=data.filter(function(f){ return !usadas.has((f.num||'').toUpperCase()); });
+
+  // Group by month of registration (creation date)
+  var byMes={};
+  disponibles.forEach(function(f){
+    var d=new Date(f.fecha||'');
+    var k=isNaN(d)?'Sin fecha':(MESES[d.getMonth()]+' '+d.getFullYear());
+    if(!byMes[k]) byMes[k]=[];
+    byMes[k].push(f);
+  });
+  var mesKeys=Object.keys(byMes).sort(function(a,b){
+    // Sort chronologically
+    var da=new Date('1 '+a), db=new Date('1 '+b);
+    return db-da; // most recent first
+  });
+
+  var totalDisp=disponibles.reduce(function(s,f){ return s+(f.monto||0); },0);
+  var todayStr=new Date().toISOString().slice(0,10);
+
+  body.innerHTML='<div style="padding:16px;max-width:900px;margin:0 auto">'+
+
+    // ── Header ──
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">'+
+      '<div>'+
+        '<div style="font-size:16px;font-weight:700;color:var(--text)">🗂️ Facturas Disponibles</div>'+
+        '<div style="font-size:11px;color:var(--muted);margin-top:2px">'+data.length+' registradas · '+disponibles.length+' disponibles · '+fmt(totalDisp)+'</div>'+
+      '</div>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+        '<button onclick="_fdExportXLSX()" style="background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer">📥 Excel</button>'+
+        '<button onclick="_fdExportPDF()" style="background:rgba(248,81,73,.12);border:1px solid rgba(248,81,73,.3);color:var(--red-l);border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer">📄 PDF</button>'+
+      '</div>'+
+    '</div>'+
+
+    // ── New invoice form ──
+    '<div id="fd-form" style="background:rgba(168,85,247,.06);border:1px solid rgba(168,85,247,.3);border-radius:12px;padding:14px;margin-bottom:16px">'+
+      '<div style="font-size:12px;font-weight:700;color:#a371f7;margin-bottom:10px">➕ Nueva Factura de Gasto</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">'+
+        '<div>'+
+          '<label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px">N° Factura *</label>'+
+          '<input id="fd-num" type="text" placeholder="Ej: INV04305" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;box-sizing:border-box">'+
+        '</div>'+
+        '<div>'+
+          '<label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px">Fecha de Registro *</label>'+
+          '<input id="fd-fecha" type="date" value="'+todayStr+'" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;box-sizing:border-box">'+
+        '</div>'+
+        '<div>'+
+          '<label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px">Proveedor *</label>'+
+          '<input id="fd-prov" type="text" placeholder="Ej: SABABA IMPORTS, S.A." style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;box-sizing:border-box">'+
+        '</div>'+
+        '<div>'+
+          '<label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px">Monto (USD) *</label>'+
+          '<input id="fd-monto" type="number" placeholder="0.00" step="0.01" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;box-sizing:border-box">'+
+        '</div>'+
+        '<div>'+
+          '<label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px">Tipo</label>'+
+          '<select id="fd-tipo" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;box-sizing:border-box">'+
+            '<option value="Flete/Agente">🚢 Flete / Agente</option>'+
+            '<option value="Sababa/Local">🤝 Sababa / Local</option>'+
+            '<option value="Liquidación">🏛️ Liquidación</option>'+
+            '<option value="Otro">📋 Otro</option>'+
+          '</select>'+
+        '</div>'+
+        '<div>'+
+          '<label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px">Notas (opcional)</label>'+
+          '<input id="fd-notas" type="text" placeholder="Embarque relacionado, observación..." style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;box-sizing:border-box">'+
+        '</div>'+
+      '</div>'+
+      '<button onclick="_fdAgregar()" style="background:#a371f7;border:none;color:#fff;border-radius:8px;padding:9px 20px;font-size:12px;font-weight:700;cursor:pointer;width:100%">➕ Agregar Factura</button>'+
+    '</div>'+
+
+    // ── Disponibles by month ──
+    (disponibles.length===0
+      ? '<div style="text-align:center;padding:40px;color:var(--muted)">'+
+          '<div style="font-size:36px;margin-bottom:8px">✅</div>'+
+          '<div style="font-size:13px;font-weight:600">No hay facturas disponibles pendientes</div>'+
+          '<div style="font-size:11px;margin-top:4px">Agrega facturas arriba o todas han sido consumidas en embarques</div>'+
+        '</div>'
+      : '<div style="font-size:11px;font-weight:700;color:#a371f7;letter-spacing:.05em;text-transform:uppercase;margin-bottom:10px">📅 Disponibles por Mes de Registro</div>'+
+        mesKeys.map(function(mes){
+          var fs=byMes[mes];
+          var tot=fs.reduce(function(s,f){ return s+(f.monto||0); },0);
+          var tipoColors={'Flete/Agente':'rgba(88,166,255,.15)','Sababa/Local':'rgba(240,136,62,.15)','Liquidación':'rgba(248,81,73,.15)','Otro':'rgba(139,148,158,.15)'};
+          var tipoText={'Flete/Agente':'var(--blue-l)','Sababa/Local':'var(--orange-l)','Liquidación':'var(--red-l)','Otro':'var(--muted)'};
+          return '<div style="margin-bottom:14px;border-radius:10px;overflow:hidden;border:1px solid rgba(168,85,247,.2)">'+
+            '<div style="display:flex;justify-content:space-between;align-items:center;background:rgba(168,85,247,.1);padding:9px 14px">'+
+              '<span style="font-size:13px;font-weight:700;color:#a371f7">📅 '+mes+'</span>'+
+              '<span style="font-size:12px;font-weight:700;color:#a371f7">'+fs.length+' factura'+(fs.length!==1?'s':'')+' · '+fmt(tot)+'</span>'+
+            '</div>'+
+            '<table style="width:100%;border-collapse:collapse;font-size:11px">'+
+              '<thead><tr style="background:var(--s2)">'+
+                '<th style="padding:6px 12px;text-align:left;color:var(--muted);font-weight:600">N° Factura</th>'+
+                '<th style="padding:6px 12px;text-align:left;color:var(--muted);font-weight:600">Proveedor</th>'+
+                '<th style="padding:6px 12px;text-align:left;color:var(--muted);font-weight:600">Tipo</th>'+
+                '<th style="padding:6px 12px;text-align:right;color:var(--muted);font-weight:600">Monto</th>'+
+                '<th style="padding:6px 12px;text-align:center;color:var(--muted);font-weight:600">Acciones</th>'+
+              '</tr></thead>'+
+              '<tbody>'+
+              fs.map(function(f,i){
+                return '<tr style="background:'+(i%2?'var(--s1)':'var(--bg)')+';border-bottom:1px solid rgba(255,255,255,.04)">'+
+                  '<td style="padding:8px 12px;font-family:monospace;font-size:10px;color:var(--text);font-weight:600">'+f.num+'</td>'+
+                  '<td style="padding:8px 12px;color:var(--text)">'+f.prov+'<br><span style="font-size:9px;color:var(--muted)">'+f.notas+'</span></td>'+
+                  '<td style="padding:8px 12px"><span style="background:'+(tipoColors[f.tipo]||'rgba(139,148,158,.15)')+';color:'+(tipoText[f.tipo]||'var(--muted)')+';border-radius:4px;padding:2px 7px;font-size:10px;font-weight:600">'+f.tipo+'</span></td>'+
+                  '<td style="padding:8px 12px;text-align:right;font-family:monospace;font-weight:700;color:var(--text)">'+fmt(f.monto)+'</td>'+
+                  '<td style="padding:8px 12px;text-align:center">'+
+                    '<button data-fid="'+f.id+'" onclick="_fdEliminar(this.dataset.fid)"  style="background:rgba(248,81,73,.12);border:1px solid rgba(248,81,73,.3);color:var(--red-l);border-radius:5px;padding:3px 8px;font-size:10px;cursor:pointer" title="Eliminar">🗑️</button>'+
+                  '</td>'+
+                '</tr>';
+              }).join('')+
+              '</tbody>'+
+            '</table>'+
+          '</div>';
+        }).join('')
+    )+
+  '</div>';
+}
+
+async function _fdAgregar(){
+  var num   =(document.getElementById('fd-num')?.value||'').trim();
+  var fecha =(document.getElementById('fd-fecha')?.value||'');
+  var prov  =(document.getElementById('fd-prov')?.value||'').trim();
+  var monto =parseFloat(document.getElementById('fd-monto')?.value||'0')||0;
+  var tipo  =(document.getElementById('fd-tipo')?.value||'Otro');
+  var notas =(document.getElementById('fd-notas')?.value||'').trim();
+
+  if(!num){ _showToast('⚠️ El número de factura es obligatorio','orange',2000); return; }
+  if(!prov){ _showToast('⚠️ El proveedor es obligatorio','orange',2000); return; }
+  if(monto<=0){ _showToast('⚠️ El monto debe ser mayor a 0','orange',2000); return; }
+
+  var data=await _fdLoad();
+  // Check duplicate
+  if(data.find(function(f){ return f.num.toUpperCase()===num.toUpperCase(); })){
+    _showToast('⚠️ Ya existe una factura con ese número','orange',3000); return;
+  }
+
+  data.push({
+    id:   Date.now().toString(36)+Math.random().toString(36).slice(2,5),
+    num:  num,
+    fecha:fecha||new Date().toISOString().slice(0,10),
+    prov: prov,
+    monto:monto,
+    tipo: tipo,
+    notas:notas,
+    creadoEn:new Date().toISOString()
+  });
+  await _fdSave(data);
+  _fdInvalidateCache();
+  _showToast('✅ Factura '+num+' guardada en nube ☁️','green',2000);
+  renderFactDisp();
+}
+
+async function _fdEliminar(id){
+  if(!confirm('¿Eliminar esta factura del registro?')) return;
+  var data=(await _fdLoad()).filter(function(f){ return f.id!==id; });
+  _fdInvalidateCache();
+  await _fdSave(data);
+  _showToast('🗑️ Factura eliminada','orange',2000);
+  renderFactDisp();
+}
+
+async function _fdExportXLSX(){
+  var data=await _fdLoad();
+  var usadas=_fdUsadas();
+  var MESES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  var rows=data.map(function(f){
+    var d=new Date(f.fecha||'');
+    var mes=isNaN(d)?'Sin fecha':(MESES[d.getMonth()]+' '+d.getFullYear());
+    var estado=usadas.has(f.num.toUpperCase())?'Consumida':'Disponible';
+    return{
+      'N° Factura':f.num,
+      'Fecha Registro':f.fecha,
+      'Mes':mes,
+      'Proveedor':f.prov,
+      'Tipo':f.tipo,
+      'Monto':f.monto,
+      'Estado':estado,
+      'Notas':f.notas||''
+    };
+  });
+  // Sort by fecha desc, disponibles first
+  rows.sort(function(a,b){
+    if(a.Estado!==b.Estado) return a.Estado==='Disponible'?-1:1;
+    return (b['Fecha Registro']||'').localeCompare(a['Fecha Registro']||'');
+  });
+  var ws=XLSX.utils.json_to_sheet(rows);
+  // Column widths
+  ws['!cols']=[{wch:18},{wch:14},{wch:12},{wch:35},{wch:15},{wch:12},{wch:12},{wch:30}];
+  var wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Facturas Disponibles');
+  XLSX.writeFile(wb,'facturas_disponibles_'+new Date().toISOString().slice(0,10)+'.xlsx');
+  _showToast('📥 Excel exportado','green',2000);
+}
+
+async function _fdExportPDF(){
+  var data=await _fdLoad();
+  var usadas=_fdUsadas();
+  var MESES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  var fmt=function(n){ return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
+
+  // Only disponibles grouped by month
+  var disponibles=data.filter(function(f){ return !usadas.has(f.num.toUpperCase()); });
+  var byMes={};
+  disponibles.forEach(function(f){
+    var d=new Date(f.fecha||'');
+    var k=isNaN(d)?'Sin fecha':(MESES[d.getMonth()]+' '+d.getFullYear());
+    if(!byMes[k]) byMes[k]=[];
+    byMes[k].push(f);
+  });
+  var mesKeys=Object.keys(byMes).sort(function(a,b){
+    return new Date('1 '+b)-new Date('1 '+a);
+  });
+  var total=disponibles.reduce(function(s,f){ return s+(f.monto||0); },0);
+
+  var mesHtml=mesKeys.map(function(mes){
+    var fs=byMes[mes];
+    var tot=fs.reduce(function(s,f){ return s+(f.monto||0); },0);
+    var rows=fs.map(function(f){
+      return '<tr><td>'+f.num+'</td><td>'+f.prov+'</td><td>'+f.tipo+'</td>'+
+        '<td style="text-align:right;font-weight:600">'+fmt(f.monto)+'</td>'+
+        '<td style="color:#666;font-size:11px">'+f.notas+'</td></tr>';
+    }).join('');
+    return '<div class="mes-block">'+
+      '<div class="mes-hdr">📅 '+mes+' &nbsp;·&nbsp; '+fs.length+' factura'+(fs.length!==1?'s':'')+' &nbsp;·&nbsp; '+fmt(tot)+'</div>'+
+      '<table><thead><tr><th>N° Factura</th><th>Proveedor</th><th>Tipo</th><th style="text-align:right">Monto</th><th>Notas</th></tr></thead>'+
+      '<tbody>'+rows+'</tbody></table></div>';
+  }).join('');
+
+  var win=window.open('','_blank');
+  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8">'+
+    '<title>Facturas Disponibles — '+new Date().toLocaleDateString('es-PA')+'</title>'+
+    '<style>'+
+      'body{font-family:Inter,sans-serif;padding:24px;color:#111;font-size:12px}'+
+      'h2{color:#a371f7;margin:0 0 4px}'+
+      '.sub{color:#666;font-size:11px;margin:0 0 20px}'+
+      '.total-chip{display:inline-block;background:#a371f7;color:#fff;border-radius:8px;padding:6px 14px;font-weight:700;font-size:13px;margin-bottom:20px}'+
+      '.mes-block{margin-bottom:20px;border-radius:8px;overflow:hidden;border:1px solid #e0d0ff}'+
+      '.mes-hdr{background:#a371f7;color:#fff;padding:8px 14px;font-weight:700;font-size:12px}'+
+      'table{width:100%;border-collapse:collapse;font-size:11px}'+
+      'th{background:#f5f0ff;padding:7px 10px;text-align:left;font-weight:600;color:#6a3fa0}'+
+      'td{padding:7px 10px;border-bottom:1px solid #f0e8ff}'+
+      'tr:last-child td{border-bottom:none}'+
+      'tr:nth-child(even){background:#faf7ff}'+
+      '.print-btn{background:#a371f7;color:#fff;border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-size:12px;margin-bottom:16px}'+
+      '@media print{.print-btn{display:none}}'+
+    '</style></head><body>'+
+    '<h2>🗂️ Facturas Disponibles</h2>'+
+    '<p class="sub">Reporte generado: '+new Date().toLocaleDateString('es-PA',{day:'2-digit',month:'long',year:'numeric'})+
+      ' · '+disponibles.length+' facturas pendientes</p>'+
+    '<div class="total-chip">Total disponible: '+fmt(total)+'</div>'+
+    '<button class="print-btn" onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>'+
+    (mesHtml||'<p style="color:green;font-weight:600">✅ No hay facturas disponibles pendientes</p>')+
+    '</body></html>');
+  win.document.close();
+}
+
+
 function _histProvSearch(){
   clearTimeout(_histProvTimer);
   _histProvTimer = setTimeout(function(){ _renderHistProvList(); }, 300);
@@ -10381,7 +10846,7 @@ function cargarSesion(input){
       });
       // Also explicitly set sc_trasp from s1_traspaso if Sababa fields exist
       if(s.campos?.s2_trasp){ const el=document.getElementById('sc_trasp'); if(el) el.value=s.campos.s2_trasp; }
-      if(s.exentoSab){ const el=document.getElementById('s2_exento'); if(el) el.value=s.exentoSab; }
+      if(s.exentoSab){ window._sab2Exento=s.exentoSab; const el=document.getElementById('s2_exento'); if(el) el.value=s.exentoSab; }
       if(s.campos?.s2_pago){  const el=document.getElementById('sc_pago');  if(el) el.value=s.campos.s2_pago; }
 
       // Restore invoice lines
@@ -10678,7 +11143,7 @@ function renderInvLines(){
           +'placeholder="N° Factura (ej: SAB-2024-001)" '
           +'id="nfact-gasto-'+i+'" '
           +'onchange="invLines['+i+'].numFact=this.value;invLines['+i+'].nfac=this.value;" '
-          +'oninput="invLines['+i+'].numFact=this.value;invLines['+i+'].nfac=this.value;" '
+          +'oninput="invLines['+i+'].numFact=this.value;invLines['+i+'].nfac=this.value;_fdAutocomplete(this,'+i+');" '
           +'style="flex:1;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:5px 10px;color:var(--text);font-size:11px;box-sizing:border-box">'
           +(l._factSaved ? '<button onclick="_unlockFactInput(document.getElementById(\'nfact-gasto-'+i+'\'),'+i+',this)" style="flex-shrink:0;background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer;transition:all .15s" title="Editar n° de factura">✏️</button>' : '<button onclick="_guardarFactura('+i+',\'nfact-gasto-'+i+'\',{btn:this})" style="flex-shrink:0;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer;transition:all .15s" title="Guardar N° Factura · TN y Sababa: se propagan automáticamente">💾</button>')
           +'</div>'
@@ -14396,6 +14861,32 @@ body:not(.sidebar-pinned) #app-wrapper {
   transform: scale(1.08);
 }
 
+
+/* ── Factura autocomplete dropdown ── */
+#fd-autocomplete-drop {
+  position: fixed;
+  z-index: 99999;
+  background: var(--s1);
+  border: 1px solid rgba(168,85,247,.4);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.5);
+  max-height: 220px;
+  overflow-y: auto;
+  min-width: 280px;
+  max-width: 420px;
+}
+.fd-ac-item {
+  padding: 9px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(255,255,255,.05);
+  transition: background .1s;
+}
+.fd-ac-item:last-child { border-bottom: none; }
+.fd-ac-item:hover, .fd-ac-item.active { background: rgba(168,85,247,.15); }
+.fd-ac-num  { font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 700; color: #a371f7; }
+.fd-ac-prov { font-size: 10px; color: var(--muted); margin-top: 1px; }
+.fd-ac-meta { font-size: 10px; color: var(--green-l); float: right; font-weight: 600; }
+
 #tab-modal-overlay {
   display: none;
   position: fixed;
@@ -14499,7 +14990,7 @@ body:not(.sidebar-pinned) #app-wrapper {
   ══════════════════════════════════════════ */
 
   var MODAL_TABS = ['cifexp','sababa','facturas','comparativo',
-                    'aranceles','tendencias','config','histfact','resumen','histprovs'];
+                    'aranceles','tendencias','config','histfact','resumen','histprovs','factdisp'];
 
   /* ── Construir estructura de modales ── */
   function buildModals(){
@@ -14584,6 +15075,7 @@ body:not(.sidebar-pinned) #app-wrapper {
       setTimeout(function(){
         if(tabId==='config'    && typeof renderConfig==='function')    { renderConfig(); if(typeof renderDeptConfig==='function') renderDeptConfig(); }
         if(tabId==='histprovs' && typeof renderHistProv==='function')  renderHistProv();
+        if(tabId==='factdisp') renderFactDisp();
         if(tabId==='tendencias' && typeof renderTend==='function'){
           (async function(){
             if(_sb){ await _pullTendFromCloud(); }
@@ -14598,7 +15090,24 @@ body:not(.sidebar-pinned) #app-wrapper {
         }
         if(tabId==='facturas'  && typeof renderInvLines==='function')  renderInvLines();
         if(tabId==='cifexp'    && typeof updateCifExpDisplays==='function') updateCifExpDisplays();
-        if(tabId==='sababa'    && typeof calcSab2==='function')        calcSab2();
+        if(tabId==='sababa'    && typeof calcSab2==='function'){
+          // Sync tipo buttons when opening Sababa modal
+          if(!window._sab2TipoManual && tipo){
+            sab2Tipo = tipo;
+            document.querySelectorAll('#sab2-tipo-seg .seg-btn').forEach(function(b){
+              b.classList.remove('on','g');
+              if((tipo==='ZL'&&b.textContent.trim().includes('Zona'))||(tipo==='EXT'&&b.textContent.trim().includes('Import'))) b.classList.add('on','g');
+            });
+            var _tr=document.getElementById('sab2-trasp-row');
+            if(_tr) _tr.style.display=tipo==='ZL'?'':'none';
+          }
+          // Restore exento field if stored
+          if(window._sab2Exento){
+            var _exEl=document.getElementById('s2_exento');
+            if(_exEl) _exEl.value=window._sab2Exento;
+          }
+          calcSab2();
+        }
         if(tabId==='unico'){
           // unico is now a direct tab — no longer opened via modal
           // This block kept for safety but should not execute
@@ -14613,7 +15122,7 @@ body:not(.sidebar-pinned) #app-wrapper {
   // Tabs de costeo: al cerrar su modal permanecen en la pantalla de costeo activa
   var COSTEO_MODAL_TABS = ['facturas','cifexp','sababa','comparativo','aranceles'];
   // Tabs informativos/config: al cerrar van al inicio
-  var INICIO_MODAL_TABS = ['tendencias','config','histprovs','histfact','resumen'];
+  var INICIO_MODAL_TABS = ['tendencias','config','histprovs','histfact','resumen','factdisp'];
 
   window.closeTabModal = function(){
     var overlay = document.getElementById('tab-modal-overlay');
