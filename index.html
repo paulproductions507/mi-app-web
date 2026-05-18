@@ -8020,7 +8020,17 @@ async function _fdAutocomplete(input, lineIdx){
   drop.style.top  = (rect.bottom + 4) + 'px';
   drop.style.left = rect.left + 'px';
   drop.style.width = Math.max(rect.width, 280) + 'px';
-  document.body.appendChild(drop);
+  // Append to modal drawer to avoid overflow clipping
+  var modalEl = document.querySelector('#tab-modal-drawer') || document.querySelector('#tab-modal-body') || document.body;
+  modalEl.appendChild(drop);
+  // Use absolute positioning relative to modal if not body
+  if(modalEl !== document.body){
+    drop.style.position = 'absolute';
+    var mRect = modalEl.getBoundingClientRect();
+    drop.style.top  = (rect.bottom - mRect.top + modalEl.scrollTop + 4) + 'px';
+    drop.style.left = (rect.left - mRect.left) + 'px';
+    drop.style.zIndex = '9999';
+  }
 
   // Keyboard nav
   input.onkeydown = function(e){
@@ -8075,65 +8085,31 @@ function _fdCloseDrop(){
 
 // ── Custom provider autocomplete for Facturas Disponibles ──
 function _fdProvAC(input){
-  var q = (input.value||'').trim().toUpperCase();
-  // Remove existing dropdown
-  var old = document.getElementById('_fdprov_drop');
-  if(old) old.remove();
-  if(q.length < 2) return;
-
-  // Ensure master list is loaded
-  if(typeof fillProvDatalist === 'function') fillProvDatalist();
-
-  // Build combined list: _PROV_NAMES + names from tendData gastos
-  var nameSet = new Set(window._PROV_NAMES||[]);
+  var q=(input.value||'').trim().toUpperCase();
+  var box=document.getElementById('_fdprov_suggestions');
+  if(!box) return;
+  box.innerHTML='';
+  if(q.length<2){box.style.display='none';return;}
+  if(typeof fillProvDatalist==='function') fillProvDatalist();
+  var nameSet=new Set(window._PROV_NAMES||[]);
   (window.tendData||[]).forEach(function(d){
     ((d.snap&&d.snap.invLines)||d.invLines||[]).forEach(function(l){
-      if(l.prov && l.tipoFac && l.tipoFac !== 'mercancia') nameSet.add(l.prov);
+      if(l.prov&&l.tipoFac&&l.tipoFac!=='mercancia') nameSet.add(l.prov);
     });
   });
-  var allNames = Array.from(nameSet);
-
-  // Filter
-  var matches = allNames.filter(function(n){
-    return n.toUpperCase().includes(q);
-  }).slice(0, 10);
-  if(!matches.length) return;
-
-  var drop = document.createElement('div');
-  drop.id = '_fdprov_drop';
-  drop.style.cssText = 'position:fixed;z-index:9999999;background:var(--s1);border:1px solid rgba(168,85,247,.4);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.5);overflow:hidden;';
-
+  var matches=Array.from(nameSet).filter(function(n){return n.toUpperCase().includes(q);}).slice(0,8);
+  if(!matches.length){box.style.display='none';return;}
+  box.style.display='block';
   matches.forEach(function(name){
-    var item = document.createElement('div');
-    item.style.cssText = 'padding:9px 14px;cursor:pointer;font-size:12px;color:var(--text);border-bottom:1px solid rgba(255,255,255,.05);';
-    item.textContent = name;
-    item.addEventListener('mousedown', function(e){
-      e.preventDefault();
-      input.value = name;
-      drop.remove();
-    });
-    item.addEventListener('touchstart', function(e){
-      e.preventDefault();
-      input.value = name;
-      drop.remove();
-    }, {passive:false});
-    item.addEventListener('mouseover', function(){ this.style.background='rgba(168,85,247,.15)'; });
-    item.addEventListener('mouseout',  function(){ this.style.background=''; });
-    drop.appendChild(item);
+    var item=document.createElement('div');
+    item.style.cssText='padding:9px 14px;cursor:pointer;font-size:12px;color:var(--text);border-bottom:1px solid rgba(255,255,255,.06);';
+    item.textContent=name;
+    item.addEventListener('mousedown',function(e){e.preventDefault();input.value=name;box.style.display='none';});
+    item.addEventListener('touchstart',function(e){e.preventDefault();input.value=name;box.style.display='none';},{passive:false});
+    item.addEventListener('mouseover',function(){this.style.background='rgba(168,85,247,.15)';});
+    item.addEventListener('mouseout',function(){this.style.background='';});
+    box.appendChild(item);
   });
-
-  // Position below input
-  var rect = input.getBoundingClientRect();
-  drop.style.top   = (rect.bottom + 4) + 'px';
-  drop.style.left  = rect.left + 'px';
-  drop.style.width = rect.width + 'px';
-  document.body.appendChild(drop);
-
-  // Close on outside interaction
-  setTimeout(function(){
-    document.addEventListener('click', function rm(){ drop.remove(); document.removeEventListener('click',rm); });
-    document.addEventListener('touchstart', function rm(){ drop.remove(); document.removeEventListener('touchstart',rm); }, {passive:true});
-  }, 0);
 }
 
 
@@ -8248,6 +8224,7 @@ async function renderFactDisp(){
         '<div>'+
           '<label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px">Proveedor *</label>'+
           '<input id="fd-prov" type="text" placeholder="Escribe proveedor para buscar..." autocomplete="off" oninput="_fdProvAC(this)" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;box-sizing:border-box">'+
+          +'<div id="_fdprov_suggestions" style="display:none;background:var(--s1);border:1px solid rgba(168,85,247,.4);border-radius:0 0 8px 8px;max-height:160px;overflow-y:auto"></div>'
         '</div>'+
         '<div>'+
           '<label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px">Monto (USD) *</label>'+
@@ -14992,6 +14969,7 @@ body:not(.sidebar-pinned) #app-wrapper {
   overflow-x: hidden;
   box-shadow: 0 24px 80px rgba(0,0,0,.7);
   border-radius: 14px;
+  isolation: auto;
   border: 1px solid var(--border);
   animation: _tmPopIn .25s cubic-bezier(.34,1.56,.64,1);
   display: flex;
