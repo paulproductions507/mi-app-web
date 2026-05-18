@@ -1236,10 +1236,8 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       <div class="r2">
         <div class="field"><label>Tipo de Equipo</label>
           <select id="s1_equipo" onchange="setEquipo(this.value);_renderContenedores()">
-            <option value="">— Selecciona tipo de equipo —</option>
-            <option value="Contenedor">🚢 Contenedor Directo</option>
-            <option value="Consolidado">📦 Consolidado</option>
-            <option value="CargaSuelta">📦 Carga Suelta</option>
+            <option value="">— Selecciona equipo —</option>
+            <option value="Contenedor">🚢 Contenedor</option>
             <option value="Camion">🚛 Camión</option>
             <option value="Furgon">🚛 Furgón</option>
             <option value="Avion">✈️ Avión</option>
@@ -2138,6 +2136,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
     <button onclick="renderDashboardKPIs()" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:8px;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer">📊 Dashboard KPIs</button>
     <button onclick="renderHistFact()" style="background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.3);color:#a855f7;border-radius:8px;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer">📋 Historial Embarques</button>
     <button onclick="renderResumenRapido()" style="background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.3);color:#22d3ee;border-radius:8px;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer">⚡ Resumen Rápido</button>
+    <button onclick="_correrProcesoProveedores()" style="background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.3);color:var(--red-l);border-radius:8px;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer">🔄 Correr Proceso</button>
     <button onclick="exportDashboardExcel()" style="margin-left:auto;background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:8px;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer">📊 Excel</button>
   </div>
 
@@ -2804,7 +2803,7 @@ function setEquipo(val){
   // Auto-set vía de transporte
   const viaEl = document.getElementById('s1_via_transporte');
   if(viaEl){
-    if(val==='Contenedor'||val==='Consolidado'||val==='CargaSuelta') viaEl.value='SEA';
+    if(val==='Contenedor') viaEl.value='SEA';
     else if(val==='Camion'||val==='Furgon') viaEl.value='LAND';
     else if(val==='Avion') viaEl.value='AIR';
   }
@@ -4443,8 +4442,8 @@ function _renderContenedores(){
   const esCamion     = equipo === 'Camion';
   const esMultiple   = nEq > 1;
 
-  // Mostrar si es Contenedor con más de 1, O si es Camión con cualquier cantidad
-  const debemostrar = (esContenedor && esMultiple) || esCamion;
+  // Show date fields for ALL equipment types when quantity >= 1
+  const debemostrar = equipo !== '' && nEq >= 1;
   wrap.style.display = debemostrar ? 'block' : 'none';
 
   if(!debemostrar){ window._contenedores=[]; return; }
@@ -4453,7 +4452,7 @@ function _renderContenedores(){
   while(window._contenedores.length < nEq) window._contenedores.push({num:'',fecha:''});
   while(window._contenedores.length > nEq) window._contenedores.pop();
 
-  if(esCamion){
+  if(true){
     // Para camión: solo mostrar fecha de llegada por unidad (sin número de contenedor)
     const hdrEl = wrap.querySelector('[data-cont-hdr]');
     const hdr = wrap.querySelector('div[style*="font-weight:700"]');
@@ -4715,6 +4714,18 @@ function _autoFillGastosProveedores(){
       _savedFacts[key] = {numFact:l.numFact, nfac:l.nfac, _factSaved:true};
     }
   });
+  // Apply S.I- provider rule based on current tipo
+  var _esZLnow = (typeof tipo!=='undefined' && tipo==='ZL');
+  mercLines = mercLines.map(function(l){
+    if(l.tipoFac!=='mercancia') return l;
+    var p = l.prov||'';
+    if(_esZLnow && !p.startsWith('S.I -') && !p.startsWith('S.I-')){
+      var m=provMatch(p); if(m&&m.si) l=Object.assign({},l,{prov:m.si});
+    } else if(!_esZLnow && (p.startsWith('S.I - ')||p.startsWith('S.I- '))){
+      l=Object.assign({},l,{prov:p.replace(/^S\.I\s*-\s*/i,'').trim()});
+    }
+    return l;
+  });
   invLines = [...mercLines, ...userGastos, ...G];
   // Restaurar facturas guardadas
   invLines.forEach(function(l){
@@ -4895,8 +4906,16 @@ function syncSC3fromSC1(){
     }
   } else {
     // CIF term (any tipo): single value field
+    // For EXT+CIF: flete may have been added manually → include in Sababa base
+    let cifConFlete = cif;
+    if(tipo==='EXT' && termino==='CIF'){
+      const _fleteManual=(window.invLines||[]).filter(function(l){return l.tipoFac==='flete';}).reduce(function(s,l){return s+(l.costo||0);},0);
+      const _fleteForm=v('s1_flete_fob')||0;
+      const _flete=Math.max(_fleteManual,_fleteForm);
+      if(_flete>0) cifConFlete=cif+_flete;
+    }
     if(cif>0){
-      setIfAuto('s2_costo_zl', cif);
+      setIfAuto('s2_costo_zl', cifConFlete);
       // Pago = CIF (base pura, sin diferencia — la diferencia va por campo separado)
       const p=document.getElementById('s2_pago');
       if(p&&(!p.value||parseFloat(p.value)===0||p.dataset.autoSet==='true')){
@@ -6484,7 +6503,13 @@ function _getFilteredTendData(){
     }
     if(prov && (d.esc||'').trim()!==prov) return false;
     if(buscar){
-      const txt=[(d.nro||''),(d.desc||''),(d.esc||''),(d.tramiteTipo||''),(d.idFiscal||'')].join(' ').toLowerCase();
+      // Expand searchable text to include tipo, proveedor names, and aliases
+      const _escL = (d.esc||'').toLowerCase();
+      const _tipoAlias = _escL.includes('sababa') ? 'zona libre zl sababa' :
+                         _escL.includes('cif') ? 'importacion cif exterior ext' :
+                         _escL.includes('liq') ? 'liquidacion aduanal' : '';
+      const _provNames = ((d.snap&&d.snap.invLines)||d.invLines||[]).map(function(l){return (l.prov||'').toLowerCase();}).join(' ');
+      const txt=[(d.nro||''),(d.desc||''),(d.esc||''),(d.tramiteTipo||''),(d.idFiscal||''),_tipoAlias,_provNames].join(' ').toLowerCase();
       if(!txt.includes(buscar)) return false;
     }
     if(origen && typeof _origenMatchFiltro==='function'){
@@ -6557,6 +6582,97 @@ function autoFillTend(){
   if(window._lastCIF) cifEl.value=window._lastCIF.toFixed(2);
   fechaEl.value=new Date().toISOString().slice(0,10);
 }
+// ══════════════════════════════════════════════════════════════════
+// Asignación de Facturas por Equipo/Contenedor
+// ══════════════════════════════════════════════════════════════════
+function _showAsignacionFacturas(snap, contenedores, onComplete){
+  var gastoLines = (snap.invLines||[]).filter(function(l){ return !l.tipoFac || l.tipoFac === 'mercancia'; });
+  var equipo = (snap.equipo || 'Equipo').replace('Contenedor','Contenedor').replace('Camion','Camión');
+  
+  // Build assignment map: lineIdx → contenedorIdx (default: all to first)
+  var assignment = {};
+  gastoLines.forEach(function(l, i){ assignment[i] = 0; });
+
+  // Build modal HTML
+  var contOpts = contenedores.map(function(c, ci){
+    var label = equipo + ' ' + (ci+1) + (c.num ? ' — ' + c.num : '') + (c.fecha ? ' (' + c.fecha + ')' : '');
+    return '<option value="'+ci+'">'+label+'</option>';
+  }).join('');
+
+  var rowsHtml = gastoLines.map(function(l, i){
+    var tipoLabel = (window._RUBROS_GASTO||[]).find(function(r){ return r.val===l.tipoFac; });
+    var nombre = tipoLabel ? tipoLabel.lbl : (l.tipoFac||'Gasto');
+    var monto = '$'+Number(l.costo||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+    return '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--s2);border-radius:8px;margin-bottom:6px">'+
+      '<div style="flex:1;min-width:0">'+
+        '<div style="font-size:12px;font-weight:600;color:var(--text)">'+(l.prov||'Sin proveedor')+'</div>'+
+        '<div style="font-size:10px;color:var(--muted)">OC: '+(l.oc||'—')+(l.dept?' · '+(l.dept||l.deptCat||''):'')+'</div>'+
+      '</div>'+
+      '<div style="font-size:12px;font-weight:700;color:var(--orange-l);flex-shrink:0">'+monto+'</div>'+
+      '<select id="_asign_'+i+'" onchange="window._asignMap['+i+']=parseInt(this.value)" '+
+        'style="background:var(--s1);border:1px solid rgba(168,85,247,.4);border-radius:6px;padding:5px 8px;color:var(--text);font-size:11px;flex-shrink:0">'+
+        contOpts+
+      '</select>'+
+    '</div>';
+  }).join('');
+
+  // Create overlay
+  var overlay = document.createElement('div');
+  overlay.id = '_asign_overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px';
+  overlay.innerHTML = 
+    '<div style="background:var(--bg);border:1px solid var(--border);border-radius:16px;padding:20px;max-width:560px;width:100%;max-height:90vh;overflow-y:auto">'+
+      '<div style="font-size:15px;font-weight:800;color:var(--text);margin-bottom:4px">📦 Asignar Facturas de Mercancía por Equipo</div>'+
+      '<div style="font-size:11px;color:var(--muted);margin-bottom:16px">Selecciona a qué '+equipo.toLowerCase()+' va cada factura de mercancía</div>'+
+      '<div id="_asign_rows">'+rowsHtml+'</div>'+
+      '<div style="display:flex;gap:10px;margin-top:16px">'+
+        '<button onclick="_asignConfirmar('+JSON.stringify(snap).replace(/</g,'&lt;')+')" '+
+          'style="flex:1;background:#a371f7;border:none;color:#fff;border-radius:8px;padding:10px;font-size:13px;font-weight:700;cursor:pointer">'+
+          '✅ Confirmar Asignación'+
+        '</button>'+
+        '<button onclick="_asignSaltar()" '+
+          'style="background:var(--s2);border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:10px 16px;font-size:12px;cursor:pointer">'+
+          'Saltar'+
+        '</button>'+
+      '</div>'+
+    '</div>';
+
+  document.body.appendChild(overlay);
+  window._asignMap = assignment;
+  window._asignCallback = onComplete;
+  window._asignSnap = snap;
+}
+
+function _asignConfirmar(){
+  var snap = window._asignSnap;
+  var map  = window._asignMap||{};
+  var gastoLines = (snap.invLines||[]).filter(function(l){ return !l.tipoFac || l.tipoFac === 'mercancia'; });
+  
+  // Save assignment to each line
+  gastoLines.forEach(function(l, i){
+    l._equipoIdx = map[i] || 0;
+    l._equipoNum = (window._contenedores||[])[map[i]||0]?.num || '';
+  });
+  
+  // Update snap in tendData
+  var idx = tendData.findIndex(function(d){ return d.nro === snap.nro; });
+  if(idx >= 0) tendData[idx] = snap;
+  saveTendData();
+  if(typeof _syncTendToCloud==='function') _syncTendToCloud();
+  _showToast('✅ Facturas asignadas a equipos', 'green', 2000);
+  
+  var overlay = document.getElementById('_asign_overlay');
+  if(overlay) overlay.remove();
+  if(window._asignCallback) window._asignCallback();
+}
+
+function _asignSaltar(){
+  var overlay = document.getElementById('_asign_overlay');
+  if(overlay) overlay.remove();
+  if(window._asignCallback) window._asignCallback();
+}
+
+
 function procesarEmbarque(){
   if(!window._lastCIF&&!window._sc1_landed1){
     _showToast('⚠️ Calcula primero el Escenario #1 antes de procesar.', 'red', 3000);
@@ -6741,6 +6857,21 @@ function procesarEmbarque(){
   const _nroGuardar = nro || ('EMB-'+Date.now());
   autoGuardarSupabase(_nroGuardar);
 
+  // If multiple equipment units, show invoice assignment step first
+  const _conts = window._contenedores || [];
+  if(_conts.length >= 2){
+    const _mercLines = (snap.invLines||[]).filter(function(l){ return !l.tipoFac || l.tipoFac === 'mercancia'; });
+    if(_mercLines.length > 0){
+      _showAsignacionFacturas(snap, _conts, function(){
+        // After assignment: show overlay
+        window._procOverlayNro = nro;
+        _showProcessingOverlay(nro, desc, window._sc1_base||window._lastCIF||0, window._lastAhorroNeto||0, function(){
+          _clearFormSilent(); volverInicio();
+        });
+      });
+      return; // wait for assignment
+    }
+  }
   // Show processing overlay
   window._procOverlayNro = nro;
   _showProcessingOverlay(nro, desc, window._sc1_base||window._lastCIF||0, window._lastAhorroNeto||0, ()=>{
@@ -7500,6 +7631,56 @@ function _toggleTendSection(bodyId, chevId){
   }
 }
 
+// ══════════════════════════════════════════════
+// Correr Proceso: fix S.I- provider rule across all tendData
+// ══════════════════════════════════════════════
+function _correrProcesoProveedores(){
+  if(!tendData || !tendData.length){
+    _showToast('⚠️ No hay embarques registrados', 'orange', 2000);
+    return;
+  }
+  var fixed = 0;
+  tendData.forEach(function(d){
+    var esZL = (d.snap&&d.snap.tipo)?d.snap.tipo==='ZL':(d.tipo||'ZL')==='ZL';
+    var lines = (d.snap&&d.snap.invLines)||d.invLines||[];
+    lines.forEach(function(l){
+      if(!l.prov || l.tipoFac==='mercancia') return;
+      var p = l.prov.trim();
+      if(!esZL && (p.startsWith('S.I - ') || p.startsWith('S.I- '))){
+        // Liquidación/CIF → remove S.I- prefix
+        var parent = p.replace(/^S\.I\s*-\s*/i,'').trim();
+        if(parent){ l.prov = parent; fixed++; }
+      } else if(esZL && !p.startsWith('S.I -') && !p.startsWith('S.I-')){
+        // Sababa/ZL → try to find S.I- child
+        var m = typeof provMatch==='function' ? provMatch(p) : null;
+        if(m && m.si){ l.prov = m.si; fixed++; }
+      }
+    });
+    // Also fix mercancía lines
+    var mercLines = lines.filter(function(l){ return l.tipoFac==='mercancia'; });
+    mercLines.forEach(function(l){
+      if(!l.prov) return;
+      var p = l.prov.trim();
+      if(!esZL && (p.startsWith('S.I - ') || p.startsWith('S.I- '))){
+        var parent = p.replace(/^S\.I\s*-\s*/i,'').trim();
+        if(parent){ l.prov = parent; fixed++; }
+      } else if(esZL && !p.startsWith('S.I -') && !p.startsWith('S.I-')){
+        var m = typeof provMatch==='function' ? provMatch(p) : null;
+        if(m && m.si){ l.prov = m.si; fixed++; }
+      }
+    });
+  });
+  if(fixed > 0){
+    saveTendData();
+    if(typeof _syncTendToCloud==='function') _syncTendToCloud();
+    _showToast('✅ Proceso completado — '+fixed+' proveedor'+(fixed!==1?'es':'')+ ' corregido'+(fixed!==1?'s':''), 'green', 3500);
+    if(typeof renderTend==='function') renderTend();
+  } else {
+    _showToast('✅ Todo correcto — no se encontraron inconsistencias', 'green', 2500);
+  }
+}
+
+
 function renderTend(){
   _populateYearFilter();
   const filteredData = _getFilteredTendData();
@@ -8067,14 +8248,8 @@ function _fdSelectItem(input, lineIdx, f){
     invLines[lineIdx].nfac    = f.num;
   }
   _fdCloseDrop();
-  // Auto-trigger save animation to confirm selection
-  var btn = input.parentElement ? input.parentElement.querySelector('button[title*="Guardar"]') : null;
-  if(btn){
-    btn.style.background = 'rgba(168,85,247,.2)';
-    btn.style.borderColor = 'rgba(168,85,247,.5)';
-    setTimeout(function(){ btn.style.background=''; btn.style.borderColor=''; }, 800);
-  }
-  _showToast('🗂️ Factura '+f.num+' seleccionada — presiona 💾 para guardar', 'green', 3000);
+  // Show Completo / Parcial dialog
+  _fdMostrarDialogoUso(input, lineIdx, f);
 }
 
 function _fdCloseDrop(){
@@ -8123,6 +8298,122 @@ function _fdFilterSelect(q){
 
   sel.innerHTML = '<option value="">— Selecciona —</option>' +
     filtered.map(function(n){ return '<option value="'+n.replace(/"/g,'&quot;')+'">'+n+'</option>'; }).join('');
+}
+
+function _fdMostrarDialogoUso(input, lineIdx, f){
+  var saldo = f.saldo != null ? f.saldo : f.monto;
+  var fmt   = function(n){ return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
+
+  var overlay = document.createElement('div');
+  overlay.id  = '_fd_dialogo_overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px';
+
+  var card = document.createElement('div');
+  card.style.cssText = 'background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:20px;max-width:340px;width:100%';
+
+  var title = document.createElement('div');
+  title.style.cssText = 'font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px';
+  title.textContent = '🗂️ Factura ' + f.num;
+
+  var sub = document.createElement('div');
+  sub.style.cssText = 'font-size:11px;color:var(--muted);margin-bottom:14px';
+  sub.innerHTML = f.prov + ' · Saldo: <strong style="color:var(--green-l)">' + fmt(saldo) + '</strong>';
+
+  var btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;gap:8px;margin-bottom:12px';
+
+  var btnC = document.createElement('button');
+  btnC.style.cssText = 'flex:1;background:rgba(63,185,80,.15);border:1px solid rgba(63,185,80,.4);color:var(--green-l);border-radius:8px;padding:10px;font-size:12px;font-weight:700;cursor:pointer';
+  btnC.innerHTML = '✅ Completo<br><span style="font-size:10px;font-weight:400">' + fmt(saldo) + '</span>';
+  btnC.addEventListener('click', function(){ _fdUsarCompleto(); });
+
+  var btnP = document.createElement('button');
+  btnP.style.cssText = 'flex:1;background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.4);color:var(--blue-l);border-radius:8px;padding:10px;font-size:12px;font-weight:700;cursor:pointer';
+  btnP.innerHTML = '✂️ Parcial<br><span style="font-size:10px;font-weight:400">Ingresar monto</span>';
+  btnP.addEventListener('click', function(){ _fdUsarParcial(); });
+
+  btnRow.appendChild(btnC);
+  btnRow.appendChild(btnP);
+
+  var parcialDiv = document.createElement('div');
+  parcialDiv.id = '_fd_parcial_input';
+  parcialDiv.style.display = 'none';
+  parcialDiv.innerHTML = '<label style="font-size:10px;color:var(--muted);display:block;margin-bottom:4px">Monto a usar (máx. '+fmt(saldo)+')</label>'
+    + '<input id="_fd_monto_parcial" type="number" step="0.01" max="'+saldo+'" placeholder="0.00" '
+    + 'style="width:100%;background:var(--s2);border:1px solid rgba(88,166,255,.4);border-radius:6px;padding:8px 10px;color:var(--text);font-size:13px;box-sizing:border-box">';
+
+  var btnConfirm = document.createElement('button');
+  btnConfirm.id = '_fd_confirmar_btn';
+  btnConfirm.style.cssText = 'width:100%;background:#a371f7;border:none;color:#fff;border-radius:8px;padding:10px;font-size:13px;font-weight:700;cursor:pointer;display:none';
+  btnConfirm.textContent = 'Confirmar';
+  btnConfirm.addEventListener('click', function(){ _fdConfirmarUso({num:f.num,prov:f.prov,monto:f.monto,saldo:saldo}); });
+
+  var btnCancel = document.createElement('button');
+  btnCancel.style.cssText = 'width:100%;background:none;border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:8px;font-size:11px;cursor:pointer;margin-top:8px';
+  btnCancel.textContent = 'Cancelar';
+  btnCancel.addEventListener('click', function(){ overlay.remove(); });
+
+  card.appendChild(title);
+  card.appendChild(sub);
+  card.appendChild(btnRow);
+  card.appendChild(parcialDiv);
+  card.appendChild(btnConfirm);
+  card.appendChild(btnCancel);
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+
+  window._fdDialogoInput   = input;
+  window._fdDialogoLineIdx = lineIdx;
+  window._fdDialogoFact    = f;
+  window._fdDialogoModo    = null;
+}
+
+
+function _fdUsarCompleto(num){
+  window._fdDialogoModo = 'completo';
+  document.getElementById('_fd_parcial_input').style.display = 'none';
+  document.getElementById('_fd_confirmar_btn').style.display = 'block';
+}
+
+function _fdUsarParcial(num){
+  window._fdDialogoModo = 'parcial';
+  document.getElementById('_fd_parcial_input').style.display = 'block';
+  document.getElementById('_fd_confirmar_btn').style.display = 'block';
+  setTimeout(function(){ var el=document.getElementById('_fd_monto_parcial'); if(el) el.focus(); },100);
+}
+
+function _fdConfirmarUso(fData){
+  var modo  = window._fdDialogoModo;
+  var input = window._fdDialogoInput;
+  var li    = window._fdDialogoLineIdx;
+  var f     = window._fdDialogoFact || fData;
+  var saldo = fData.saldo != null ? fData.saldo : fData.monto;
+
+  var montoUsar;
+  if(modo === 'completo'){
+    montoUsar = saldo;
+  } else {
+    montoUsar = parseFloat(document.getElementById('_fd_monto_parcial')?.value||'0')||0;
+    if(montoUsar <= 0 || montoUsar > saldo){
+      _showToast('⚠️ Ingresa un monto válido (máx. $'+saldo.toFixed(2)+')','orange',2500);
+      return;
+    }
+  }
+
+  // Fill input with invoice number
+  if(input){ input.value = fData.num; }
+  if(li !== null && li !== undefined && invLines[li]){
+    invLines[li].numFact = fData.num;
+    invLines[li].nfac    = fData.num;
+    invLines[li].costo   = montoUsar; // override with partial amount
+  }
+
+  // Close dialog
+  var overlay = document.querySelector('div[style*="fixed"][style*="99999"]');
+  if(overlay) overlay.remove();
+
+  _fdConsumirParcial(fData.num, montoUsar);
+  _showToast('✅ Factura '+fData.num+' — '+( modo==='completo'?'uso completo':'$'+montoUsar.toFixed(2)+' asignado'),'green',2500);
 }
 
 function _fdProvSearch(input){
@@ -8318,15 +8609,6 @@ async function renderFactDisp(){
           '<input id="fd-notas" type="text" placeholder="Embarque relacionado, observación..." style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;box-sizing:border-box">'+
         '</div>'+
       '</div>'+
-      // ── Líneas de gastos internas ──
-      '<div style="margin-top:10px;margin-bottom:10px">'+
-        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'+
-          '<span style="font-size:10px;font-weight:700;color:#a371f7;text-transform:uppercase;letter-spacing:.05em">📋 Líneas de Gastos / Rubros internos</span>'+
-          '<button onclick="_fdAddLinea()" style="background:rgba(168,85,247,.15);border:1px solid rgba(168,85,247,.4);color:#a371f7;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer">＋ Agregar línea</button>'+
-        '</div>'+
-        '<div id="fd-lineas-container" style="display:flex;flex-direction:column;gap:6px"></div>'+
-        '<div id="fd-lineas-total" style="text-align:right;font-size:11px;color:var(--muted);margin-top:4px"></div>'+
-      '</div>'+
       '<button onclick="_fdAgregar()" style="background:#a371f7;border:none;color:#fff;border-radius:8px;padding:9px 20px;font-size:12px;font-weight:700;cursor:pointer;width:100%">➕ Agregar Factura</button>'+
     '</div>'+
 
@@ -8359,43 +8641,15 @@ async function renderFactDisp(){
               '</tr></thead>'+
               '<tbody>'+
               fs.map(function(f,i){
-                var hasLineas = f.lineas && f.lineas.length > 0;
-                var lineasHtml = '';
-                if(hasLineas){
-                  lineasHtml = '<tr id="fd-expand-'+f.id+'" style="display:none;background:rgba(168,85,247,.04)">'+
-                    '<td colspan="6" style="padding:0 12px 10px 28px">'+
-                      '<div style="font-size:10px;font-weight:700;color:#a371f7;text-transform:uppercase;letter-spacing:.04em;padding:8px 0 4px">📋 Líneas de Gastos Incluidas</div>'+
-                      '<table style="width:100%;border-collapse:collapse;font-size:10px">'+
-                        '<thead><tr style="background:rgba(168,85,247,.08)">'+
-                          '<th style="padding:4px 8px;text-align:left;color:var(--muted);font-weight:600">Descripción</th>'+
-                          '<th style="padding:4px 8px;text-align:left;color:var(--muted);font-weight:600">Rubro</th>'+
-                          '<th style="padding:4px 8px;text-align:right;color:var(--muted);font-weight:600">Monto</th>'+
-                          '<th style="padding:4px 8px;text-align:left;color:var(--muted);font-weight:600">Notas</th>'+
-                        '</tr></thead>'+
-                        '<tbody>'+
-                        f.lineas.map(function(l,li){
-                          return '<tr style="background:'+(li%2?'rgba(168,85,247,.04)':'transparent')+';border-bottom:1px solid rgba(168,85,247,.1)">'+
-                            '<td style="padding:4px 8px;color:var(--text)">'+( l.desc||'—')+'</td>'+
-                            '<td style="padding:4px 8px"><span style="background:rgba(168,85,247,.12);color:#a371f7;border-radius:4px;padding:1px 6px;font-size:9px;font-weight:600">'+(l.tipo||'—')+'</span></td>'+
-                            '<td style="padding:4px 8px;text-align:right;font-family:monospace;font-weight:700;color:var(--text)">'+fmt(l.monto||0)+'</td>'+
-                            '<td style="padding:4px 8px;color:var(--muted);font-size:9px">'+(l.notas||'')+'</td>'+
-                          '</tr>';
-                        }).join('')+
-                        '</tbody>'+
-                      '</table>'+
-                    '</td>'+
-                  '</tr>';
-                }
                 return '<tr style="background:'+(i%2?'var(--s1)':'var(--bg)')+';border-bottom:1px solid rgba(255,255,255,.04)">'+
                   '<td style="padding:8px 12px;font-family:monospace;font-size:10px;color:var(--text);font-weight:600">'+f.num+'</td>'+
                   '<td style="padding:8px 12px;color:var(--text)">'+f.prov+'<br><span style="font-size:9px;color:var(--muted)">'+f.notas+'</span></td>'+
                   '<td style="padding:8px 12px"><span style="background:'+(tipoColors[f.tipo]||'rgba(139,148,158,.15)')+';color:'+(tipoText[f.tipo]||'var(--muted)')+';border-radius:4px;padding:2px 7px;font-size:10px;font-weight:600">'+f.tipo+'</span></td>'+
                   '<td style="padding:8px 12px;text-align:right;font-family:monospace;font-weight:700;color:var(--text)">'+fmt(f.monto)+'</td>'+
                   '<td style="padding:8px 12px;text-align:center">'+
-                    (hasLineas ? '<button data-fid="'+f.id+'" onclick="_fdToggleLineas(this.dataset.fid,this)" style="background:rgba(168,85,247,.12);border:1px solid rgba(168,85,247,.3);color:#a371f7;border-radius:5px;padding:3px 8px;font-size:10px;cursor:pointer;margin-right:4px" title="Ver líneas de gasto">📋 '+f.lineas.length+'</button>' : '')+
                     '<button data-fid="'+f.id+'" onclick="_fdEliminar(this.dataset.fid)"  style="background:rgba(248,81,73,.12);border:1px solid rgba(248,81,73,.3);color:var(--red-l);border-radius:5px;padding:3px 8px;font-size:10px;cursor:pointer" title="Eliminar">🗑️</button>'+
                   '</td>'+
-                '</tr>'+lineasHtml;
+                '</tr>';
               }).join('')+
               '</tbody>'+
             '</table>'+
@@ -8405,75 +8659,31 @@ async function renderFactDisp(){
   '</div>';
 }
 
-// ── Funciones de Líneas de Gastos Internas ──
-function _fdToggleLineas(fid, btn){
-  var row = document.getElementById('fd-expand-'+fid);
-  if(!row) return;
-  var visible = row.style.display !== 'none';
-  row.style.display = visible ? 'none' : 'table-row';
-  if(btn) btn.style.background = visible ? 'rgba(168,85,247,.12)' : 'rgba(168,85,247,.3)';
-}
-
-
-function _fdGetRubrosOpts(selectedVal){
-  var rubros=(typeof _RUBROS_GASTO!=='undefined'?_RUBROS_GASTO:window._RUBROS_GASTO)||[];
-  return rubros.map(function(r){
-    var v=(r.val||r.lbl||'');
-    var sel=(v===selectedVal)?'selected':'';
-    return '<option value="'+v.replace(/"/g,'&quot;')+'" '+sel+'>'+(r.icon?r.icon+' ':'')+( r.lbl||v)+'</option>';
-  }).join('');
-}
-
-function _fdAddLinea(desc,monto,tipo,notas){
-  var c=document.getElementById('fd-lineas-container');
-  if(!c) return;
-  var id='fdl-'+Date.now().toString(36);
-  var rubrosOpts=_fdGetRubrosOpts(tipo||'');
-  var row=document.createElement('div');
-  row.className='fd-linea-row';
-  row.id=id;
-  row.style.cssText='display:grid;grid-template-columns:1fr 110px 1fr 1fr 36px;gap:5px;align-items:end;background:rgba(168,85,247,.06);border:1px solid rgba(168,85,247,.2);border-radius:8px;padding:8px;';
-  row.innerHTML=
-    '<div>'+
-      '<label style="font-size:9px;color:var(--muted);display:block;margin-bottom:2px">Descripción del Gasto</label>'+
-      '<input class="fd-l-desc" type="text" placeholder="Ej: Honorarios aduaneros..." value="'+(desc||'')+'" oninput="_fdUpdateLineasTotal()" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 8px;color:var(--text);font-size:11px;box-sizing:border-box">'+
-    '</div>'+
-    '<div>'+
-      '<label style="font-size:9px;color:var(--muted);display:block;margin-bottom:2px">Monto (USD)</label>'+
-      '<input class="fd-l-monto" type="number" placeholder="0.00" step="0.01" value="'+(monto||'')+'" oninput="_fdUpdateLineasTotal()" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 8px;color:var(--text);font-size:11px;box-sizing:border-box">'+
-    '</div>'+
-    '<div>'+
-      '<label style="font-size:9px;color:var(--muted);display:block;margin-bottom:2px">Rubro / Tipo</label>'+
-      '<select class="fd-l-tipo" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 8px;color:var(--text);font-size:11px;box-sizing:border-box">'+rubrosOpts+'</select>'+
-    '</div>'+
-    '<div>'+
-      '<label style="font-size:9px;color:var(--muted);display:block;margin-bottom:2px">Notas (opcional)</label>'+
-      '<input class="fd-l-notas" type="text" placeholder="Observaciones..." value="'+(notas||'')+'" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 8px;color:var(--text);font-size:11px;box-sizing:border-box">'+
-    '</div>'+
-    '<button onclick="_fdRemoveLinea(\''+id+'\')" style="background:rgba(248,81,73,.12);border:1px solid rgba(248,81,73,.3);color:var(--red-l);border-radius:5px;padding:0;width:32px;height:32px;font-size:14px;cursor:pointer;margin-top:14px;display:flex;align-items:center;justify-content:center" title="Eliminar línea">✕</button>';
-  c.appendChild(row);
-  _fdUpdateLineasTotal();
-}
-
-function _fdRemoveLinea(id){
-  var el=document.getElementById(id);
-  if(el) el.remove();
-  _fdUpdateLineasTotal();
-}
-
-function _fdUpdateLineasTotal(){
-  var c=document.getElementById('fd-lineas-container');
-  var t=document.getElementById('fd-lineas-total');
-  if(!c||!t) return;
-  var total=0;
-  c.querySelectorAll('.fd-l-monto').forEach(function(inp){ total+=parseFloat(inp.value||0)||0; });
-  if(total>0){
-    t.innerHTML='Suma de líneas: <strong style="color:#a371f7">$'+total.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</strong>';
-  } else {
-    t.innerHTML='';
+// ── Consume partial amount from a factura disponible ──
+async function _fdConsumirParcial(numFact, montoUsado){
+  if(!numFact || !montoUsado) return;
+  var data = await _fdLoad();
+  var changed = false;
+  data.forEach(function(f){
+    if((f.num||'').toUpperCase() === numFact.toUpperCase()){
+      var saldoActual = (f.saldo != null ? f.saldo : f.monto) || 0;
+      var nuevoSaldo  = Math.max(0, saldoActual - montoUsado);
+      f.saldo = Math.round(nuevoSaldo * 100) / 100;
+      // Track usage
+      if(!f.usos) f.usos = [];
+      f.usos.push({
+        embarque: v('s1_nro') || '—',
+        monto:    montoUsado,
+        fecha:    new Date().toISOString().slice(0,10)
+      });
+      changed = true;
+    }
+  });
+  if(changed){
+    await _fdSave(data);
+    _fdInvalidateCache();
   }
 }
-
 
 async function _fdAgregar(){
   var num   =(document.getElementById('fd-num')?.value||'').trim();
@@ -8493,22 +8703,6 @@ async function _fdAgregar(){
     _showToast('⚠️ Ya existe una factura con ese número','orange',3000); return;
   }
 
-  // Recolectar líneas de gastos adicionales
-  var lineas = [];
-  var lineasContainer = document.getElementById('fd-lineas-container');
-  if(lineasContainer){
-    var filas = lineasContainer.querySelectorAll('.fd-linea-row');
-    filas.forEach(function(row){
-      var lDesc  = (row.querySelector('.fd-l-desc')?.value||'').trim();
-      var lMonto = parseFloat(row.querySelector('.fd-l-monto')?.value||'0')||0;
-      var lTipo  = (row.querySelector('.fd-l-tipo')?.value||'').trim();
-      var lNotas = (row.querySelector('.fd-l-notas')?.value||'').trim();
-      if(lDesc || lMonto>0){
-        lineas.push({ desc:lDesc, monto:lMonto, tipo:lTipo, notas:lNotas });
-      }
-    });
-  }
-
   data.push({
     id:   Date.now().toString(36)+Math.random().toString(36).slice(2,5),
     num:  num,
@@ -8517,7 +8711,6 @@ async function _fdAgregar(){
     monto:monto,
     tipo: tipo,
     notas:notas,
-    lineas:lineas,
     creadoEn:new Date().toISOString()
   });
   await _fdSave(data);
@@ -8539,12 +8732,11 @@ async function _fdExportXLSX(){
   var data=await _fdLoad();
   var usadas=_fdUsadas();
   var MESES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-  var rows=[];
-  data.forEach(function(f){
+  var rows=data.map(function(f){
     var d=new Date(f.fecha||'');
     var mes=isNaN(d)?'Sin fecha':(MESES[d.getMonth()]+' '+d.getFullYear());
     var estado=usadas.has(f.num.toUpperCase())?'Consumida':'Disponible';
-    var baseRow = {
+    return{
       'N° Factura':f.num,
       'Fecha Registro':f.fecha,
       'Mes':mes,
@@ -8554,25 +8746,8 @@ async function _fdExportXLSX(){
       'Estado':estado,
       'Notas':f.notas||''
     };
-    // If the invoice has internal lines, expand them as sub-rows
-    if(f.lineas && f.lineas.length > 0){
-      f.lineas.forEach(function(l,li){
-        rows.push(Object.assign({},baseRow,{
-          'N° Factura': li===0 ? f.num : '',
-          'Fecha Registro': li===0 ? f.fecha : '',
-          'Proveedor': li===0 ? f.prov : '',
-          'Estado': li===0 ? estado : '',
-          'Tipo': l.tipo||f.tipo,
-          'Monto': l.monto||0,
-          'Notas': l.desc ? '[Línea '+(li+1)+'] '+(l.desc||'')+(l.notas?' · '+l.notas:'') : (l.notas||'')
-        }));
-      });
-      return; // rows already pushed above
-    }
-    rows.push(baseRow);
   });
   // Sort by fecha desc, disponibles first
-  rows = rows.filter(Boolean);
   rows.sort(function(a,b){
     if(a.Estado!==b.Estado) return a.Estado==='Disponible'?-1:1;
     return (b['Fecha Registro']||'').localeCompare(a['Fecha Registro']||'');
@@ -8951,6 +9126,40 @@ function renderDashboardKPIs(data){
     <div style="background:var(--s1);border:1px solid var(--border);border-radius:10px;margin-bottom:10px;overflow:hidden">
       <div id="_kpi-costos-body" style="display:block">
         ${_renderGastosNoMerc(all)}
+
+    <!-- ZL vs Importación KPI Section -->
+    <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">
+        📊 Zona Libre vs Importación
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        ${(function(){
+          var zlEmb   = all.filter(function(d){ return ((d.snap&&d.snap.tipo)||d.tipo||'ZL')==='ZL'; });
+          var impEmb  = all.filter(function(d){ return ((d.snap&&d.snap.tipo)||d.tipo||'ZL')==='EXT'; });
+          var zlMerc  = zlEmb.reduce(function(s,d){ return s+(d.cif||d.snap&&d.snap.CIF||0); },0);
+          var impMerc = impEmb.reduce(function(s,d){ return s+(d.cif||d.snap&&d.snap.CIF||0); },0);
+          var zlLanded= zlEmb.reduce(function(s,d){ return s+(d.snap&&d.snap.sc3&&d.snap.sc3.landedG?d.snap.sc3.landedG:(d.snap&&d.snap.sc1&&d.snap.sc1.landedG?d.snap.sc1.landedG:0)); },0);
+          var impLanded=impEmb.reduce(function(s,d){ return s+(d.snap&&d.snap.sc1&&d.snap.sc1.landedG?d.snap.sc1.landedG:0); },0);
+          var total   = zlMerc + impMerc || 1;
+          var fmtK2   = function(n){ return n>=1000000?'$'+(n/1000000).toFixed(2)+'M':n>=1000?'$'+(n/1000).toFixed(1)+'k':'$'+n.toFixed(0); };
+          var pct     = function(v){ return total>0?((v/total)*100).toFixed(1)+'%':'0%'; };
+          return '<div style="background:rgba(63,185,80,.08);border:1px solid rgba(63,185,80,.2);border-radius:10px;padding:12px">'
+            +'<div style="font-size:10px;font-weight:700;color:var(--green-l);margin-bottom:6px">🏭 ZONA LIBRE — '+pct(zlMerc)+'</div>'
+            +'<div style="font-size:11px;color:var(--muted);margin-bottom:2px">Embarques: <strong style="color:var(--text)">'+zlEmb.length+'</strong></div>'
+            +'<div style="font-size:11px;color:var(--muted);margin-bottom:2px">Mercancía: <strong style="color:var(--green-l)">'+fmtK2(zlMerc)+'</strong></div>'
+            +'<div style="font-size:11px;color:var(--muted);margin-bottom:2px">Homologado (inv.): <strong style="color:var(--orange-l)">'+(zlEmb.reduce(function(s,d){return s+(d.snap&&d.snap.sc3&&d.snap.sc3.mercHomol?d.snap.sc3.mercHomol:0);},0)>0?fmtK2(zlEmb.reduce(function(s,d){return s+(d.snap&&d.snap.sc3&&d.snap.sc3.mercHomol?d.snap.sc3.mercHomol:0);},0)):'—')+'</strong></div>'
+            +'<div style="font-size:11px;color:var(--muted)">Landed: <strong style="color:var(--green-l)">'+fmtK2(zlLanded)+'</strong></div>'
+            +'</div>'
+            +'<div style="background:rgba(88,166,255,.08);border:1px solid rgba(88,166,255,.2);border-radius:10px;padding:12px">'
+            +'<div style="font-size:10px;font-weight:700;color:var(--blue-l);margin-bottom:6px">✈️ IMPORTACIÓN — '+pct(impMerc)+'</div>'
+            +'<div style="font-size:11px;color:var(--muted);margin-bottom:2px">Embarques: <strong style="color:var(--text)">'+impEmb.length+'</strong></div>'
+            +'<div style="font-size:11px;color:var(--muted);margin-bottom:2px">Mercancía: <strong style="color:var(--blue-l)">'+fmtK2(impMerc)+'</strong></div>'
+            +'<div style="font-size:11px;color:var(--muted);margin-bottom:2px">Orig. (inv.): <strong style="color:var(--blue-l)">'+fmtK2(impMerc)+'</strong></div>'
+            +'<div style="font-size:11px;color:var(--muted)">Landed: <strong style="color:var(--blue-l)">'+fmtK2(impLanded)+'</strong></div>'
+            +'</div>';
+        })()}
+      </div>
+    </div>
       </div>
     </div>`;
 }
@@ -9809,6 +10018,10 @@ function _renderGroupSections(data){
       +'<div style="font-size:9px;color:var(--muted);margin-bottom:3px">CIF/FOB MERC.</div>'
       +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:var(--text)">'+fmtKl(totalMerc)+'</div>'
       +'</div>'
+      +(isSab&&sc3.mercHomol>0?'<div style="background:rgba(240,136,62,.08);border:1px solid rgba(240,136,62,.2);border-radius:7px;padding:8px;text-align:center">'
+        +'<div style="font-size:9px;color:var(--orange-l);font-weight:700;margin-bottom:3px">HOMOLOGADO</div>'
+        +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:var(--orange-l)">'+fmtKl(sc3.mercHomol)+'</div>'
+        +'</div>':'')
       +'<div style="background:var(--bg);border-radius:7px;padding:8px;text-align:center">'
       +'<div style="font-size:9px;color:var(--muted);margin-bottom:3px">COSTO NO MERC.</div>'
       +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:var(--orange-l)">'+fmtKl(totalNoMerc)+'</div>'
@@ -9895,6 +10108,8 @@ function _renderGroupSections(data){
               var isLineNeg=(l.costo||0)<0;
               var lColor=isLineNeg?'var(--green-l)':'var(--muted)';
               var rNombre=tipoNombres[l.tipoFac||'gastos']||l.tipoFac||'Gasto';
+              var honPct = (totalMerc>0&&(l.tipoFac==='honorarios'||l.tipoFac==='manejo_liquidacion'||l.tipoFac==='manejo_liquid_grabada'))
+                ? ' <span style="color:var(--blue-l);font-size:9px">('+((l.costo/totalMerc)*100).toFixed(2)+'% s/merc)</span>' : null;
               return '<div style="display:flex;justify-content:space-between;padding:4px 12px;font-size:10px;border-top:1px solid rgba(255,255,255,.04)">'
                 +'<span style="color:'+lColor+'">'+(tipoIcons[l.tipoFac||'gastos']||'📋')+' '+rNombre+'</span>'
                 +'<span style="font-family:\'IBM Plex Mono\',monospace;font-weight:700;color:'+(isLineNeg?'var(--green-l)':'var(--orange-l)')+'">'+fmt2l(l.costo)+'</span></div>';
@@ -9918,7 +10133,8 @@ function _renderGroupSections(data){
               : '<div style="font-size:9px;color:var(--muted2);margin-top:2px">'+grp.lines.length+' concepto'+(grp.lines.length!==1?'s':'')+'</div>')
             +'</div>'
             +'<div style="display:flex;align-items:center;gap:8px;flex-shrink:0;margin-left:8px">'
-            +'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:13px;font-weight:800;color:'+provColor+'">'+fmt2l(grp.total)+'</span>'
++'<span style="font-size:10px;color:var(--muted);font-weight:400">'+((totalMerc>0?'('+((grp.total/totalMerc)*100).toFixed(2)+'% s/merc)':'')+(isSab&&sc3.mercHomol>0&&grp.prov.toLowerCase().includes('sababa')?(function(){var _itbms=grp.lines.filter(function(l){return l.tipoFac==='itbms';}).reduce(function(s,l){return s+(l.costo||0);},0);var _honNeto=grp.total-_itbms;return' <span style="color:var(--orange-l);font-size:9px;font-weight:700">[Com. '+(_honNeto/sc3.mercHomol*100).toFixed(2)+'% s/Homol.]</span>';})():''))+'</span>'+
+            '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:13px;font-weight:800;color:'+provColor+'">'+fmt2l(grp.total)+'</span>'
             +'<span class="gc5" style="font-size:11px;color:var(--muted)">▼</span></div></div>'
             // Body: directly show rubros (no sub-accordion per invoice)
             +'<div id="'+pid+'">'
@@ -9943,7 +10159,7 @@ function _renderGroupSections(data){
                 +'<div style="text-align:right;flex-shrink:0;margin-left:8px">'
                 +'<span style="font-family:\'IBM Plex Mono\',monospace;font-weight:700;color:'+(isLineNeg?'var(--green-l)':'var(--orange-l)')+'">'+fmt2l(l.costo)+'</span>'
                 +(l.nfac&&l.nfac!=='—'?'<div style="font-size:9px;color:var(--muted)">Fact: '+l.nfac+'</div>':'')
-                +'</div></div>';
+                +'</div></div>'
             }).join('')
             +'</div></div>';
         }).join('');
@@ -11296,7 +11512,7 @@ function renderInvLines(){
   const cGastos= gastosContainers.length? gastosContainers[gastosContainers.length-1]: null;
 
   _initProvDatalist();
-  const isSababa=compar==='sababa';
+  const isSababa=(tipo==='ZL');
 
   // Split into mercancía and gastos
   const mercLines  = invLines.filter(l=>(l.tipoFac||'mercancia')==='mercancia');
@@ -11415,14 +11631,41 @@ function renderInvLines(){
 }
 
 // Called on change of Proveedor field
+// ── S.I- provider rule enforcement ──
+// ZL/Sababa → S.I- child; EXT/Liq → parent (no S.I-)
+function _enforceProviderRule(lines, esZL){
+  if(!lines||!lines.length) return lines;
+  return lines.map(function(l){
+    if(!l.prov || l.tipoFac==='mercancia') return l;
+    var p = l.prov;
+    if(esZL){
+      // Should use S.I- child — find it in _PROV_NAMES
+      if(!p.startsWith('S.I -') && !p.startsWith('S.I-')){
+        var siName = (typeof _PROV_NAMES!=='undefined'?_PROV_NAMES:[]).find(function(n){
+          return n.startsWith('S.I -') && n.toUpperCase().includes(p.toUpperCase().slice(0,8));
+        });
+        if(siName) l = Object.assign({},l,{prov:siName});
+      }
+    } else {
+      // Should use parent — strip S.I- prefix
+      if(p.startsWith('S.I - ') || p.startsWith('S.I- ')){
+        var parent = p.replace(/^S\.I\s*-\s*/i,'').trim();
+        if(parent) l = Object.assign({},l,{prov:parent});
+      }
+    }
+    return l;
+  });
+}
+
 function onInvProvChange(idx, val){
   invLines[idx].prov=val;
   const m=provMatch(val);
   invLines[idx]._match=m;
-  const isSababa=compar==='sababa';
+  // Rule: ZL (Sababa) → use S.I- child provider; EXT (Liquidación/CIF) → use parent
+  const _useChild = (tipo==='ZL') && m && m.si;
   if(m&&(m.exact||m.score>=0.8)){
-    const finalName=isSababa&&m.si?m.si:m.name;
-    invLines[idx].prov=finalName;
+    const finalName = _useChild ? m.si : m.name;
+    invLines[idx].prov = finalName;
   }
   renderInvLines();
 }
@@ -13100,12 +13343,12 @@ function renderTopProvs(){
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
         <span style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em">${filteredByTipo.length} embarques · mercancía</span>
         <button id="_top10-toggle" onclick="(function(btn){var list=btn.closest('[id=\\'top-provs-wrap\\']').querySelector('#_top10-list');if(!list)return;var o=list.style.display==='none';list.style.display=o?'block':'none';btn.textContent=o?'▲ ocultar':'▼ ver lista';})(this)"
-          style="background:none;border:none;color:var(--muted);font-size:10px;cursor:pointer;padding:0">▼ ver lista</button>
+          style="background:none;border:none;color:var(--muted);font-size:10px;cursor:pointer;padding:0">▲ ocultar</button>
       </div>
       <div style="font-family:'IBM Plex Mono',monospace;font-size:26px;font-weight:900;color:var(--text);letter-spacing:-.01em">${fK(totalAll)}</div>
       <div style="font-size:10px;color:var(--muted);margin-top:2px">valor total en mercancía — top ${sorted.length} proveedores</div>
     </div>
-    <div id="_top10-list" style="display:none">` +
+    <div id="_top10-list" style="display:block">` +
     sorted.map((prov,i)=>{
       const pctTotal = ((provTotals[prov]/totalAll)*100).toFixed(1);
       const tipo = provTipos[prov]==='EXT'?'IMP':'ZL';
@@ -13955,6 +14198,9 @@ function _guardarFactura(idx, inputId, opts){
   invLines[idx].numFact = val;
   invLines[idx].nfac    = val;
   invLines[idx]._factSaved = true;
+  // Update saldo in facturas disponibles if this matches a registered invoice
+  var _monto = invLines[idx].costo || 0;
+  _fdConsumirParcial(val, _monto);
 
   var propagados = 0;
   var prov = (invLines[idx].prov || '').toUpperCase();
