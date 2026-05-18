@@ -8083,33 +8083,15 @@ function _fdCloseDrop(){
 }
 
 
-// ── Custom provider autocomplete for Facturas Disponibles ──
-function _fdProvAC(input){
-  var q=(input.value||'').trim().toUpperCase();
-  var box=document.getElementById('_fdprov_suggestions');
-  if(!box) return;
-  box.innerHTML='';
-  if(q.length<2){box.style.display='none';return;}
-  if(typeof fillProvDatalist==='function') fillProvDatalist();
-  var nameSet=new Set(window._PROV_NAMES||[]);
-  (window.tendData||[]).forEach(function(d){
-    ((d.snap&&d.snap.invLines)||d.invLines||[]).forEach(function(l){
-      if(l.prov&&l.tipoFac&&l.tipoFac!=='mercancia') nameSet.add(l.prov);
-    });
-  });
-  var matches=Array.from(nameSet).filter(function(n){return n.toUpperCase().includes(q);}).slice(0,8);
-  if(!matches.length){box.style.display='none';return;}
-  box.style.display='block';
-  matches.forEach(function(name){
-    var item=document.createElement('div');
-    item.style.cssText='padding:9px 14px;cursor:pointer;font-size:12px;color:var(--text);border-bottom:1px solid rgba(255,255,255,.06);';
-    item.textContent=name;
-    item.addEventListener('mousedown',function(e){e.preventDefault();input.value=name;box.style.display='none';});
-    item.addEventListener('touchstart',function(e){e.preventDefault();input.value=name;box.style.display='none';},{passive:false});
-    item.addEventListener('mouseover',function(){this.style.background='rgba(168,85,247,.15)';});
-    item.addEventListener('mouseout',function(){this.style.background='';});
-    box.appendChild(item);
-  });
+// ── Provider datalist for Facturas Disponibles ──
+function _initFdProvDatalist(){
+  var dl = document.getElementById('fd-prov-datalist');
+  if(!dl) return;
+  if(dl.dataset.loaded) return;
+  dl.dataset.loaded = '1';
+  dl.innerHTML = (_PROV_NAMES||[]).map(function(n){
+    return '<option value="' + n.replace(/"/g,'&quot;') + '">';
+  }).join('');
 }
 
 
@@ -8223,8 +8205,9 @@ async function renderFactDisp(){
         '</div>'+
         '<div>'+
           '<label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px">Proveedor *</label>'+
-          '<input id="fd-prov" type="text" placeholder="Escribe proveedor para buscar..." autocomplete="off" oninput="_fdProvAC(this)" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;box-sizing:border-box">'+
-          +'<div id="_fdprov_suggestions" style="display:none;background:var(--s1);border:1px solid rgba(168,85,247,.4);border-radius:0 0 8px 8px;max-height:160px;overflow-y:auto"></div>'
+          '<input id="fd-prov" type="text" placeholder="Escribe proveedor para buscar..." list="fd-prov-datalist" autocomplete="off" oninput="_initFdProvDatalist()" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;box-sizing:border-box">'+
+          +'<datalist id="fd-prov-datalist"></datalist>'
+          
         '</div>'+
         '<div>'+
           '<label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px">Monto (USD) *</label>'+
@@ -15124,7 +15107,7 @@ body:not(.sidebar-pinned) #app-wrapper {
       setTimeout(function(){
         if(tabId==='config'    && typeof renderConfig==='function')    { renderConfig(); if(typeof renderDeptConfig==='function') renderDeptConfig(); }
         if(tabId==='histprovs' && typeof renderHistProv==='function')  renderHistProv();
-        if(tabId==='factdisp') renderFactDisp();
+        if(tabId==='factdisp'){ renderFactDisp(); setTimeout(_initFdProvDatalist, 200); }
         if(tabId==='tendencias' && typeof renderTend==='function'){
           (async function(){
             if(_sb){ await _pullTendFromCloud(); }
