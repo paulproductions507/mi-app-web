@@ -669,6 +669,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-landed">—</div><div class="splash-kpi-chip-lbl">Landed Mes</div></div>
       <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-fac-merc">—</div><div class="splash-kpi-chip-lbl">Fact. Merc.</div></div>
       <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-fac-serv">—</div><div class="splash-kpi-chip-lbl">Fact. Serv.</div></div>
+      <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-costo-inv" style="color:var(--blue-l)">—</div><div class="splash-kpi-chip-lbl">Costo Inventario</div></div>
     </div>
 
     <!-- 10 Menu cards: 2×5 grid -->
@@ -4240,6 +4241,30 @@ function showSplashNav(){
   const skLChip=skL?.closest('.splash-kpi-chip'); if(skLChip){const lbl=skLChip.querySelector('.splash-kpi-chip-lbl');if(lbl)lbl.textContent='Landed '+_mesStr;}
   const skFM=document.getElementById('sk-fac-merc'); if(skFM) skFM.textContent=facMerc||'0';
   const skFS=document.getElementById('sk-fac-serv'); if(skFS) skFS.textContent=facServ||'0';
+  // Costo Inventario = suma de: 
+  //   - Embarques Sababa: mercHomol (valor homologado que entra al inventario)
+  //   - Otros escenarios (CIF Express, Único, etc.): costo original CIF/FOB
+  //   + Costo No Mercancía de todos los embarques del mes
+  const costoInventario = _mesData.reduce((s,d) => {
+    const isSabD = (d.esc||'').toLowerCase().includes('sababa');
+    const isUnicoD2 = !!(d.modoUnico || d.tipoEsc==='unico'
+      || (d.esc||'').toLowerCase().includes('único') || (d.esc||'').toLowerCase().includes('unico')
+      || (d.snap && d.snap.sc1 && !d.snap.sc2 && !d.snap.sc3));
+    const sn = d.snap||{};
+    const lines = (sn.invLines || d.invLines || []);
+    const mercLines2 = lines.filter(l => (l.tipoFac||'mercancia')==='mercancia');
+    const cifOriginal = mercLines2.reduce((a,l) => a+(l.costo||0), 0);
+    const mercInv = isSabD && (sn.sc3?.mercHomol||0) > 0 ? (sn.sc3.mercHomol) : cifOriginal;
+    const noMercInv = isUnicoD2 ? (sn.sc1?.noMerc != null ? sn.sc1.noMerc
+        : ((sn.sc1?.arancel||0)+(sn.sc1?.hon||0)+(sn.sc1?.tasa||0)+(sn.sc1?.uso||0)+(sn.sc1?.itbmsTasa||0)+(sn.sc1?.agente||0)+(sn.sc1?.extras||0)))
+      : isSabD ? (sn.sc3?.noMerc||0)
+      : (sn.sc2?.noMerc||0);
+    return s + mercInv + noMercInv;
+  }, 0);
+  const skCI = document.getElementById('sk-costo-inv');
+  if(skCI) skCI.textContent = costoInventario > 0 ? fmt(costoInventario) : '—';
+  const skCIChip = skCI?.closest('.splash-kpi-chip');
+  if(skCIChip){const lbl=skCIChip.querySelector('.splash-kpi-chip-lbl');if(lbl)lbl.textContent='Inventario '+_mesStr;}
   setTimeout(()=>{
     if(nav) nav.style.transform='translateX(-50%) translateY(0)';
     setTimeout(()=>{ drawNavTrend(); drawSplashChart(); }, 300);
@@ -8355,7 +8380,9 @@ function drawDeptBarsInPortal(){
   if(!wrap) return;
   if(!invLines||!invLines.length){ wrap.style.display='none'; return; }
   const cats={},cts={};
+  // SOLO mercancía — las facturas de gasto/servicio no entran en la distribución por departamento
   invLines.forEach(l=>{
+    if((l.tipoFac||'mercancia')!=='mercancia') return;
     const k=l.deptCat||(l.prov||l.dept||'Sin categoría');
     if(l.costo>0){cats[k]=(cats[k]||0)+l.costo;cts[k]=(cts[k]||0)+1;}
   });
@@ -11086,12 +11113,20 @@ function _renderGroupSections(data){
     var fmt2l = function(n){ return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
     var fmtKl = function(n){ return n>=1000?'$'+(n/1000).toFixed(1)+'k':fmt2l(n); };
 
+    // Para embarques Sababa con homologado disponible, la base de prorrateo y el Costo Landed
+    // Costeable por línea deben usar el valor HOMOLOGADO (mercHomol), no el original CIF.
+    // Esto refleja correctamente el valor que entra al inventario.
+    var baseParaProrrateo = (isSab && fobHomol > 0) ? fobHomol : totalMerc;
+
     // Prorratear costo no mercancía e ITBMS entre facturas de mercancía por peso relativo
     mercLines.forEach(function(l){
       l._pct = totalMerc>0 ? (l.costo||0)/totalMerc : 0;
+      // Para Sababa: el valor que entra al inventario de esta línea es su porción del homologado
+      var costoBase = (isSab && fobHomol > 0) ? (fobHomol * l._pct) : (l.costo||0);
+      l._costoHomolPorcion = (isSab && fobHomol > 0) ? costoBase : 0;
       l._noMercPorcion = totalNoMerc * l._pct;
       l._itbmsPorcion  = totalItbms  * l._pct;
-      l._landedPorcion = (l.costo||0) + l._noMercPorcion;
+      l._landedPorcion = costoBase + l._noMercPorcion;
     });
 
     var html = '<div style="padding:0 0 8px 0">'
@@ -11129,7 +11164,7 @@ function _renderGroupSections(data){
       :'')
       +'<div style="background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.2);border-radius:7px;padding:8px;text-align:center">'
       +'<div style="font-size:9px;color:var(--green-l);margin-bottom:3px;font-weight:700">FACTOR IMPORT.</div>'
-      +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:13px;font-weight:800;color:var(--green-l)">'+(isUnicoM&&sc1u.factor!=null?Number(sc1u.factor).toFixed(2)+'%':(totalMerc>0?((landedCosteable/totalMerc-1)*100).toFixed(2)+'%':'—'))+'</div>'
+      +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:13px;font-weight:800;color:var(--green-l)">'+(isUnicoM&&sc1u.factor!=null?Number(sc1u.factor).toFixed(2)+'%':(baseParaProrrateo>0?(((isSab&&fobHomol>0?(fobHomol+totalNoMerc):landedCosteable)/baseParaProrrateo-1)*100).toFixed(2)+'%':'—'))+'</div>'
       +'</div>'
       +'</div>'
       +'</div>'
@@ -11148,6 +11183,7 @@ function _renderGroupSections(data){
           +'</div>'
           +'<div style="text-align:right;flex-shrink:0;margin-left:10px">'
           +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:var(--text)">'+fmt2l(l.costo)+'</div>'
+          +(l._costoHomolPorcion>0?'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:10px;font-weight:700;color:var(--orange-l)">🏷️ Homol: '+fmt2l(l._costoHomolPorcion)+'</div>':'')
           +'<div style="font-size:9px;color:var(--muted)">'+pctStr+' del total</div>'
           +'</div>'
           +'</div>'
@@ -13668,7 +13704,9 @@ function drawInvPie(){
 
   // Group by deptCat (primary). If no deptCat, use prov or dept as fallback
   const cats={}, counts={};
+  // SOLO líneas de mercancía — gastos/flete/honorarios NO entran en distribución por departamento
   invLines.forEach(l=>{
+    if((l.tipoFac||'mercancia')!=='mercancia') return;
     const key=l.deptCat||(l.prov||l.dept||'Sin categoría');
     if(l.costo>0){
       cats[key]=(cats[key]||0)+l.costo;
