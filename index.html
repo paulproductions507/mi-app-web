@@ -643,7 +643,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
   </div>
 
   <!-- PHASE 2: Modern Nav Panel -->
-  <div id="splash-nav" style="position:absolute;bottom:0;left:50%;transform:translateX(-50%) translateY(100%);width:100%;max-width:var(--content-max);background:var(--s1);border-top:1px solid var(--border);border-radius:20px 20px 0 0;padding:0;transition:transform .45s cubic-bezier(.25,.46,.45,.94);box-shadow:0 -20px 60px rgba(0,0,0,.5);display:flex;flex-direction:column;max-height:92dvh;">
+  <div id="splash-nav" style="position:absolute;bottom:0;left:50%;transform:translateX(-50%) translateY(100%);width:100%;max-width:var(--content-max);background:var(--s1);border-top:1px solid var(--border);border-radius:20px 20px 0 0;padding:0;transition:transform .45s cubic-bezier(.25,.46,.45,.94);box-shadow:0 -20px 60px rgba(0,0,0,.5);">
 
     <!-- Dark/Light toggle + handle -->
     <div style="padding:14px 20px 0;display:flex;align-items:center;justify-content:space-between">
@@ -662,7 +662,6 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
     </div>
 
     <!-- KPI CHIPS -->
-    <div style="overflow-y:auto;overflow-x:hidden;flex:1;-webkit-overflow-scrolling:touch;">
     <div class="splash-kpi-strip" id="splash-kpi-strip">
       <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-embarques">—</div><div class="splash-kpi-chip-lbl">Emb. Mes</div></div>
       <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-ahorro">—</div><div class="splash-kpi-chip-lbl">Ahorro Total</div></div>
@@ -785,7 +784,6 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
         <div style="font-size:10px;color:var(--muted)">Aranceles · Temas · Datos</div>
       </button>
     </div>
-    </div><!-- end scrollable wrapper -->
   </div>
 </div>
 
@@ -2578,6 +2576,404 @@ const fmt=n=>isNaN(n)?'$—':'$'+Number(n).toLocaleString('en-US',{minimumFracti
 const fmtP=n=>(n*100).toFixed(4)+'%';
 const lookupArt=desc=>{const q=desc.toUpperCase().trim();const f=arts.find(a=>q.includes(a.d)||a.d.split(' ').every(w=>q.includes(w)));return f?f.p:null;};
 
+// ══════════════════════════════════════════════════════════════════════
+// ── PLANEACIÓN DE CARGA — módulo integrado ──
+// Estructura fiel al Excel: vista semanal LU→VI, KPIs globales,
+// tabla de departamentos, pestaña Programado (de tránsito)
+// ══════════════════════════════════════════════════════════════════════
+
+function _planISOWeek(d){
+  // Lunes de la semana que contiene d
+  var day = new Date(d);
+  var dow = day.getDay();
+  day.setDate(day.getDate() - ((dow + 6) % 7));
+  return day;
+}
+function _planToISO(d){ return d.toISOString().slice(0,10); }
+function _planFmt(n){ return '$' + Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function _planFmtN(n){ return Number(n||0).toLocaleString('en-US'); }
+
+function _renderPlaneacion(){
+  var body = document.getElementById('tab-modal-body');
+  if(!body) return;
+
+  var hoy    = new Date();
+  var lunes  = _planISOWeek(hoy);
+  var viernes= new Date(lunes); viernes.setDate(lunes.getDate()+4);
+
+  if(!window._planDesde) window._planDesde = _planToISO(lunes);
+  if(!window._planHasta) window._planHasta = _planToISO(viernes);
+  if(!window._planTab)   window._planTab   = 'resultados';
+
+  body.innerHTML =
+    '<div style="padding:14px 16px;max-width:1100px;margin:0 auto;font-family:\'Inter\',sans-serif">'+
+
+    // ── Selector de rango ──
+    '<div style="background:var(--s2);border:1px solid var(--border);border-radius:12px;padding:10px 16px;margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
+      +'<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">📅 Desde</div>'
+      +'<input type="date" id="plan-desde" value="'+window._planDesde+'" onchange="window._planDesde=this.value;_planBuild()" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:5px 9px;color:var(--text);font-size:12px">'
+      +'<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">Hasta</div>'
+      +'<input type="date" id="plan-hasta" value="'+window._planHasta+'" onchange="window._planHasta=this.value;_planBuild()" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:5px 9px;color:var(--text);font-size:12px">'
+    +'</div>'
+
+    // ── Pestañas ──
+    +'<div style="display:flex;gap:6px;margin-bottom:14px">'
+      +'<button id="plan-tab-resultados" onclick="_planTab(\'resultados\')" style="flex:1;padding:9px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid rgba(63,185,80,.4);background:rgba(63,185,80,.12);color:var(--green-l)">✅ Resultados</button>'
+      +'<button id="plan-tab-programado" onclick="_planTab(\'programado\')" style="flex:1;padding:9px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid var(--border);background:var(--s2);color:var(--muted)">🚢 Programado</button>'
+    +'</div>'
+
+    +'<div id="plan-content"></div>'
+    +'</div>';
+
+  _planBuild();
+}
+
+function _planTab(t){
+  window._planTab = t;
+  ['resultados','programado'].forEach(function(id){
+    var b = document.getElementById('plan-tab-'+id);
+    if(!b) return;
+    if(id===t){ b.style.background='rgba(63,185,80,.12)'; b.style.borderColor='rgba(63,185,80,.4)'; b.style.color='var(--green-l)'; }
+    else       { b.style.background='var(--s2)';          b.style.borderColor='var(--border)';       b.style.color='var(--muted)'; }
+  });
+  _planBuild();
+}
+
+function _planBuild(){
+  var desde = window._planDesde || '';
+  var hasta = window._planHasta || '';
+  var el    = document.getElementById('plan-content');
+  if(!el) return;
+  if(window._planTab === 'programado') _planBuildProgramado(desde, hasta, el);
+  else                                  _planBuildResultados(desde, hasta, el);
+}
+
+// ─────────────────────────────────────────────────────
+// RESULTADOS — lee tendData, vista semanal LU→VI
+// ─────────────────────────────────────────────────────
+function _planBuildResultados(desde, hasta, el){
+  var td = window.tendData || [];
+  var d0 = desde ? new Date(desde+'T00:00:00') : null;
+  var d1 = hasta ? new Date(hasta+'T23:59:59') : null;
+
+  var filtered = td.filter(function(d){
+    var f = d.fecha || d.date || '';
+    if(!f) return false;
+    var fd = new Date(f+'T00:00:00');
+    if(d0 && fd < d0) return false;
+    if(d1 && fd > d1) return false;
+    return true;
+  }).sort(function(a,b){ return (a.fecha||a.date||'').localeCompare(b.fecha||b.date||''); });
+
+  if(!filtered.length){
+    el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)">'
+      +'<div style="font-size:36px;margin-bottom:8px">📭</div>'
+      +'<div style="font-size:13px;font-weight:600">Sin embarques procesados en este período</div>'
+      +'<div style="font-size:11px;margin-top:4px">Ajusta el rango o procesa embarques primero</div>'
+      +'</div>';
+    return;
+  }
+
+  var fmt = _planFmt;
+
+  // ── Título de semana (igual que Excel) ──
+  var tituloSemana = '';
+  if(desde && hasta){
+    var MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    var dD = new Date(desde+'T00:00:00'), dH = new Date(hasta+'T00:00:00');
+    if(dD.getMonth()===dH.getMonth())
+      tituloSemana = 'Semana del '+dD.getDate()+' al '+dH.getDate()+' de '+MESES[dH.getMonth()]+' de '+dH.getFullYear();
+    else
+      tituloSemana = 'Semana del '+dD.getDate()+' de '+MESES[dD.getMonth()]+' al '+dH.getDate()+' de '+MESES[dH.getMonth()]+' de '+dH.getFullYear();
+  }
+
+  // ── Construir mapa día → embarques ──
+  var dayMap = {}; // 'YYYY-MM-DD' → [embarque,...]
+  filtered.forEach(function(d){
+    var k = d.fecha || d.date || '';
+    if(!dayMap[k]) dayMap[k] = [];
+    dayMap[k].push(d);
+  });
+
+  // ── Generar días del rango ──
+  var dias = [];
+  if(desde && hasta){
+    var cur = new Date(desde+'T00:00:00');
+    var end = new Date(hasta+'T00:00:00');
+    while(cur <= end){
+      dias.push(_planToISO(cur));
+      cur.setDate(cur.getDate()+1);
+    }
+  } else {
+    dias = Object.keys(dayMap).sort();
+  }
+
+  // ── KPIs globales ──
+  var totFOB=0, totBultos=0, totLanded=0, totAhorro=0, numEmbarques=filtered.length;
+  var deptAccum = {};
+  filtered.forEach(function(d){
+    var snap = d.snap || {};
+    var sc1  = snap.sc1 || {};
+    totFOB    += sc1.fob || sc1.cif || d.cif || 0;
+    totLanded += snap.sc1Base || d.sc1Base || d.landed || 0;
+    totAhorro += d.ahorroNeto || d.ahorro || 0;
+    var lines = snap.invLines || d.invLines || [];
+    lines.filter(function(l){ return !l.tipoFac||l.tipoFac==='mercancia'; }).forEach(function(l){
+      totBultos += l.bultos || l.cajas || 0;
+      var dep = l.dept || l.deptCat || 'Sin Depto';
+      if(!deptAccum[dep]) deptAccum[dep] = {fob:0, bultos:0};
+      deptAccum[dep].fob    += l.costo || 0;
+      deptAccum[dep].bultos += l.bultos || l.cajas || 0;
+    });
+  });
+
+  var DIAS_ES = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  var html = '';
+
+  // ── Título semana ──
+  if(tituloSemana){
+    html += '<div style="font-size:14px;font-weight:800;color:var(--text);margin-bottom:12px;text-align:center;letter-spacing:-.01em">📋 PLANEACIÓN DE CARGA SEMANAL<br>'
+      +'<span style="font-size:12px;font-weight:600;color:var(--muted)">'+tituloSemana+'</span></div>';
+  }
+
+  // ── KPI strip ──
+  html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">'
+    +'<div style="background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;text-align:center">'
+      +'<div style="font-size:20px;font-weight:800;color:var(--green-l);font-family:\'IBM Plex Mono\',monospace">'+numEmbarques+'</div>'
+      +'<div style="font-size:9px;color:var(--muted);text-transform:uppercase;margin-top:3px;letter-spacing:.05em">Embarques</div>'
+    +'</div>'
+    +'<div style="background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;text-align:center">'
+      +'<div style="font-size:13px;font-weight:800;color:var(--blue-l);font-family:\'IBM Plex Mono\',monospace">'+fmt(totFOB)+'</div>'
+      +'<div style="font-size:9px;color:var(--muted);text-transform:uppercase;margin-top:3px;letter-spacing:.05em">Global FOB</div>'
+    +'</div>'
+    +'<div style="background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;text-align:center">'
+      +'<div style="font-size:13px;font-weight:800;color:var(--orange-l);font-family:\'IBM Plex Mono\',monospace">'+fmt(totLanded)+'</div>'
+      +'<div style="font-size:9px;color:var(--muted);text-transform:uppercase;margin-top:3px;letter-spacing:.05em">Landed Total</div>'
+    +'</div>'
+    +'<div style="background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;text-align:center">'
+      +'<div style="font-size:13px;font-weight:800;color:#3fb950;font-family:\'IBM Plex Mono\',monospace">'+fmt(totAhorro)+'</div>'
+      +'<div style="font-size:9px;color:var(--muted);text-transform:uppercase;margin-top:3px;letter-spacing:.05em">Ahorro Neto</div>'
+    +'</div>'
+  +'</div>';
+
+  // ── Vista por día ──
+  html += '<div style="display:flex;flex-direction:column;gap:10px">';
+  dias.forEach(function(dia){
+    var embarquesDia = dayMap[dia] || [];
+    var dObj = new Date(dia+'T00:00:00');
+    var diaNombre = DIAS_ES[dObj.getDay()].toUpperCase()+' '+dObj.getDate();
+    var hayData = embarquesDia.length > 0;
+
+    html += '<div style="border:1px solid '+(hayData?'rgba(63,185,80,.3)':'var(--border)')
+      +';border-radius:12px;overflow:hidden;background:var(--s2)">'
+
+      // Cabecera del día
+      +'<div style="background:'+(hayData?'rgba(63,185,80,.08)':'rgba(139,148,158,.05)')
+        +';padding:9px 14px;display:flex;align-items:center;justify-content:space-between">'
+        +'<div style="font-size:12px;font-weight:800;color:'+(hayData?'var(--green-l)':'var(--muted)')+'">'+diaNombre+'</div>'
+        +(hayData?'<div style="font-size:10px;color:var(--muted)">'+embarquesDia.length+' embarque'+(embarquesDia.length>1?'s':'')+'</div>':'<div style="font-size:10px;color:var(--muted)">Sin recibos</div>')
+      +'</div>';
+
+    if(hayData){
+      embarquesDia.forEach(function(d){
+        var snap = d.snap || {};
+        var sc1  = snap.sc1 || {};
+        var lines = (snap.invLines || d.invLines || []).filter(function(l){ return !l.tipoFac||l.tipoFac==='mercancia'; });
+        var fob   = sc1.fob || sc1.cif || d.cif || 0;
+        var nro   = d.nro || '—';
+        var desc  = d.desc || d.descripcion || '';
+
+        // Agrupar por proveedor
+        var provMap = {};
+        lines.forEach(function(l){
+          var p = l.prov || 'Sin proveedor';
+          if(!provMap[p]) provMap[p] = {fob:0, dept:'', bultos:0};
+          provMap[p].fob    += l.costo || 0;
+          provMap[p].bultos += l.bultos || l.cajas || 0;
+          if(l.dept||l.deptCat) provMap[p].dept = l.dept||l.deptCat||'';
+        });
+        var provs = Object.entries(provMap);
+        var totFobEmb = provs.reduce(function(s,e){ return s+e[1].fob; },0);
+
+        html += '<div style="border-top:1px solid var(--border);padding:10px 14px">'
+          // Embarque header
+          +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:4px">'
+            +'<div><span style="font-size:12px;font-weight:800;color:var(--text)">📦 Emb. '+nro+'</span>'
+              +(desc?'<span style="font-size:10px;color:var(--muted);margin-left:8px">'+desc+'</span>':'')+'</div>'
+            +'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:var(--blue-l)">'+fmt(fob)+'</span>'
+          +'</div>'
+          // Tabla de proveedores
+          +'<table style="width:100%;border-collapse:collapse;font-size:11px">'
+            +'<thead><tr style="background:rgba(255,255,255,.04)">'
+              +'<th style="padding:4px 8px;text-align:left;color:var(--muted);font-weight:600;font-size:9px;text-transform:uppercase">Proveedor</th>'
+              +'<th style="padding:4px 8px;text-align:left;color:var(--muted);font-weight:600;font-size:9px;text-transform:uppercase">Depto.</th>'
+              +'<th style="padding:4px 8px;text-align:right;color:var(--muted);font-weight:600;font-size:9px;text-transform:uppercase">FOB</th>'
+              +'<th style="padding:4px 8px;text-align:right;color:var(--muted);font-weight:600;font-size:9px;text-transform:uppercase">Merc. %</th>'
+              +'<th style="padding:4px 8px;text-align:right;color:var(--muted);font-weight:600;font-size:9px;text-transform:uppercase">Bultos</th>'
+            +'</tr></thead>'
+            +'<tbody>'
+            +provs.map(function(e,i){
+              var pct = totFobEmb > 0 ? (e[1].fob/totFobEmb*100).toFixed(1)+'%' : '—';
+              return '<tr style="border-top:1px solid rgba(255,255,255,.04)">'
+                +'<td style="padding:5px 8px;color:var(--text)">'+e[0]+'</td>'
+                +'<td style="padding:5px 8px;color:var(--muted)">'+e[1].dept+'</td>'
+                +'<td style="padding:5px 8px;text-align:right;font-family:\'IBM Plex Mono\',monospace;font-weight:700;color:var(--blue-l)">'+fmt(e[1].fob)+'</td>'
+                +'<td style="padding:5px 8px;text-align:right;color:var(--muted)">'+pct+'</td>'
+                +'<td style="padding:5px 8px;text-align:right;color:var(--muted)">'+(e[1].bultos||'—')+'</td>'
+              +'</tr>';
+            }).join('')
+            +'</tbody>'
+          +'</table>'
+        +'</div>';
+      });
+    }
+
+    html += '</div>';
+  });
+  html += '</div>';
+
+  // ── Tabla de Departamentos (como el Excel) ──
+  if(Object.keys(deptAccum).length){
+    html += '<div style="margin-top:16px;background:var(--s2);border:1px solid var(--border);border-radius:12px;overflow:hidden">'
+      +'<div style="background:rgba(88,166,255,.06);padding:9px 14px;font-size:11px;font-weight:700;color:var(--blue-l);text-transform:uppercase;letter-spacing:.05em">📊 Departamentos</div>'
+      +'<table style="width:100%;border-collapse:collapse;font-size:11px">'
+        +'<thead><tr style="background:rgba(255,255,255,.04)">'
+          +'<th style="padding:6px 12px;text-align:left;color:var(--muted);font-weight:600;font-size:9px;text-transform:uppercase">Departamento</th>'
+          +'<th style="padding:6px 12px;text-align:right;color:var(--muted);font-weight:600;font-size:9px;text-transform:uppercase">F.O.B</th>'
+          +'<th style="padding:6px 12px;text-align:right;color:var(--muted);font-weight:600;font-size:9px;text-transform:uppercase">Bultos</th>'
+          +'<th style="padding:6px 12px;text-align:right;color:var(--muted);font-weight:600;font-size:9px;text-transform:uppercase">% Merc.</th>'
+        +'</tr></thead>'
+        +'<tbody>'
+        +Object.entries(deptAccum).sort(function(a,b){ return b[1].fob-a[1].fob; }).map(function(e,i){
+          var pct = totFOB > 0 ? (e[1].fob/totFOB*100).toFixed(2)+'%' : '—';
+          return '<tr style="background:'+(i%2?'var(--s1)':'var(--bg)')+';border-bottom:1px solid rgba(255,255,255,.04)">'
+            +'<td style="padding:7px 12px;font-weight:600;color:var(--text)">'+e[0]+'</td>'
+            +'<td style="padding:7px 12px;text-align:right;font-family:\'IBM Plex Mono\',monospace;font-weight:700;color:var(--blue-l)">'+fmt(e[1].fob)+'</td>'
+            +'<td style="padding:7px 12px;text-align:right;color:var(--muted)">'+(e[1].bultos||'—')+'</td>'
+            +'<td style="padding:7px 12px;text-align:right;color:var(--muted)">'+pct+'</td>'
+          +'</tr>';
+        }).join('')
+        +'<tr style="background:rgba(88,166,255,.06);font-weight:800">'
+          +'<td style="padding:7px 12px;color:var(--text)">TOTAL</td>'
+          +'<td style="padding:7px 12px;text-align:right;font-family:\'IBM Plex Mono\',monospace;color:var(--blue-l)">'+fmt(totFOB)+'</td>'
+          +'<td style="padding:7px 12px;text-align:right;color:var(--muted)">'+_planFmtN(totBultos)+'</td>'
+          +'<td style="padding:7px 12px;text-align:right;color:var(--muted)">100%</td>'
+        +'</tr>'
+        +'</tbody>'
+      +'</table>'
+    +'</div>';
+  }
+
+  el.innerHTML = html;
+}
+
+// ─────────────────────────────────────────────────────
+// PROGRAMADO — lee Mercancía en Tránsito (localStorage)
+// ─────────────────────────────────────────────────────
+function _planBuildProgramado(desde, hasta, el){
+  var raw = [];
+  try{ raw = JSON.parse(localStorage.getItem('_transito_v1')||'[]'); }catch(e){}
+  if(!raw.length && window._transitoData) raw = window._transitoData;
+
+  var d0 = desde ? new Date(desde+'T00:00:00') : null;
+  var d1 = hasta ? new Date(hasta+'T23:59:59') : null;
+
+  var filtered = raw.filter(function(t){
+    var eta = t.eta || t.fechaETA || t.fecha || '';
+    if(!eta) return true;
+    var ed = new Date(eta+'T00:00:00');
+    if(d0 && ed < d0) return false;
+    if(d1 && ed > d1) return false;
+    return true;
+  }).sort(function(a,b){
+    return (a.eta||a.fechaETA||a.fecha||'').localeCompare(b.eta||b.fechaETA||b.fecha||'');
+  });
+
+  if(!filtered.length){
+    el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)">'
+      +'<div style="font-size:36px;margin-bottom:8px">🚢</div>'
+      +'<div style="font-size:13px;font-weight:600">Sin embarques programados en este período</div>'
+      +'<div style="font-size:11px;margin-top:6px">Los embarques se registran en Mercancía en Tránsito</div>'
+      +'</div>';
+    return;
+  }
+
+  var fmt = _planFmt;
+  var DIAS_ES = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+
+  // Agrupar por ETA
+  var byETA = {};
+  filtered.forEach(function(t){
+    var k = t.eta || t.fechaETA || t.fecha || 'Sin ETA';
+    if(!byETA[k]) byETA[k]=[];
+    byETA[k].push(t);
+  });
+
+  var html = '';
+
+  // KPIs rápidos
+  var totFOB = filtered.reduce(function(s,t){ return s+(t.monto||t.valor||t.cif||0); },0);
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">'
+    +'<div style="background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;text-align:center">'
+      +'<div style="font-size:20px;font-weight:800;color:#2dd4bf;font-family:\'IBM Plex Mono\',monospace">'+filtered.length+'</div>'
+      +'<div style="font-size:9px;color:var(--muted);text-transform:uppercase;margin-top:3px">Envíos Programados</div>'
+    +'</div>'
+    +'<div style="background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;text-align:center">'
+      +'<div style="font-size:13px;font-weight:800;color:var(--blue-l);font-family:\'IBM Plex Mono\',monospace">'+fmt(totFOB)+'</div>'
+      +'<div style="font-size:9px;color:var(--muted);text-transform:uppercase;margin-top:3px">FOB Programado</div>'
+    +'</div>'
+  +'</div>';
+
+  Object.keys(byETA).sort().forEach(function(eta){
+    var ts = byETA[eta];
+    var dObj = new Date(eta+'T00:00:00');
+    var diaNombre = isNaN(dObj.getTime()) ? eta : (DIAS_ES[dObj.getDay()]+' '+dObj.getDate()+'/'+String(dObj.getMonth()+1).padStart(2,'0'));
+
+    html += '<div style="border:1px solid rgba(45,212,191,.3);border-radius:12px;margin-bottom:10px;overflow:hidden;background:var(--s2)">'
+      +'<div style="background:rgba(45,212,191,.06);padding:9px 14px;display:flex;justify-content:space-between;align-items:center">'
+        +'<div style="font-size:12px;font-weight:800;color:#2dd4bf">🚚 ETA: '+diaNombre+'</div>'
+        +'<div style="font-size:10px;color:var(--muted)">'+ts.length+' envío'+(ts.length>1?'s':'')+'</div>'
+      +'</div>'
+      +'<table style="width:100%;border-collapse:collapse;font-size:11px">'
+        +'<thead><tr style="background:rgba(255,255,255,.04)">'
+          +'<th style="padding:5px 10px;text-align:left;color:var(--muted);font-weight:600;font-size:9px;text-transform:uppercase">Tipo</th>'
+          +'<th style="padding:5px 10px;text-align:left;color:var(--muted);font-weight:600;font-size:9px;text-transform:uppercase">N° Cont./Guía</th>'
+          +'<th style="padding:5px 10px;text-align:left;color:var(--muted);font-weight:600;font-size:9px;text-transform:uppercase">Proveedor</th>'
+          +'<th style="padding:5px 10px;text-align:left;color:var(--muted);font-weight:600;font-size:9px;text-transform:uppercase">Depto.</th>'
+          +'<th style="padding:5px 10px;text-align:right;color:var(--muted);font-weight:600;font-size:9px;text-transform:uppercase">FOB</th>'
+          +'<th style="padding:5px 10px;text-align:right;color:var(--muted);font-weight:600;font-size:9px;text-transform:uppercase">Bultos</th>'
+          +'<th style="padding:5px 10px;text-align:center;color:var(--muted);font-weight:600;font-size:9px;text-transform:uppercase">Estado</th>'
+        +'</tr></thead>'
+        +'<tbody>'
+        +ts.map(function(t,i){
+          var nroCont = t.nroContenedor||t.contenedor||t.nro||'—';
+          var nroGuia = t.nroGuia||t.guia||'';
+          var id      = nroGuia||nroCont;
+          var tipo    = nroGuia ? '✈️ Aéreo' : '🚢 Marítimo';
+          var prov    = t.proveedor||t.prov||'—';
+          var dept    = t.departamento||t.dept||'—';
+          var monto   = t.monto||t.valor||t.cif||0;
+          var bultos  = t.bultos||t.cajas||t.cartones||'—';
+          var estado  = t.estado||t.status||'En tránsito';
+          var eColor  = {'Recibido':'var(--green-l)','En tránsito':'var(--orange-l)','Pendiente':'var(--muted)'}[estado]||'var(--muted)';
+          return '<tr style="background:'+(i%2?'var(--s1)':'var(--bg)')+';border-bottom:1px solid rgba(255,255,255,.04)">'
+            +'<td style="padding:6px 10px;color:var(--muted);font-size:10px">'+tipo+'</td>'
+            +'<td style="padding:6px 10px;font-family:monospace;font-size:10px;color:var(--text);font-weight:600">'+id+'</td>'
+            +'<td style="padding:6px 10px;color:var(--text)">'+prov+'</td>'
+            +'<td style="padding:6px 10px;color:var(--muted)">'+dept+'</td>'
+            +'<td style="padding:6px 10px;text-align:right;font-family:\'IBM Plex Mono\',monospace;font-weight:700;color:var(--blue-l)">'+(monto?fmt(monto):'—')+'</td>'
+            +'<td style="padding:6px 10px;text-align:right;color:var(--muted)">'+bultos+'</td>'
+            +'<td style="padding:6px 10px;text-align:center"><span style="font-size:9px;font-weight:700;color:'+eColor+'">'+estado+'</span></td>'
+          +'</tr>';
+        }).join('')
+        +'</tbody>'
+      +'</table>'
+    +'</div>';
+  });
+
+  el.innerHTML = html;
+}
+
 function abrirTransito(){
   var w = window.open('transito.html','_transito','width=1100,height=800,resizable=yes,scrollbars=yes');
   if(!w){ window.location.href='transito.html'; return; }
@@ -2586,13 +2982,8 @@ function abrirTransito(){
   });
 }
 function abrirPlaneacion(){
-  var w = window.open('planeacion.html','_planeacion','width=1200,height=860,resizable=yes,scrollbars=yes');
-  if(!w){ window.location.href='planeacion.html'; return; }
-  w.addEventListener('load', function(){
-    try{
-      w.tendData = window.tendData; // pass historial for cross-reference
-    }catch(e){}
-  });
+  openTabModal('planeacion','📋 Planeación de Carga');
+  setTimeout(_renderPlaneacion, 300);
 }
 function abrirUnicoModulo(){
   // Open standalone Escenario Único module
@@ -8836,8 +9227,9 @@ async function renderFactDisp(){
                   '<td style="padding:8px 12px"><span style="background:'+(tipoColors[f.tipo]||'rgba(139,148,158,.15)')+';color:'+(tipoText[f.tipo]||'var(--muted)')+';border-radius:4px;padding:2px 7px;font-size:10px;font-weight:600">'+f.tipo+'</span></td>'+
                   '<td style="padding:8px 12px;text-align:right;font-family:monospace;font-weight:700;color:var(--text)">'+fmt(f.monto)+'</td>'+
                   '<td style="padding:8px 12px;text-align:right;font-family:monospace;font-weight:700;color:'+saldoColor+'">'+fmt(saldoDisp)+'</td>'+
-                  '<td style="padding:8px 12px;text-align:center">'+
-                    '<button data-fid="'+f.id+'" onclick="_fdEliminar(this.dataset.fid)" style="background:rgba(248,81,73,.12);border:1px solid rgba(248,81,73,.3);color:var(--red-l);border-radius:5px;padding:3px 8px;font-size:10px;cursor:pointer" title="Eliminar">🗑️</button>'+
+                  '<td style="padding:8px 12px;text-align:center;display:flex;gap:5px;justify-content:center">'+
+                    '<button data-fid="'+f.id+'" onclick="_fdMarcarConsumida(this.dataset.fid)" style="background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:5px;padding:3px 8px;font-size:10px;cursor:pointer;white-space:nowrap" title="Marcar como consumida — asignar embarque">✅ Consumida</button>'+
+                    '<button data-fid="'+f.id+'" onclick="_fdEliminar(this.dataset.fid)" style="background:rgba(248,81,73,.12);border:1px solid rgba(248,81,73,.3);color:var(--red-l);border-radius:5px;padding:3px 7px;font-size:10px;cursor:pointer" title="Eliminar">🗑️</button>'+
                   '</td>'+
                 '</tr>';
               }).join('')+
@@ -15858,7 +16250,8 @@ body:not(.sidebar-pinned) #app-wrapper {
       setTimeout(function(){
         if(tabId==='config'    && typeof renderConfig==='function')    { renderConfig(); if(typeof renderDeptConfig==='function') renderDeptConfig(); }
         if(tabId==='histprovs' && typeof renderHistProv==='function')  renderHistProv();
-        if(tabId==='factdisp'){ renderFactDisp(); _fdAllProvNames=null; setTimeout(function(){ _fdFilterSelect(''); }, 400); }
+        if(tabId==='factdisp'){ renderFactDisp(); _fdAllProvNames=null; setTimeout(function(){ _fdFilterSelect(''); _fdInitRubros(); }, 400); }
+        if(tabId==='planeacion'){ setTimeout(_renderPlaneacion, 100); }
         if(tabId==='tendencias' && typeof renderTend==='function'){
           (async function(){
             if(_sb){ await _pullTendFromCloud(); }
