@@ -8542,6 +8542,9 @@ function _correrProcesoProveedores(){
     var isSabEmb = escLow.includes('sababa') || escLow.includes('sab');
     // Tipo del embarque según cómo se procesó (ZL o EXT/IMP)
     var tipoEmb = (d.snap&&d.snap.tipo) ? d.snap.tipo : (d.tipo||'ZL');
+    // FIX PERMANENTE: embarques de importación que quedaron guardados como ZL
+    var _nroD = (d.nro||'').toString().trim();
+    if(['22032','22033','22034','22038','22039'].indexOf(_nroD) !== -1) tipoEmb = 'IMP';
     var lines = (d.snap&&d.snap.invLines)||d.invLines||[];
 
     lines.forEach(function(l){
@@ -8621,7 +8624,10 @@ function _fixImportacionTipo(){
     var nro = (d.nro || d.snap?.nro || '').toString().trim().toUpperCase();
     // También buscar sin el nro exacto — comparar contra variantes
     var matchFound = EMB_IMP.some(function(e){
-      return nro === e || nro === ('EMB'+e) || nro.includes(e);
+      return nro === e ||
+             nro === ('EMB'+e) ||
+             nro.includes(e) ||
+             parseInt(nro,10) === parseInt(e,10);
     });
     if(!matchFound) return;
 
@@ -10092,6 +10098,9 @@ function _buildHistProvRows(){
     var isUnico2 = !!(d.modoUnico || d.tipoEsc==='unico');
     // Tipo del embarque según cómo se procesó (ZL o EXT/IMP)
     var tipoEmb = (d.snap&&d.snap.tipo) ? d.snap.tipo : (d.tipo||'ZL');
+    // FIX PERMANENTE: embarques de importación Sababa que quedaron guardados como ZL
+    var _EMB_IMP_FIJOS = ['22032','22033','22034','22038','22039'];
+    if(_EMB_IMP_FIJOS.indexOf((nro||'').toString().trim()) !== -1) tipoEmb = 'IMP';
     var tipoEmbNorm = (tipoEmb==='EXT'||tipoEmb==='IMP') ? 'IMP' : 'ZL';
 
     lines.forEach(function(l){
@@ -11183,6 +11192,7 @@ function _renderGroupSections(data){
   data.forEach(function(d){
     var invL = (d.snap && d.snap.invLines) ? d.snap.invLines : (d.invLines||[]);
     var tipoEmb = ((d.snap && d.snap.tipo) || d.tipo || 'ZL');
+    if(['22032','22033','22034','22038','22039'].indexOf((d.nro||'').toString().trim()) !== -1) tipoEmb = 'IMP';
     var dIdx = tendData.indexOf(d);
     invL.forEach(function(l){
       // Skip expense lines — only mercancía lines go into dept grouping
@@ -14800,7 +14810,7 @@ function renderTopProvs(){
     // Buscar invLines en múltiples ubicaciones del snap
     const lines = d.snap?.invLines || d.invLines ||
                   (d.snap?.snap?.invLines) || [];
-    const tipoEmb = (d.snap?.tipo || d.tipo || 'ZL');
+    const tipoEmb = (['22032','22033','22034','22038','22039'].indexOf((d.nro||'').toString().trim()) !== -1) ? 'IMP' : (d.snap?.tipo || d.tipo || 'ZL');
     const isEmbSab = (d.esc||'').toLowerCase().includes('sababa');
     lines.forEach(l=>{
       let prov = (l.prov||l.dept||'').trim();
