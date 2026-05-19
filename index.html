@@ -8749,24 +8749,16 @@ async function renderFactDisp(){
           '<input id="fd-prov-search" type="text" placeholder="Buscar proveedor..." autocomplete="off" oninput="_fdProvSearchFilter(this)" style="width:100%;background:var(--s2);border:1px solid rgba(168,85,247,.4);border-radius:6px 6px 0 0;padding:7px 10px;color:var(--text);font-size:12px;box-sizing:border-box;margin-bottom:0">'+
           (_fdBuildProvSelect())+
         '</div>'+
-        '<div>'+
-          '<label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px">Monto Total (USD) *</label>'+
-          '<input id="fd-monto" type="number" placeholder="0.00" step="0.01" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;box-sizing:border-box">'+
-        '</div>'+
-        '<div>'+
-          '<label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px">Tipo</label>'+
-          (function(){
-  var rubros = (typeof _RUBROS_GASTO!=='undefined'?_RUBROS_GASTO:window._RUBROS_GASTO)||[];
-  var opts = rubros.map(function(r){
-    return '<option value="'+(r.val||r.lbl||'').replace(/"/g,'&quot;')+'">'+(r.icon?r.icon+' ':'')+(r.lbl||r.val||'')+'</option>';
-  }).join('');
-  return '<select id="fd-tipo" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;box-sizing:border-box">'+opts+'</select>';
-})()+
-        '</div>'+
-        '<div>'+
+        '<div style="grid-column:1/-1">'+
           '<label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px">Notas (opcional)</label>'+
           '<input id="fd-notas" type="text" placeholder="Embarque relacionado, observación..." style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;box-sizing:border-box">'+
         '</div>'+
+      '</div>'+
+      '<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">📋 Rubros de la Factura</div>'+
+      '<div id="fd-rubros-list" style="margin-bottom:8px"></div>'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'+
+        '<button onclick="_fdAddRubroRow()" style="background:rgba(168,85,247,.1);border:1px dashed rgba(168,85,247,.5);color:#a371f7;border-radius:7px;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer">+ Agregar rubro</button>'+
+        '<span id="fd-rubros-total" style="font-size:12px;font-weight:700;font-family:\'IBM Plex Mono\',monospace;color:var(--green-l)">Total: $0.00</span>'+
       '</div>'+
       '<button onclick="_fdAgregar()" style="background:#a371f7;border:none;color:#fff;border-radius:8px;padding:9px 20px;font-size:12px;font-weight:700;cursor:pointer;width:100%">➕ Agregar Factura</button>'+
     '</div>'+
@@ -8816,6 +8808,7 @@ async function renderFactDisp(){
         }).join('')
     )+
   '</div>';
+  setTimeout(_fdInitRubros, 60);
 }
 
 // ── Consume partial amount from a factura disponible ──
@@ -8844,38 +8837,86 @@ async function _fdConsumirParcial(numFact, montoUsado){
   }
 }
 
+// ── Helpers multi-rubro para Facturas Disponibles ──
+var _fdFormRubros = [];
+var _FD_RL = {flete:'🚢 Flete Internacional',liquidacion:'🏛️ Liquidación / Pago Arancelario',itbms:'🧾 ITBMS',tasa:'💵 Tasa / Uso del Sistema',honorarios:'💼 Honorarios / Comisión',acarreo:'🚛 Acarreo / Transporte',gastos_destino:'📦 Gastos Destino / Origen',uso_sistema:'💻 Uso del Sistema',seguro:'🛡️ Seguro de Carga',almacenaje:'🏪 Almacenaje',inspeccion:'🔍 Inspección',dmce:'📝 DMCE',otros:'📋 Otros Gastos'};
+
+function _fdInitRubros(){
+  _fdFormRubros = [{tipo:'flete', monto:0}];
+  _fdRenderRubrosForm();
+}
+
+function _fdAddRubroRow(){
+  _fdFormRubros.push({tipo:'otros', monto:0});
+  _fdRenderRubrosForm();
+}
+
+function _fdRenderRubrosForm(){
+  var list = document.getElementById('fd-rubros-list');
+  if(!list) return;
+  var ropts = Object.entries(_FD_RL).map(function(e){
+    return '<option value="'+e[0]+'">'+e[1]+'</option>';
+  }).join('');
+  list.innerHTML = _fdFormRubros.map(function(r, ri){
+    var sel = ropts.replace('value="'+r.tipo+'"', 'value="'+r.tipo+'" selected');
+    return '<div style="display:flex;gap:6px;align-items:center;margin-bottom:7px">'
+      +'<select onchange="_fdFormRubros['+ri+'].tipo=this.value" '
+        +'style="flex:1;background:var(--s2);border:1px solid rgba(168,85,247,.3);border-radius:6px;padding:6px 8px;color:var(--text);font-size:11px">'+sel+'</select>'
+      +'<input type="number" step="0.01" value="'+(r.monto||'')+'" placeholder="0.00" '
+        +'oninput="_fdFormRubros['+ri+'].monto=parseFloat(this.value)||0;_fdRubrosTotal()" '
+        +'style="width:120px;flex-shrink:0;background:var(--s2);border:1px solid rgba(88,166,255,.35);border-radius:6px;padding:6px 8px;color:var(--blue-l);font-size:12px;font-family:\'IBM Plex Mono\',monospace;text-align:right;font-weight:700">'
+      +(_fdFormRubros.length > 1
+        ? '<button onclick="_fdFormRubros.splice('+ri+',1);_fdRenderRubrosForm()" '
+            +'style="background:rgba(218,54,51,.1);border:1px solid rgba(218,54,51,.2);color:var(--red-l);border-radius:5px;width:28px;height:28px;cursor:pointer;font-size:13px;flex-shrink:0">×</button>'
+        : '<div style="width:28px"></div>')
+      +'</div>';
+  }).join('');
+  _fdRubrosTotal();
+}
+
+function _fdRubrosTotal(){
+  var total = _fdFormRubros.reduce(function(s,r){ return s+(r.monto||0); }, 0);
+  var el = document.getElementById('fd-rubros-total');
+  if(el) el.textContent = 'Total: $'+Number(total).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+
 async function _fdAgregar(){
-  var num   =(document.getElementById('fd-num')?.value||'').trim();
-  var fecha =(document.getElementById('fd-fecha')?.value||'');
-  var provHidden=document.getElementById('fd-prov'); var provSearch=document.getElementById('fd-prov-search'); var prov=((provHidden&&provHidden.value?provHidden.value:'')||(provSearch&&provSearch.value?provSearch.value:'')).trim();
-  var monto =parseFloat(document.getElementById('fd-monto')?.value||'0')||0;
-  var tipo  =(document.getElementById('fd-tipo')?.value||'Otro');
-  var notas =(document.getElementById('fd-notas')?.value||'').trim();
+  var num  = (document.getElementById('fd-num')?.value||'').trim();
+  var fecha= (document.getElementById('fd-fecha')?.value||'');
+  var provHidden = document.getElementById('fd-prov');
+  var provSearch = document.getElementById('fd-prov-search');
+  var prov = ((provHidden&&provHidden.value ? provHidden.value : '')||(provSearch&&provSearch.value ? provSearch.value : '')).trim();
+  var notas= (document.getElementById('fd-notas')?.value||'').trim();
 
-  if(!num){ _showToast('⚠️ El número de factura es obligatorio','orange',2000); return; }
+  if(!num) { _showToast('⚠️ El número de factura es obligatorio','orange',2000); return; }
   if(!prov){ _showToast('⚠️ El proveedor es obligatorio','orange',2000); return; }
-  if(monto<=0){ _showToast('⚠️ El monto debe ser mayor a 0','orange',2000); return; }
 
-  var data=await _fdLoad();
-  // Check duplicate
-  if(data.find(function(f){ return f.num.toUpperCase()===num.toUpperCase(); })){
+  var rubros = (_fdFormRubros||[]).filter(function(r){ return (r.monto||0) > 0; });
+  if(!rubros.length){ _showToast('⚠️ Agrega al menos un rubro con monto > $0','orange',2000); return; }
+
+  var montoTotal = rubros.reduce(function(s,r){ return s+(r.monto||0); }, 0);
+
+  var data = await _fdLoad();
+  if(data.find(function(f){ return (f.num||'').toUpperCase()===num.toUpperCase(); })){
     _showToast('⚠️ Ya existe una factura con ese número','orange',3000); return;
   }
 
   data.push({
-    id:   Date.now().toString(36)+Math.random().toString(36).slice(2,5),
-    num:  num,
-    fecha:fecha||new Date().toISOString().slice(0,10),
-    prov: prov,
-    monto:monto,
-    tipo: tipo,
-    notas:notas,
-    creadoEn:new Date().toISOString()
+    id:      Date.now().toString(36)+Math.random().toString(36).slice(2,5),
+    num:     num,
+    fecha:   fecha||new Date().toISOString().slice(0,10),
+    prov:    prov,
+    monto:   Math.round(montoTotal*100)/100,
+    tipo:    rubros[0].tipo,
+    rubros:  rubros,
+    notas:   notas,
+    creadoEn: new Date().toISOString()
   });
   await _fdSave(data);
   _fdInvalidateCache();
-  _showToast('✅ Factura '+num+' guardada en nube ☁️','green',2000);
+  _showToast('✅ Factura '+num+' guardada — '+rubros.length+' rubro'+(rubros.length>1?'s':''),'green',2500);
   renderFactDisp();
+  setTimeout(_fdInitRubros, 100);
 }
 
 async function _fdEliminar(id){
@@ -15740,7 +15781,7 @@ body:not(.sidebar-pinned) #app-wrapper {
       setTimeout(function(){
         if(tabId==='config'    && typeof renderConfig==='function')    { renderConfig(); if(typeof renderDeptConfig==='function') renderDeptConfig(); }
         if(tabId==='histprovs' && typeof renderHistProv==='function')  renderHistProv();
-        if(tabId==='factdisp'){ renderFactDisp(); _fdAllProvNames=null; setTimeout(function(){ _fdFilterSelect(''); }, 400); }
+        if(tabId==='factdisp'){ renderFactDisp(); _fdAllProvNames=null; setTimeout(function(){ _fdFilterSelect(''); _fdInitRubros(); }, 400); }
         if(tabId==='tendencias' && typeof renderTend==='function'){
           (async function(){
             if(_sb){ await _pullTendFromCloud(); }
