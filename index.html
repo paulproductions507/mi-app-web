@@ -444,14 +444,14 @@ body[style*="color-scheme: light"] #portal-content tr td[style*="background:#1c2
 #app-wrapper.visible{opacity:1;transform:translateX(0);}
 
 /* SIDEBAR PANEL — Wide vertical nav */
-.sidebar{position:fixed;left:0;top:0;bottom:0;width:270px;background:var(--s1);border-right:1px solid var(--border);z-index:300;transform:translateX(-100%);transition:transform .3s cubic-bezier(.25,.46,.45,.94);overflow-y:auto;padding:0;display:flex;flex-direction:column;}
+.sidebar{position:fixed;left:0;top:0;bottom:0;width:310px;background:var(--s1);border-right:1px solid var(--border);z-index:300;transform:translateX(-100%);transition:transform .3s cubic-bezier(.25,.46,.45,.94);overflow-y:auto;padding:0;display:flex;flex-direction:column;}
 .sidebar.open{transform:translateX(0);}
 .sidebar.pinned{transform:translateX(0)!important;}
 .sidebar-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:299;display:none;backdrop-filter:blur(2px);}
 .sidebar-overlay.open{display:block;}
 .sidebar-overlay.pinned{display:none!important;}
 /* When sidebar is pinned, shift app content */
-body.sidebar-pinned #app-wrapper{margin-left:270px;transition:margin-left .3s cubic-bezier(.25,.46,.45,.94);}
+body.sidebar-pinned #app-wrapper{margin-left:310px;transition:margin-left .3s cubic-bezier(.25,.46,.45,.94);}
 body:not(.sidebar-pinned) #app-wrapper{margin-left:0;transition:margin-left .3s cubic-bezier(.25,.46,.45,.94);}
 /* When pinned, page content centers within remaining space */
 body.sidebar-pinned .page{margin-left:auto;margin-right:auto;}
@@ -803,8 +803,12 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       <button class="sidebar-close" onclick="closeSidebar()">×</button>
     </div>
   </div>
-
-  <!-- EMBARQUES Nav -->
+  <!-- Menú Principal en panel -->
+  <div style="padding:6px 10px;border-bottom:1px solid var(--border);">
+    <button onclick="volverInicio()" style="width:100%;background:rgba(88,166,255,.08);border:1px solid rgba(88,166,255,.25);color:var(--blue-l);border-radius:7px;padding:7px 12px;font-size:12px;font-weight:600;cursor:pointer;text-align:left;display:flex;align-items:center;gap:6px;">
+      🏠 Menú Principal
+    </button>
+  </div>
   <div class="sidebar-section">
     <div class="sidebar-section-lbl">Embarques</div>
 
@@ -961,8 +965,8 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
     <input type="file" id="sesion-file-input" accept=".json" style="display:none" onchange="cargarSesion(this)">
     </div><!-- /inner constrained row -->
   </div>
-  <!-- ROW 3: TABS — constrained width -->
-  <div style="border-bottom:1px solid var(--border)">
+  <!-- ROW 3: TABS — hidden, navigation via sidebar panel -->
+  <div style="border-bottom:1px solid var(--border);display:none">
   <nav style="display:flex;align-items:stretch;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;max-width:var(--content-max);margin:0 auto;" id="unified-nav-row">
       <div class="tab on" onclick="switchTab('sim',this)">📋 Simulador</div>
       <div class="tab" onclick="switchTab('cifexp',this)">⚡ CIF Express</div>
@@ -986,7 +990,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
   <span style="font-size:10px;font-weight:700;color:var(--blue-l);letter-spacing:.08em">📋 SIMULADOR ZLC</span>
   <span style="font-size:10px;color:var(--muted)">— Referencia · no refleja desembolso real</span>
 </div>
-<div style="padding:10px 16px 0;max-width:900px;margin:0 auto">
+<div style="padding:10px 16px 0;max-width:900px;margin:0 auto;display:none">
   <button onclick="volverInicio()" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer">← Menú Principal</button>
 </div>
 <div class="page">
@@ -1425,6 +1429,22 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
             <div class="seg-btn on b" onclick="setExon(true,this)">Sí — 100% exonerado</div>
           </div>
           <p class="note" id="exon-note"></p>
+        </div>
+        <!-- Omitir Master Value — ambos escenarios -->
+        <div class="field" style="margin-top:8px;padding:9px 12px;background:rgba(248,209,34,.05);border:1px solid rgba(248,209,34,.2);border-radius:8px">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;font-weight:600;color:#f8d122;margin:0">
+            <input type="checkbox" id="chk_omit_mv_ambos_sim" onchange="
+              window._omitMV_sab=this.checked;
+              window._omitMV_cif=this.checked;
+              ['chk_omit_mv_sab','chk_omit_mv_cif','chk_omit_mv_ambos'].forEach(function(id){
+                var el=document.getElementById(id); if(el) el.checked=document.getElementById('chk_omit_mv_ambos_sim').checked;
+              });
+              if(typeof calcSab2==='function') calcSab2();
+              if(typeof calc==='function') calc();
+            " style="accent-color:#f8d122;width:15px;height:15px">
+            ⚠️ Omitir Master Value — ambos escenarios
+          </label>
+          <div style="font-size:10px;color:var(--muted);margin-top:4px;margin-left:23px">Cuando el MV es negativo o no aplica para este embarque</div>
         </div>
       </div>
     </div>
@@ -1881,12 +1901,13 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
           <label>Master Value (auto — editable) <span class="info-btn" onclick="document.getElementById('mv-info').classList.toggle('open')" style="font-style:normal">i</span></label>
           <div id="mv-info" class="info-box">Calculado = Costo Landed Esc.#1 − Costo Landed Sababa sin MV. Ajusta centavos si es necesario. El MV no se paga — es un puente contable.</div>
           <input type="number" id="s2_mv_display" step="0.01" oninput="window._mvManualValue=parseFloat(this.value);window._mvUserEdited=true;calcSab2();" class="mv-editable" placeholder="Se calcula automático">
-          <div style="margin-top:6px;display:flex;gap:12px;flex-wrap:wrap">
+          <div style="margin-top:6px">
             <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);cursor:pointer">
               <input type="checkbox" id="chk_omit_mv_sab" onchange="window._omitMV_sab=this.checked;if(this.checked&&document.getElementById('chk_omit_mv_ambos'))document.getElementById('chk_omit_mv_ambos').checked=false;calcSab2();" style="accent-color:var(--orange-l)">
               Omitir MV (este escenario)
             </label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);cursor:pointer">
+            <!-- Omitir MV ambos movido al Simulador -->
+            <label style="display:none">
               <input type="checkbox" id="chk_omit_mv_ambos" onchange="window._omitMV_sab=this.checked;window._omitMV_cif=this.checked;['chk_omit_mv_sab','chk_omit_mv_cif'].forEach(function(id){var el=document.getElementById(id);if(el)el.checked=document.getElementById('chk_omit_mv_ambos').checked;});calcSab2();calc();" style="accent-color:var(--orange-l)">
               Omitir MV (ambos escenarios)
             </label>
@@ -2648,9 +2669,9 @@ function _PLN_BUILD_HTML(){
   +'#_PLN_OV .xbtn.tl{background:rgba(45,212,191,.1);border-color:rgba(45,212,191,.3);color:#2dd4bf;}'
   +'#_PLN_OV .xbtn.rd{background:rgba(248,81,73,.1);border-color:rgba(248,81,73,.3);color:var(--red-l);}'
   +'#_PLN_OV .ep-row{padding:11px 14px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px;transition:background .1s;}'
-  +'#_PLN_OV .ep-row:hover{background:rgba(255,255,255,.04);}'
+  +'#_PLN_OV .ep-row:hover{background:rgba(255,255,255,.05);}'
   +'#_PLN_OV .ep-nro{font-size:10px;font-weight:700;color:var(--orange-l);}'
-  +'#_PLN_OV .ep-desc{font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px;}'
+  +'#_PLN_OV .ep-desc{font-size:12px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:260px;}'
   +'#_PLN_OV .ep-meta{font-size:10px;color:var(--muted);margin-top:2px;}'
   +'#_PLN_OV .ep-fob{font-family:"IBM Plex Mono",monospace;font-size:13px;font-weight:800;color:var(--green-l);white-space:nowrap;}'
   +'#_PLN_OV .ep-month{background:rgba(240,136,62,.05);border:1px solid rgba(240,136,62,.18);border-radius:9px;margin-bottom:10px;overflow:hidden;}'
@@ -2819,18 +2840,16 @@ function _PLN_BUILD_HTML(){
     +'</div>'
   +'</div></div>'
 
-  // ── Modal Selector de Embarques (Resultado) ──
+  // ── Modal Selector de Embarques ──
   +'<div class="mo" id="_pln_picker">'
   +'<div class="mc" style="max-width:600px">'
     +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
-      +'<div>'
-        +'<div style="font-size:14px;font-weight:800">📦 Seleccionar Embarque Procesado</div>'
-        +'<div style="font-size:10px;color:var(--muted);margin-top:2px">Elige el embarque — heredará todos sus proveedores, FOB, Landed y departamentos</div>'
-      +'</div>'
-      +'<button style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;flex-shrink:0;margin-left:12px" onclick="_plnClosePicker()">×</button>'
+      +'<div><div style="font-size:14px;font-weight:800">📦 Seleccionar Embarque Procesado</div>'
+      +'<div style="font-size:10px;color:var(--muted);margin-top:2px">Hereda proveedores, FOB, Landed y departamentos automáticamente</div></div>'
+      +'<button style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;flex-shrink:0;margin-left:10px" onclick="_plnClosePicker()">×</button>'
     +'</div>'
-    +'<input type="text" id="_pln_picker_q" placeholder="🔍 Buscar por N° embarque o descripción..." oninput="_plnPickerFilter()" style="width:100%;background:var(--s2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 12px;font-size:12px;margin-bottom:12px;outline:none;">'
-    +'<div id="_pln_picker_list" style="max-height:440px;overflow-y:auto;"></div>'
+    +'<input type="text" id="_pln_picker_q" placeholder="🔍 Buscar por N° embarque o descripción..." oninput="_plnPickerFilter()" style="width:100%;background:var(--s2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 12px;font-size:12px;margin-bottom:8px;outline:none;">'
+    +'<div id="_pln_picker_list" style="max-height:450px;overflow-y:auto;"></div>'
   +'</div></div>'
 
   // ── Modal Nueva Semana ──
@@ -3284,126 +3303,126 @@ window._plnCSV=function(){
   var a=document.createElement('a'); a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv); a.download='Planeacion_'+_PLN_CUR+'.csv'; a.click();
 };
 
-// ── Picker de Embarques (Resultado) ──
-window._plnOpenPicker=function(mon,di){
-  _PLN_CTX={mon:mon,di:di,ci:null,tab:'res'};
-  var q=document.getElementById('_pln_picker_q');
-  if(q) q.value='';
+// ── Picker de Embarques — lee window.tendData directamente ──
+window._plnOpenPicker = function(mon, di){
+  _PLN_CTX = {mon:mon, di:di, ci:null, tab:'res'};
+  var q = document.getElementById('_pln_picker_q'); if(q) q.value='';
+  var m = document.querySelector('#_PLN_OV #_pln_picker'); if(m) m.classList.add('open');
   _plnPickerRender('');
-  var m=document.querySelector('#_PLN_OV #_pln_picker');
-  if(m) m.classList.add('open');
 };
-window._plnClosePicker=function(){
-  var m=document.querySelector('#_PLN_OV #_pln_picker');
-  if(m) m.classList.remove('open');
+
+window._plnClosePicker = function(){
+  var m = document.querySelector('#_PLN_OV #_pln_picker'); if(m) m.classList.remove('open');
 };
-window._plnPickerFilter=function(){
+
+window._plnPickerFilter = function(){
   _plnPickerRender((document.getElementById('_pln_picker_q')||{}).value||'');
 };
 
 function _plnPickerRender(q){
-  var el=document.getElementById('_pln_picker_list'); if(!el) return;
-  var MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-  var td=(window.tendData||[]).filter(function(d){ return d.nro && d.fecha; });
+  var el = document.getElementById('_pln_picker_list'); if(!el) return;
+  var MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+  // Leer tendData — la misma variable global que usa Tendencias
+  var td = (window.tendData||[]).filter(function(d){ return d.nro && d.fecha; });
 
   if(!td.length){
-    el.innerHTML='<div style="text-align:center;padding:40px;color:var(--muted)">'
+    // tendData vacío — ofrecer recarga
+    el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)">'
       +'<div style="font-size:36px;margin-bottom:10px">📭</div>'
-      +'<div style="font-size:13px;font-weight:600">Sin embarques procesados</div>'
-      +'<div style="font-size:11px;margin-top:6px">Procesa embarques en el Simulador primero</div>'
-    +'</div>';
+      +'<div style="font-size:13px;font-weight:600;color:var(--text)">Sin embarques en memoria</div>'
+      +'<div style="font-size:11px;margin-top:6px;margin-bottom:16px">Los datos pueden estar cargando. Intenta recargar.</div>'
+      +'<button onclick="_plnPickerReload()" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:8px;padding:8px 18px;font-size:12px;font-weight:700;cursor:pointer">🔄 Recargar desde nube</button>'
+      +'</div>';
     return;
   }
 
   if(q && q.trim()){
-    var qn=q.trim().toLowerCase();
-    td=td.filter(function(d){
+    var qn = q.trim().toLowerCase();
+    td = td.filter(function(d){
       return (d.nro||'').toLowerCase().includes(qn)
           || (d.desc||d.descripcion||'').toLowerCase().includes(qn)
           || (d.fecha||'').includes(qn);
     });
     if(!td.length){
-      el.innerHTML='<div style="text-align:center;padding:24px;color:var(--muted);font-size:12px">Sin resultados para "'+_plnESC(q)+'"</div>';
+      el.innerHTML = '<div style="text-align:center;padding:24px;color:var(--muted);font-size:12px">Sin resultados para "'+_plnESC(q)+'"</div>';
       return;
     }
   }
 
-  // Agrupar por mes — igual que tendencias
-  var byMes={};
+  // Agrupar por mes igual que Tendencias
+  var byMes = {};
   td.forEach(function(d){
-    var mes=(d.fecha||'').slice(0,7);
-    if(!byMes[mes]) byMes[mes]=[];
+    var mes = (d.fecha||'').slice(0,7);
+    if(!byMes[mes]) byMes[mes] = [];
     byMes[mes].push(d);
   });
-  var meses=Object.keys(byMes).sort().reverse();
+  var meses = Object.keys(byMes).sort().reverse();
+  var h = '';
 
-  var h='';
   meses.forEach(function(mes){
-    var items=byMes[mes].sort(function(a,b){return (b.fecha||'').localeCompare(a.fecha||'');});
-    var dm=new Date(mes+'-01');
-    var label=MESES[dm.getMonth()]+' '+dm.getFullYear();
-    var totMes=items.reduce(function(s,d){
-      var snap=d.snap||{}, sc1=snap.sc1||{};
+    var items = byMes[mes].sort(function(a,b){ return (b.fecha||'').localeCompare(a.fecha||''); });
+    var dm = new Date(mes+'-01');
+    var label = MESES[dm.getMonth()]+' '+dm.getFullYear();
+    var totMes = items.reduce(function(s,d){
+      var sc1 = (d.snap||{}).sc1||{};
       return s+(sc1.fob||sc1.cif||d.cif||0);
-    },0);
+    }, 0);
 
-    h+='<div class="ep-month">'
+    h += '<div class="ep-month">'
       +'<div class="ep-month-hdr">'
         +'<span>📅 '+label+'</span>'
         +'<span>'+items.length+' embarque'+(items.length!==1?'s':'')+' · '+_plnFF(totMes)+'</span>'
       +'</div>';
 
     items.forEach(function(d){
-      var snap=d.snap||{}, sc1=snap.sc1||{};
-      var fob=sc1.fob||sc1.cif||d.cif||0;
-      var landed=snap.sc1Base||d.sc1Base||d.landed||0;
-      var lines=(snap.invLines||d.invLines||[]).filter(function(l){return !l.tipoFac||l.tipoFac==='mercancia';});
-      var tipoEq=d.tipoEquipo||snap.tipoEquipo||snap.equipo||(snap.campos?.s1_equipo)||'';
-      var nEquip=parseInt(d.equipos||snap.campos?.s1_equipos||snap.nEquipos||1)||1;
-      var equip=(nEquip>1?nEquip+'× ':'')+tipoEq;
-      // Departamentos únicos del embarque
-      var deptos=[...new Set(lines.map(function(l){return l.dept||l.deptCat||'';}).filter(Boolean))].slice(0,3).join(' · ');
-      // Proveedores únicos
-      var provCount=lines.length;
+      var snap = d.snap||{}, sc1 = snap.sc1||{};
+      var fob = sc1.fob||sc1.cif||d.cif||0;
+      var landed = snap.sc1Base||d.sc1Base||d.landed||0;
+      var lines = (snap.invLines||d.invLines||[]).filter(function(l){return !l.tipoFac||l.tipoFac==='mercancia';});
+      var tipoEq = d.tipoEquipo||snap.tipoEquipo||snap.equipo||(snap.campos&&snap.campos.s1_equipo)||'';
+      var nEquip = parseInt(d.equipos||(snap.campos&&snap.campos.s1_equipos)||snap.nEquipos||1)||1;
+      var deptos = [...new Set(lines.map(function(l){return l.dept||l.deptCat||'';}).filter(Boolean))].slice(0,3).join(' · ');
+      var equipStr = (nEquip>1?nEquip+'× ':'')+tipoEq;
+      var nroEnc = JSON.stringify(d.nro);
 
-      h+='<div class="ep-row" onclick="_plnPickerSelect('+JSON.stringify(d.nro)+')">'
+      h += '<div class="ep-row" onclick="_plnPickerSelect('+nroEnc+')">'
         +'<div style="flex:1;min-width:0">'
           +'<div class="ep-nro">📦 Emb. '+_plnESC(d.nro)+'</div>'
           +'<div class="ep-desc">'+(d.desc||d.descripcion||'Sin descripción')+'</div>'
-          +'<div class="ep-meta">'
-            +d.fecha
-            +(equip?' · '+_plnESC(equip):'')
-            +' · '+provCount+' proveedor'+(provCount!==1?'es':'')
-            +(deptos?' · '+_plnESC(deptos):'')
-          +'</div>'
+          +'<div class="ep-meta">'+d.fecha+(equipStr?' · '+_plnESC(equipStr):'')+(lines.length?' · '+lines.length+' prov.':'')+(deptos?' · '+_plnESC(deptos):'')+'</div>'
         +'</div>'
         +'<div style="text-align:right;flex-shrink:0;margin-left:10px">'
           +'<div class="ep-fob">'+_plnFF(fob)+'</div>'
-          +(landed?'<div style="font-size:10px;color:var(--orange-l);font-family:\'IBM Plex Mono\',monospace;font-weight:700">'+_plnFF(landed)+'</div>':'')
-          +'<div style="font-size:9px;color:var(--muted);margin-top:2px">'+(d.esc||'')+'</div>'
+          +(landed?'<div style="font-size:10px;color:var(--orange-l);font-family:\'IBM Plex Mono\',monospace;font-weight:700;margin-top:2px">'+_plnFF(landed)+'</div>':'')
+          +(d.esc?'<div style="font-size:9px;color:var(--muted);margin-top:2px">'+_plnESC(d.esc)+'</div>':'')
         +'</div>'
       +'</div>';
     });
-    h+='</div>';
+    h += '</div>';
   });
-  el.innerHTML=h;
+  el.innerHTML = h;
 }
 
-window._plnPickerSelect=function(nro){
-  var td=window.tendData||[];
-  var found=td.find(function(d){return (d.nro||'')===(nro||'');});
-  if(!found){
-    if(typeof _showToast==='function') _showToast('⚠️ Embarque no encontrado en tendencias','orange',3000);
-    return;
-  }
-  var snap=found.snap||{}, sc1=snap.sc1||{};
-  var lines=(snap.invLines||found.invLines||[]).filter(function(l){return !l.tipoFac||l.tipoFac==='mercancia';});
-  var totCIF=lines.reduce(function(s,l){return s+(parseFloat(l.costo)||0);},0);
-  var landedTotal=snap.sc1Base||found.sc1Base||found.landed||0;
+window._plnPickerReload = async function(){
+  var el = document.getElementById('_pln_picker_list');
+  if(el) el.innerHTML = '<div style="text-align:center;padding:24px;color:var(--muted);font-size:12px">⏳ Recargando desde Supabase...</div>';
+  try{
+    if(typeof _pullTendFromCloud === 'function') await _pullTendFromCloud();
+  }catch(e){}
+  _plnPickerRender((document.getElementById('_pln_picker_q')||{}).value||'');
+};
 
-  // Construir filas con Landed proporcional al FOB de cada línea
-  var rows=lines.map(function(l){
-    var prop=totCIF>0?((parseFloat(l.costo)||0)/totCIF):0;
+window._plnPickerSelect = function(nro){
+  var td = window.tendData||[];
+  var found = td.find(function(d){ return (d.nro||'') === nro; });
+  if(!found){ if(typeof _showToast==='function') _showToast('⚠️ Embarque '+nro+' no encontrado','orange',3000); return; }
+  var snap = found.snap||{};
+  var lines = (snap.invLines||found.invLines||[]).filter(function(l){return !l.tipoFac||l.tipoFac==='mercancia';});
+  var totCIF = lines.reduce(function(s,l){return s+(parseFloat(l.costo)||0);},0);
+  var landedTotal = snap.sc1Base||found.sc1Base||found.landed||0;
+  var rows = lines.map(function(l){
+    var prop = totCIF>0 ? ((parseFloat(l.costo)||0)/totCIF) : 0;
     return {
       prov:    l.prov||'—',
       bultos:  l.bultos||l.cajas||0,
@@ -3414,25 +3433,20 @@ window._plnPickerSelect=function(nro){
       matched: true
     };
   });
-
-  var tipoCarga=found.tipoEquipo||snap.tipoEquipo||snap.equipo||(snap.campos?.s1_equipo)||'';
-  var newCub={
+  var newCub = {
     via:       'res',
-    tipoCarga: tipoCarga,
+    tipoCarga: found.tipoEquipo||snap.tipoEquipo||snap.equipo||(snap.campos&&snap.campos.s1_equipo)||'',
     nroEmb:    found.nro,
     nroCont:   '',
     eta:       found.fecha,
     status:    'Recibido en CDF',
     rows:      rows
   };
-
-  var wk=_plnMkWeek(_PLN_CTX.mon);
+  var wk = _plnMkWeek(_PLN_CTX.mon);
   wk[_PLN_CTX.tab][_PLN_CTX.di].cubiculos.push(newCub);
-  _PLN_SAVE();
-  _plnClosePicker();
-  _PLN_RENDER();
+  _PLN_SAVE(); _plnClosePicker(); _PLN_RENDER();
   if(typeof _showToast==='function')
-    _showToast('✅ Embarque '+found.nro+' agregado · '+rows.length+' proveedores heredados','green',3000);
+    _showToast('✅ Embarque '+found.nro+' · '+rows.length+' proveedores heredados','green',3000);
 };
 
 // ── Badge ──
@@ -16447,15 +16461,15 @@ function _endProgress() {
 
 /* 1. Layout principal: sidebar fijo + contenido al lado */
 body.sidebar-pinned #app-wrapper {
-  margin-left: 200px !important;
-  width: calc(100% - 200px) !important;
+  margin-left: 310px !important;
+  width: calc(100% - 310px) !important;
 }
 body:not(.sidebar-pinned) #app-wrapper {
   margin-left: 0 !important;
   width: 100% !important;
 }
 .sidebar {
-  width: 200px !important;
+  width: 310px !important;
   z-index: 400 !important;
 }
 
