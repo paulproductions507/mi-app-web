@@ -862,7 +862,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       <div class="nav-icon" style="background:rgba(45,212,191,.1)">🚢</div>
       <div><div class="nav-label" style="color:#2dd4bf">Mercancía en Tránsito</div><div class="nav-sub">Control logístico en ruta</div></div>
     </div>
-    <div class="sidebar-nav-item" onclick="closeSidebar();iniciarApp('planeacion')" style="border:1px solid rgba(248,209,34,.3)">
+    <div class="sidebar-nav-item" onclick="closeSidebar();abrirPlaneacion()" style="border:1px solid rgba(248,209,34,.3)">
       <div class="nav-icon" style="background:rgba(248,209,34,.1)">📋</div>
       <div><div class="nav-label" style="color:#f8d122">Planeación de Carga</div><div class="nav-sub">Plan semanal · Cruce de embarques</div></div>
     </div>
@@ -2045,683 +2045,6 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
 <!-- ============================= -->
 <!-- TAB 4: CONFIGURACIÓN         -->
 <!-- ============================= -->
-<!-- TAB: PLANEACIÓN DE CARGA     -->
-<!-- ============================= -->
-<div id="tab-planeacion" class="tab-pane" style="display:none;padding:0;height:100%;overflow:hidden">
-<style>
-/* ── PLANEACIÓN — scoped ── */
-#pln-root{height:100%;display:flex;flex-direction:column;overflow:hidden;font-family:'Inter',system-ui,sans-serif;}
-#pln-root *{box-sizing:border-box;}
-.pln-topbar{background:var(--s1);border-bottom:2px solid #f8d122;padding:0 12px;height:46px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-shrink:0;}
-.pln-brand{font-size:12px;font-weight:900;color:#f8d122;letter-spacing:-.01em;}
-.pln-sub{font-size:9px;color:var(--muted);}
-.pln-btn{display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid var(--border);background:var(--s2);color:var(--text);white-space:nowrap;transition:background .12s;}
-.pln-btn:hover{filter:brightness(1.1);}
-.pln-btn.yw{background:rgba(248,209,34,.1);border-color:rgba(248,209,34,.35);color:#f8d122;}
-.pln-btn.gn{background:rgba(63,185,80,.1);border-color:rgba(63,185,80,.3);color:var(--green-l);}
-.pln-btn.bl{background:rgba(88,166,255,.1);border-color:rgba(88,166,255,.3);color:var(--blue-l);}
-.pln-btn.tl{background:rgba(45,212,191,.1);border-color:rgba(45,212,191,.3);color:#2dd4bf;}
-.pln-btn.rd{background:rgba(248,81,73,.1);border-color:rgba(248,81,73,.3);color:var(--red-l);}
-
-/* Week nav */
-.pln-wknav{background:var(--s2);border-bottom:1px solid var(--border);padding:6px 12px;display:flex;align-items:center;gap:8px;flex-shrink:0;flex-wrap:wrap;}
-.pln-wnbtn{background:var(--s1);border:1px solid var(--border);color:var(--muted);border-radius:5px;padding:2px 10px;cursor:pointer;font-size:13px;font-weight:700;line-height:1.4;}
-.pln-wklbl{font-size:13px;font-weight:800;color:var(--text);min-width:220px;text-align:center;}
-
-/* KPI bar */
-.pln-kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;padding:8px 12px;background:var(--s1);border-bottom:1px solid var(--border);flex-shrink:0;}
-.pln-kpi{background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:7px 10px;text-align:center;}
-.pln-kpi-l{font-size:8px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px;}
-.pln-kpi-v{font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:800;}
-
-/* Tabs */
-.pln-tabs{display:flex;gap:0;background:var(--s1);border-bottom:1px solid var(--border);flex-shrink:0;}
-.pln-tabt{flex:1;padding:9px;text-align:center;font-size:12px;font-weight:700;cursor:pointer;border:none;background:none;color:var(--muted);border-bottom:3px solid transparent;transition:all .15s;}
-.pln-tabt.on{color:var(--text);border-bottom-color:var(--orange-l);}
-
-/* Scroll area */
-.pln-scroll{flex:1;overflow-x:auto;overflow-y:auto;-webkit-overflow-scrolling:touch;}
-
-/* Calendar grid */
-.pln-grid{display:grid;grid-template-columns:repeat(5,1fr);min-width:800px;border-top:1px solid var(--border);}
-
-/* Day column */
-.pln-day-head{position:sticky;top:0;z-index:10;text-align:center;padding:10px 8px 8px;font-size:13px;font-weight:900;letter-spacing:.04em;border-bottom:3px solid;border-right:1px solid var(--border);}
-.pln-day-body{border-right:1px solid var(--border);vertical-align:top;min-height:120px;position:relative;}
-
-/* Day head colors */
-.pln-dh-0{background:#1e3a8a;color:#93c5fd;border-color:#3b82f6;}
-.pln-dh-1{background:#4c1d95;color:#c4b5fd;border-color:#7c3aed;}
-.pln-dh-2{background:#064e3b;color:#6ee7b7;border-color:#059669;}
-.pln-dh-3{background:#78350f;color:#fcd34d;border-color:#d97706;}
-.pln-dh-4{background:#7f1d1d;color:#fca5a5;border-color:#dc2626;}
-.pln-day-sub{font-size:9px;font-weight:500;opacity:.8;margin-top:2px;}
-
-/* Cubículo */
-.pln-cub{border-top:3px solid;margin:0;background:rgba(255,255,255,.015);}
-.pln-cub-sea{border-color:#3b82f6;}
-.pln-cub-land{border-color:#d97706;}
-.pln-cub-air{border-color:#7c3aed;}
-.pln-cub-hdr{padding:6px 8px;display:flex;align-items:center;gap:5px;flex-wrap:wrap;font-size:10px;border-bottom:1px solid var(--border);}
-.pln-cub-tag{font-size:8px;font-weight:700;padding:2px 6px;border-radius:3px;flex-shrink:0;}
-.pln-cub-tag.sea{background:rgba(59,130,246,.15);color:#60a5fa;}
-.pln-cub-tag.land{background:rgba(217,119,6,.15);color:#fbbf24;}
-.pln-cub-tag.air{background:rgba(124,58,237,.15);color:#c4b5fd;}
-.pln-cub-cols{display:flex;background:rgba(255,255,255,.04);border-bottom:1px solid var(--border);}
-.pln-cub-col-hdr{font-size:8px;font-weight:700;color:var(--muted);padding:3px 5px;text-transform:uppercase;}
-.pln-row{display:flex;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;min-height:30px;transition:background .1s;}
-.pln-row:hover{background:rgba(255,255,255,.04);}
-.pln-row.mat{background:rgba(63,185,80,.06);}
-.pln-cell{font-size:10px;padding:4px 5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.pln-cell.mono{font-family:'IBM Plex Mono',monospace;font-weight:700;}
-.pln-cub-foot{padding:5px 8px;display:flex;justify-content:space-between;background:var(--s2);border-top:2px solid var(--border);font-size:10px;}
-.pln-add-row{padding:8px;text-align:center;font-size:11px;color:var(--muted);cursor:pointer;border-top:1px dashed rgba(255,255,255,.1);opacity:.6;}
-.pln-add-row:hover{opacity:1;background:rgba(255,255,255,.02);}
-.pln-add-eq{padding:6px 8px;display:flex;gap:5px;border-top:2px dashed rgba(255,255,255,.08);}
-
-/* Status badge */
-.pln-status{font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;white-space:nowrap;}
-
-/* Modal */
-.pln-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:9999;display:none;align-items:center;justify-content:center;padding:12px;}
-.pln-modal-bg.open{display:flex;}
-.pln-modal{background:var(--s1);border:1px solid var(--border);border-radius:13px;max-width:540px;width:100%;max-height:92vh;overflow-y:auto;padding:18px;}
-.pln-field{margin-bottom:10px;}
-.pln-field label{display:block;font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;}
-.pln-field input,.pln-field select,.pln-field textarea{width:100%;background:var(--s2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:7px 9px;font-size:12px;}
-.pln-field input:focus,.pln-field select:focus{outline:none;border-color:#f8d122;}
-.pln-2col{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
-.pln-match-box{border-radius:8px;padding:8px 10px;margin-bottom:10px;display:none;}
-.pln-match-box.on{display:block;}
-
-@media(max-width:600px){.pln-kpis{grid-template-columns:repeat(3,1fr);}}
-</style>
-
-<div id="pln-root">
-
-  <!-- Top bar -->
-  <div class="pln-topbar">
-    <div>
-      <div class="pln-brand">📋 PLANEACIÓN DE CARGA SEMANAL ®</div>
-      <div class="pln-sub" id="pln-sub">ZLC Panamá</div>
-    </div>
-    <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
-      <span id="pln-cloud" style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:6px;background:rgba(139,148,158,.1);border:1px solid rgba(139,148,158,.25);color:var(--muted)">☁️ ...</span>
-      <button class="pln-btn yw" onclick="_plnModalSemana()">+ Semana</button>
-      <button class="pln-btn gn" onclick="_plnExportCSV()">📊 CSV</button>
-    </div>
-  </div>
-
-  <!-- Week nav -->
-  <div class="pln-wknav">
-    <button class="pln-wnbtn" onclick="_plnNavW(-1)">◀</button>
-    <div class="pln-wklbl" id="pln-wklbl">—</div>
-    <button class="pln-wnbtn" onclick="_plnNavW(1)">▶</button>
-    <input type="date" id="pln-wdi" onchange="_plnIrFecha(this.value)" style="background:var(--s2);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:4px 8px;font-size:11px;">
-  </div>
-
-  <!-- KPIs -->
-  <div class="pln-kpis">
-    <div class="pln-kpi"><div class="pln-kpi-l">Equipos</div><div class="pln-kpi-v" id="pln-k-eq" style="color:#f8d122">0</div></div>
-    <div class="pln-kpi"><div class="pln-kpi-l">Proveedores</div><div class="pln-kpi-v" id="pln-k-pv" style="color:var(--green-l)">0</div></div>
-    <div class="pln-kpi"><div class="pln-kpi-l">FOB Total</div><div class="pln-kpi-v" id="pln-k-fob" style="color:var(--blue-l);font-size:12px">$0</div></div>
-    <div class="pln-kpi"><div class="pln-kpi-l">Landed Total</div><div class="pln-kpi-v" id="pln-k-lnd" style="color:var(--orange-l);font-size:12px">$0</div></div>
-    <div class="pln-kpi"><div class="pln-kpi-l">Bultos</div><div class="pln-kpi-v" id="pln-k-blt" style="color:#2dd4bf">0</div></div>
-    <div class="pln-kpi"><div class="pln-kpi-l">Cruzados</div><div class="pln-kpi-v" id="pln-k-mat" style="color:#a371f7">0%</div></div>
-  </div>
-
-  <!-- Tabs Programado / Resultado -->
-  <div class="pln-tabs">
-    <button class="pln-tabt on" id="pln-tab-prog" onclick="_plnSwitchTab('prog')">🚢 Programado</button>
-    <button class="pln-tabt" id="pln-tab-res" onclick="_plnSwitchTab('res')">✅ Resultado</button>
-  </div>
-
-  <!-- Scroll area with calendar grid -->
-  <div class="pln-scroll">
-    <div id="pln-calendar" class="pln-grid"></div>
-    <!-- Dept table -->
-    <div id="pln-depts" style="padding:12px 16px 40px"></div>
-  </div>
-
-</div><!-- end pln-root -->
-
-<!-- ── Modales ── -->
-<div class="pln-modal-bg" id="pln-eq-modal">
-<div class="pln-modal">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-    <div style="font-size:14px;font-weight:800" id="pln-eq-title">Nuevo Equipo</div>
-    <button style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer" onclick="_plnCloseEqModal()">×</button>
-  </div>
-  <!-- Tipo equipo -->
-  <div class="pln-2col">
-    <div class="pln-field">
-      <label>Tipo de Embarque</label>
-      <select id="pln-eq-via" onchange="_plnEqViaChange()">
-        <option value="SEA">🚢 SEA — Marítimo (Importación)</option>
-        <option value="LAND">🚛 LAND — Terrestre (Zona Libre)</option>
-        <option value="AIR">✈️ AIR — Aéreo</option>
-      </select>
-    </div>
-    <div class="pln-field">
-      <label>Tipo de Equipo</label>
-      <select id="pln-eq-tipo">
-        <option value="">(selecciona)</option>
-        <option>"20" CONTENEDOR</option><option>"40" CONTENEDOR</option>
-        <option>"40" HQ CONTENEDOR</option><option>"45" CONTENEDOR</option>
-        <option>CAMIÓN / SABABA</option><option>CAMIONES / SABABA</option>
-        <option>CARGA SUELTA / SABABA</option><option>FURGÓN</option><option>LCL</option>
-      </select>
-    </div>
-  </div>
-  <!-- Criterio de cruce -->
-  <div style="background:rgba(45,212,191,.05);border:1px solid rgba(45,212,191,.2);border-radius:8px;padding:10px 12px;margin-bottom:10px">
-    <div style="font-size:9px;font-weight:700;color:#2dd4bf;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">🔗 Cruce con datos existentes</div>
-    <div class="pln-2col">
-      <div class="pln-field" style="margin:0">
-        <label id="pln-eq-nro-lbl">N° Contenedor (SEA/LAND)</label>
-        <input type="text" id="pln-eq-nro" placeholder="Ej: MAGU5407544" oninput="_plnEqCruce()">
-      </div>
-      <div class="pln-field" style="margin:0" id="pln-eq-emb-wrap">
-        <label>N° Embarque (Resultado)</label>
-        <input type="text" id="pln-eq-emb" placeholder="Ej: 22042" oninput="_plnEqCruce()">
-      </div>
-    </div>
-  </div>
-  <!-- Match result -->
-  <div class="pln-match-box" id="pln-eq-match" style="background:rgba(63,185,80,.07);border:1px solid rgba(63,185,80,.2)">
-    <div style="color:var(--green-l);font-weight:700;font-size:11px;margin-bottom:2px" id="pln-eq-match-t">✅ Encontrado</div>
-    <div style="color:var(--muted);font-size:10px" id="pln-eq-match-v"></div>
-  </div>
-  <div class="pln-2col">
-    <div class="pln-field"><label>ETA (Fecha Tentativa)</label><input type="date" id="pln-eq-eta"></div>
-    <div class="pln-field">
-      <label>Estado</label>
-      <select id="pln-eq-status">
-        <option>Programado</option><option>Tránsito Marítimo</option><option>En aduana</option>
-        <option>Llegada a Puerto</option><option>En tránsito de Liq.</option>
-        <option>Recibido en CDF</option><option>Pendiente por Factura y OC.</option>
-        <option>Pendiente (Recibo)</option><option>Cancelado</option>
-      </select>
-    </div>
-  </div>
-  <!-- Recepción completa / parcial -->
-  <div class="pln-field" id="pln-eq-recepcion-wrap" style="display:none">
-    <label>Tipo de Recepción</label>
-    <select id="pln-eq-recepcion" onchange="_plnEqRecepChange()">
-      <option value="completo">Completo — todos los equipos en este día</option>
-      <option value="parcial">Parcial — asignar equipos por día</option>
-    </select>
-  </div>
-  <!-- Día destino cuando parcial -->
-  <div id="pln-eq-parcial-wrap" style="display:none">
-    <div style="font-size:10px;font-weight:700;color:var(--orange-l);margin-bottom:6px">📅 Asignar equipos a días:</div>
-    <div id="pln-eq-parcial-days"></div>
-  </div>
-  <div style="display:flex;gap:8px;margin-top:12px">
-    <button class="pln-btn gn" onclick="_plnSaveEq()" style="flex:2;padding:9px;font-size:12px">💾 Guardar Equipo</button>
-    <button class="pln-btn rd" id="pln-eq-del-btn" onclick="_plnDelEq()" style="display:none;padding:9px 14px;font-size:12px">🗑</button>
-    <button class="pln-btn" onclick="_plnCloseEqModal()" style="flex:1;padding:9px;font-size:12px">Cancelar</button>
-  </div>
-</div>
-</div>
-
-<!-- Modal Nueva Semana -->
-<div class="pln-modal-bg" id="pln-wk-modal">
-<div class="pln-modal" style="max-width:360px">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-    <div style="font-size:14px;font-weight:800">📅 Nueva Semana</div>
-    <button style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer" onclick="document.getElementById('pln-wk-modal').classList.remove('open')">×</button>
-  </div>
-  <div class="pln-field"><label>Lunes de inicio</label><input type="date" id="pln-wk-date"></div>
-  <div style="font-size:11px;color:var(--muted);margin-bottom:14px">Crea una semana vacía de Lunes a Viernes.</div>
-  <div style="display:flex;gap:8px">
-    <button class="pln-btn gn" onclick="_plnCrearSemana()" style="flex:2;padding:9px;font-size:12px">✅ Crear</button>
-    <button class="pln-btn" onclick="document.getElementById('pln-wk-modal').classList.remove('open')" style="flex:1;padding:9px;font-size:12px">Cancelar</button>
-  </div>
-</div>
-</div>
-
-</div><!-- end tab-planeacion -->
-
-<script>
-(function(){
-'use strict';
-
-// ════════════════════════════════════════════════
-// PLANEACIÓN DE CARGA — Motor completo
-// ════════════════════════════════════════════════
-var PLN_SK    = '_pln_v3';
-var PLN_TABLE = 'planeacion_semanas';
-var _sb_pln   = null;
-var _pln_timer= null;
-var _plnWeeks = {};
-var _plnCur   = '';
-var _plnTab   = 'prog';  // 'prog' | 'res'
-var _plnCtx   = null;    // contexto modal equipo actual
-
-var DAYS   = ['LU','MA','MI','JU','VI'];
-var COLORS = ['pln-dh-0','pln-dh-1','pln-dh-2','pln-dh-3','pln-dh-4'];
-
-// ── Helpers ──
-function fmtFOB(n){ n=parseFloat(n)||0; return n>=1e6?'$'+(n/1e6).toFixed(1)+'M':n>=1000?'$'+(n/1000).toFixed(1)+'k':'$'+n.toFixed(2); }
-function fmtFull(n){ return '$'+Number(parseFloat(n)||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
-function fmtDate(ds){ if(!ds) return ''; try{ var d=new Date(ds+'T00:00:00'); return d.getDate()+'/'+String(d.getMonth()+1).padStart(2,'0'); }catch(e){ return ds; } }
-function addDays(ds,n){ var d=new Date(ds+'T00:00:00'); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
-function getLunes(ds){ var d=new Date(ds+'T00:00:00'); var dow=d.getDay(); d.setDate(d.getDate()+(dow===0?-6:1-dow)); return d.toISOString().slice(0,10); }
-function toISO(d){ return d.toISOString().slice(0,10); }
-function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function ge(id){ return document.getElementById(id); }
-function sumFob(rows){ return (rows||[]).reduce(function(s,r){return s+(parseFloat(r.fob)||0);},0); }
-function sumLanded(rows){ return (rows||[]).reduce(function(s,r){return s+(parseFloat(r.landed)||parseFloat(r.fob)||0);},0); }
-function sumBultos(rows){ return (rows||[]).reduce(function(s,r){return s+(parseInt(r.bultos)||0);},0); }
-
-// ── Obtener datos externos ──
-function getTend(){ return window.tendData||[]; }
-function getTransito(){ try{ return JSON.parse(localStorage.getItem('_transito_v1')||'[]'); }catch(e){ return []; } }
-
-// ── Persistencia local ──
-function plnLoad(){ try{ _plnWeeks=JSON.parse(localStorage.getItem(PLN_SK)||'{}'); }catch(e){ _plnWeeks={}; } }
-function plnSave(){ try{ localStorage.setItem(PLN_SK,JSON.stringify(_plnWeeks)); }catch(e){} plnSBAutoSave(); }
-
-// ── Crear/obtener semana ──
-function mkWeek(mon){
-  if(!_plnWeeks[mon]){
-    _plnWeeks[mon]={ weekStart:mon, prog:DAYS.map(function(l,i){ return {date:addDays(mon,i),label:l,cubiculos:[]}; }), res:DAYS.map(function(l,i){ return {date:addDays(mon,i),label:l,cubiculos:[]}; }) };
-    plnSave();
-  }
-  if(!_plnWeeks[mon].prog) _plnWeeks[mon].prog=DAYS.map(function(l,i){return {date:addDays(mon,i),label:l,cubiculos:[]};});
-  if(!_plnWeeks[mon].res)  _plnWeeks[mon].res =DAYS.map(function(l,i){return {date:addDays(mon,i),label:l,cubiculos:[]};});
-  return _plnWeeks[mon];
-}
-
-// ── Render principal ──
-window._PLN_INIT = function(){
-  plnLoad();
-  _plnCur = getLunes(toISO(new Date()));
-  _plnTab = 'prog';
-  _plnRender();
-  // Conectar Supabase con la misma instancia del index
-  if(!_sb_pln && window._sb){ _sb_pln=window._sb; plnBadge('ok'); plnSBLoad(); }
-};
-
-function _plnRender(){
-  var wk=mkWeek(_plnCur);
-  // Week label
-  var MESES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-  var d0=new Date(_plnCur+'T00:00:00'),d4=new Date(_plnCur+'T00:00:00'); d4.setDate(d0.getDate()+4);
-  ge('pln-wklbl').textContent='Semana del '+d0.getDate()+' al '+d4.getDate()+' de '+MESES[d0.getMonth()]+' '+d0.getFullYear();
-  ge('pln-sub').textContent='ZLC Panamá · '+d0.getFullYear();
-  ge('pln-wdi').value=_plnCur;
-  // Tab buttons
-  ge('pln-tab-prog').className='pln-tabt'+(_plnTab==='prog'?' on':'');
-  ge('pln-tab-res').className='pln-tabt'+(_plnTab==='res'?' on':'');
-  // Grid
-  _plnRenderGrid(wk);
-  _plnRenderKPIs(wk);
-  _plnRenderDepts(wk);
-}
-
-function _plnRenderGrid(wk){
-  var days=wk[_plnTab]; // array de 5 días
-  var cal=ge('pln-calendar'); if(!cal) return;
-  var h='';
-  // Day headers row
-  days.forEach(function(day,di){
-    var d=new Date(day.date+'T00:00:00');
-    h+='<div class="pln-day-head '+COLORS[di]+'" style="border-right:1px solid rgba(255,255,255,.1)">'
-      +day.label
-      +'<div class="pln-day-sub">'+d.getDate()+'/'+String(d.getMonth()+1).padStart(2,'0')+'</div>'
-    +'</div>';
-  });
-  // Day bodies row
-  days.forEach(function(day,di){
-    h+='<div class="pln-day-body">';
-    // All cubículos span the full grid height — we just render per day column
-    (day.cubiculos||[]).forEach(function(cub,ci){
-      h+=_plnRenderCubHtml(cub,di,ci,_plnTab,_plnCur);
-    });
-    // Add equipo button
-    h+='<div class="pln-add-eq">';
-    if(_plnTab==='prog'){
-      h+='<button class="pln-btn bl" onclick="_plnOpenEqModal(\''+_plnCur+'\','+di+',null,\'prog\',\'SEA\')" style="flex:1;font-size:10px;padding:4px 6px">🚢 +SEA</button>'
-       +'<button class="pln-btn yw" onclick="_plnOpenEqModal(\''+_plnCur+'\','+di+',null,\'prog\',\'LAND\')" style="flex:1;font-size:10px;padding:4px 6px">🚛 +LAND</button>'
-       +'<button class="pln-btn" onclick="_plnOpenEqModal(\''+_plnCur+'\','+di+',null,\'prog\',\'AIR\')" style="flex:1;font-size:10px;padding:4px 6px">✈️</button>';
-    } else {
-      h+='<button class="pln-btn gn" onclick="_plnOpenEqModal(\''+_plnCur+'\','+di+',null,\'res\',\'RES\')" style="width:100%;font-size:10px;padding:5px">➕ Agregar embarque</button>';
-    }
-    h+='</div></div>';
-  });
-  cal.innerHTML=h;
-}
-
-function _plnRenderCubHtml(cub,di,ci,tab,mon){
-  var viaClass={'SEA':'sea','LAND':'land','AIR':'air','RES':'gn'}[cub.via]||'sea';
-  var viaIcon={'SEA':'🚢','LAND':'🚛','AIR':'✈️','RES':'✅'}[cub.via]||'📦';
-  var rows=cub.rows||[];
-  var totFob=sumFob(rows), totLand=sumLanded(rows), totBultos=sumBultos(rows);
-  var statusColors={'Recibido en CDF':'var(--green-l)','Programado':'var(--blue-l)','Tránsito Marítimo':'var(--blue-l)','En aduana':'var(--orange-l)','Llegada a Puerto':'#2dd4bf','En tránsito de Liq.':'var(--orange-l)','Cancelado':'var(--red-l)','Pendiente por Factura y OC.':'var(--muted)','Pendiente (Recibo)':'var(--muted)'};
-  var scol=statusColors[cub.status]||'var(--muted)';
-  var monEsc=esc(mon);
-  var h='<div class="pln-cub pln-cub-'+viaClass+'">'
-    // Header del cubículo
-    +'<div class="pln-cub-hdr" onclick="_plnOpenEqModal(\''+monEsc+'\','+di+','+ci+',\''+tab+'\')" style="cursor:pointer">'
-      +'<span style="font-size:13px">'+viaIcon+'</span>'
-      +'<span class="pln-cub-tag '+viaClass+'">'+(cub.tipoCarga||cub.via||'—')+'</span>'
-      +(cub.nroCont||cub.nroEmb?'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:9px;color:var(--muted)">'+(cub.nroCont||cub.nroEmb||'')+'</span>':'')
-      +(cub.eta?'<span style="font-size:9px;color:var(--muted)">ETA: '+fmtDate(cub.eta)+'</span>':'')
-      +(cub.status?'<span class="pln-status" style="background:rgba(255,255,255,.06);color:'+scol+'">'+cub.status+'</span>':'')
-      +'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:10px;font-weight:700;color:var(--green-l);margin-left:auto">'+fmtFOB(totFob)+'</span>'
-    +'</div>';
-  // Column headers
-  if(rows.length){
-    h+='<div class="pln-cub-cols">'
-      +'<span class="pln-cub-col-hdr" style="flex:2">Proveedor</span>'
-      +'<span class="pln-cub-col-hdr" style="width:38px;text-align:right">Bult.</span>'
-      +'<span class="pln-cub-col-hdr" style="width:60px;text-align:right">FOB</span>'
-      +'<span class="pln-cub-col-hdr" style="width:64px;text-align:right">Landed</span>'
-      +'<span class="pln-cub-col-hdr" style="width:52px">Depto.</span>'
-      +'<span class="pln-cub-col-hdr" style="width:34px;text-align:right">%</span>'
-    +'</div>';
-    // Rows
-    rows.forEach(function(r){
-      var pct=totLand>0?((parseFloat(r.landed)||parseFloat(r.fob)||0)/totLand*100).toFixed(1)+'%':'—';
-      var nm=r.prov||'—'; var nmShort=nm.length>18?nm.slice(0,16)+'…':nm;
-      h+='<div class="pln-row'+(r.matched?' mat':'')+'">'
-        +'<div class="pln-cell" style="flex:2" title="'+esc(nm)+'">'+esc(nmShort)+'</div>'
-        +'<div class="pln-cell mono" style="width:38px;text-align:right">'+(r.bultos||'—')+'</div>'
-        +'<div class="pln-cell mono" style="width:60px;text-align:right;color:var(--blue-l)">'+fmtFOB(r.fob)+'</div>'
-        +'<div class="pln-cell mono" style="width:64px;text-align:right;color:var(--orange-l)">'+fmtFOB(r.landed||r.fob)+'</div>'
-        +'<div class="pln-cell" style="width:52px;color:var(--muted)">'+(r.dept||'')+'</div>'
-        +'<div class="pln-cell" style="width:34px;text-align:right;color:var(--muted)">'+pct+'</div>'
-      +'</div>';
-    });
-    // Footer totals
-    h+='<div class="pln-cub-foot">'
-      +'<span style="color:var(--muted)">'+rows.length+' sup · '+totBultos+' blt</span>'
-      +'<span style="font-family:\'IBM Plex Mono\',monospace;font-weight:700;color:var(--green-l)">'+fmtFull(totFob)+'</span>'
-    +'</div>';
-  }
-  h+='</div>';
-  return h;
-}
-
-function _plnRenderKPIs(wk){
-  var days=wk[_plnTab];
-  var eqs=0,pvs=0,fob=0,lnd=0,blt=0,mat=0,tot=0;
-  days.forEach(function(day){ (day.cubiculos||[]).forEach(function(cub){ eqs++; var rows=cub.rows||[]; pvs+=rows.length; fob+=sumFob(rows); lnd+=sumLanded(rows); blt+=sumBultos(rows); rows.forEach(function(r){ tot++; if(r.matched) mat++; }); }); });
-  function s(id,v){ var e=ge(id); if(e) e.textContent=v; }
-  s('pln-k-eq',eqs); s('pln-k-pv',pvs); s('pln-k-fob',fmtFOB(fob)); s('pln-k-lnd',fmtFOB(lnd)); s('pln-k-blt',blt); s('pln-k-mat',tot>0?Math.round(mat/tot*100)+'%':'0%');
-}
-
-function _plnRenderDepts(wk){
-  var days=wk[_plnTab]; var dm={},tl=0;
-  days.forEach(function(day){ (day.cubiculos||[]).forEach(function(cub){ (cub.rows||[]).forEach(function(r){ var d=(r.dept||'Sin depto').toUpperCase(); var v=parseFloat(r.landed)||parseFloat(r.fob)||0; dm[d]=(dm[d]||0)+v; tl+=v; }); }); });
-  var el=ge('pln-depts'); if(!el) return;
-  var ents=Object.entries(dm).sort(function(a,b){return b[1]-a[1];});
-  if(!ents.length){ el.innerHTML=''; return; }
-  var h='<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">📊 FOB/Landed por Departamento</div>'
-    +'<table style="width:100%;border-collapse:collapse;font-size:11px;max-width:600px">'
-    +'<thead><tr style="background:var(--s2)"><th style="padding:5px 10px;text-align:left;border:1px solid var(--border);font-size:9px;color:var(--muted);text-transform:uppercase">Departamento</th><th style="padding:5px 10px;text-align:right;border:1px solid var(--border);font-size:9px;color:var(--muted);text-transform:uppercase">F.O.B / Landed</th><th style="padding:5px 10px;text-align:right;border:1px solid var(--border);font-size:9px;color:var(--muted);text-transform:uppercase">% Merc.</th><th style="border:1px solid var(--border);padding:5px 8px;min-width:80px"></th></tr></thead><tbody>';
-  ents.forEach(function(e,i){
-    var pct=tl>0?(e[1]/tl*100).toFixed(2):'0';
-    h+='<tr style="background:'+(i%2?'var(--s1)':'var(--bg)')+'">'
-      +'<td style="padding:5px 10px;border:1px solid var(--border);font-weight:600">'+e[0]+'</td>'
-      +'<td style="padding:5px 10px;border:1px solid var(--border);text-align:right;font-family:\'IBM Plex Mono\',monospace;color:var(--green-l)">'+fmtFull(e[1])+'</td>'
-      +'<td style="padding:5px 10px;border:1px solid var(--border);text-align:right;color:var(--muted)">'+pct+'%</td>'
-      +'<td style="border:1px solid var(--border);padding:4px 8px"><div style="height:7px;border-radius:4px;background:linear-gradient(90deg,#f8d122,#f97316);width:'+Math.max(2,parseFloat(pct))+'%;min-width:2px"></div></td>'
-    +'</tr>';
-  });
-  h+='<tr style="background:rgba(88,166,255,.06);font-weight:800"><td style="padding:5px 10px;border:1px solid var(--border)">TOTAL</td><td style="padding:5px 10px;border:1px solid var(--border);text-align:right;font-family:\'IBM Plex Mono\',monospace;color:var(--blue-l)">'+fmtFull(tl)+'</td><td style="padding:5px 10px;border:1px solid var(--border);text-align:right">100%</td><td style="border:1px solid var(--border)"></td></tr>'
-  +'</tbody></table>';
-  el.innerHTML=h;
-}
-
-// ── Nav semana ──
-window._plnNavW=function(dir){ var d=new Date(_plnCur+'T00:00:00'); d.setDate(d.getDate()+dir*7); _plnCur=toISO(d); _plnRender(); };
-window._plnIrFecha=function(val){ if(val){ _plnCur=getLunes(val); _plnRender(); } };
-window._plnSwitchTab=function(t){ _plnTab=t; _plnRender(); };
-
-// ── Modal nueva semana ──
-window._plnModalSemana=function(){ var d=new Date(_plnCur+'T00:00:00'); d.setDate(d.getDate()+7); var el=ge('pln-wk-date'); if(el) el.value=toISO(d); ge('pln-wk-modal').classList.add('open'); };
-window._plnCrearSemana=function(){ var val=(ge('pln-wk-date')||{}).value; if(!val){ if(typeof _showToast==='function') _showToast('⚠️ Selecciona una fecha','orange',2000); return; } _plnCur=getLunes(val); mkWeek(_plnCur); _plnRender(); ge('pln-wk-modal').classList.remove('open'); if(typeof _showToast==='function') _showToast('✅ Semana '+_plnCur+' creada','green',2000); };
-
-// ── Modal equipo ──
-window._plnOpenEqModal=function(mon,di,ci,tab,via){
-  _plnCtx={mon:mon,di:di,ci:ci,tab:tab};
-  var isEdit=(ci!==null&&ci!==undefined);
-  ge('pln-eq-title').textContent=isEdit?'✏️ Editar Equipo':'➕ Nuevo Equipo';
-  ge('pln-eq-del-btn').style.display=isEdit?'inline-flex':'none';
-  ge('pln-eq-match').classList.remove('on');
-  // Defaults
-  ge('pln-eq-via').value=via||'SEA';
-  ge('pln-eq-tipo').value='';
-  ge('pln-eq-nro').value='';
-  ge('pln-eq-emb').value='';
-  ge('pln-eq-eta').value='';
-  ge('pln-eq-status').value='Programado';
-  ge('pln-eq-recepcion').value='completo';
-  ge('pln-eq-parcial-wrap').style.display='none';
-  _plnEqViaChange();
-  if(isEdit){
-    var cub=_plnWeeks[mon][tab][di].cubiculos[ci];
-    if(cub){
-      ge('pln-eq-via').value=cub.via||'SEA';
-      ge('pln-eq-tipo').value=cub.tipoCarga||'';
-      ge('pln-eq-nro').value=cub.nroCont||'';
-      ge('pln-eq-emb').value=cub.nroEmb||'';
-      ge('pln-eq-eta').value=cub.eta||'';
-      ge('pln-eq-status').value=cub.status||'Programado';
-      _plnEqViaChange();
-    }
-  }
-  ge('pln-eq-modal').classList.add('open');
-};
-window._plnCloseEqModal=function(){ ge('pln-eq-modal').classList.remove('open'); };
-
-window._plnEqViaChange=function(){
-  var via=ge('pln-eq-via').value;
-  var nroLbl=ge('pln-eq-nro-lbl');
-  if(nroLbl) nroLbl.textContent = via==='RES'?'N° Contenedor (opcional)':'N° Contenedor';
-  var embWrap=ge('pln-eq-emb-wrap');
-  if(embWrap) embWrap.style.display=(_plnCtx&&_plnCtx.tab==='res')||via==='RES'?'block':'none';
-};
-
-window._plnEqCruce=function(){
-  var nroCont=(ge('pln-eq-nro')||{}).value||'';
-  var nroEmb=(ge('pln-eq-emb')||{}).value||'';
-  var matchBox=ge('pln-eq-match'); if(!matchBox) return;
-  matchBox.classList.remove('on');
-
-  // Resultado: buscar en tendData por N° embarque
-  if(nroEmb && _plnCtx && _plnCtx.tab==='res'){
-    var td=getTend();
-    var found=td.find(function(d){ return (d.nro||'').toUpperCase()===nroEmb.toUpperCase(); });
-    if(found){
-      var snap=found.snap||{};
-      var lines=(snap.invLines||found.invLines||[]).filter(function(l){return !l.tipoFac||l.tipoFac==='mercancia';});
-      ge('pln-eq-match-t').textContent='✅ Embarque '+found.nro+' · '+found.fecha;
-      ge('pln-eq-match-v').textContent=lines.length+' proveedores de mercancía · FOB: '+fmtFull(snap.sc1?.fob||snap.sc1?.cif||found.cif||0);
-      matchBox.classList.add('on');
-      // Pre-llenar tipo equipo
-      if(snap.tipoEquipo||snap.equipo){ ge('pln-eq-tipo').value=snap.tipoEquipo||snap.equipo||''; }
-      return;
-    }
-  }
-
-  // Programado: buscar en tránsito por N° contenedor
-  if(nroCont){
-    var tr=getTransito();
-    var foundTr=tr.find(function(r){ return (r.contenedor||r.nroContenedor||'').toUpperCase()===nroCont.toUpperCase(); });
-    if(foundTr){
-      ge('pln-eq-match-t').textContent='📦 En Tránsito: '+(foundTr.proveedor||foundTr.prov||'—');
-      ge('pln-eq-match-v').textContent='Depto: '+(foundTr.departamento||foundTr.dept||'—')+' · ETA: '+(foundTr.eta||foundTr.fechaETA||'—')+' · Estado: '+(foundTr.estado||foundTr.status||'—');
-      matchBox.classList.add('on');
-      matchBox.style.background='rgba(88,166,255,.07)';
-      matchBox.style.borderColor='rgba(88,166,255,.25)';
-      ge('pln-eq-match-t').style.color='var(--blue-l)';
-      if(foundTr.eta||foundTr.fechaETA){ ge('pln-eq-eta').value=foundTr.eta||foundTr.fechaETA||''; }
-      if(foundTr.estado||foundTr.status){ ge('pln-eq-status').value=foundTr.estado||foundTr.status||'Programado'; }
-    }
-  }
-};
-
-window._plnEqRecepChange=function(){
-  var val=ge('pln-eq-recepcion').value;
-  if(val==='parcial') _plnRenderParcialDays();
-  ge('pln-eq-parcial-wrap').style.display=val==='parcial'?'block':'none';
-};
-
-function _plnRenderParcialDays(){
-  var wk=mkWeek(_plnCtx.mon);
-  var days=wk[_plnCtx.tab];
-  var MESES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-  var h='<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px">';
-  days.forEach(function(day,di){
-    var d=new Date(day.date+'T00:00:00');
-    var isOrig=di===_plnCtx.di;
-    h+='<div><label style="display:flex;align-items:center;gap:5px;font-size:11px;cursor:pointer">'
-      +'<input type="checkbox" name="pln-parcial-day" value="'+di+'"'+(isOrig?' checked':'')+' '+(isOrig?' disabled':'')+' style="accent-color:var(--orange-l)">'
-      +day.label+' '+d.getDate()+'/'+(d.getMonth()+1)
-    +'</label></div>';
-  });
-  h+='</div>';
-  ge('pln-eq-parcial-days').innerHTML=h;
-}
-
-window._plnSaveEq=function(){
-  var via=ge('pln-eq-via').value;
-  var tipoCarga=ge('pln-eq-tipo').value;
-  var nroCont=ge('pln-eq-nro').value.trim();
-  var nroEmb=ge('pln-eq-emb').value.trim();
-  var eta=ge('pln-eq-eta').value;
-  var status=ge('pln-eq-status').value;
-  var recepcion=ge('pln-eq-recepcion').value;
-  var tab=_plnCtx.tab;
-  var mon=_plnCtx.mon;
-  var di=_plnCtx.di;
-  var ci=_plnCtx.ci;
-
-  // Construir filas de proveedores
-  var rows=[];
-  if(tab==='res' && nroEmb){
-    // Hereda proveedores de tendData
-    var td=getTend();
-    var found=td.find(function(d){ return (d.nro||'').toUpperCase()===nroEmb.toUpperCase(); });
-    if(found){
-      var snap=found.snap||{};
-      var sc1=snap.sc1||{};
-      var lines=(snap.invLines||found.invLines||[]).filter(function(l){return !l.tipoFac||l.tipoFac==='mercancia';});
-      // Calcular Landed proporcional
-      var totCIF=lines.reduce(function(s,l){return s+(l.costo||0);},0);
-      var landedTotal=snap.sc1Base||found.sc1Base||found.landed||0;
-      lines.forEach(function(l){
-        var prop=totCIF>0?((l.costo||0)/totCIF):0;
-        rows.push({
-          prov: l.prov||'—',
-          bultos: l.bultos||l.cajas||0,
-          piezas: l.piezas||0,
-          fob: l.costo||0,
-          landed: landedTotal>0?Math.round(landedTotal*prop*100)/100:l.costo||0,
-          dept: l.dept||l.deptCat||'',
-          matched: true
-        });
-      });
-      if(!tipoCarga && (snap.tipoEquipo||snap.equipo)) tipoCarga=snap.tipoEquipo||snap.equipo||'';
-      if(!eta && found.fecha) eta=found.fecha;
-    }
-  } else if(tab==='prog' && nroCont){
-    // Hereda de tránsito si hay match
-    var tr=getTransito();
-    var foundTr=tr.filter(function(r){ return (r.contenedor||r.nroContenedor||'').toUpperCase()===nroCont.toUpperCase(); });
-    foundTr.forEach(function(r){
-      rows.push({ prov:r.proveedor||r.prov||'—', bultos:r.bultos||r.cantBultos||0, piezas:r.piezas||0, fob:r.monto||r.valor||0, landed:r.monto||r.valor||0, dept:r.departamento||r.dept||'', matched:true });
-    });
-  }
-
-  var newCub={ via:via, tipoCarga:tipoCarga, nroCont:nroCont, nroEmb:nroEmb, eta:eta, status:status, rows:rows };
-  var wk=mkWeek(mon);
-
-  if(recepcion==='parcial'){
-    // Distribuir entre días seleccionados
-    var checks=document.querySelectorAll('input[name="pln-parcial-day"]:checked');
-    checks.forEach(function(chk){
-      var dIdx=parseInt(chk.value);
-      if(ci!==null && dIdx===di) wk[tab][dIdx].cubiculos[ci]=newCub;
-      else wk[tab][dIdx].cubiculos.push(Object.assign({},newCub,{rows:[]}));
-    });
-    if(!checks.length){ if(ci!==null) wk[tab][di].cubiculos[ci]=newCub; else wk[tab][di].cubiculos.push(newCub); }
-  } else {
-    // Completo — asignar al día actual
-    if(ci!==null&&ci>=0) wk[tab][di].cubiculos[ci]=newCub;
-    else wk[tab][di].cubiculos.push(newCub);
-  }
-
-  plnSave();
-  _plnCloseEqModal();
-  _plnRender();
-  if(typeof _showToast==='function') _showToast('✅ Equipo guardado'+(rows.length?' · '+rows.length+' proveedores heredados':''),'green',2500);
-};
-
-window._plnDelEq=function(){
-  if(!confirm('¿Eliminar este cubículo?')) return;
-  var wk=mkWeek(_plnCtx.mon);
-  wk[_plnCtx.tab][_plnCtx.di].cubiculos.splice(_plnCtx.ci,1);
-  plnSave(); _plnCloseEqModal(); _plnRender();
-};
-
-// ── Export CSV ──
-window._plnExportCSV=function(){
-  var wk=mkWeek(_plnCur);
-  var rows=[['Tab','Día','Fecha','Vía','Equipo','N°Cont','N°Emb','ETA','Estado','Proveedor','Bultos','FOB','Landed','Depto','%Land','Cruzado']];
-  ['prog','res'].forEach(function(tab){
-    (wk[tab]||[]).forEach(function(day){
-      (day.cubiculos||[]).forEach(function(cub){
-        var tl=sumLanded(cub.rows||[]);
-        (cub.rows||[]).forEach(function(r){
-          var pct=tl>0?((parseFloat(r.landed)||0)/tl*100).toFixed(2):'0';
-          rows.push([tab,day.label,day.date,cub.via||'',cub.tipoCarga||'',cub.nroCont||'',cub.nroEmb||'',cub.eta||'',cub.status||'',r.prov||'',r.bultos||0,(r.fob||0).toFixed(2),(r.landed||0).toFixed(2),r.dept||'',pct,r.matched?'Sí':'No']);
-        });
-      });
-    });
-  });
-  var csv=rows.map(function(r){return r.map(function(c){return'"'+(String(c||'').replace(/"/g,'""'))+'"';}).join(',');}).join('\r\n');
-  var a=document.createElement('a'); a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv); a.download='PlaneacionCarga_'+_plnCur+'.csv'; a.click();
-};
-
-// ── Supabase ──
-function plnBadge(st){
-  var b=ge('pln-cloud'); if(!b) return;
-  if(st==='ok'){b.textContent='☁️ Nube ✓';b.style.background='rgba(63,185,80,.12)';b.style.borderColor='rgba(63,185,80,.3)';b.style.color='#56d364';}
-  else if(st==='saving'){b.textContent='☁️ Guardando...';b.style.background='rgba(88,166,255,.12)';b.style.borderColor='rgba(88,166,255,.3)';b.style.color='#79c0ff';}
-  else{b.textContent='☁️ Sin nube';b.style.background='rgba(248,81,73,.08)';b.style.borderColor='rgba(248,81,73,.25)';b.style.color='#ff7b72';}
-}
-function plnSBAutoSave(){ if(_pln_timer) clearTimeout(_pln_timer); _pln_timer=setTimeout(plnSBSave,2000); }
-async function plnSBSave(){
-  if(!_sb_pln||!_plnCur) return; plnBadge('saving');
-  try{
-    var wk=_plnWeeks[_plnCur]; if(!wk){plnBadge('ok');return;}
-    var r=await _sb_pln.from(PLN_TABLE).upsert({semana:_plnCur,datos:wk,updated_at:new Date().toISOString()},{onConflict:'semana'});
-    plnBadge(r.error?'err':'ok');
-  }catch(e){plnBadge('err');}
-}
-async function plnSBLoad(){
-  if(!_sb_pln) return;
-  try{
-    var r=await _sb_pln.from(PLN_TABLE).select('semana,datos,updated_at').order('updated_at',{ascending:false});
-    if(r.error) return;
-    (r.data||[]).forEach(function(row){ if(row.semana&&row.datos) _plnWeeks[row.semana]=row.datos; });
-    try{localStorage.setItem(PLN_SK,JSON.stringify(_plnWeeks));}catch(e){}
-    _plnRender(); plnBadge('ok');
-    if(typeof _showToast==='function') _showToast('☁️ Plan cargado','green',2000);
-  }catch(e){}
-}
-
-// Exponer _plnRender para recargar desde fuera si hace falta
-window._plnRender=_plnRender;
-
-})(); // end IIFE
-</script>
-
 <!-- ============================= -->
 <!-- TAB: TENDENCIAS              -->
 <!-- ============================= -->
@@ -3261,338 +2584,559 @@ function abrirTransito(){
   });
 }
 function abrirPlaneacion(){
-  if(typeof openTabModal==='function') openTabModal('planeacion','📋 Planeación de Carga');
-  else if(typeof iniciarApp==='function') iniciarApp('planeacion');
+  // Si ya existe el overlay, solo mostrarlo
+  var existing = document.getElementById('_PLN_OV');
+  if(existing){ existing.style.display='flex'; _PLN_RENDER(); return; }
+
+  // Crear overlay fullscreen independiente — mismo patrón que comparativo
+  var ov = document.createElement('div');
+  ov.id = '_PLN_OV';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:9998;display:flex;flex-direction:column;overflow:hidden;font-family:\'Inter\',system-ui,sans-serif';
+  ov.innerHTML = _PLN_BUILD_HTML();
+  document.body.appendChild(ov);
+  _PLN_INIT();
 }
 
-function _planFmt(n){ return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
-function _planFmtN(n){ return Number(n||0).toLocaleString('en-US'); }
-function _planToISO(d){ return d.toISOString().slice(0,10); }
+// ══════════════════════════════════════════════════════════════════
+// PLANEACIÓN DE CARGA — overlay independiente
+// ══════════════════════════════════════════════════════════════════
+var _PLN_DATA  = {};   // { 'YYYY-MM-DD': { prog:[{cubiculos}], res:[{cubiculos}] } }
+var _PLN_CUR   = '';   // lunes activo
+var _PLN_TAB   = 'prog'; // 'prog' | 'res'
+var _PLN_CTX   = null;   // contexto modal activo
+var _PLN_SB    = null;
+var _PLN_TIMER = null;
+var _PLN_KEY   = '_pln_v3';
+var _PLN_TABLE = 'planeacion_semanas';
+var PLN_DAYS   = ['LU','MA','MI','JU','VI'];
 
-function _renderPlaneacion(){
-  var body = document.getElementById('_modPlanBody'); if(!body) return;
-  var hoy=new Date(), dow=hoy.getDay();
-  var lunes=new Date(hoy); lunes.setDate(hoy.getDate()-((dow+6)%7));
-  var vier=new Date(lunes); vier.setDate(lunes.getDate()+4);
-  if(!window._planDesde) window._planDesde=_planToISO(lunes);
-  if(!window._planHasta) window._planHasta=_planToISO(vier);
-  if(!window._planTabA)  window._planTabA='resultados';
+// ── helpers ──
+function _plnF(n){ n=parseFloat(n)||0; return n>=1e6?'$'+(n/1e6).toFixed(1)+'M':n>=1000?'$'+(n/1000).toFixed(1)+'k':'$'+n.toFixed(0); }
+function _plnFF(n){ return '$'+Number(parseFloat(n)||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function _plnFD(ds){ if(!ds) return ''; try{ var d=new Date(ds+'T00:00:00'); return d.getDate()+'/'+String(d.getMonth()+1).padStart(2,'0'); }catch(e){return ds;} }
+function _plnAD(ds,n){ var d=new Date(ds+'T00:00:00'); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
+function _plnISO(d){ return d.toISOString().slice(0,10); }
+function _plnLunes(ds){ var d=new Date(ds+'T00:00:00'); var dow=d.getDay(); d.setDate(d.getDate()+(dow===0?-6:1-dow)); return _plnISO(d); }
+function _plnESC(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function _plnQ(sel){ return document.querySelector('#_PLN_OV '+sel); }
+function _plnQA(sel){ return document.querySelectorAll('#_PLN_OV '+sel); }
+function _plnSumFOB(rows){ return (rows||[]).reduce(function(s,r){return s+(parseFloat(r.fob)||0);},0); }
+function _plnSumLND(rows){ return (rows||[]).reduce(function(s,r){return s+(parseFloat(r.landed)||parseFloat(r.fob)||0);},0); }
+function _plnSumBLT(rows){ return (rows||[]).reduce(function(s,r){return s+(parseInt(r.bultos)||0);},0); }
 
-  body.innerHTML =
-    // Selector fecha
-    '<div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
-      +'<span style="font-size:10px;font-weight:700;color:#8b949e;text-transform:uppercase;letter-spacing:.06em">📅 Desde</span>'
-      +'<input type="date" id="pd-desde" value="'+window._planDesde+'" onchange="window._planDesde=this.value;_planBuild()" style="background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:5px 9px;color:#e6edf3;font-size:12px">'
-      +'<span style="font-size:10px;font-weight:700;color:#8b949e;text-transform:uppercase;letter-spacing:.06em">Hasta</span>'
-      +'<input type="date" id="pd-hasta" value="'+window._planHasta+'" onchange="window._planHasta=this.value;_planBuild()" style="background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:5px 9px;color:#e6edf3;font-size:12px">'
+// ── persistencia ──
+function _PLN_LOAD(){ try{ _PLN_DATA=JSON.parse(localStorage.getItem(_PLN_KEY)||'{}'); }catch(e){ _PLN_DATA={}; } }
+function _PLN_SAVE(){ try{ localStorage.setItem(_PLN_KEY,JSON.stringify(_PLN_DATA)); }catch(e){} if(_PLN_TIMER) clearTimeout(_PLN_TIMER); _PLN_TIMER=setTimeout(_PLN_SB_SAVE,2000); }
+
+// ── semana ──
+function _plnMkWeek(mon){
+  if(!_PLN_DATA[mon]){ _PLN_DATA[mon]={ prog:PLN_DAYS.map(function(l,i){return {date:_plnAD(mon,i),label:l,cubiculos:[]};}), res:PLN_DAYS.map(function(l,i){return {date:_plnAD(mon,i),label:l,cubiculos:[]};}) }; _PLN_SAVE(); }
+  return _PLN_DATA[mon];
+}
+
+function _PLN_BUILD_HTML(){
+  return '<style>'
+  +'#_PLN_OV{background:var(--bg);color:var(--text);}'
+  +'#_PLN_OV .pb{display:flex;align-items:center;justify-content:space-between;padding:0 12px;height:46px;background:var(--s1);border-bottom:2px solid #f8d122;flex-shrink:0;gap:8px;}'
+  +'#_PLN_OV .pb-brand{font-size:12px;font-weight:900;color:#f8d122;}'
+  +'#_PLN_OV .pb-sub{font-size:9px;color:var(--muted);}'
+  +'#_PLN_OV .pb-acts{display:flex;gap:5px;align-items:center;}'
+  +'#_PLN_OV .xbtn{display:inline-flex;align-items:center;gap:4px;padding:4px 9px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid var(--border);background:var(--s2);color:var(--text);white-space:nowrap;}'
+  +'#_PLN_OV .xbtn.yw{background:rgba(248,209,34,.1);border-color:rgba(248,209,34,.35);color:#f8d122;}'
+  +'#_PLN_OV .xbtn.gn{background:rgba(63,185,80,.1);border-color:rgba(63,185,80,.3);color:var(--green-l);}'
+  +'#_PLN_OV .xbtn.bl{background:rgba(88,166,255,.1);border-color:rgba(88,166,255,.3);color:var(--blue-l);}'
+  +'#_PLN_OV .xbtn.tl{background:rgba(45,212,191,.1);border-color:rgba(45,212,191,.3);color:#2dd4bf;}'
+  +'#_PLN_OV .xbtn.rd{background:rgba(248,81,73,.1);border-color:rgba(248,81,73,.3);color:var(--red-l);}'
+  +'#_PLN_OV .xbtn.or{background:rgba(240,136,62,.1);border-color:rgba(240,136,62,.3);color:var(--orange-l);}'
+  // week nav
+  +'#_PLN_OV .wknav{background:var(--s2);border-bottom:1px solid var(--border);padding:5px 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex-shrink:0;}'
+  +'#_PLN_OV .wnbtn{background:var(--s1);border:1px solid var(--border);color:var(--muted);border-radius:5px;padding:2px 10px;cursor:pointer;font-size:13px;font-weight:700;line-height:1.4;}'
+  +'#_PLN_OV .wklbl{font-size:13px;font-weight:800;color:var(--text);min-width:200px;text-align:center;}'
+  // KPIs
+  +'#_PLN_OV .kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;padding:7px 12px;background:var(--s1);border-bottom:1px solid var(--border);flex-shrink:0;}'
+  +'#_PLN_OV .kpi{background:var(--s2);border:1px solid var(--border);border-radius:7px;padding:6px 8px;text-align:center;}'
+  +'#_PLN_OV .kpil{font-size:8px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px;}'
+  +'#_PLN_OV .kpiv{font-family:"IBM Plex Mono",monospace;font-size:14px;font-weight:800;}'
+  // tabs
+  +'#_PLN_OV .tabs{display:flex;background:var(--s1);border-bottom:1px solid var(--border);flex-shrink:0;}'
+  +'#_PLN_OV .tabt{flex:1;padding:9px;text-align:center;font-size:12px;font-weight:700;cursor:pointer;border:none;background:none;color:var(--muted);border-bottom:3px solid transparent;}'
+  +'#_PLN_OV .tabt.on{color:var(--text);border-bottom-color:var(--orange-l);}'
+  // scroll + grid
+  +'#_PLN_OV .gscroll{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;}'
+  +'#_PLN_OV .cal{display:grid;grid-template-columns:repeat(5,minmax(220px,1fr));border-top:1px solid var(--border);min-width:900px;}'
+  // day header
+  +'#_PLN_OV .dh{text-align:center;padding:8px 6px;font-size:14px;font-weight:900;letter-spacing:.04em;border-bottom:3px solid;border-right:1px solid rgba(255,255,255,.08);position:sticky;top:0;z-index:5;}'
+  +'#_PLN_OV .dhs{font-size:10px;font-weight:500;opacity:.75;margin-top:2px;}'
+  +'#_PLN_OV .dh0{background:#1e3a8a;color:#93c5fd;border-color:#3b82f6;}'
+  +'#_PLN_OV .dh1{background:#4c1d95;color:#c4b5fd;border-color:#7c3aed;}'
+  +'#_PLN_OV .dh2{background:#064e3b;color:#6ee7b7;border-color:#059669;}'
+  +'#_PLN_OV .dh3{background:#78350f;color:#fcd34d;border-color:#d97706;}'
+  +'#_PLN_OV .dh4{background:#7f1d1d;color:#fca5a5;border-color:#dc2626;}'
+  // day body
+  +'#_PLN_OV .db{border-right:1px solid var(--border);vertical-align:top;}'
+  // cubículo
+  +'#_PLN_OV .cub{border-top:3px solid var(--border);}'
+  +'#_PLN_OV .cub.sea{border-top-color:#3b82f6;}'
+  +'#_PLN_OV .cub.land{border-top-color:#d97706;}'
+  +'#_PLN_OV .cub.air{border-top-color:#7c3aed;}'
+  +'#_PLN_OV .cub.res{border-top-color:var(--green-l);}'
+  // cub header
+  +'#_PLN_OV .chdr{padding:5px 8px;display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.025);border-bottom:1px solid var(--border);cursor:pointer;flex-wrap:wrap;}'
+  +'#_PLN_OV .chdr:hover{background:rgba(255,255,255,.05);}'
+  +'#_PLN_OV .ctag{font-size:8px;font-weight:700;padding:2px 6px;border-radius:3px;}'
+  +'#_PLN_OV .ctag.sea{background:rgba(59,130,246,.2);color:#60a5fa;}'
+  +'#_PLN_OV .ctag.land{background:rgba(217,119,6,.2);color:#fbbf24;}'
+  +'#_PLN_OV .ctag.air{background:rgba(124,58,237,.2);color:#c4b5fd;}'
+  +'#_PLN_OV .ctag.res{background:rgba(63,185,80,.2);color:var(--green-l);}'
+  // cub col headers
+  +'#_PLN_OV .cch{display:flex;background:var(--s2);border-bottom:1px solid var(--border);}'
+  +'#_PLN_OV .cch span{font-size:8px;font-weight:700;color:var(--muted);padding:3px 5px;text-transform:uppercase;}'
+  // supplier row
+  +'#_PLN_OV .sr{display:flex;border-bottom:1px solid rgba(255,255,255,.04);min-height:28px;}'
+  +'#_PLN_OV .sr.mat{background:rgba(63,185,80,.05);}'
+  +'#_PLN_OV .sc{font-size:10px;padding:4px 5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'
+  +'#_PLN_OV .sc.mo{font-family:"IBM Plex Mono",monospace;font-weight:700;}'
+  // cub footer
+  +'#_PLN_OV .cft{padding:5px 8px;display:flex;justify-content:space-between;background:var(--s2);border-top:2px solid var(--border);font-size:10px;color:var(--muted);}'
+  // add btn
+  +'#_PLN_OV .addeq{padding:6px 8px;display:flex;gap:5px;border-top:2px dashed rgba(255,255,255,.08);}'
+  // modal
+  +'#_PLN_OV .mo{position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:99999;display:none;align-items:center;justify-content:center;padding:12px;}'
+  +'#_PLN_OV .mo.open{display:flex;}'
+  +'#_PLN_OV .mc{background:var(--s1);border:1px solid var(--border);border-radius:13px;max-width:520px;width:100%;max-height:92vh;overflow-y:auto;padding:18px;}'
+  +'#_PLN_OV .fl{margin-bottom:10px;}'
+  +'#_PLN_OV .fl label{display:block;font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;}'
+  +'#_PLN_OV .fl input,#_PLN_OV .fl select{width:100%;background:var(--s2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:7px 9px;font-size:12px;}'
+  +'#_PLN_OV .fl input:focus,#_PLN_OV .fl select:focus{outline:none;border-color:#f8d122;}'
+  +'#_PLN_OV .g2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}'
+  +'#_PLN_OV .mbox{border-radius:8px;padding:8px 10px;margin-bottom:10px;display:none;}'
+  +'#_PLN_OV .mbox.on{display:block;}'
+  +'@media(max-width:600px){#_PLN_OV .kpis{grid-template-columns:repeat(3,1fr);}}'
+  +'</style>'
+
+  // ── HTML structure ──
+  +'<div class="pb">'
+    +'<div><div class="pb-brand">📋 PLANEACIÓN DE CARGA SEMANAL ®</div><div class="pb-sub" id="_pln_sub">ZLC Panamá</div></div>'
+    +'<div class="pb-acts">'
+      +'<span id="_pln_cloud" style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:6px;background:rgba(139,148,158,.1);border:1px solid rgba(139,148,158,.25);color:var(--muted)">☁️ ...</span>'
+      +'<button class="xbtn yw" onclick="_plnModalSemana()">+ Semana</button>'
+      +'<button class="xbtn gn" onclick="_plnCSV()">📊 CSV</button>'
+      +'<button class="xbtn rd" onclick="document.getElementById(\'_PLN_OV\').style.display=\'none\'">✕ Cerrar</button>'
     +'</div>'
-    // Tabs
-    +'<div style="display:flex;gap:6px;margin-bottom:14px">'
-      +'<button id="pd-btn-res" onclick="_planSwitchTab(\'resultados\')" style="flex:1;padding:9px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid rgba(63,185,80,.5);background:rgba(63,185,80,.12);color:#3fb950">✅ Resultados</button>'
-      +'<button id="pd-btn-pro" onclick="_planSwitchTab(\'programado\')" style="flex:1;padding:9px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid #30363d;background:#161b22;color:#8b949e">📋 Programado</button>'
+  +'</div>'
+  +'<div class="wknav">'
+    +'<button class="wnbtn" onclick="_plnNavW(-1)">◀</button>'
+    +'<div class="wklbl" id="_pln_wklbl">—</div>'
+    +'<button class="wnbtn" onclick="_plnNavW(1)">▶</button>'
+    +'<input type="date" id="_pln_wdi" onchange="_plnIrFecha(this.value)" style="background:var(--s2);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:4px 8px;font-size:11px;">'
+  +'</div>'
+  +'<div class="kpis">'
+    +'<div class="kpi"><div class="kpil">Equipos</div><div class="kpiv" id="_pln_keq" style="color:#f8d122">0</div></div>'
+    +'<div class="kpi"><div class="kpil">Proveedores</div><div class="kpiv" id="_pln_kpv" style="color:var(--green-l)">0</div></div>'
+    +'<div class="kpi"><div class="kpil">FOB Total</div><div class="kpiv" id="_pln_kfob" style="color:var(--blue-l);font-size:12px">$0</div></div>'
+    +'<div class="kpi"><div class="kpil">Landed Total</div><div class="kpiv" id="_pln_klnd" style="color:var(--orange-l);font-size:12px">$0</div></div>'
+    +'<div class="kpi"><div class="kpil">Bultos</div><div class="kpiv" id="_pln_kblt" style="color:#2dd4bf">0</div></div>'
+    +'<div class="kpi"><div class="kpil">Cruzados</div><div class="kpiv" id="_pln_kmat" style="color:#a371f7">0%</div></div>'
+  +'</div>'
+  +'<div class="tabs">'
+    +'<button class="tabt on" id="_pln_tbp" onclick="_PLN_SWITCH(\'prog\')">🚢 Programado</button>'
+    +'<button class="tabt" id="_pln_tbr" onclick="_PLN_SWITCH(\'res\')">✅ Resultado</button>'
+  +'</div>'
+  +'<div class="gscroll">'
+    +'<div class="cal" id="_pln_cal"></div>'
+    +'<div id="_pln_depts" style="padding:12px 16px 40px"></div>'
+  +'</div>'
+
+  // ── Modal Equipo ──
+  +'<div class="mo" id="_pln_eqmo">'
+  +'<div class="mc">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'
+      +'<div style="font-size:14px;font-weight:800" id="_pln_eqmo_t">Nuevo Equipo</div>'
+      +'<button style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer" onclick="_plnCloseEq()">×</button>'
     +'</div>'
-    +'<div id="pd-content"></div>';
+    +'<div class="g2">'
+      +'<div class="fl"><label>Tipo Embarque</label><select id="_pln_via" onchange="_plnViaChange()">'
+        +'<option value="SEA">🚢 SEA — Marítimo</option>'
+        +'<option value="LAND">🚛 LAND — Terrestre</option>'
+        +'<option value="AIR">✈️ AIR — Aéreo</option>'
+      +'</select></div>'
+      +'<div class="fl"><label>Tipo de Equipo</label><select id="_pln_tipo">'
+        +'<option value="">(selecciona)</option>'
+        +'<option>"20" CONTENEDOR</option><option>"40" CONTENEDOR</option><option>"40" HQ CONTENEDOR</option>'
+        +'<option>"45" CONTENEDOR</option><option>CAMIÓN / SABABA</option><option>CAMIONES / SABABA</option>'
+        +'<option>CARGA SUELTA / SABABA</option><option>FURGÓN</option><option>LCL</option>'
+      +'</select></div>'
+    +'</div>'
+    +'<div style="background:rgba(45,212,191,.05);border:1px solid rgba(45,212,191,.2);border-radius:8px;padding:10px 12px;margin-bottom:10px">'
+      +'<div style="font-size:9px;font-weight:700;color:#2dd4bf;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">🔗 Cruce automático de datos</div>'
+      +'<div class="g2">'
+        +'<div class="fl" style="margin:0"><label id="_pln_nro_lbl">N° Contenedor</label><input type="text" id="_pln_nro" placeholder="Ej: MAGU5407544" oninput="_plnCruce()"></div>'
+        +'<div class="fl" style="margin:0" id="_pln_emb_wr"><label>N° Embarque (Resultado)</label><input type="text" id="_pln_emb" placeholder="Ej: 22042" oninput="_plnCruce()"></div>'
+      +'</div>'
+    +'</div>'
+    +'<div class="mbox" id="_pln_mbox" style="background:rgba(63,185,80,.07);border:1px solid rgba(63,185,80,.2)">'
+      +'<div style="font-weight:700;font-size:11px;margin-bottom:2px;color:var(--green-l)" id="_pln_mbox_t">✅ Encontrado</div>'
+      +'<div style="font-size:10px;color:var(--muted)" id="_pln_mbox_v"></div>'
+    +'</div>'
+    +'<div class="g2">'
+      +'<div class="fl"><label>ETA (Fecha tentativa)</label><input type="date" id="_pln_eta"></div>'
+      +'<div class="fl"><label>Estado</label><select id="_pln_status">'
+        +'<option>Programado</option><option>Tránsito Marítimo</option><option>En aduana</option>'
+        +'<option>Llegada a Puerto</option><option>En tránsito de Liq.</option>'
+        +'<option>Recibido en CDF</option><option>Pendiente por Factura y OC.</option>'
+        +'<option>Pendiente (Recibo)</option><option>Cancelado</option>'
+      +'</select></div>'
+    +'</div>'
+    +'<div class="fl" id="_pln_recep_wr" style="display:none"><label>Recepción</label>'
+      +'<select id="_pln_recep" onchange="_plnRecepChange()">'
+        +'<option value="completo">Completo — todos los equipos hoy</option>'
+        +'<option value="parcial">Parcial — asignar por día</option>'
+      +'</select>'
+    +'</div>'
+    +'<div id="_pln_parcial_wr" style="display:none">'
+      +'<div style="font-size:10px;font-weight:700;color:var(--orange-l);margin-bottom:6px">📅 Días a asignar:</div>'
+      +'<div id="_pln_parcial_days" style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px"></div>'
+    +'</div>'
+    +'<div style="display:flex;gap:8px;margin-top:12px">'
+      +'<button class="xbtn gn" onclick="_plnSaveEq()" style="flex:2;padding:9px;font-size:12px">💾 Guardar</button>'
+      +'<button class="xbtn rd" id="_pln_del_btn" onclick="_plnDelEq()" style="display:none;padding:9px 14px;font-size:12px">🗑</button>'
+      +'<button class="xbtn" onclick="_plnCloseEq()" style="flex:1;padding:9px;font-size:12px">Cancelar</button>'
+    +'</div>'
+  +'</div></div>'
 
-  _planBuild();
+  // ── Modal Nueva Semana ──
+  +'<div class="mo" id="_pln_wkmo">'
+  +'<div class="mc" style="max-width:340px">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'
+      +'<div style="font-size:14px;font-weight:800">📅 Nueva Semana</div>'
+      +'<button style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer" onclick="document.querySelector(\'#_PLN_OV #_pln_wkmo\').classList.remove(\'open\')">×</button>'
+    +'</div>'
+    +'<div class="fl"><label>Lunes de inicio</label><input type="date" id="_pln_wkdate"></div>'
+    +'<div style="display:flex;gap:8px">'
+      +'<button class="xbtn gn" onclick="_plnCrearSemana()" style="flex:2;padding:9px;font-size:12px">✅ Crear</button>'
+      +'<button class="xbtn" onclick="document.querySelector(\'#_PLN_OV #_pln_wkmo\').classList.remove(\'open\')" style="flex:1;padding:9px;font-size:12px">Cancelar</button>'
+    +'</div>'
+  +'</div></div>';
 }
 
-function _planSwitchTab(t){
-  window._planTabA=t;
-  var bR=document.getElementById('pd-btn-res'),bP=document.getElementById('pd-btn-pro');
-  if(bR){bR.style.background=t==='resultados'?'rgba(63,185,80,.12)':'#161b22';bR.style.borderColor=t==='resultados'?'rgba(63,185,80,.5)':'#30363d';bR.style.color=t==='resultados'?'#3fb950':'#8b949e';}
-  if(bP){bP.style.background=t==='programado'?'rgba(45,212,191,.12)':'#161b22';bP.style.borderColor=t==='programado'?'rgba(45,212,191,.5)':'#30363d';bP.style.color=t==='programado'?'#2dd4bf':'#8b949e';}
-  _planBuild();
+// ── Inicializar ──
+function _PLN_INIT(){
+  _PLN_LOAD();
+  _PLN_CUR = _plnLunes(_plnISO(new Date()));
+  _PLN_TAB = 'prog';
+  _PLN_RENDER();
+  if(!_PLN_SB && window._sb){ _PLN_SB=window._sb; _plnBadge('ok'); _PLN_SB_LOAD(); }
 }
 
-function _planBuild(){
-  var el=document.getElementById('pd-content'); if(!el) return;
-  if(window._planTabA==='programado') _planBuildProg(el);
-  else _planBuildRes(el);
+// ── Render ──
+function _PLN_RENDER(){
+  var wk=_plnMkWeek(_PLN_CUR);
+  // Header
+  var MESES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  var d0=new Date(_PLN_CUR+'T00:00:00'), d4=new Date(_PLN_CUR+'T00:00:00'); d4.setDate(d0.getDate()+4);
+  var wlbl=document.getElementById('_pln_wklbl'); if(wlbl) wlbl.textContent='Semana del '+d0.getDate()+' al '+d4.getDate()+' de '+MESES[d0.getMonth()]+' '+d0.getFullYear();
+  var wsub=document.getElementById('_pln_sub'); if(wsub) wsub.textContent='ZLC Panamá · '+d0.getFullYear();
+  var wdi=document.getElementById('_pln_wdi'); if(wdi) wdi.value=_PLN_CUR;
+  // Tab buttons
+  var tbp=document.getElementById('_pln_tbp'), tbr=document.getElementById('_pln_tbr');
+  if(tbp) tbp.className='tabt'+(_PLN_TAB==='prog'?' on':'');
+  if(tbr) tbr.className='tabt'+(_PLN_TAB==='res'?' on':'');
+  // Calendar
+  var cal=document.getElementById('_pln_cal'); if(!cal) return;
+  var days=wk[_PLN_TAB];
+  var DH=['dh0','dh1','dh2','dh3','dh4'];
+  var h='';
+  // Day headers
+  days.forEach(function(day,di){
+    var d=new Date(day.date+'T00:00:00');
+    h+='<div class="dh '+DH[di]+'">'+day.label+'<div class="dhs">'+['Lunes','Martes','Miércoles','Jueves','Viernes'][di]+' '+d.getDate()+'</div></div>';
+  });
+  // Day bodies
+  days.forEach(function(day,di){
+    h+='<div class="db">';
+    (day.cubiculos||[]).forEach(function(cub,ci){
+      h+=_plnCubHtml(cub,di,ci,_PLN_TAB,_PLN_CUR);
+    });
+    h+='<div class="addeq">';
+    if(_PLN_TAB==='prog'){
+      h+='<button class="xbtn bl" style="flex:1;font-size:10px;padding:4px" onclick="_plnOpenEq(\''+_PLN_CUR+'\','+di+',null,\'prog\',\'SEA\')">🚢 +SEA</button>'
+       +'<button class="xbtn or" style="flex:1;font-size:10px;padding:4px" onclick="_plnOpenEq(\''+_PLN_CUR+'\','+di+',null,\'prog\',\'LAND\')">🚛 +LAND</button>'
+       +'<button class="xbtn" style="flex:1;font-size:10px;padding:4px" onclick="_plnOpenEq(\''+_PLN_CUR+'\','+di+',null,\'prog\',\'AIR\')">✈️</button>';
+    } else {
+      h+='<button class="xbtn gn" style="width:100%;font-size:10px;padding:5px" onclick="_plnOpenEq(\''+_PLN_CUR+'\','+di+',null,\'res\',\'RES\')">➕ Agregar embarque</button>';
+    }
+    h+='</div></div>';
+  });
+  cal.innerHTML=h;
+  _PLN_KPIS(wk);
+  _PLN_DEPTS(wk);
 }
 
-function _planBuildRes(el){
-  var desde=window._planDesde||'', hasta=window._planHasta||'';
-  var fmt=_planFmt;
-  var MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-  var DIAS_FULL=['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
-  var DIAS_ABR=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+function _plnCubHtml(cub,di,ci,tab,mon){
+  var via=(cub.via||'sea').toLowerCase();
+  var viaCls={'sea':'sea','land':'land','air':'air','res':'res'}[via]||'sea';
+  var viaIco={'sea':'🚢','land':'🚛','air':'✈️','res':'✅'}[via]||'📦';
+  var rows=cub.rows||[];
+  var totFob=_plnSumFOB(rows), totLnd=_plnSumLND(rows), totBlt=_plnSumBLT(rows);
+  var SCOL={'Recibido en CDF':'var(--green-l)','Tránsito Marítimo':'var(--blue-l)','En aduana':'var(--orange-l)','Llegada a Puerto':'#2dd4bf','En tránsito de Liq.':'var(--orange-l)','Cancelado':'var(--red-l)','Programado':'var(--blue-l)'};
+  var sc=SCOL[cub.status]||'var(--muted)';
+  var m=_plnESC(mon);
+  var h='<div class="cub '+viaCls+'">'
+    // Header del cubículo — clickeable para editar
+    +'<div class="chdr" onclick="_plnOpenEq(\''+m+'\','+di+','+ci+',\''+tab+'\')" title="Editar equipo">'
+      +'<span style="font-size:13px">'+viaIco+'</span>'
+      +'<span class="ctag '+viaCls+'">'+_plnESC(cub.tipoCarga||cub.via||'—')+'</span>'
+      +(cub.nroCont||cub.nroEmb?'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:9px;color:var(--muted)">'+_plnESC(cub.nroCont||cub.nroEmb)+'</span>':'')
+      +(cub.eta?'<span style="font-size:9px;color:var(--muted)">ETA '+_plnFD(cub.eta)+'</span>':'')
+      +(cub.status?'<span style="font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;background:rgba(255,255,255,.06);color:'+sc+'">'+_plnESC(cub.status)+'</span>':'')
+      +'<span style="margin-left:auto;font-family:\'IBM Plex Mono\',monospace;font-size:10px;font-weight:700;color:var(--green-l)">'+_plnF(totFob)+'</span>'
+    +'</div>';
+  if(rows.length){
+    // Column headers — fiel al Excel: Ctns | Suplidores | Valor FOB | Depto | Merc.%
+    h+='<div class="cch">'
+      +'<span style="width:32px;text-align:center">Ctns</span>'
+      +'<span style="flex:1">Suplidores</span>'
+      +'<span style="width:72px;text-align:right">Valor FOB</span>'
+      +'<span style="width:64px;text-align:right">Landed</span>'
+      +'<span style="width:58px">Depto.</span>'
+      +'<span style="width:38px;text-align:right">Merc.%</span>'
+    +'</div>';
+    rows.forEach(function(r){
+      var pct=totLnd>0?((parseFloat(r.landed)||parseFloat(r.fob)||0)/totLnd*100).toFixed(2)+'%':'—';
+      var nm=r.prov||'—'; var nmS=nm.length>20?nm.slice(0,18)+'…':nm;
+      h+='<div class="sr'+(r.matched?' mat':'')+'">'
+        +'<div class="sc" style="width:32px;text-align:center;color:var(--muted)">'+(r.bultos||'—')+'</div>'
+        +'<div class="sc" style="flex:1" title="'+_plnESC(nm)+'">'+_plnESC(nmS)+'</div>'
+        +'<div class="sc mo" style="width:72px;text-align:right;color:var(--blue-l)">'+_plnF(r.fob)+'</div>'
+        +'<div class="sc mo" style="width:64px;text-align:right;color:var(--orange-l)">'+_plnF(r.landed||r.fob)+'</div>'
+        +'<div class="sc" style="width:58px;color:var(--muted)">'+(r.dept||'')+'</div>'
+        +'<div class="sc" style="width:38px;text-align:right;color:var(--muted)">'+pct+'</div>'
+      +'</div>';
+    });
+    h+='<div class="cft">'
+      +'<span>'+totBlt+' ctns · '+rows.length+' sup</span>'
+      +'<span style="font-family:\'IBM Plex Mono\',monospace;font-weight:700;color:var(--green-l)">'+_plnFF(totFob)+'</span>'
+    +'</div>';
+  }
+  h+='</div>';
+  return h;
+}
 
-  var td=window.tendData||[];
-  var d0=desde?new Date(desde+'T00:00:00'):null, d1=hasta?new Date(hasta+'T23:59:59'):null;
-  var filtered=td.filter(function(d){
-    var f=d.fecha||d.date||''; if(!f) return false;
-    var fd=new Date(f+'T00:00:00');
-    if(d0&&fd<d0) return false; if(d1&&fd>d1) return false; return true;
-  }).sort(function(a,b){return(a.fecha||a.date||'').localeCompare(b.fecha||b.date||'');});
+function _PLN_KPIS(wk){
+  var days=wk[_PLN_TAB];
+  var eq=0,pv=0,fob=0,lnd=0,blt=0,mat=0,tot=0;
+  days.forEach(function(day){ (day.cubiculos||[]).forEach(function(cub){ eq++; (cub.rows||[]).forEach(function(r){ pv++; tot++; fob+=parseFloat(r.fob)||0; lnd+=parseFloat(r.landed)||parseFloat(r.fob)||0; blt+=parseInt(r.bultos)||0; if(r.matched) mat++; }); }); });
+  function s(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; }
+  s('_pln_keq',eq); s('_pln_kpv',pv); s('_pln_kfob',_plnF(fob)); s('_pln_klnd',_plnF(lnd)); s('_pln_kblt',blt); s('_pln_kmat',tot>0?Math.round(mat/tot*100)+'%':'0%');
+}
 
-  // Título semana
-  var titulo='';
-  if(desde&&hasta){
-    var dD=new Date(desde+'T00:00:00'), dH=new Date(hasta+'T00:00:00');
-    titulo=dD.getMonth()===dH.getMonth()
-      ?'Semana del '+dD.getDate()+' al '+dH.getDate()+' de '+MESES[dH.getMonth()]+' de '+dH.getFullYear()
-      :'Del '+dD.getDate()+' de '+MESES[dD.getMonth()]+' al '+dH.getDate()+' de '+MESES[dH.getMonth()]+' de '+dH.getFullYear();
+function _PLN_DEPTS(wk){
+  var el=document.getElementById('_pln_depts'); if(!el) return;
+  var dm={},tl=0;
+  (wk[_PLN_TAB]||[]).forEach(function(day){ (day.cubiculos||[]).forEach(function(cub){ (cub.rows||[]).forEach(function(r){ var d=(r.dept||'Sin depto').toUpperCase(); var v=parseFloat(r.landed)||parseFloat(r.fob)||0; dm[d]=(dm[d]||0)+v; tl+=v; }); }); });
+  var ents=Object.entries(dm).sort(function(a,b){return b[1]-a[1];});
+  if(!ents.length){ el.innerHTML=''; return; }
+  var h='<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">📊 FOB/Landed por Departamento</div>'
+    +'<table style="border-collapse:collapse;font-size:11px;max-width:560px;width:100%"><thead><tr style="background:var(--s2)">'
+    +'<th style="padding:5px 10px;border:1px solid var(--border);font-size:9px;color:var(--muted);text-align:left">Departamento</th>'
+    +'<th style="padding:5px 10px;border:1px solid var(--border);font-size:9px;color:var(--muted);text-align:right">F.O.B / Landed</th>'
+    +'<th style="padding:5px 10px;border:1px solid var(--border);font-size:9px;color:var(--muted);text-align:right">% Merc.</th>'
+    +'<th style="border:1px solid var(--border);min-width:70px;padding:4px 8px"></th>'
+    +'</tr></thead><tbody>';
+  ents.forEach(function(e,i){
+    var pct=tl>0?(e[1]/tl*100).toFixed(2):'0';
+    h+='<tr style="background:'+(i%2?'var(--s1)':'var(--bg)')+'">'
+      +'<td style="padding:5px 10px;border:1px solid var(--border);font-weight:600">'+e[0]+'</td>'
+      +'<td style="padding:5px 10px;border:1px solid var(--border);text-align:right;font-family:\'IBM Plex Mono\',monospace;color:var(--green-l)">'+_plnFF(e[1])+'</td>'
+      +'<td style="padding:5px 10px;border:1px solid var(--border);text-align:right;color:var(--muted)">'+pct+'%</td>'
+      +'<td style="border:1px solid var(--border);padding:4px 8px"><div style="height:7px;border-radius:4px;background:linear-gradient(90deg,#f8d122,#f97316);width:'+Math.max(2,parseFloat(pct))+'%"></div></td>'
+    +'</tr>';
+  });
+  h+='<tr style="background:rgba(88,166,255,.06);font-weight:800"><td style="padding:5px 10px;border:1px solid var(--border)">TOTAL</td><td style="padding:5px 10px;border:1px solid var(--border);text-align:right;font-family:\'IBM Plex Mono\',monospace;color:var(--blue-l)">'+_plnFF(tl)+'</td><td style="padding:5px 10px;border:1px solid var(--border);text-align:right">100%</td><td style="border:1px solid var(--border)"></td></tr>'
+  +'</tbody></table>';
+  el.innerHTML=h;
+}
+
+// ── Controles ──
+window._plnNavW=function(dir){ var d=new Date(_PLN_CUR+'T00:00:00'); d.setDate(d.getDate()+dir*7); _PLN_CUR=_plnISO(d); _PLN_RENDER(); };
+window._plnIrFecha=function(v){ if(v){ _PLN_CUR=_plnLunes(v); _PLN_RENDER(); } };
+window._PLN_SWITCH=function(t){ _PLN_TAB=t; _PLN_RENDER(); };
+window._plnModalSemana=function(){ var d=new Date(_PLN_CUR+'T00:00:00'); d.setDate(d.getDate()+7); var el=document.getElementById('_pln_wkdate'); if(el) el.value=_plnISO(d); var m=document.querySelector('#_PLN_OV #_pln_wkmo'); if(m) m.classList.add('open'); };
+window._plnCrearSemana=function(){ var v=(document.getElementById('_pln_wkdate')||{}).value; if(!v){ if(typeof _showToast==='function')_showToast('⚠️ Selecciona fecha','orange',2000); return; } _PLN_CUR=_plnLunes(v); _plnMkWeek(_PLN_CUR); _PLN_RENDER(); var m=document.querySelector('#_PLN_OV #_pln_wkmo'); if(m) m.classList.remove('open'); if(typeof _showToast==='function')_showToast('✅ Semana '+_PLN_CUR+' creada','green',2000); };
+
+// ── Modal equipo ──
+window._plnOpenEq=function(mon,di,ci,tab,via){
+  _PLN_CTX={mon:mon,di:di,ci:ci,tab:tab};
+  var isEdit=(ci!==null&&ci>=0);
+  var mt=document.getElementById('_pln_eqmo_t'); if(mt) mt.textContent=isEdit?'✏️ Editar Equipo':'➕ Nuevo Equipo';
+  var db=document.getElementById('_pln_del_btn'); if(db) db.style.display=isEdit?'inline-flex':'none';
+  var mb=document.getElementById('_pln_mbox'); if(mb) mb.classList.remove('on');
+  // defaults
+  var els=['_pln_nro','_pln_emb','_pln_eta']; els.forEach(function(id){ var e=document.getElementById(id); if(e) e.value=''; });
+  var vs=document.getElementById('_pln_via'); if(vs) vs.value=via||'SEA';
+  var ts=document.getElementById('_pln_tipo'); if(ts) ts.value='';
+  var ss=document.getElementById('_pln_status'); if(ss) ss.value='Programado';
+  var rs=document.getElementById('_pln_recep'); if(rs) rs.value='completo';
+  var pw=document.getElementById('_pln_parcial_wr'); if(pw) pw.style.display='none';
+  _plnViaChange();
+  if(isEdit){
+    var cub=_PLN_DATA[mon][tab][di].cubiculos[ci];
+    if(cub){
+      if(vs) vs.value=cub.via||'SEA'; if(ts) ts.value=cub.tipoCarga||'';
+      var ne=document.getElementById('_pln_nro'); if(ne) ne.value=cub.nroCont||'';
+      var ee=document.getElementById('_pln_emb'); if(ee) ee.value=cub.nroEmb||'';
+      var etae=document.getElementById('_pln_eta'); if(etae) etae.value=cub.eta||'';
+      if(ss) ss.value=cub.status||'Programado';
+      _plnViaChange();
+    }
+  }
+  var m=document.querySelector('#_PLN_OV #_pln_eqmo'); if(m) m.classList.add('open');
+};
+window._plnCloseEq=function(){ var m=document.querySelector('#_PLN_OV #_pln_eqmo'); if(m) m.classList.remove('open'); };
+window._plnViaChange=function(){
+  var via=(document.getElementById('_pln_via')||{}).value||'SEA';
+  var lbl=document.getElementById('_pln_nro_lbl'); if(lbl) lbl.textContent=via==='RES'?'N° Contenedor (opc.)':'N° Contenedor';
+  var ew=document.getElementById('_pln_emb_wr'); if(ew) ew.style.display=(_PLN_CTX&&_PLN_CTX.tab==='res')?'block':'none';
+  var rw=document.getElementById('_pln_recep_wr'); if(rw) rw.style.display=(_PLN_CTX&&_PLN_CTX.tab==='res')?'block':'none';
+};
+window._plnCruce=function(){
+  var nroCont=(document.getElementById('_pln_nro')||{}).value||'';
+  var nroEmb=(document.getElementById('_pln_emb')||{}).value||'';
+  var mb=document.getElementById('_pln_mbox'); if(!mb) return;
+  mb.classList.remove('on');
+  // Resultado: buscar en tendData
+  if(nroEmb && _PLN_CTX && _PLN_CTX.tab==='res'){
+    var td=window.tendData||[];
+    var found=td.find(function(d){return (d.nro||'').toUpperCase()===nroEmb.toUpperCase();});
+    if(found){
+      var snap=found.snap||{}, lines=(snap.invLines||found.invLines||[]).filter(function(l){return !l.tipoFac||l.tipoFac==='mercancia';});
+      document.getElementById('_pln_eqmo_t').textContent='✏️ '+found.nro+' — '+found.fecha;
+      document.getElementById('_pln_mbox_t').textContent='✅ Embarque '+found.nro+' · '+found.fecha;
+      document.getElementById('_pln_mbox_v').textContent=lines.length+' proveedores · FOB: '+_plnFF(snap.sc1?.fob||snap.sc1?.cif||found.cif||0);
+      mb.style.background='rgba(63,185,80,.07)'; mb.style.borderColor='rgba(63,185,80,.2)';
+      document.getElementById('_pln_mbox_t').style.color='var(--green-l)';
+      mb.classList.add('on');
+      var tp=document.getElementById('_pln_tipo'); if(tp&&!tp.value&&(snap.tipoEquipo||snap.equipo)) tp.value=snap.tipoEquipo||snap.equipo||'';
+      var eta=document.getElementById('_pln_eta'); if(eta&&!eta.value&&found.fecha) eta.value=found.fecha;
+      return;
+    }
+  }
+  // Programado: buscar en tránsito
+  if(nroCont){
+    var tr=[];
+    try{tr=JSON.parse(localStorage.getItem('_transito_v1')||'[]');}catch(e){}
+    var foundTr=tr.find(function(r){return (r.contenedor||r.nroContenedor||'').toUpperCase()===nroCont.toUpperCase();});
+    if(foundTr){
+      document.getElementById('_pln_mbox_t').textContent='📦 En Tránsito: '+(foundTr.proveedor||foundTr.prov||'—');
+      document.getElementById('_pln_mbox_v').textContent='Depto: '+(foundTr.departamento||foundTr.dept||'—')+' · ETA: '+(foundTr.eta||foundTr.fechaETA||'—')+' · '+( foundTr.estado||foundTr.status||'');
+      mb.style.background='rgba(88,166,255,.07)'; mb.style.borderColor='rgba(88,166,255,.2)';
+      document.getElementById('_pln_mbox_t').style.color='var(--blue-l)';
+      mb.classList.add('on');
+      var etae=document.getElementById('_pln_eta'); if(etae&&!etae.value&&(foundTr.eta||foundTr.fechaETA)) etae.value=foundTr.eta||foundTr.fechaETA||'';
+      var sse=document.getElementById('_pln_status'); if(sse&&foundTr.estado) sse.value=foundTr.estado||foundTr.status||'Programado';
+    }
+  }
+};
+window._plnRecepChange=function(){
+  var v=(document.getElementById('_pln_recep')||{}).value;
+  var pw=document.getElementById('_pln_parcial_wr'); if(!pw) return;
+  pw.style.display=v==='parcial'?'block':'none';
+  if(v==='parcial') _plnRenderParcial();
+};
+function _plnRenderParcial(){
+  var pd=document.getElementById('_pln_parcial_days'); if(!pd) return;
+  var wk=_plnMkWeek(_PLN_CTX.mon); var days=wk[_PLN_CTX.tab];
+  pd.innerHTML=days.map(function(day,di){
+    var d=new Date(day.date+'T00:00:00');
+    return '<label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer">'
+      +'<input type="checkbox" name="plnpd" value="'+di+'"'+(di===_PLN_CTX.di?' checked disabled':'')+' style="accent-color:var(--orange-l)">'
+      +day.label+' '+d.getDate()+'/'+(d.getMonth()+1)
+    +'</label>';
+  }).join('');
+}
+window._plnSaveEq=function(){
+  var g=function(id){var e=document.getElementById(id);return e?e.value.trim():'';};
+  var via=g('_pln_via'), tipoCarga=g('_pln_tipo'), nroCont=g('_pln_nro'), nroEmb=g('_pln_emb');
+  var eta=g('_pln_eta'), status=g('_pln_status'), recep=g('_pln_recep');
+  var tab=_PLN_CTX.tab, mon=_PLN_CTX.mon, di=_PLN_CTX.di, ci=_PLN_CTX.ci;
+
+  // Construir filas heredadas
+  var rows=[];
+  if(tab==='res'&&nroEmb){
+    var td=window.tendData||[];
+    var found=td.find(function(d){return (d.nro||'').toUpperCase()===nroEmb.toUpperCase();});
+    if(found){
+      var snap=found.snap||{}, sc1=snap.sc1||{};
+      var lines=(snap.invLines||found.invLines||[]).filter(function(l){return !l.tipoFac||l.tipoFac==='mercancia';});
+      var totCIF=lines.reduce(function(s,l){return s+(l.costo||0);},0);
+      var landedTotal=snap.sc1Base||found.sc1Base||found.landed||0;
+      lines.forEach(function(l){
+        var prop=totCIF>0?((l.costo||0)/totCIF):0;
+        rows.push({prov:l.prov||'—',bultos:l.bultos||l.cajas||0,piezas:l.piezas||0,fob:l.costo||0,landed:landedTotal>0?Math.round(landedTotal*prop*100)/100:l.costo||0,dept:l.dept||l.deptCat||'',matched:true});
+      });
+      if(!tipoCarga&&(snap.tipoEquipo||snap.equipo)) tipoCarga=snap.tipoEquipo||snap.equipo||'';
+      if(!eta&&found.fecha) eta=found.fecha;
+    }
+  } else if(tab==='prog'&&nroCont){
+    var tr=[]; try{tr=JSON.parse(localStorage.getItem('_transito_v1')||'[]');}catch(e){}
+    tr.filter(function(r){return (r.contenedor||r.nroContenedor||'').toUpperCase()===nroCont.toUpperCase();}).forEach(function(r){
+      rows.push({prov:r.proveedor||r.prov||'—',bultos:r.bultos||r.cantBultos||0,piezas:r.piezas||0,fob:r.monto||r.valor||0,landed:r.monto||r.valor||0,dept:r.departamento||r.dept||'',matched:true});
+    });
   }
 
-  // Totales globales y departamentos
-  var totFOB=0, totBultos=0, totLanded=0, totAhorro=0, numEquipos=0;
-  var deptAcc={};
-  filtered.forEach(function(d){
-    var snap=d.snap||{}, sc1=snap.sc1||{};
-    totFOB    += sc1.fob||sc1.cif||d.cif||0;
-    totLanded += snap.sc1Base||d.sc1Base||d.landed||0;
-    totAhorro += d.ahorroNeto||d.ahorro||0;
-    numEquipos+= parseInt(d.equipos||d.nEquipos||snap.nEquipos||1)||1;
-    (snap.invLines||d.invLines||[]).filter(function(l){return !l.tipoFac||l.tipoFac==='mercancia';}).forEach(function(l){
-      totBultos += l.bultos||l.cajas||0;
-      var dep=l.dept||l.deptCat||'Sin Depto';
-      if(!deptAcc[dep]) deptAcc[dep]={fob:0,bultos:0};
-      deptAcc[dep].fob    += l.costo||0;
-      deptAcc[dep].bultos += l.bultos||l.cajas||0;
+  var newCub={via:via,tipoCarga:tipoCarga,nroCont:nroCont,nroEmb:nroEmb,eta:eta,status:status,rows:rows};
+  var wk=_plnMkWeek(mon);
+
+  if(recep==='parcial'){
+    var checks=document.querySelectorAll('input[name="plnpd"]:checked');
+    checks.forEach(function(chk){
+      var dIdx=parseInt(chk.value);
+      var cubForDay=Object.assign({},newCub,{rows:dIdx===di?rows:[]});
+      if(dIdx===di&&ci>=0) wk[tab][dIdx].cubiculos[ci]=cubForDay;
+      else wk[tab][dIdx].cubiculos.push(cubForDay);
+    });
+    if(!checks.length){ if(ci>=0) wk[tab][di].cubiculos[ci]=newCub; else wk[tab][di].cubiculos.push(newCub); }
+  } else {
+    if(ci!==null&&ci>=0) wk[tab][di].cubiculos[ci]=newCub;
+    else wk[tab][di].cubiculos.push(newCub);
+  }
+
+  _PLN_SAVE(); _plnCloseEq(); _PLN_RENDER();
+  if(typeof _showToast==='function') _showToast('✅ Guardado'+(rows.length?' · '+rows.length+' proveedores':''),'green',2500);
+};
+window._plnDelEq=function(){
+  if(!confirm('¿Eliminar este cubículo?')) return;
+  var wk=_plnMkWeek(_PLN_CTX.mon); wk[_PLN_CTX.tab][_PLN_CTX.di].cubiculos.splice(_PLN_CTX.ci,1);
+  _PLN_SAVE(); _plnCloseEq(); _PLN_RENDER();
+};
+
+// ── Export CSV ──
+window._plnCSV=function(){
+  var wk=_plnMkWeek(_PLN_CUR);
+  var rows=[['Tab','Día','Fecha','Vía','Equipo','N°Cont','N°Emb','ETA','Estado','Proveedor','Bultos','FOB','Landed','Depto','%Landed','Cruzado']];
+  ['prog','res'].forEach(function(tab){
+    (wk[tab]||[]).forEach(function(day){
+      (day.cubiculos||[]).forEach(function(cub){
+        var tl=_plnSumLND(cub.rows||[]);
+        (cub.rows||[]).forEach(function(r){
+          var pct=tl>0?((parseFloat(r.landed)||0)/tl*100).toFixed(2):'0';
+          rows.push([tab,day.label,day.date,cub.via||'',cub.tipoCarga||'',cub.nroCont||'',cub.nroEmb||'',cub.eta||'',cub.status||'',r.prov||'',r.bultos||0,(r.fob||0).toFixed(2),(r.landed||0).toFixed(2),r.dept||'',pct,r.matched?'Sí':'No']);
+        });
+      });
     });
   });
+  var csv=rows.map(function(r){return r.map(function(c){return '"'+(String(c||'').replace(/"/g,'""'))+'"';}).join(',');}).join('\r\n');
+  var a=document.createElement('a'); a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv); a.download='Planeacion_'+_PLN_CUR+'.csv'; a.click();
+};
 
-  if(!filtered.length){
-    el.innerHTML='<div style="text-align:center;padding:40px;color:#8b949e"><div style="font-size:36px;margin-bottom:8px">📭</div><div style="font-size:13px;font-weight:600">Sin embarques procesados en este período</div><div style="font-size:11px;margin-top:4px">Ajusta el rango de fechas o procesa embarques primero</div></div>';
-    return;
-  }
+// ── Badge ──
+function _plnBadge(st){ var b=document.getElementById('_pln_cloud'); if(!b) return; if(st==='ok'){b.textContent='☁️ ✓';b.style.background='rgba(63,185,80,.12)';b.style.borderColor='rgba(63,185,80,.3)';b.style.color='#56d364';}else if(st==='saving'){b.textContent='☁️ ...';b.style.background='rgba(88,166,255,.12)';b.style.borderColor='rgba(88,166,255,.3)';b.style.color='#79c0ff';}else{b.textContent='☁️ ✗';b.style.background='rgba(248,81,73,.08)';b.style.borderColor='rgba(248,81,73,.25)';b.style.color='#ff7b72';} }
 
-  var html='';
+// ── Supabase ──
+async function _PLN_SB_SAVE(){ if(!_PLN_SB||!_PLN_CUR) return; _plnBadge('saving'); try{ var wk=_PLN_DATA[_PLN_CUR]; if(!wk){_plnBadge('ok');return;} var r=await _PLN_SB.from(_PLN_TABLE).upsert({semana:_PLN_CUR,datos:wk,updated_at:new Date().toISOString()},{onConflict:'semana'}); _plnBadge(r.error?'err':'ok'); }catch(e){_plnBadge('err');} }
+async function _PLN_SB_LOAD(){ if(!_PLN_SB) return; try{ var r=await _PLN_SB.from(_PLN_TABLE).select('semana,datos,updated_at').order('updated_at',{ascending:false}); if(r.error) return; (r.data||[]).forEach(function(row){if(row.semana&&row.datos)_PLN_DATA[row.semana]=row.datos;}); try{localStorage.setItem(_PLN_KEY,JSON.stringify(_PLN_DATA));}catch(e){} _PLN_RENDER(); _plnBadge('ok'); if(typeof _showToast==='function')_showToast('☁️ Plan cargado','green',2000); }catch(e){} }
 
-  // ── TÍTULO ──
-  html+='<div style="text-align:center;margin-bottom:16px">'
-    +'<div style="font-size:16px;font-weight:900;color:#e6edf3;letter-spacing:-.01em">PLANEACIÓN DE CARGA SEMANAL ®</div>'
-    +'<div style="font-size:12px;font-weight:600;color:#8b949e;margin-top:4px">'+titulo+'</div>'
-  +'</div>';
-
-  // ── KPIs GLOBALES (fiel al Excel) ──
-  html+='<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:16px">'
-    +'<div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:12px">'
-      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
-        +'<span style="font-size:10px;font-weight:700;color:#8b949e;text-transform:uppercase;letter-spacing:.06em">Global FOB</span>'
-        +'<span style="font-size:18px;font-weight:900;color:#58a6ff;font-family:monospace">'+fmt(totFOB)+'</span>'
-      +'</div>'
-      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px">'
-        +'<div><div style="font-size:9px;color:#8b949e;text-transform:uppercase">Programado</div><div style="font-size:13px;font-weight:700;color:#3fb950;font-family:monospace">'+fmt(totFOB)+'</div></div>'
-        +'<div><div style="font-size:9px;color:#8b949e;text-transform:uppercase">Recibido (proc.)</div><div style="font-size:13px;font-weight:700;color:#3fb950;font-family:monospace">'+fmt(totFOB)+'</div></div>'
-      +'</div>'
-    +'</div>'
-    +'<div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:12px">'
-      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">'
-        +'<div><div style="font-size:9px;color:#8b949e;text-transform:uppercase">Equipos</div><div style="font-size:18px;font-weight:900;color:#f08632;font-family:monospace">'+numEquipos+'</div></div>'
-        +'<div><div style="font-size:9px;color:#8b949e;text-transform:uppercase">Cartones/Bultos</div><div style="font-size:18px;font-weight:900;color:#e6edf3;font-family:monospace">'+_planFmtN(totBultos)+'</div></div>'
-        +'<div><div style="font-size:9px;color:#8b949e;text-transform:uppercase">Embarques</div><div style="font-size:18px;font-weight:900;color:#a371f7;font-family:monospace">'+filtered.length+'</div></div>'
-        +'<div><div style="font-size:9px;color:#8b949e;text-transform:uppercase">Ahorro Neto</div><div style="font-size:14px;font-weight:700;color:#3fb950;font-family:monospace">'+fmt(totAhorro)+'</div></div>'
-      +'</div>'
-    +'</div>'
-  +'</div>';
-
-  // ── VISTA POR DÍA — fiel al Excel: cada día = columna con tipo equipo + tabla proveedores ──
-  var dayMap={};
-  filtered.forEach(function(d){var k=d.fecha||d.date||'';if(!dayMap[k])dayMap[k]=[];dayMap[k].push(d);});
-  var dias=[];
-  if(desde&&hasta){
-    var cur=new Date(desde+'T00:00:00'), end=new Date(hasta+'T00:00:00');
-    while(cur<=end){dias.push(_planToISO(cur));cur.setDate(cur.getDate()+1);}
-  } else { dias=Object.keys(dayMap).sort(); }
-
-  dias.forEach(function(dia){
-    var embs=dayMap[dia]||[];
-    var dObj=new Date(dia+'T00:00:00');
-    var diaNm=DIAS_ABR[dObj.getDay()].toUpperCase()+' '+dObj.getDate();
-    var hayData=embs.length>0;
-
-    html+='<div style="background:#161b22;border:1px solid '+(hayData?'rgba(63,185,80,.4)':'#30363d')+';border-radius:12px;margin-bottom:12px;overflow:hidden">';
-
-    // Cabecera del día
-    html+='<div style="background:'+(hayData?'rgba(63,185,80,.1)':'rgba(255,255,255,.02)')+';padding:10px 14px;display:flex;align-items:center;justify-content:space-between">'
-      +'<div style="font-size:13px;font-weight:900;color:'+(hayData?'#3fb950':'#8b949e')+'">'+diaNm+'</div>'
-      +'<div style="font-size:10px;color:#8b949e">'+(hayData?embs.length+' embarque'+(embs.length>1?'s':''):'Sin recibos')+'</div>'
-    +'</div>';
-
-    if(hayData){
-      embs.forEach(function(d, ei){
-        var snap=d.snap||{}, sc1=snap.sc1||{};
-        var lines=(snap.invLines||d.invLines||[]).filter(function(l){return !l.tipoFac||l.tipoFac==='mercancia';});
-        var fob=sc1.fob||sc1.cif||d.cif||0;
-        var nro=d.nro||'—', desc=d.desc||d.descripcion||'';
-        var tipoEquipo=d.tipoEquipo||snap.tipoEquipo||d.equipo||snap.equipo||'';
-        var nEquipos=parseInt(d.equipos||d.nEquipos||snap.nEquipos||1)||1;
-        var equipoLabel=tipoEquipo ? (nEquipos>1?nEquipos+' ':'')+tipoEquipo : (nEquipos>1?nEquipos+' EQUIPO(S)':'');
-
-        // Agrupar proveedores
-        var provMap={};
-        lines.forEach(function(l){
-          var p=l.prov||'Sin proveedor';
-          if(!provMap[p]) provMap[p]={fob:0,dept:'',bultos:0};
-          provMap[p].fob    += l.costo||0;
-          provMap[p].bultos += l.bultos||l.cajas||0;
-          if(l.dept||l.deptCat) provMap[p].dept=l.dept||l.deptCat||'';
-        });
-        var provs=Object.entries(provMap);
-        var totE=provs.reduce(function(s,e){return s+e[1].fob;},0);
-
-        html+='<div style="border-top:1px solid #30363d;padding:10px 14px">';
-
-        // Sub-header embarque (tipo equipo + N° embarque + FOB)
-        html+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:6px">'
-          +'<div>'
-            +(equipoLabel?'<span style="background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.3);border-radius:5px;padding:2px 8px;font-size:10px;font-weight:700;color:#58a6ff;margin-right:8px">'+equipoLabel+'</span>':'')
-            +'<span style="font-size:12px;font-weight:800;color:#e6edf3">📦 Emb. '+nro+'</span>'
-            +(desc?'<span style="font-size:10px;color:#8b949e;margin-left:8px">'+desc+'</span>':'')
-          +'</div>'
-          +'<span style="font-family:monospace;font-size:13px;font-weight:800;color:#58a6ff">'+fmt(fob)+'</span>'
-        +'</div>';
-
-        // Tabla proveedores fiel al Excel: Ctns | Suplidores | Valor FOB | Depto | Merc.%
-        if(provs.length){
-          html+='<div style="overflow-x:auto">'
-            +'<table style="width:100%;border-collapse:collapse;font-size:11px;min-width:400px">'
-              +'<thead><tr style="background:rgba(255,255,255,.04)">'
-                +'<th style="padding:5px 8px;text-align:right;color:#8b949e;font-weight:600;font-size:9px;text-transform:uppercase;width:50px">Ctns</th>'
-                +'<th style="padding:5px 8px;text-align:left;color:#8b949e;font-weight:600;font-size:9px;text-transform:uppercase">Suplidores</th>'
-                +'<th style="padding:5px 8px;text-align:right;color:#8b949e;font-weight:600;font-size:9px;text-transform:uppercase">Valor FOB</th>'
-                +'<th style="padding:5px 8px;text-align:left;color:#8b949e;font-weight:600;font-size:9px;text-transform:uppercase">Depto.</th>'
-                +'<th style="padding:5px 8px;text-align:right;color:#8b949e;font-weight:600;font-size:9px;text-transform:uppercase">Merc.%</th>'
-              +'</tr></thead>'
-              +'<tbody>'
-              +provs.map(function(e,i){
-                var pct=totE>0?(e[1].fob/totE*100).toFixed(2)+'%':'—';
-                return '<tr style="border-top:1px solid rgba(255,255,255,.04)">'
-                  +'<td style="padding:5px 8px;text-align:right;color:#8b949e;font-family:monospace">'+(e[1].bultos||'')+'</td>'
-                  +'<td style="padding:5px 8px;color:#e6edf3;font-weight:600">'+e[0]+'</td>'
-                  +'<td style="padding:5px 8px;text-align:right;font-family:monospace;font-weight:700;color:#58a6ff">'+fmt(e[1].fob)+'</td>'
-                  +'<td style="padding:5px 8px;color:#8b949e">'+e[1].dept+'</td>'
-                  +'<td style="padding:5px 8px;text-align:right;color:#8b949e">'+pct+'</td>'
-                +'</tr>';
-              }).join('')
-              // Fila totales del embarque
-              +'<tr style="background:rgba(88,166,255,.06);border-top:1px solid rgba(88,166,255,.2);font-weight:700">'
-                +'<td style="padding:5px 8px;text-align:right;color:#8b949e;font-family:monospace">'+_planFmtN(lines.reduce(function(s,l){return s+(l.bultos||l.cajas||0);},0))+'</td>'
-                +'<td style="padding:5px 8px;color:#8b949e;font-size:9px;text-transform:uppercase">Total Embarque</td>'
-                +'<td style="padding:5px 8px;text-align:right;font-family:monospace;color:#58a6ff">'+fmt(fob)+'</td>'
-                +'<td colspan="2"></td>'
-              +'</tr>'
-              +'</tbody>'
-            +'</table>'
-          +'</div>';
-        }
-        html+='</div>';
-      });
-    }
-    html+='</div>';
-  });
-
-  // ── TABLA DEPARTAMENTOS (fiel al Excel) ──
-  if(Object.keys(deptAcc).length){
-    html+='<div style="margin-top:20px;background:#161b22;border:1px solid rgba(88,166,255,.3);border-radius:12px;overflow:hidden">'
-      +'<div style="background:rgba(88,166,255,.1);padding:10px 14px;font-size:11px;font-weight:700;color:#58a6ff;text-transform:uppercase;letter-spacing:.05em">📊 Detalle por Departamento</div>'
-      +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">'
-        +'<thead><tr style="background:rgba(255,255,255,.04)">'
-          +'<th style="padding:7px 12px;text-align:left;color:#8b949e;font-weight:600;font-size:9px;text-transform:uppercase">Departamento</th>'
-          +'<th style="padding:7px 12px;text-align:right;color:#8b949e;font-weight:600;font-size:9px;text-transform:uppercase">F.O.B</th>'
-          +'<th style="padding:7px 12px;text-align:right;color:#8b949e;font-weight:600;font-size:9px;text-transform:uppercase">Bultos</th>'
-          +'<th style="padding:7px 12px;text-align:right;color:#8b949e;font-weight:600;font-size:9px;text-transform:uppercase">% Merc.</th>'
-        +'</tr></thead>'
-        +'<tbody>'
-        +Object.entries(deptAcc).sort(function(a,b){return b[1].fob-a[1].fob;}).map(function(e,i){
-          var pct=totFOB>0?(e[1].fob/totFOB*100).toFixed(4):'0';
-          var pctDisp=(parseFloat(pct)*100).toFixed(2)+'%';
-          return '<tr style="background:rgba(255,255,255,'+(i%2?.02:.0)+');border-bottom:1px solid rgba(255,255,255,.05)">'
-            +'<td style="padding:7px 12px;font-weight:600;color:#e6edf3">'+e[0]+'</td>'
-            +'<td style="padding:7px 12px;text-align:right;font-family:monospace;font-weight:700;color:#58a6ff">'+fmt(e[1].fob)+'</td>'
-            +'<td style="padding:7px 12px;text-align:right;font-family:monospace;color:#8b949e">'+_planFmtN(e[1].bultos)+'</td>'
-            +'<td style="padding:7px 12px;text-align:right;color:#8b949e">'+pctDisp+'</td>'
-          +'</tr>';
-        }).join('')
-        +'<tr style="background:rgba(88,166,255,.08);font-weight:800;border-top:2px solid rgba(88,166,255,.3)">'
-          +'<td style="padding:7px 12px;color:#e6edf3">Todos</td>'
-          +'<td style="padding:7px 12px;text-align:right;font-family:monospace;color:#58a6ff">'+fmt(totFOB)+'</td>'
-          +'<td style="padding:7px 12px;text-align:right;font-family:monospace;color:#e6edf3">'+_planFmtN(totBultos)+'</td>'
-          +'<td style="padding:7px 12px;text-align:right;color:#e6edf3">100%</td>'
-        +'</tr>'
-        +'</tbody>'
-      +'</table></div>'
-    +'</div>';
-  }
-
-  el.innerHTML=html;
-}
-
-function _planBuildProg(el){
-  // Lee hoja Programado — del localStorage de tránsito
-  var raw=[];
-  try{raw=JSON.parse(localStorage.getItem('_transito_v1')||'[]');}catch(e){}
-  if(!raw.length&&window._transitoData) raw=window._transitoData;
-
-  var fmt=_planFmt;
-
-  if(!raw.length){
-    el.innerHTML='<div style="text-align:center;padding:40px;color:#8b949e">'
-      +'<div style="font-size:36px;margin-bottom:8px">📋</div>'
-      +'<div style="font-size:13px;font-weight:600">Sin mercancía programada</div>'
-      +'<div style="font-size:11px;margin-top:6px">Regístrala en el módulo Mercancía en Tránsito</div>'
-      +'</div>';
-    return;
-  }
-
-  // Agrupar por estado
-  var grupos={};
-  raw.forEach(function(t){
-    var k=t.estado||t.status||'En tránsito';
-    if(!grupos[k]) grupos[k]=[];
-    grupos[k].push(t);
-  });
-
-  var totFOB=raw.reduce(function(s,t){return s+(t.monto||t.valor||t.cif||0);},0);
-
-  var html='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">'
-    +'<div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:10px;text-align:center"><div style="font-size:20px;font-weight:800;color:#2dd4bf;font-family:monospace">'+raw.length+'</div><div style="font-size:9px;color:#8b949e;text-transform:uppercase;margin-top:2px">Líneas Programadas</div></div>'
-    +'<div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:10px;text-align:center"><div style="font-size:13px;font-weight:800;color:#58a6ff;font-family:monospace">'+fmt(totFOB)+'</div><div style="font-size:9px;color:#8b949e;text-transform:uppercase;margin-top:2px">FOB Total</div></div>'
-  +'</div>';
-
-  // Tabla completa fiel al Excel: Tipo | Proveedor | Tipo Pedido | Depto | N°Pedido | Comprador | Monto | Cant | Estatus
-  html+='<div style="background:#161b22;border:1px solid #30363d;border-radius:12px;overflow:hidden"><div style="overflow-x:auto">'
-    +'<table style="width:100%;border-collapse:collapse;font-size:11px;min-width:700px">'
-      +'<thead><tr style="background:rgba(255,255,255,.06)">'
-        +'<th style="padding:7px 10px;text-align:left;color:#8b949e;font-size:9px;text-transform:uppercase;font-weight:600">Tipo</th>'
-        +'<th style="padding:7px 10px;text-align:left;color:#8b949e;font-size:9px;text-transform:uppercase;font-weight:600">Proveedor</th>'
-        +'<th style="padding:7px 10px;text-align:left;color:#8b949e;font-size:9px;text-transform:uppercase;font-weight:600">Depto.</th>'
-        +'<th style="padding:7px 10px;text-align:left;color:#8b949e;font-size:9px;text-transform:uppercase;font-weight:600">N° Pedido/Fact</th>'
-        +'<th style="padding:7px 10px;text-align:left;color:#8b949e;font-size:9px;text-transform:uppercase;font-weight:600">Comprador</th>'
-        +'<th style="padding:7px 10px;text-align:right;color:#8b949e;font-size:9px;text-transform:uppercase;font-weight:600">Monto</th>'
-        +'<th style="padding:7px 10px;text-align:right;color:#8b949e;font-size:9px;text-transform:uppercase;font-weight:600">Cant.</th>'
-        +'<th style="padding:7px 10px;text-align:left;color:#8b949e;font-size:9px;text-transform:uppercase;font-weight:600">Estatus</th>'
-        +'<th style="padding:7px 10px;text-align:left;color:#8b949e;font-size:9px;text-transform:uppercase;font-weight:600">ETA</th>'
-      +'</tr></thead>'
-      +'<tbody>'
-      +raw.map(function(t,i){
-        var estado=t.estado||t.status||'En tránsito';
-        var eColor={'Recibido en CDF':'#3fb950','Llegada a Puerto':'#2dd4bf','En tránsito de Liq.':'#f08632','Pendiente por Factura y OC.':'#d29922','Tránsito Marítimo':'#58a6ff'}[estado]||'#8b949e';
-        var nroC=t.nroContenedor||t.contenedor||t.nro||'';
-        var nroG=t.nroGuia||t.guia||'';
-        var nroPed=t.nroPedido||t.factura||nroC||nroG||'—';
-        var tipo=nroG?'✈️ Aéreo':(nroC?'🚢 Marítimo':'📦 Zona Libre');
-        return '<tr style="background:rgba(255,255,255,'+(i%2?.02:.0)+');border-bottom:1px solid rgba(255,255,255,.04)">'
-          +'<td style="padding:6px 10px;color:#8b949e;font-size:10px">'+tipo+'</td>'
-          +'<td style="padding:6px 10px;color:#e6edf3;font-weight:600">'+(t.proveedor||t.prov||'—')+'</td>'
-          +'<td style="padding:6px 10px;color:#8b949e">'+(t.departamento||t.dept||'—')+'</td>'
-          +'<td style="padding:6px 10px;font-family:monospace;font-size:10px;color:#e6edf3">'+nroPed+'</td>'
-          +'<td style="padding:6px 10px;color:#8b949e">'+(t.comprador||t.buyer||'—')+'</td>'
-          +'<td style="padding:6px 10px;text-align:right;font-family:monospace;font-weight:700;color:#58a6ff">'+(t.monto||t.valor||t.cif?fmt(t.monto||t.valor||t.cif):'-')+'</td>'
-          +'<td style="padding:6px 10px;text-align:right;color:#8b949e">'+(t.bultos||t.cant||t.cajas||'—')+'</td>'
-          +'<td style="padding:6px 10px"><span style="font-size:9px;font-weight:700;color:'+eColor+'">'+estado+'</span></td>'
-          +'<td style="padding:6px 10px;font-size:10px;color:#8b949e">'+(t.eta||t.fechaETA||t.fecha||'—')+'</td>'
-        +'</tr>';
-      }).join('')
-      +'</tbody>'
-    +'</table>'
-  +'</div></div>';
-
-  el.innerHTML=html;
-}
-
-function abrirTransito(){
+function abrirUnicoModulo(){
   // Open standalone Escenario Único module
   var w = window.open('unico.html','_unico','width=720,height=860,resizable=yes,scrollbars=yes');
   if(!w){ window.location.href='unico.html'; return; }
@@ -16859,7 +16403,6 @@ body:not(.sidebar-pinned) #app-wrapper {
         if(tabId==='config'    && typeof renderConfig==='function')    { renderConfig(); if(typeof renderDeptConfig==='function') renderDeptConfig(); }
         if(tabId==='histprovs' && typeof renderHistProv==='function')  renderHistProv();
         if(tabId==='factdisp'){ renderFactDisp(); _fdAllProvNames=null; setTimeout(function(){ _fdFilterSelect(''); }, 400); }
-        if(tabId==='planeacion'){ setTimeout(function(){ if(typeof window._PLN_INIT==='function') window._PLN_INIT(); },80); }
         if(tabId==='tendencias' && typeof renderTend==='function'){
           (async function(){
             if(_sb){ await _pullTendFromCloud(); }
@@ -16906,7 +16449,7 @@ body:not(.sidebar-pinned) #app-wrapper {
   // Tabs de costeo: al cerrar su modal permanecen en la pantalla de costeo activa
   var COSTEO_MODAL_TABS = ['facturas','cifexp','sababa','comparativo','aranceles'];
   // Tabs informativos/config: al cerrar van al inicio
-  var INICIO_MODAL_TABS = ['tendencias','config','histprovs','histfact','resumen','factdisp','planeacion'];
+  var INICIO_MODAL_TABS = ['tendencias','config','histprovs','histfact','resumen','factdisp'];
 
   window.closeTabModal = function(){
     var overlay = document.getElementById('tab-modal-overlay');
