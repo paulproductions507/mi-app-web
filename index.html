@@ -643,7 +643,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
   </div>
 
   <!-- PHASE 2: Modern Nav Panel -->
-  <div id="splash-nav" style="position:absolute;bottom:0;left:50%;transform:translateX(-50%) translateY(100%);width:100%;max-width:var(--content-max);background:var(--s1);border-top:1px solid var(--border);border-radius:20px 20px 0 0;padding:0;transition:transform .45s cubic-bezier(.25,.46,.45,.94);box-shadow:0 -20px 60px rgba(0,0,0,.5);">
+  <div id="splash-nav" style="position:absolute;bottom:0;left:50%;transform:translateX(-50%) translateY(100%);width:100%;max-width:var(--content-max);background:var(--s1);border-top:1px solid var(--border);border-radius:20px 20px 0 0;padding:0;transition:transform .45s cubic-bezier(.25,.46,.45,.94);box-shadow:0 -20px 60px rgba(0,0,0,.5);display:flex;flex-direction:column;max-height:92dvh;">
 
     <!-- Dark/Light toggle + handle -->
     <div style="padding:14px 20px 0;display:flex;align-items:center;justify-content:space-between">
@@ -662,6 +662,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
     </div>
 
     <!-- KPI CHIPS -->
+    <div style="overflow-y:auto;overflow-x:hidden;flex:1;-webkit-overflow-scrolling:touch;">
     <div class="splash-kpi-strip" id="splash-kpi-strip">
       <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-embarques">—</div><div class="splash-kpi-chip-lbl">Emb. Mes</div></div>
       <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-ahorro">—</div><div class="splash-kpi-chip-lbl">Ahorro Total</div></div>
@@ -784,6 +785,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
         <div style="font-size:10px;color:var(--muted)">Aranceles · Temas · Datos</div>
       </button>
     </div>
+    </div><!-- end scrollable wrapper -->
   </div>
 </div>
 
@@ -1774,6 +1776,12 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       </div>
       <div class="field" style="margin-top:12px"><label style="font-weight:700">Master Value (diferencia Esc.#1 − Esc.#2)</label>
         <input type="number" id="sc_costo_zl" readonly style="background:var(--bg);color:var(--blue-l);font-weight:700">
+        <div style="margin-top:6px">
+          <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);cursor:pointer">
+            <input type="checkbox" id="chk_omit_mv_cif" onchange="window._omitMV_cif=this.checked;if(this.checked&&document.getElementById('chk_omit_mv_ambos'))document.getElementById('chk_omit_mv_ambos').checked=false;calc();" style="accent-color:var(--blue-l)">
+            Omitir Master Value en este escenario
+          </label>
+        </div>
       </div>
       <div style="display:flex;gap:8px;margin-top:12px">
         <button id="btn-aplicar-cif" class="btn" style="flex:1;background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);color:var(--blue-l);opacity:.45;pointer-events:none;transition:all .25s" onclick="calc();if(typeof syncSC3fromSC1==='function')syncSC3fromSC1();setTimeout(function(){if(typeof calcSab2==='function')calcSab2();},80);_showToast('✅ Cambios aplicados','green',1500)">✓ Aplicar</button>
@@ -1875,6 +1883,16 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
           <label>Master Value (auto — editable) <span class="info-btn" onclick="document.getElementById('mv-info').classList.toggle('open')" style="font-style:normal">i</span></label>
           <div id="mv-info" class="info-box">Calculado = Costo Landed Esc.#1 − Costo Landed Sababa sin MV. Ajusta centavos si es necesario. El MV no se paga — es un puente contable.</div>
           <input type="number" id="s2_mv_display" step="0.01" oninput="window._mvManualValue=parseFloat(this.value);window._mvUserEdited=true;calcSab2();" class="mv-editable" placeholder="Se calcula automático">
+          <div style="margin-top:6px;display:flex;gap:12px;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);cursor:pointer">
+              <input type="checkbox" id="chk_omit_mv_sab" onchange="window._omitMV_sab=this.checked;if(this.checked&&document.getElementById('chk_omit_mv_ambos'))document.getElementById('chk_omit_mv_ambos').checked=false;calcSab2();" style="accent-color:var(--orange-l)">
+              Omitir MV (este escenario)
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);cursor:pointer">
+              <input type="checkbox" id="chk_omit_mv_ambos" onchange="window._omitMV_sab=this.checked;window._omitMV_cif=this.checked;['chk_omit_mv_sab','chk_omit_mv_cif'].forEach(function(id){var el=document.getElementById(id);if(el)el.checked=document.getElementById('chk_omit_mv_ambos').checked;});calcSab2();calc();" style="accent-color:var(--orange-l)">
+              Omitir MV (ambos escenarios)
+            </label>
+          </div>
         </div>
         <div class="field"><label>Gastos Destino / Agente (USD)</label><input type="number" id="s2_agente" value="" placeholder="0.00" step="0.01" oninput="this.dataset.autoSet='false';calcSab2()"></div>
       </div>
@@ -4642,13 +4660,14 @@ function _autoFillGastosProveedores(){
     add('honorarios', 'CIF EXPRESS TRÁMITE S.A.', 'Honorarios — Monto Gravado',    honG);
     add('itbms',      'CIF EXPRESS TRÁMITE S.A.', 'ITBMS s/Monto Gravado',         itbmsHon);
 
-    // MASTER VALUE — absorbe diferencia Liq vs CIF (arancel, DMCE, acarreo que CIF no paga)
+    // MASTER VALUE — absorbe diferencia Liq vs CIF
     const mv2 = sc2.mv || 0;
-    if(mv2 > 0.005){
-      add('gastos', 'MASTER VALUE, S.A.', 'Diferencia Liq. vs CIF Express', mv2);
-    } else if(mv2 < -0.005){
-      // Master Value negativo — advertencia, NO se agrega, se avisa al usuario
-      _showToast('⚠️ Master Value negativo ($' + Math.abs(mv2).toFixed(2) + ') — No se puede procesar con este valor. Revisa los parámetros.', 'red', 7000);
+    if(!window._omitMV_cif){
+      if(mv2 > 0.005){
+        add('gastos', 'MASTER VALUE, S.A.', 'Diferencia Liq. vs CIF Express', mv2);
+      } else if(mv2 < -0.005){
+        _showToast('⚠️ Master Value negativo ($'+Math.abs(mv2).toFixed(2)+') — Activa "Omitir MV" si no aplica.','orange',6000);
+      }
     }
   }
 
@@ -4690,10 +4709,12 @@ function _autoFillGastosProveedores(){
     } else {
       mv3 = sc3.mv || 0;
     }
-    if(mv3 > 0.005){
-      add('gastos', 'MASTER VALUE, S.A.', 'Diferencia Liq. vs Sababa', mv3);
-    } else if(mv3 < -0.005){
-      _showToast('⚠️ Master Value negativo ($' + Math.abs(mv3).toFixed(2) + ') — No se puede procesar con este valor. Revisa los parámetros.', 'red', 7000);
+    if(!window._omitMV_sab){
+      if(mv3 > 0.005){
+        add('gastos', 'MASTER VALUE, S.A.', 'Diferencia Liq. vs Sababa', mv3);
+      } else if(mv3 < -0.005){
+        _showToast('⚠️ Master Value negativo ($'+Math.abs(mv3).toFixed(2)+') — Activa "Omitir MV" si no aplica.','orange',6000);
+      }
     }
   }
 
@@ -8698,8 +8719,15 @@ async function renderFactDisp(){
   var fmt=function(n){ return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
   var MESES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 
-  // Only show disponibles (not found in processed shipments)
-  var disponibles=data.filter(function(f){ return !usadas.has((f.num||'').toUpperCase()); });
+  // Separar: disponibles (saldo > 0) vs consumidas (saldo = 0)
+  var disponibles = data.filter(function(f){
+    var s = (f.saldo != null) ? f.saldo : f.monto;
+    return (s||0) > 0;
+  });
+  var consumidas = data.filter(function(f){
+    var s = (f.saldo != null) ? f.saldo : f.monto;
+    return (s||0) <= 0;
+  });
 
   // Group by month of registration (creation date)
   var byMes={};
@@ -8749,16 +8777,24 @@ async function renderFactDisp(){
           '<input id="fd-prov-search" type="text" placeholder="Buscar proveedor..." autocomplete="off" oninput="_fdProvSearchFilter(this)" style="width:100%;background:var(--s2);border:1px solid rgba(168,85,247,.4);border-radius:6px 6px 0 0;padding:7px 10px;color:var(--text);font-size:12px;box-sizing:border-box;margin-bottom:0">'+
           (_fdBuildProvSelect())+
         '</div>'+
-        '<div style="grid-column:1/-1">'+
+        '<div>'+
+          '<label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px">Monto Total (USD) *</label>'+
+          '<input id="fd-monto" type="number" placeholder="0.00" step="0.01" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;box-sizing:border-box">'+
+        '</div>'+
+        '<div>'+
+          '<label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px">Tipo</label>'+
+          (function(){
+  var rubros = (typeof _RUBROS_GASTO!=='undefined'?_RUBROS_GASTO:window._RUBROS_GASTO)||[];
+  var opts = rubros.map(function(r){
+    return '<option value="'+(r.val||r.lbl||'').replace(/"/g,'&quot;')+'">'+(r.icon?r.icon+' ':'')+(r.lbl||r.val||'')+'</option>';
+  }).join('');
+  return '<select id="fd-tipo" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;box-sizing:border-box">'+opts+'</select>';
+})()+
+        '</div>'+
+        '<div>'+
           '<label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px">Notas (opcional)</label>'+
           '<input id="fd-notas" type="text" placeholder="Embarque relacionado, observación..." style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;box-sizing:border-box">'+
         '</div>'+
-      '</div>'+
-      '<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">📋 Rubros de la Factura</div>'+
-      '<div id="fd-rubros-list" style="margin-bottom:8px"></div>'+
-      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'+
-        '<button onclick="_fdAddRubroRow()" style="background:rgba(168,85,247,.1);border:1px dashed rgba(168,85,247,.5);color:#a371f7;border-radius:7px;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer">+ Agregar rubro</button>'+
-        '<span id="fd-rubros-total" style="font-size:12px;font-weight:700;font-family:\'IBM Plex Mono\',monospace;color:var(--green-l)">Total: $0.00</span>'+
       '</div>'+
       '<button onclick="_fdAgregar()" style="background:#a371f7;border:none;color:#fff;border-radius:8px;padding:9px 20px;font-size:12px;font-weight:700;cursor:pointer;width:100%">➕ Agregar Factura</button>'+
     '</div>'+
@@ -8792,13 +8828,16 @@ async function renderFactDisp(){
               '</tr></thead>'+
               '<tbody>'+
               fs.map(function(f,i){
+                var saldoDisp = (f.saldo != null ? f.saldo : f.monto) || 0;
+                var saldoColor = saldoDisp <= 0 ? 'var(--red-l)' : saldoDisp < f.monto*0.3 ? 'var(--orange-l)' : 'var(--green-l)';
                 return '<tr style="background:'+(i%2?'var(--s1)':'var(--bg)')+';border-bottom:1px solid rgba(255,255,255,.04)">'+
                   '<td style="padding:8px 12px;font-family:monospace;font-size:10px;color:var(--text);font-weight:600">'+f.num+'</td>'+
                   '<td style="padding:8px 12px;color:var(--text)">'+f.prov+'<br><span style="font-size:9px;color:var(--muted)">'+f.notas+'</span></td>'+
                   '<td style="padding:8px 12px"><span style="background:'+(tipoColors[f.tipo]||'rgba(139,148,158,.15)')+';color:'+(tipoText[f.tipo]||'var(--muted)')+';border-radius:4px;padding:2px 7px;font-size:10px;font-weight:600">'+f.tipo+'</span></td>'+
                   '<td style="padding:8px 12px;text-align:right;font-family:monospace;font-weight:700;color:var(--text)">'+fmt(f.monto)+'</td>'+
+                  '<td style="padding:8px 12px;text-align:right;font-family:monospace;font-weight:700;color:'+saldoColor+'">'+fmt(saldoDisp)+'</td>'+
                   '<td style="padding:8px 12px;text-align:center">'+
-                    '<button data-fid="'+f.id+'" onclick="_fdEliminar(this.dataset.fid)"  style="background:rgba(248,81,73,.12);border:1px solid rgba(248,81,73,.3);color:var(--red-l);border-radius:5px;padding:3px 8px;font-size:10px;cursor:pointer" title="Eliminar">🗑️</button>'+
+                    '<button data-fid="'+f.id+'" onclick="_fdEliminar(this.dataset.fid)" style="background:rgba(248,81,73,.12);border:1px solid rgba(248,81,73,.3);color:var(--red-l);border-radius:5px;padding:3px 8px;font-size:10px;cursor:pointer" title="Eliminar">🗑️</button>'+
                   '</td>'+
                 '</tr>';
               }).join('')+
@@ -8807,8 +8846,94 @@ async function renderFactDisp(){
           '</div>';
         }).join('')
     )+
+
+    // ── Consumidas (saldo = 0) ──
+    (consumidas.length===0?'':
+      '<div style="margin-top:24px">'+
+      '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">✅ Facturas Consumidas</div>'+
+      (function(){
+        var byMesC={};
+        consumidas.forEach(function(f){
+          var d=new Date(f.fecha||'');
+          var k=isNaN(d)?'Sin fecha':(MESES[d.getMonth()]+' '+d.getFullYear());
+          if(!byMesC[k]) byMesC[k]=[];
+          byMesC[k].push(f);
+        });
+        return Object.keys(byMesC).sort(function(a,b){ return new Date('1 '+b)-new Date('1 '+a); }).map(function(mes){
+          var fs=byMesC[mes];
+          return '<div style="margin-bottom:12px;border-radius:10px;overflow:hidden;border:1px solid rgba(139,148,158,.2)">'+
+            '<div style="background:rgba(139,148,158,.06);padding:8px 14px;display:flex;justify-content:space-between">'+
+              '<span style="font-size:12px;font-weight:700;color:var(--muted)">📅 '+mes+'</span>'+
+              '<span style="font-size:11px;color:var(--muted)">'+fs.length+' factura'+(fs.length!==1?'s':'')+'</span>'+
+            '</div>'+
+            '<table style="width:100%;border-collapse:collapse;font-size:11px">'+
+              '<thead><tr style="background:var(--s2)">'+
+                '<th style="padding:6px 12px;text-align:left;color:var(--muted);font-weight:600">N° Factura</th>'+
+                '<th style="padding:6px 12px;text-align:left;color:var(--muted);font-weight:600">Proveedor</th>'+
+                '<th style="padding:6px 12px;text-align:right;color:var(--muted);font-weight:600">Total</th>'+
+                '<th style="padding:6px 12px;text-align:left;color:var(--muted);font-weight:600">Embarques utilizados</th>'+
+                '<th style="padding:6px 12px;text-align:center;font-weight:600"></th>'+
+              '</tr></thead>'+
+              '<tbody>'+
+              fs.map(function(f,i){
+                var usos=f.usos||[];
+                var usosHtml=usos.length
+                  ? usos.map(function(u){ return '<div style="font-size:9px;color:var(--muted);line-height:1.6">📦 <strong style="color:var(--text)">'+u.embarque+'</strong> — '+fmt(u.monto)+(u.fecha?' ('+u.fecha+')':'')+'</div>'; }).join('')
+                  : '<span style="font-size:9px;color:var(--muted)">Sin historial registrado</span>';
+                return '<tr style="background:'+(i%2?'var(--s1)':'var(--bg)')+';border-bottom:1px solid rgba(255,255,255,.04)">'+
+                  '<td style="padding:8px 12px;font-family:monospace;font-size:10px;color:var(--muted);font-weight:600">'+f.num+'</td>'+
+                  '<td style="padding:8px 12px;color:var(--muted);font-size:11px">'+f.prov+'</td>'+
+                  '<td style="padding:8px 12px;text-align:right;font-family:monospace;font-size:11px;color:var(--muted)">'+fmt(f.monto)+'</td>'+
+                  '<td style="padding:8px 12px">'+usosHtml+'</td>'+
+                  '<td style="padding:8px 12px;text-align:center">'+
+                    '<button data-fid="'+f.id+'" onclick="_fdEliminar(this.dataset.fid)" style="background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.2);color:var(--red-l);border-radius:5px;padding:3px 7px;font-size:10px;cursor:pointer">🗑️</button>'+
+                  '</td>'+
+                '</tr>';
+              }).join('')+
+              '</tbody>'+
+            '</table>'+
+          '</div>';
+        }).join('');
+      })()+
+      '</div>'
+    )+
+
   '</div>';
   setTimeout(_fdInitRubros, 60);
+}
+
+// ── Marcar factura como consumida manualmente ──
+async function _fdMarcarConsumida(fid){
+  var data = await _fdLoad();
+  var f = data.find(function(x){ return x.id === fid; });
+  if(!f) return;
+  var saldoActual = (f.saldo != null ? f.saldo : f.monto) || 0;
+  var fmt = function(n){ return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
+
+  // Pedir número de embarque
+  var nro = prompt(
+    '✅ Marcar "'+f.num+'" como consumida\n\n'+
+    'Proveedor: '+f.prov+'\n'+
+    'Total: '+fmt(f.monto)+' · Saldo actual: '+fmt(saldoActual)+'\n\n'+
+    'Ingresa el N° de embarque al que se asignó esta factura:'
+  );
+  if(nro === null) return; // canceló
+  nro = (nro||'').trim() || '—';
+
+  // Registrar uso y bajar saldo a 0
+  if(!f.usos) f.usos = [];
+  f.usos.push({
+    embarque: nro,
+    monto:    saldoActual,
+    fecha:    new Date().toISOString().slice(0,10),
+    manual:   true
+  });
+  f.saldo = 0;
+
+  await _fdSave(data);
+  _fdInvalidateCache();
+  _showToast('✅ Factura '+f.num+' marcada como consumida — Embarque: '+nro, 'green', 3000);
+  renderFactDisp();
 }
 
 // ── Consume partial amount from a factura disponible ──
@@ -8837,86 +8962,38 @@ async function _fdConsumirParcial(numFact, montoUsado){
   }
 }
 
-// ── Helpers multi-rubro para Facturas Disponibles ──
-var _fdFormRubros = [];
-var _FD_RL = {flete:'🚢 Flete Internacional',liquidacion:'🏛️ Liquidación / Pago Arancelario',itbms:'🧾 ITBMS',tasa:'💵 Tasa / Uso del Sistema',honorarios:'💼 Honorarios / Comisión',acarreo:'🚛 Acarreo / Transporte',gastos_destino:'📦 Gastos Destino / Origen',uso_sistema:'💻 Uso del Sistema',seguro:'🛡️ Seguro de Carga',almacenaje:'🏪 Almacenaje',inspeccion:'🔍 Inspección',dmce:'📝 DMCE',otros:'📋 Otros Gastos'};
-
-function _fdInitRubros(){
-  _fdFormRubros = [{tipo:'flete', monto:0}];
-  _fdRenderRubrosForm();
-}
-
-function _fdAddRubroRow(){
-  _fdFormRubros.push({tipo:'otros', monto:0});
-  _fdRenderRubrosForm();
-}
-
-function _fdRenderRubrosForm(){
-  var list = document.getElementById('fd-rubros-list');
-  if(!list) return;
-  var ropts = Object.entries(_FD_RL).map(function(e){
-    return '<option value="'+e[0]+'">'+e[1]+'</option>';
-  }).join('');
-  list.innerHTML = _fdFormRubros.map(function(r, ri){
-    var sel = ropts.replace('value="'+r.tipo+'"', 'value="'+r.tipo+'" selected');
-    return '<div style="display:flex;gap:6px;align-items:center;margin-bottom:7px">'
-      +'<select onchange="_fdFormRubros['+ri+'].tipo=this.value" '
-        +'style="flex:1;background:var(--s2);border:1px solid rgba(168,85,247,.3);border-radius:6px;padding:6px 8px;color:var(--text);font-size:11px">'+sel+'</select>'
-      +'<input type="number" step="0.01" value="'+(r.monto||'')+'" placeholder="0.00" '
-        +'oninput="_fdFormRubros['+ri+'].monto=parseFloat(this.value)||0;_fdRubrosTotal()" '
-        +'style="width:120px;flex-shrink:0;background:var(--s2);border:1px solid rgba(88,166,255,.35);border-radius:6px;padding:6px 8px;color:var(--blue-l);font-size:12px;font-family:\'IBM Plex Mono\',monospace;text-align:right;font-weight:700">'
-      +(_fdFormRubros.length > 1
-        ? '<button onclick="_fdFormRubros.splice('+ri+',1);_fdRenderRubrosForm()" '
-            +'style="background:rgba(218,54,51,.1);border:1px solid rgba(218,54,51,.2);color:var(--red-l);border-radius:5px;width:28px;height:28px;cursor:pointer;font-size:13px;flex-shrink:0">×</button>'
-        : '<div style="width:28px"></div>')
-      +'</div>';
-  }).join('');
-  _fdRubrosTotal();
-}
-
-function _fdRubrosTotal(){
-  var total = _fdFormRubros.reduce(function(s,r){ return s+(r.monto||0); }, 0);
-  var el = document.getElementById('fd-rubros-total');
-  if(el) el.textContent = 'Total: $'+Number(total).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-}
-
 async function _fdAgregar(){
-  var num  = (document.getElementById('fd-num')?.value||'').trim();
-  var fecha= (document.getElementById('fd-fecha')?.value||'');
-  var provHidden = document.getElementById('fd-prov');
-  var provSearch = document.getElementById('fd-prov-search');
-  var prov = ((provHidden&&provHidden.value ? provHidden.value : '')||(provSearch&&provSearch.value ? provSearch.value : '')).trim();
-  var notas= (document.getElementById('fd-notas')?.value||'').trim();
+  var num   =(document.getElementById('fd-num')?.value||'').trim();
+  var fecha =(document.getElementById('fd-fecha')?.value||'');
+  var provHidden=document.getElementById('fd-prov'); var provSearch=document.getElementById('fd-prov-search'); var prov=((provHidden&&provHidden.value?provHidden.value:'')||(provSearch&&provSearch.value?provSearch.value:'')).trim();
+  var monto =parseFloat(document.getElementById('fd-monto')?.value||'0')||0;
+  var tipo  =(document.getElementById('fd-tipo')?.value||'Otro');
+  var notas =(document.getElementById('fd-notas')?.value||'').trim();
 
-  if(!num) { _showToast('⚠️ El número de factura es obligatorio','orange',2000); return; }
+  if(!num){ _showToast('⚠️ El número de factura es obligatorio','orange',2000); return; }
   if(!prov){ _showToast('⚠️ El proveedor es obligatorio','orange',2000); return; }
+  if(monto<=0){ _showToast('⚠️ El monto debe ser mayor a 0','orange',2000); return; }
 
-  var rubros = (_fdFormRubros||[]).filter(function(r){ return (r.monto||0) > 0; });
-  if(!rubros.length){ _showToast('⚠️ Agrega al menos un rubro con monto > $0','orange',2000); return; }
-
-  var montoTotal = rubros.reduce(function(s,r){ return s+(r.monto||0); }, 0);
-
-  var data = await _fdLoad();
-  if(data.find(function(f){ return (f.num||'').toUpperCase()===num.toUpperCase(); })){
+  var data=await _fdLoad();
+  // Check duplicate
+  if(data.find(function(f){ return f.num.toUpperCase()===num.toUpperCase(); })){
     _showToast('⚠️ Ya existe una factura con ese número','orange',3000); return;
   }
 
   data.push({
-    id:      Date.now().toString(36)+Math.random().toString(36).slice(2,5),
-    num:     num,
-    fecha:   fecha||new Date().toISOString().slice(0,10),
-    prov:    prov,
-    monto:   Math.round(montoTotal*100)/100,
-    tipo:    rubros[0].tipo,
-    rubros:  rubros,
-    notas:   notas,
-    creadoEn: new Date().toISOString()
+    id:   Date.now().toString(36)+Math.random().toString(36).slice(2,5),
+    num:  num,
+    fecha:fecha||new Date().toISOString().slice(0,10),
+    prov: prov,
+    monto:monto,
+    tipo: tipo,
+    notas:notas,
+    creadoEn:new Date().toISOString()
   });
   await _fdSave(data);
   _fdInvalidateCache();
-  _showToast('✅ Factura '+num+' guardada — '+rubros.length+' rubro'+(rubros.length>1?'s':''),'green',2500);
+  _showToast('✅ Factura '+num+' guardada en nube ☁️','green',2000);
   renderFactDisp();
-  setTimeout(_fdInitRubros, 100);
 }
 
 async function _fdEliminar(id){
@@ -15781,7 +15858,7 @@ body:not(.sidebar-pinned) #app-wrapper {
       setTimeout(function(){
         if(tabId==='config'    && typeof renderConfig==='function')    { renderConfig(); if(typeof renderDeptConfig==='function') renderDeptConfig(); }
         if(tabId==='histprovs' && typeof renderHistProv==='function')  renderHistProv();
-        if(tabId==='factdisp'){ renderFactDisp(); _fdAllProvNames=null; setTimeout(function(){ _fdFilterSelect(''); _fdInitRubros(); }, 400); }
+        if(tabId==='factdisp'){ renderFactDisp(); _fdAllProvNames=null; setTimeout(function(){ _fdFilterSelect(''); }, 400); }
         if(tabId==='tendencias' && typeof renderTend==='function'){
           (async function(){
             if(_sb){ await _pullTendFromCloud(); }
