@@ -8540,11 +8540,7 @@ function _correrProcesoProveedores(){
   tendData.forEach(function(d){
     var escLow = (d.esc||'').toLowerCase();
     var isSabEmb = escLow.includes('sababa') || escLow.includes('sab');
-    // Tipo del embarque según cómo se procesó (ZL o EXT/IMP)
-    var tipoEmb = (d.snap&&d.snap.tipo) ? d.snap.tipo : (d.tipo||'ZL');
-    // FIX PERMANENTE: embarques de importación que quedaron guardados como ZL
-    var _nroD = (d.nro||'').toString().trim();
-    if(['22032','22033','22034','22038','22039'].indexOf(_nroD) !== -1) tipoEmb = 'IMP';
+    var tipoEmb = (['22032','22033','22034','22038','22039'].indexOf((d.nro||'').toString().trim())!==-1) ? 'IMP' : ((d.snap&&d.snap.tipo) ? d.snap.tipo : (d.tipo||'ZL'));
     var lines = (d.snap&&d.snap.invLines)||d.invLines||[];
 
     lines.forEach(function(l){
@@ -10096,11 +10092,7 @@ function _buildHistProvRows(){
     var isSabEmb = (escLabel==='Sababa');
     var dIdx=tendData.indexOf(d);
     var isUnico2 = !!(d.modoUnico || d.tipoEsc==='unico');
-    // Tipo del embarque según cómo se procesó (ZL o EXT/IMP)
-    var tipoEmb = (d.snap&&d.snap.tipo) ? d.snap.tipo : (d.tipo||'ZL');
-    // FIX PERMANENTE: embarques de importación Sababa que quedaron guardados como ZL
-    var _EMB_IMP_FIJOS = ['22032','22033','22034','22038','22039'];
-    if(_EMB_IMP_FIJOS.indexOf((nro||'').toString().trim()) !== -1) tipoEmb = 'IMP';
+    var tipoEmb = (['22032','22033','22034','22038','22039'].indexOf((d.nro||'').toString().trim())!==-1) ? 'IMP' : ((d.snap&&d.snap.tipo) ? d.snap.tipo : (d.tipo||'ZL'));
     var tipoEmbNorm = (tipoEmb==='EXT'||tipoEmb==='IMP') ? 'IMP' : 'ZL';
 
     lines.forEach(function(l){
@@ -11038,7 +11030,8 @@ function _renderDeptChart(all){
   const byDept={};
   all.forEach(d=>{
     const invL=d.snap?.invLines||d.invLines||[];
-    const tipoEmb=((d.snap?.tipo)||d.tipo||'ZL');
+    const _nroFix=['22032','22033','22034','22038','22039'].indexOf((d.nro||'').toString().trim())!==-1;
+    const tipoEmb=_nroFix?'IMP':((d.snap?.tipo)||d.tipo||'ZL');
     const tipoEmbNorm=(tipoEmb==='EXT'||tipoEmb==='IMP')?'IMP':'ZL';
     const escLow=(d.esc||'').toLowerCase();
     const isSabEmb=escLow.includes('sababa')||escLow.includes('sab');
@@ -11106,7 +11099,7 @@ function _renderDeptChart(all){
     const sortedProvs=[...v.provs].sort((a,b)=>b.costo-a.costo);
     const totalProv=sortedProvs.reduce((s,p)=>s+p.costo,0);
     const provRows=sortedProvs.map(p=>{
-      const tipoBadge=p.tipo==='EXT'
+      const tipoBadge=(p.tipo==='EXT'||p.tipo==='IMP')
         ?`<span style="background:rgba(240,136,62,.15);border:1px solid rgba(240,136,62,.3);color:var(--orange-l);border-radius:3px;padding:0 5px;font-size:9px;font-weight:700">🚢 IMP</span>`
         :`<span style="background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:3px;padding:0 5px;font-size:9px;font-weight:700">🚛 ZL</span>`;
       return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 12px;border-bottom:1px solid rgba(48,54,61,.3);cursor:pointer;transition:background .12s"
@@ -11191,8 +11184,7 @@ function _renderGroupSections(data){
   var byDept = {};
   data.forEach(function(d){
     var invL = (d.snap && d.snap.invLines) ? d.snap.invLines : (d.invLines||[]);
-    var tipoEmb = ((d.snap && d.snap.tipo) || d.tipo || 'ZL');
-    if(['22032','22033','22034','22038','22039'].indexOf((d.nro||'').toString().trim()) !== -1) tipoEmb = 'IMP';
+    var tipoEmb = (['22032','22033','22034','22038','22039'].indexOf((d.nro||'').toString().trim())!==-1) ? 'IMP' : (((d.snap && d.snap.tipo) || d.tipo || 'ZL'));
     var dIdx = tendData.indexOf(d);
     invL.forEach(function(l){
       // Skip expense lines — only mercancía lines go into dept grouping
@@ -11225,7 +11217,7 @@ function _renderGroupSections(data){
   function buildProvRows(facs){
     if(!facs.length) return '<div style="padding:12px 16px;color:var(--muted);font-size:11px">Sin proveedores en esta categoría.</div>';
     return facs.map(function(f){
-      var tipoBadge = f.tipo==='EXT'
+      var tipoBadge = (f.tipo==='EXT'||f.tipo==='IMP')
         ? '<span style="background:rgba(240,136,62,.15);border:1px solid rgba(240,136,62,.3);color:var(--orange-l);border-radius:3px;padding:1px 5px;font-size:9px;font-weight:700;white-space:nowrap">🚢 IMP</span>'
         : '<span style="background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:3px;padding:1px 5px;font-size:9px;font-weight:700;white-space:nowrap">🚛 ZL</span>';
       return '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 16px;'
