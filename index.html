@@ -5578,15 +5578,17 @@ function _autoFillGastosProveedores(){
       _savedFacts[key] = {numFact:l.numFact, nfac:l.nfac, _factSaved:true};
     }
   });
-  // Apply S.I- provider rule based on current tipo
-  var _esZLnow = (typeof tipo!=='undefined' && tipo==='ZL');
+  // ── REGLA S.I. CORREGIDA: basada en montoHomologado/ocHomologada, NO en tipo ZL/EXT ──
+  // Si tiene homologado → S.I- hijo (sin importar ZL o Importación)
+  // Si NO tiene homologado → proveedor padre (sin S.I-)
   mercLines = mercLines.map(function(l){
     if(l.tipoFac!=='mercancia') return l;
     var p = l.prov||'';
-    if(_esZLnow && !p.startsWith('S.I -') && !p.startsWith('S.I-')){
+    var tieneHomol = (l.montoHomologado||0) > 0 || !!(l.ocHomologada&&l.ocHomologada.trim());
+    if(tieneHomol && !(/^S\.I\s*[-–]/i.test(p))){
       var m=provMatch(p); if(m&&m.si) l=Object.assign({},l,{prov:m.si});
-    } else if(!_esZLnow && (p.startsWith('S.I - ')||p.startsWith('S.I- '))){
-      l=Object.assign({},l,{prov:p.replace(/^S\.I\s*-\s*/i,'').trim()});
+    } else if(!tieneHomol && (/^S\.I\s*[-–]/i.test(p))){
+      l=Object.assign({},l,{prov:p.replace(/^S\.I\s*[-–]\s*/i,'').trim()});
     }
     return l;
   });
@@ -8493,8 +8495,13 @@ function _toggleTendSection(bodyId, chevId){
 
 // ══════════════════════════════════════════════
 // Correr Proceso: fix S.I. provider rule across all tendData
-// Regla principal: líneas de mercancía en embarques Sababa CON montoHomologado > 0
-// deben tener el nombre S.I. correspondiente (proveedor hijo).
+// ══════════════════════════════════════════════
+// REGLA CORREGIDA (única y definitiva):
+//   1. Si la línea tiene montoHomologado > 0 ó ocHomologada definida
+//      → FORZAR proveedor hijo "S.I - [Nombre]", sin importar si es ZL o Importación.
+//   2. Si NO tiene homologado → usar proveedor PADRE (sin prefijo S.I -).
+//   3. Para el tipo ZL/IMP del proveedor: leerlo del campo tipo del EMBARQUE,
+//      NO deducirlo del nombre del proveedor.
 // ══════════════════════════════════════════════
 function _correrProcesoProveedores(){
   if(!tendData || !tendData.length){
@@ -8505,34 +8512,63 @@ function _correrProcesoProveedores(){
   tendData.forEach(function(d){
     var escLow = (d.esc||'').toLowerCase();
     var isSabEmb = escLow.includes('sababa') || escLow.includes('sab');
-    var isZL = (d.snap&&d.snap.tipo)?d.snap.tipo==='ZL':(d.tipo||'ZL')==='ZL';
+    // Tipo del embarque según cómo se procesó (ZL o EXT/IMP)
+    var tipoEmb = (d.snap&&d.snap.tipo) ? d.snap.tipo : (d.tipo||'ZL');
     var lines = (d.snap&&d.snap.invLines)||d.invLines||[];
 
     lines.forEach(function(l){
       if(!l.prov) return;
       var p = l.prov.trim();
       var esMerc = (l.tipoFac||'mercancia')==='mercancia';
+      var tieneHomol = (l.montoHomologado||0) > 0 || !!(l.ocHomologada&&l.ocHomologada.trim());
 
       if(isSabEmb && esMerc){
-        // ── REGLA SABABA: si tiene montoHomologado > 0, FORZAR nombre S.I. ──
-        if((l.montoHomologado||0) > 0){
-          var yaEsSI = /^S\.I\s*[-–]/i.test(p) || p.toUpperCase().startsWith('S.I -') || p.toUpperCase().startsWith('S.I-');
-          if(!yaEsSI && typeof provMatch === 'function'){
-            var m = provMatch(p);
-            if(m && m.si){ l.prov = m.si; fixed++; }
+        if(tieneHomol){
+          // ── REGLA: tiene homologado → FORZAR nombre S.I. (ZL o IMP, no importa) ──
+          var yaEsSI = /^S\.I\s*[-–]/i.test(p);
+          if(!yaEsSI){
+            // Buscar en mapa _PROV_SI
+            var siKey = typeof _PROV_SI!=='undefined' ? Object.keys(_PROV_SI).find(function(k){ return k.toUpperCase()===p.toUpperCase(); }) : null;
+            if(siKey){ l.prov = _PROV_SI[siKey]; fixed++; }
+            else if(typeof provMatch === 'function'){
+              var m = provMatch(p);
+              if(m && m.si){ l.prov = m.si; fixed++; }
+            }
+          }
+          // Asegurar que el tipo del proveedor refleja el tipo real del embarque
+          if(!l.tipoProv || l.tipoProv==='') {
+            l.tipoProv = (tipoEmb==='EXT'||tipoEmb==='IMP') ? 'IMP' : 'ZL';
+          }
+        } else {
+          // ── REGLA: sin homologado → usar proveedor PADRE (quitar S.I -) ──
+          var parent = p.replace(/^S\.I\s*[-–]\s*/i,'').trim();
+          if(parent && parent !== p){ l.prov = parent; fixed++; }
+          // Sincronizar tipo del proveedor con el del embarque
+          if(!l.tipoProv || l.tipoProv==='') {
+            l.tipoProv = (tipoEmb==='EXT'||tipoEmb==='IMP') ? 'IMP' : 'ZL';
           }
         }
       } else if(isSabEmb && !esMerc){
-        // Gastos de Sababa: también asignar S.I. si corresponde
-        var yaEsSI2 = /^S\.I\s*[-–]/i.test(p) || p.toUpperCase().startsWith('S.I -') || p.toUpperCase().startsWith('S.I-');
-        if(!yaEsSI2 && typeof provMatch === 'function'){
-          var m2 = provMatch(p);
-          if(m2 && m2.si){ l.prov = m2.si; fixed++; }
+        // Gastos de Sababa con homologado: también asignar S.I.
+        if(tieneHomol){
+          var yaEsSI2 = /^S\.I\s*[-–]/i.test(p);
+          if(!yaEsSI2){
+            var siKey2 = typeof _PROV_SI!=='undefined' ? Object.keys(_PROV_SI).find(function(k){ return k.toUpperCase()===p.toUpperCase(); }) : null;
+            if(siKey2){ l.prov = _PROV_SI[siKey2]; fixed++; }
+            else if(typeof provMatch === 'function'){
+              var m2 = provMatch(p);
+              if(m2 && m2.si){ l.prov = m2.si; fixed++; }
+            }
+          }
         }
-      } else if(!isZL && esMerc){
-        // Liquidación/Importación directa: quitar prefijo S.I. si lo tiene
-        var parent = p.replace(/^S\.I\s*[-–]\s*/i,'').trim();
-        if(parent && parent !== p){ l.prov = parent; fixed++; }
+      } else if(!isSabEmb && esMerc){
+        // Liquidación / Esc. Aduanal único: quitar prefijo S.I. si lo tiene
+        var parentLiq = p.replace(/^S\.I\s*[-–]\s*/i,'').trim();
+        if(parentLiq && parentLiq !== p){ l.prov = parentLiq; fixed++; }
+        // Tipo según embarque
+        if(!l.tipoProv || l.tipoProv==='') {
+          l.tipoProv = (tipoEmb==='EXT'||tipoEmb==='IMP') ? 'IMP' : 'ZL';
+        }
       }
     });
   });
@@ -9998,10 +10034,10 @@ function _buildHistProvRows(){
           if(siMatchH) prov = _PROV_SI[siMatchH];
         }
       }
-      // Tipo ZL/IMP: para Único usar tipoProv de la línea; para otros usar nombre
+      // Tipo ZL/IMP: usar el tipo real del embarque (cómo se procesó), no el nombre del proveedor
       var tipoP = isUnico2
         ? ((l.tipoProv||l.tipoProveedor||'ZL').toUpperCase()==='IMP' ? 'IMP' : 'ZL')
-        : (prov.toUpperCase().startsWith('S.I') ? 'IMP' : 'ZL');
+        : (l.tipoProv && l.tipoProv!=='' ? l.tipoProv : ((tipoEmb==='EXT'||tipoEmb==='IMP') ? 'IMP' : 'ZL'));
       var base={prov,oc:l.oc||l.nfac||'—',numFact:l.numFact||l.nroFact||l.nfac||l.factura||'—',ocHomologada:l.ocHomologada||'',montoHomologado:l.montoHomologado||0,
         depto:(l.deptCat||l.dept||'Sin categoría').toUpperCase(),
         piezas:l.piezas||0,bultos:l.bultos||0,costo:l.costo||0,
@@ -12858,7 +12894,8 @@ function renderInvLines(){
   const cGastos= gastosContainers.length? gastosContainers[gastosContainers.length-1]: null;
 
   _initProvDatalist();
-  const isSababa=(tipo==='ZL');
+  // isSababa: verdadero cuando el escenario activo es Sababa (no solo por tipo ZL)
+  const isSababa = (typeof compar !== 'undefined' && compar === 'sababa') || (typeof tipo !== 'undefined' && tipo === 'ZL' && document.getElementById('tab-sababa')?.classList.contains('on'));
 
   // Split into mercancía and gastos
   const mercLines  = invLines.filter(l=>(l.tipoFac||'mercancia')==='mercancia');
@@ -13008,8 +13045,9 @@ function onInvProvChange(idx, val){
   invLines[idx].prov=val;
   const m=provMatch(val);
   invLines[idx]._match=m;
-  // Rule: ZL (Sababa) → use S.I- child provider; EXT (Liquidación/CIF) → use parent
-  const _useChild = (tipo==='ZL') && m && m.si;
+  // Regla S.I. corregida: usar hijo S.I si la línea tiene montoHomologado > 0 o ocHomologada
+  const tieneHomol = (invLines[idx].montoHomologado||0) > 0 || !!(invLines[idx].ocHomologada&&invLines[idx].ocHomologada.trim());
+  const _useChild = tieneHomol && m && m.si;
   if(m&&(m.exact||m.score>=0.8)){
     const finalName = _useChild ? m.si : m.name;
     invLines[idx].prov = finalName;
@@ -14677,7 +14715,7 @@ function renderTopProvs(){
       }
       provTotals[prov] = (provTotals[prov]||0) + (l.costo||0);
       provCount[prov]  = (provCount[prov]||0) + 1;
-      if(!provTipos[prov]) provTipos[prov] = tipoEmb;
+      if(!provTipos[prov]) provTipos[prov] = (tipoEmb==='EXT'||tipoEmb==='IMP') ? 'IMP' : 'ZL';
     });
   });
 
@@ -14708,7 +14746,7 @@ function renderTopProvs(){
     <div id="_top10-list" style="display:block">` +
     sorted.map((prov,i)=>{
       const pctTotal = ((provTotals[prov]/totalAll)*100).toFixed(1);
-      const tipo = provTipos[prov]==='EXT'?'IMP':'ZL';
+      const tipo = provTipos[prov]==='IMP'?'IMP':'ZL';
       return `<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;border-bottom:1px solid rgba(48,54,61,.2)">
         <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1">
           <span style="font-size:10px;font-weight:700;color:var(--muted);min-width:22px;flex-shrink:0">#${i+1}</span>
