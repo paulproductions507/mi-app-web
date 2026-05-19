@@ -2647,6 +2647,14 @@ function _PLN_BUILD_HTML(){
   +'#_PLN_OV .xbtn.bl{background:rgba(88,166,255,.1);border-color:rgba(88,166,255,.3);color:var(--blue-l);}'
   +'#_PLN_OV .xbtn.tl{background:rgba(45,212,191,.1);border-color:rgba(45,212,191,.3);color:#2dd4bf;}'
   +'#_PLN_OV .xbtn.rd{background:rgba(248,81,73,.1);border-color:rgba(248,81,73,.3);color:var(--red-l);}'
+  +'#_PLN_OV .ep-row{padding:11px 14px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px;transition:background .1s;}'
+  +'#_PLN_OV .ep-row:hover{background:rgba(255,255,255,.04);}'
+  +'#_PLN_OV .ep-nro{font-size:10px;font-weight:700;color:var(--orange-l);}'
+  +'#_PLN_OV .ep-desc{font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px;}'
+  +'#_PLN_OV .ep-meta{font-size:10px;color:var(--muted);margin-top:2px;}'
+  +'#_PLN_OV .ep-fob{font-family:"IBM Plex Mono",monospace;font-size:13px;font-weight:800;color:var(--green-l);white-space:nowrap;}'
+  +'#_PLN_OV .ep-month{background:rgba(240,136,62,.05);border:1px solid rgba(240,136,62,.18);border-radius:9px;margin-bottom:10px;overflow:hidden;}'
+  +'#_PLN_OV .ep-month-hdr{padding:8px 14px;font-size:10px;font-weight:700;color:var(--orange-l);text-transform:uppercase;letter-spacing:.05em;display:flex;justify-content:space-between;align-items:center;background:rgba(240,136,62,.08);}'
   +'#_PLN_OV .xbtn.or{background:rgba(240,136,62,.1);border-color:rgba(240,136,62,.3);color:var(--orange-l);}'
   // week nav
   +'#_PLN_OV .wknav{background:var(--s2);border-bottom:1px solid var(--border);padding:5px 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex-shrink:0;}'
@@ -2771,7 +2779,14 @@ function _PLN_BUILD_HTML(){
       +'<div style="font-size:9px;font-weight:700;color:#2dd4bf;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">🔗 Cruce automático de datos</div>'
       +'<div class="g2">'
         +'<div class="fl" style="margin:0"><label id="_pln_nro_lbl">N° Contenedor</label><input type="text" id="_pln_nro" placeholder="Ej: MAGU5407544" oninput="_plnCruce()"></div>'
-        +'<div class="fl" style="margin:0" id="_pln_emb_wr"><label>N° Embarque (Resultado)</label><input type="text" id="_pln_emb" placeholder="Ej: 22042" oninput="_plnCruce()"></div>'
+        +'<div class="fl" style="margin:0" id="_pln_emb_wr">'
+          +'<label>N° Embarque <span style="color:#2dd4bf;font-size:8px;font-weight:800">(Resultado)</span></label>'
+          +'<div style="position:relative">'
+            +'<input type="text" id="_pln_emb" placeholder="🔍 Buscar o escribir N°..." oninput="_plnEmbSearch(this.value)" onfocus="_plnEmbFocus()" autocomplete="off" style="padding-right:28px">'
+            +'<span id="_pln_emb_clr" onclick="_plnEmbClear()" style="position:absolute;right:7px;top:50%;transform:translateY(-50%);cursor:pointer;color:var(--muted);font-size:14px;display:none">×</span>'
+          +'</div>'
+          +'<div id="_pln_emb_drop" style="display:none;position:absolute;z-index:99999;background:var(--s1);border:1px solid rgba(45,212,191,.35);border-radius:8px;max-height:260px;overflow-y:auto;width:240px;box-shadow:0 8px 24px rgba(0,0,0,.5);margin-top:2px"></div>'
+        +'</div>'
       +'</div>'
     +'</div>'
     +'<div class="mbox" id="_pln_mbox" style="background:rgba(63,185,80,.07);border:1px solid rgba(63,185,80,.2)">'
@@ -2802,6 +2817,20 @@ function _PLN_BUILD_HTML(){
       +'<button class="xbtn rd" id="_pln_del_btn" onclick="_plnDelEq()" style="display:none;padding:9px 14px;font-size:12px">🗑</button>'
       +'<button class="xbtn" onclick="_plnCloseEq()" style="flex:1;padding:9px;font-size:12px">Cancelar</button>'
     +'</div>'
+  +'</div></div>'
+
+  // ── Modal Selector de Embarques (Resultado) ──
+  +'<div class="mo" id="_pln_picker">'
+  +'<div class="mc" style="max-width:600px">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
+      +'<div>'
+        +'<div style="font-size:14px;font-weight:800">📦 Seleccionar Embarque Procesado</div>'
+        +'<div style="font-size:10px;color:var(--muted);margin-top:2px">Elige el embarque — heredará todos sus proveedores, FOB, Landed y departamentos</div>'
+      +'</div>'
+      +'<button style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;flex-shrink:0;margin-left:12px" onclick="_plnClosePicker()">×</button>'
+    +'</div>'
+    +'<input type="text" id="_pln_picker_q" placeholder="🔍 Buscar por N° embarque o descripción..." oninput="_plnPickerFilter()" style="width:100%;background:var(--s2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 12px;font-size:12px;margin-bottom:12px;outline:none;">'
+    +'<div id="_pln_picker_list" style="max-height:440px;overflow-y:auto;"></div>'
   +'</div></div>'
 
   // ── Modal Nueva Semana ──
@@ -2863,7 +2892,7 @@ function _PLN_RENDER(){
        +'<button class="xbtn or" style="flex:1;font-size:10px;padding:4px" onclick="_plnOpenEq(\''+_PLN_CUR+'\','+di+',null,\'prog\',\'LAND\')">🚛 +LAND</button>'
        +'<button class="xbtn" style="flex:1;font-size:10px;padding:4px" onclick="_plnOpenEq(\''+_PLN_CUR+'\','+di+',null,\'prog\',\'AIR\')">✈️</button>';
     } else {
-      h+='<button class="xbtn gn" style="width:100%;font-size:10px;padding:5px" onclick="_plnOpenEq(\''+_PLN_CUR+'\','+di+',null,\'res\',\'RES\')">➕ Agregar embarque</button>';
+      h+='<button class="xbtn gn" style="width:100%;font-size:10px;padding:5px" onclick="_plnOpenPicker(\''+_PLN_CUR+'\','+di+')">➕ Agregar embarque</button>';
     }
     h+='</div></div>';
   });
@@ -2972,22 +3001,27 @@ window._plnOpenEq=function(mon,di,ci,tab,via){
   var db=document.getElementById('_pln_del_btn'); if(db) db.style.display=isEdit?'inline-flex':'none';
   var mb=document.getElementById('_pln_mbox'); if(mb) mb.classList.remove('on');
   // defaults
-  var els=['_pln_nro','_pln_emb','_pln_eta']; els.forEach(function(id){ var e=document.getElementById(id); if(e) e.value=''; });
+  var els=['_pln_nro','_pln_emb']; els.forEach(function(id){ var e=document.getElementById(id); if(e) e.value=''; });
+  var etaEl=document.getElementById('_pln_eta'); if(etaEl) etaEl.value='';
   var vs=document.getElementById('_pln_via'); if(vs) vs.value=via||'SEA';
   var ts=document.getElementById('_pln_tipo'); if(ts) ts.value='';
   var ss=document.getElementById('_pln_status'); if(ss) ss.value='Programado';
   var rs=document.getElementById('_pln_recep'); if(rs) rs.value='completo';
   var pw=document.getElementById('_pln_parcial_wr'); if(pw) pw.style.display='none';
+  // Limpiar el buscador de embarques
+  var clr=document.getElementById('_pln_emb_clr'); if(clr) clr.style.display='none';
+  _plnEmbCloseDrop();
   _plnViaChange();
   if(isEdit){
     var cub=_PLN_DATA[mon][tab][di].cubiculos[ci];
     if(cub){
       if(vs) vs.value=cub.via||'SEA'; if(ts) ts.value=cub.tipoCarga||'';
       var ne=document.getElementById('_pln_nro'); if(ne) ne.value=cub.nroCont||'';
-      var ee=document.getElementById('_pln_emb'); if(ee) ee.value=cub.nroEmb||'';
+      var ee=document.getElementById('_pln_emb'); if(ee){ ee.value=cub.nroEmb||''; if(ee.value){ var clr2=document.getElementById('_pln_emb_clr'); if(clr2) clr2.style.display='inline'; } }
       var etae=document.getElementById('_pln_eta'); if(etae) etae.value=cub.eta||'';
       if(ss) ss.value=cub.status||'Programado';
       _plnViaChange();
+      if(cub.nroEmb) _plnCruce();
     }
   }
   var m=document.querySelector('#_PLN_OV #_pln_eqmo'); if(m) m.classList.add('open');
@@ -2996,9 +3030,120 @@ window._plnCloseEq=function(){ var m=document.querySelector('#_PLN_OV #_pln_eqmo
 window._plnViaChange=function(){
   var via=(document.getElementById('_pln_via')||{}).value||'SEA';
   var lbl=document.getElementById('_pln_nro_lbl'); if(lbl) lbl.textContent=via==='RES'?'N° Contenedor (opc.)':'N° Contenedor';
-  var ew=document.getElementById('_pln_emb_wr'); if(ew) ew.style.display=(_PLN_CTX&&_PLN_CTX.tab==='res')?'block':'none';
-  var rw=document.getElementById('_pln_recep_wr'); if(rw) rw.style.display=(_PLN_CTX&&_PLN_CTX.tab==='res')?'block':'none';
+  var isRes=(_PLN_CTX&&_PLN_CTX.tab==='res');
+  var ew=document.getElementById('_pln_emb_wr'); if(ew) ew.style.display=isRes?'block':'none';
+  var rw=document.getElementById('_pln_recep_wr'); if(rw) rw.style.display=isRes?'block':'none';
+  // Si es Resultado, mostrar hint de cuántos embarques hay disponibles
+  if(isRes){
+    var cnt=(window.tendData||[]).filter(function(d){return d.nro;}).length;
+    var lbl2=document.getElementById('_pln_emb_hint');
+    if(!lbl2){
+      var ew2=document.getElementById('_pln_emb_wr');
+      if(ew2){
+        var hint=document.createElement('div');
+        hint.id='_pln_emb_hint';
+        hint.style.cssText='font-size:9px;color:#2dd4bf;margin-top:3px;';
+        ew2.appendChild(hint);
+      }
+    }
+    var hint2=document.getElementById('_pln_emb_hint');
+    if(hint2) hint2.textContent=cnt>0?'📦 '+cnt+' embarques disponibles — haz clic para ver el listado':'Sin embarques procesados aún';
+  }
 };
+// ── Buscador inteligente de embarques procesados ──
+window._plnEmbSearch=function(q){
+  var clr=document.getElementById('_pln_emb_clr'); if(clr) clr.style.display=q?'inline':'none';
+  _plnEmbRenderDrop(q);
+  _plnCruce();
+};
+window._plnEmbFocus=function(){
+  var q=(document.getElementById('_pln_emb')||{}).value||'';
+  _plnEmbRenderDrop(q,true);
+};
+window._plnEmbClear=function(){
+  var e=document.getElementById('_pln_emb'); if(e) e.value='';
+  var clr=document.getElementById('_pln_emb_clr'); if(clr) clr.style.display='none';
+  var mb=document.getElementById('_pln_mbox'); if(mb) mb.classList.remove('on');
+  _plnEmbRenderDrop('',true);
+  var e2=document.getElementById('_pln_emb'); if(e2) e2.focus();
+};
+window._plnEmbSelect=function(nro){
+  var e=document.getElementById('_pln_emb'); if(e) e.value=nro;
+  var clr=document.getElementById('_pln_emb_clr'); if(clr) clr.style.display='inline';
+  _plnEmbCloseDrop();
+  _plnCruce();
+};
+window._plnEmbCloseDrop=function(){
+  var d=document.getElementById('_pln_emb_drop'); if(d) d.style.display='none';
+};
+function _plnEmbRenderDrop(q,forceOpen){
+  var drop=document.getElementById('_pln_emb_drop'); if(!drop) return;
+  var td=(window.tendData||[]).filter(function(d){return d.nro;});
+  if(!td.length){ drop.style.display='none'; return; }
+  var qU=(q||'').toUpperCase().trim();
+  var filtered=qU
+    ? td.filter(function(d){ return (d.nro||'').toUpperCase().indexOf(qU)>=0 || (d.fecha||'').indexOf(qU)>=0; })
+    : td;
+  // Ordenar: más reciente primero
+  filtered=filtered.slice().sort(function(a,b){
+    var fa=a.fecha||'', fb=b.fecha||'';
+    return fb.localeCompare(fa);
+  });
+  if(!filtered.length && !forceOpen){ drop.style.display='none'; return; }
+  // Agrupar por mes (YYYY-MM)
+  var groups={}, order=[];
+  filtered.forEach(function(d){
+    var mes=(d.fecha||'').slice(0,7)||'Sin fecha';
+    if(!groups[mes]){ groups[mes]=[]; order.push(mes); }
+    groups[mes].push(d);
+  });
+  var MESES_ES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  var h='';
+  if(!filtered.length){
+    h='<div style="padding:12px;text-align:center;color:var(--muted);font-size:11px">Sin resultados para "'+_plnESC(q)+'"</div>';
+  } else {
+    order.forEach(function(mes){
+      var parts=mes.split('-'); var label=mes==='Sin fecha'?mes:MESES_ES[parseInt(parts[1]||1)-1]+' '+parts[0];
+      h+='<div style="padding:5px 10px 3px;font-size:8px;font-weight:800;color:#2dd4bf;text-transform:uppercase;letter-spacing:.07em;background:rgba(45,212,191,.06);border-bottom:1px solid rgba(45,212,191,.12)">📅 '+label+'</div>';
+      groups[mes].forEach(function(d){
+        var snap=d.snap||{}, sc1=snap.sc1||{};
+        var lines=(snap.invLines||d.invLines||[]).filter(function(l){return !l.tipoFac||l.tipoFac==='mercancia';});
+        var fob=sc1.fob||sc1.cif||d.cif||0;
+        var eq=snap.tipoEquipo||snap.equipo||d.tipoEquipo||'';
+        var provCount=lines.length;
+        var nroE=_plnESC(d.nro||'');
+        var nroH=qU&&nroE.toUpperCase().indexOf(qU)>=0
+          ? nroE.replace(new RegExp('('+qU.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi'),'<mark style="background:rgba(248,209,34,.3);color:#f8d122;border-radius:2px">$1</mark>')
+          : nroE;
+        h+='<div onclick="_plnEmbSelect(\''+nroE+'\')" style="padding:8px 10px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.04);transition:background .12s" onmouseover="this.style.background=\'rgba(45,212,191,.08)\'" onmouseout="this.style.background=\'\'">'
+          +'<div style="display:flex;align-items:center;justify-content:space-between;gap:6px">'
+            +'<div style="font-weight:800;font-size:12px;color:var(--text);font-family:\'IBM Plex Mono\',monospace">'+nroH+'</div>'
+            +(fob>0?'<div style="font-size:10px;font-weight:700;color:var(--green-l);font-family:\'IBM Plex Mono\',monospace">'+_plnF(fob)+'</div>':'')
+          +'</div>'
+          +'<div style="display:flex;gap:6px;align-items:center;margin-top:2px;flex-wrap:wrap">'
+            +(d.fecha?'<span style="font-size:9px;color:var(--muted)">📆 '+d.fecha+'</span>':'')
+            +(provCount?'<span style="font-size:9px;color:var(--muted)">👥 '+provCount+' prov.</span>':'')
+            +(eq?'<span style="font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;background:rgba(88,166,255,.15);color:var(--blue-l)">'+_plnESC(eq)+'</span>':'')
+          +'</div>'
+        +'</div>';
+      });
+    });
+    if(!qU){
+      h='<div style="padding:5px 10px 3px;font-size:8px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;display:flex;align-items:center;justify-content:space-between">'
+        +'<span>Embarques procesados — '+filtered.length+' total</span>'
+        +'<span style="color:var(--muted2)">más reciente primero</span>'
+      +'</div>'+h;
+    }
+  }
+  drop.innerHTML=h;
+  drop.style.display='block';
+  // Cerrar al click fuera
+  setTimeout(function(){
+    var _cl=function(ev){ if(!drop.contains(ev.target)&&ev.target.id!=='_pln_emb'){ _plnEmbCloseDrop(); document.removeEventListener('click',_cl); } };
+    document.addEventListener('click',_cl);
+  },0);
+}
+
 window._plnCruce=function(){
   var nroCont=(document.getElementById('_pln_nro')||{}).value||'';
   var nroEmb=(document.getElementById('_pln_emb')||{}).value||'';
@@ -3010,16 +3155,26 @@ window._plnCruce=function(){
     var found=td.find(function(d){return (d.nro||'').toUpperCase()===nroEmb.toUpperCase();});
     if(found){
       var snap=found.snap||{}, lines=(snap.invLines||found.invLines||[]).filter(function(l){return !l.tipoFac||l.tipoFac==='mercancia';});
+      var fobVal=snap.sc1?.(snap.sc1.fob||snap.sc1.cif)||found.cif||0;
+      if(!fobVal && snap.sc1) fobVal=snap.sc1.fob||snap.sc1.cif||0;
+      if(!fobVal) fobVal=found.cif||0;
       document.getElementById('_pln_eqmo_t').textContent='✏️ '+found.nro+' — '+found.fecha;
       document.getElementById('_pln_mbox_t').textContent='✅ Embarque '+found.nro+' · '+found.fecha;
-      document.getElementById('_pln_mbox_v').textContent=lines.length+' proveedores · FOB: '+_plnFF(snap.sc1?.fob||snap.sc1?.cif||found.cif||0);
+      document.getElementById('_pln_mbox_v').textContent=lines.length+' proveedores · FOB: '+_plnFF(fobVal);
       mb.style.background='rgba(63,185,80,.07)'; mb.style.borderColor='rgba(63,185,80,.2)';
       document.getElementById('_pln_mbox_t').style.color='var(--green-l)';
       mb.classList.add('on');
-      var tp=document.getElementById('_pln_tipo'); if(tp&&!tp.value&&(snap.tipoEquipo||snap.equipo)) tp.value=snap.tipoEquipo||snap.equipo||'';
+      var tp=document.getElementById('_pln_tipo'); if(tp&&(snap.tipoEquipo||snap.equipo)) tp.value=snap.tipoEquipo||snap.equipo||'';
       var eta=document.getElementById('_pln_eta'); if(eta&&!eta.value&&found.fecha) eta.value=found.fecha;
       return;
     }
+    // No encontrado en tendData pero tiene valor escrito
+    document.getElementById('_pln_mbox_t').textContent='⚠️ Embarque '+nroEmb+' no encontrado';
+    document.getElementById('_pln_mbox_v').textContent='Escribe el N° exacto o busca en el listado';
+    mb.style.background='rgba(210,153,34,.07)'; mb.style.borderColor='rgba(210,153,34,.25)';
+    document.getElementById('_pln_mbox_t').style.color='var(--orange-l)';
+    mb.classList.add('on');
+    return;
   }
   // Programado: buscar en tránsito
   if(nroCont){
@@ -3127,6 +3282,157 @@ window._plnCSV=function(){
   });
   var csv=rows.map(function(r){return r.map(function(c){return '"'+(String(c||'').replace(/"/g,'""'))+'"';}).join(',');}).join('\r\n');
   var a=document.createElement('a'); a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv); a.download='Planeacion_'+_PLN_CUR+'.csv'; a.click();
+};
+
+// ── Picker de Embarques (Resultado) ──
+window._plnOpenPicker=function(mon,di){
+  _PLN_CTX={mon:mon,di:di,ci:null,tab:'res'};
+  var q=document.getElementById('_pln_picker_q');
+  if(q) q.value='';
+  _plnPickerRender('');
+  var m=document.querySelector('#_PLN_OV #_pln_picker');
+  if(m) m.classList.add('open');
+};
+window._plnClosePicker=function(){
+  var m=document.querySelector('#_PLN_OV #_pln_picker');
+  if(m) m.classList.remove('open');
+};
+window._plnPickerFilter=function(){
+  _plnPickerRender((document.getElementById('_pln_picker_q')||{}).value||'');
+};
+
+function _plnPickerRender(q){
+  var el=document.getElementById('_pln_picker_list'); if(!el) return;
+  var MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  var td=(window.tendData||[]).filter(function(d){ return d.nro && d.fecha; });
+
+  if(!td.length){
+    el.innerHTML='<div style="text-align:center;padding:40px;color:var(--muted)">'
+      +'<div style="font-size:36px;margin-bottom:10px">📭</div>'
+      +'<div style="font-size:13px;font-weight:600">Sin embarques procesados</div>'
+      +'<div style="font-size:11px;margin-top:6px">Procesa embarques en el Simulador primero</div>'
+    +'</div>';
+    return;
+  }
+
+  if(q && q.trim()){
+    var qn=q.trim().toLowerCase();
+    td=td.filter(function(d){
+      return (d.nro||'').toLowerCase().includes(qn)
+          || (d.desc||d.descripcion||'').toLowerCase().includes(qn)
+          || (d.fecha||'').includes(qn);
+    });
+    if(!td.length){
+      el.innerHTML='<div style="text-align:center;padding:24px;color:var(--muted);font-size:12px">Sin resultados para "'+_plnESC(q)+'"</div>';
+      return;
+    }
+  }
+
+  // Agrupar por mes — igual que tendencias
+  var byMes={};
+  td.forEach(function(d){
+    var mes=(d.fecha||'').slice(0,7);
+    if(!byMes[mes]) byMes[mes]=[];
+    byMes[mes].push(d);
+  });
+  var meses=Object.keys(byMes).sort().reverse();
+
+  var h='';
+  meses.forEach(function(mes){
+    var items=byMes[mes].sort(function(a,b){return (b.fecha||'').localeCompare(a.fecha||'');});
+    var dm=new Date(mes+'-01');
+    var label=MESES[dm.getMonth()]+' '+dm.getFullYear();
+    var totMes=items.reduce(function(s,d){
+      var snap=d.snap||{}, sc1=snap.sc1||{};
+      return s+(sc1.fob||sc1.cif||d.cif||0);
+    },0);
+
+    h+='<div class="ep-month">'
+      +'<div class="ep-month-hdr">'
+        +'<span>📅 '+label+'</span>'
+        +'<span>'+items.length+' embarque'+(items.length!==1?'s':'')+' · '+_plnFF(totMes)+'</span>'
+      +'</div>';
+
+    items.forEach(function(d){
+      var snap=d.snap||{}, sc1=snap.sc1||{};
+      var fob=sc1.fob||sc1.cif||d.cif||0;
+      var landed=snap.sc1Base||d.sc1Base||d.landed||0;
+      var lines=(snap.invLines||d.invLines||[]).filter(function(l){return !l.tipoFac||l.tipoFac==='mercancia';});
+      var tipoEq=d.tipoEquipo||snap.tipoEquipo||snap.equipo||(snap.campos?.s1_equipo)||'';
+      var nEquip=parseInt(d.equipos||snap.campos?.s1_equipos||snap.nEquipos||1)||1;
+      var equip=(nEquip>1?nEquip+'× ':'')+tipoEq;
+      // Departamentos únicos del embarque
+      var deptos=[...new Set(lines.map(function(l){return l.dept||l.deptCat||'';}).filter(Boolean))].slice(0,3).join(' · ');
+      // Proveedores únicos
+      var provCount=lines.length;
+
+      h+='<div class="ep-row" onclick="_plnPickerSelect('+JSON.stringify(d.nro)+')">'
+        +'<div style="flex:1;min-width:0">'
+          +'<div class="ep-nro">📦 Emb. '+_plnESC(d.nro)+'</div>'
+          +'<div class="ep-desc">'+(d.desc||d.descripcion||'Sin descripción')+'</div>'
+          +'<div class="ep-meta">'
+            +d.fecha
+            +(equip?' · '+_plnESC(equip):'')
+            +' · '+provCount+' proveedor'+(provCount!==1?'es':'')
+            +(deptos?' · '+_plnESC(deptos):'')
+          +'</div>'
+        +'</div>'
+        +'<div style="text-align:right;flex-shrink:0;margin-left:10px">'
+          +'<div class="ep-fob">'+_plnFF(fob)+'</div>'
+          +(landed?'<div style="font-size:10px;color:var(--orange-l);font-family:\'IBM Plex Mono\',monospace;font-weight:700">'+_plnFF(landed)+'</div>':'')
+          +'<div style="font-size:9px;color:var(--muted);margin-top:2px">'+(d.esc||'')+'</div>'
+        +'</div>'
+      +'</div>';
+    });
+    h+='</div>';
+  });
+  el.innerHTML=h;
+}
+
+window._plnPickerSelect=function(nro){
+  var td=window.tendData||[];
+  var found=td.find(function(d){return (d.nro||'')===(nro||'');});
+  if(!found){
+    if(typeof _showToast==='function') _showToast('⚠️ Embarque no encontrado en tendencias','orange',3000);
+    return;
+  }
+  var snap=found.snap||{}, sc1=snap.sc1||{};
+  var lines=(snap.invLines||found.invLines||[]).filter(function(l){return !l.tipoFac||l.tipoFac==='mercancia';});
+  var totCIF=lines.reduce(function(s,l){return s+(parseFloat(l.costo)||0);},0);
+  var landedTotal=snap.sc1Base||found.sc1Base||found.landed||0;
+
+  // Construir filas con Landed proporcional al FOB de cada línea
+  var rows=lines.map(function(l){
+    var prop=totCIF>0?((parseFloat(l.costo)||0)/totCIF):0;
+    return {
+      prov:    l.prov||'—',
+      bultos:  l.bultos||l.cajas||0,
+      piezas:  l.piezas||0,
+      fob:     parseFloat(l.costo)||0,
+      landed:  landedTotal>0 ? Math.round(landedTotal*prop*100)/100 : parseFloat(l.costo)||0,
+      dept:    l.dept||l.deptCat||'',
+      matched: true
+    };
+  });
+
+  var tipoCarga=found.tipoEquipo||snap.tipoEquipo||snap.equipo||(snap.campos?.s1_equipo)||'';
+  var newCub={
+    via:       'res',
+    tipoCarga: tipoCarga,
+    nroEmb:    found.nro,
+    nroCont:   '',
+    eta:       found.fecha,
+    status:    'Recibido en CDF',
+    rows:      rows
+  };
+
+  var wk=_plnMkWeek(_PLN_CTX.mon);
+  wk[_PLN_CTX.tab][_PLN_CTX.di].cubiculos.push(newCub);
+  _PLN_SAVE();
+  _plnClosePicker();
+  _PLN_RENDER();
+  if(typeof _showToast==='function')
+    _showToast('✅ Embarque '+found.nro+' agregado · '+rows.length+' proveedores heredados','green',3000);
 };
 
 // ── Badge ──
