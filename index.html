@@ -2330,6 +2330,8 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
     <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Herramientas para corregir y normalizar datos de proveedores en el historial de embarques.</div>
     <button onclick="_correrProcesoProveedores()" style="background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.3);color:var(--red-l);border-radius:8px;padding:8px 18px;font-size:12px;font-weight:700;cursor:pointer">🔄 Correr Proceso de Proveedores</button>
     <div style="font-size:10px;color:var(--muted2);margin-top:6px">Normaliza nombres de proveedores (S.I., homologados, etc.) en todos los embarques del historial.</div>
+    <button onclick="var n=_fixImportacionTipo();_showToast(n>0?'✅ '+n+' embarque(s) corregidos a IMP':'✅ Sin cambios necesarios',n>0?'green':'blue',3000);" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:8px;padding:8px 18px;font-size:12px;font-weight:700;cursor:pointer;margin-top:8px">🚢 Fix: Embarques Importación (22032/33/34/38/39)</button>
+    <div style="font-size:10px;color:var(--muted2);margin-top:4px">Corrige snap.tipo ZL→IMP para embarques Sababa procesados incorrectamente como Zona Libre.</div>
   </div>
 </div>
 
@@ -4223,7 +4225,11 @@ function showSplashNav(){
   const totalAhorro=_nonUnico.reduce((s,d)=>s+(d.ahorro||0),0);
   // Mes actual — compras de mercancía
   const _now=new Date(); const _curY=_now.getFullYear(); const _curM=_now.getMonth();
-  const _mesData=tendData.filter(d=>{ if(!d.fecha&&!d.date) return false; const fd=new Date(d.fecha||d.date); return fd.getFullYear()===_curY&&fd.getMonth()===_curM; });
+  const _mesRaw=tendData.filter(d=>{ if(!d.fecha&&!d.date) return false; const fd=new Date(d.fecha||d.date); return fd.getFullYear()===_curY&&fd.getMonth()===_curM; });
+  // Deduplicar por nro — evitar que embarques duplicados inflen los conteos
+  const _mesDedup=new Map();
+  _mesRaw.forEach(d=>{ const k=(d.nro||'').trim().toUpperCase()||('_ts_'+(d.ts||Math.random())); const ex=_mesDedup.get(k); if(!ex||(d.ts||0)>(ex.ts||0)) _mesDedup.set(k,d); });
+  const _mesData=Array.from(_mesDedup.values());
   const totalMesMerc=_mesData.reduce((s,d)=>{ const lines=(d.snap?.invLines||d.invLines||[]); return s+lines.filter(l=>(l.tipoFac||'mercancia')==='mercancia').reduce((a,l)=>a+(l.costo||0),0); },0);
   // Costo Landed por tipo de embarque
   const totalLanded=_mesData.reduce((s,d)=>{
@@ -4234,12 +4240,17 @@ function showSplashNav(){
     if(isUnicoD) return s+(sn.sc1?.landed||0);
     return s+(sn.sc1?.landedG||sn.sc1?.landed1||0);
   },0);
-  // Facturas mercancía vs servicio del mes
+  // Facturas mercancía vs servicio del mes — conteo de números únicos, sin duplicados
   const _allLines=_mesData.reduce((a,d)=>a.concat(d.snap?.invLines||d.invLines||[]),[]);
   const _mercL=_allLines.filter(l=>(l.tipoFac||'mercancia')==='mercancia');
   const _servL=_allLines.filter(l=>l.tipoFac&&l.tipoFac!=='mercancia');
-  const facMerc=new Set(_mercL.map(l=>(l.numFact||l.nfac||'').trim()).filter(n=>n)).size || _mercL.length;
-  const facServ=new Set(_servL.map(l=>(l.numFact||l.nfac||'').trim()).filter(n=>n)).size || _servL.length;
+  // Factura única = por número de factura normalizado; si no tiene número, cada línea cuenta como 1
+  const _mercFactSet=new Set(); let _mercSinNum=0;
+  _mercL.forEach(l=>{ const n=(l.numFact||l.nfac||'').trim(); if(n) _mercFactSet.add(n.toUpperCase()); else _mercSinNum++; });
+  const facMerc=_mercFactSet.size + _mercSinNum;
+  const _servFactSet=new Set(); let _servSinNum=0;
+  _servL.forEach(l=>{ const n=(l.numFact||l.nfac||'').trim(); if(n) _servFactSet.add(n.toUpperCase()); else _servSinNum++; });
+  const facServ=_servFactSet.size + _servSinNum;
   const _mesStr=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][_curM];
   const skE=document.getElementById('sk-embarques'); if(skE) skE.textContent=_mesData.length||'0';
   const skEChip=skE?.closest('.splash-kpi-chip'); if(skEChip){const lbl=skEChip.querySelector('.splash-kpi-chip-lbl');if(lbl)lbl.textContent='Emb. '+_mesStr;}
@@ -7204,6 +7215,16 @@ async function _pullTendFromCloud(){
     }
 
     // Reemplazar tendData con la versión fusionada
+    // ── DEDUPLICAR por nro (priorizar el más reciente por ts) ──
+    const dedupMap = new Map();
+    cloudTend.forEach(rec => {
+      const key = rec.nro ? rec.nro.trim().toUpperCase() : ('_ts_'+(rec.ts||Math.random()));
+      const existing = dedupMap.get(key);
+      if(!existing || (rec.ts||0) > (existing.ts||0)){
+        dedupMap.set(key, rec);
+      }
+    });
+    cloudTend = Array.from(dedupMap.values());
     tendData = cloudTend;
 
     // 4. Correcciones y migraciones en memoria
@@ -7231,6 +7252,8 @@ async function _syncManualTend(btn){
     return;
   }
   await _pullTendFromCloud();
+  // Aplicar fix de tipo de importación para embarques históricos mal guardados
+  if(typeof _fixImportacionTipo === 'function') _fixImportacionTipo();
   renderTend();
   if(typeof renderDashboardKPIs==='function') renderDashboardKPIs();
   if(typeof renderTopProvs==='function') renderTopProvs();
@@ -7338,7 +7361,12 @@ function _getFilteredTendData(){
   const buscar = _tfVal('tf_buscar').toLowerCase().trim();
   const origen = _tfVal('tf_origen').trim();
 
-  return tendData.filter(d=>{
+  // Deduplicar tendData por nro antes de filtrar — evita conteos inflados
+  const _dedupMap=new Map();
+  (tendData||[]).forEach(d=>{ const k=(d.nro||'').trim().toUpperCase()||('_ts_'+(d.ts||Math.random())); const ex=_dedupMap.get(k); if(!ex||(d.ts||0)>(ex.ts||0)) _dedupMap.set(k,d); });
+  const _dedupData=Array.from(_dedupMap.values());
+
+  return _dedupData.filter(d=>{
     // ── Filtro por fecha ──
     // Para embarques PARCIALES con múltiples contenedores:
     // se incluye si AL MENOS UN contenedor tiene fecha dentro del rango
@@ -8535,18 +8563,14 @@ function _correrProcesoProveedores(){
               if(m && m.si){ l.prov = m.si; fixed++; }
             }
           }
-          // Asegurar que el tipo del proveedor refleja el tipo real del embarque
-          if(!l.tipoProv || l.tipoProv==='') {
-            l.tipoProv = (tipoEmb==='EXT'||tipoEmb==='IMP') ? 'IMP' : 'ZL';
-          }
+          // SIEMPRE actualizar tipoProv — fix: no dejar valor incorrecto (e.g. ZL en embarques IMP)
+          l.tipoProv = (tipoEmb==='EXT'||tipoEmb==='IMP') ? 'IMP' : 'ZL';
         } else {
           // ── REGLA: sin homologado → usar proveedor PADRE (quitar S.I -) ──
           var parent = p.replace(/^S\.I\s*[-–]\s*/i,'').trim();
           if(parent && parent !== p){ l.prov = parent; fixed++; }
-          // Sincronizar tipo del proveedor con el del embarque
-          if(!l.tipoProv || l.tipoProv==='') {
-            l.tipoProv = (tipoEmb==='EXT'||tipoEmb==='IMP') ? 'IMP' : 'ZL';
-          }
+          // SIEMPRE sincronizar tipoProv con tipo real del embarque
+          l.tipoProv = (tipoEmb==='EXT'||tipoEmb==='IMP') ? 'IMP' : 'ZL';
         }
       } else if(isSabEmb && !esMerc){
         // Gastos de Sababa con homologado: también asignar S.I.
@@ -8565,10 +8589,8 @@ function _correrProcesoProveedores(){
         // Liquidación / Esc. Aduanal único: quitar prefijo S.I. si lo tiene
         var parentLiq = p.replace(/^S\.I\s*[-–]\s*/i,'').trim();
         if(parentLiq && parentLiq !== p){ l.prov = parentLiq; fixed++; }
-        // Tipo según embarque
-        if(!l.tipoProv || l.tipoProv==='') {
-          l.tipoProv = (tipoEmb==='EXT'||tipoEmb==='IMP') ? 'IMP' : 'ZL';
-        }
+        // SIEMPRE sincronizar tipoProv con tipo real del embarque
+        l.tipoProv = (tipoEmb==='EXT'||tipoEmb==='IMP') ? 'IMP' : 'ZL';
       }
     });
   });
@@ -8583,6 +8605,44 @@ function _correrProcesoProveedores(){
   }
 }
 
+
+// ── FIX: Corregir snap.tipo de embarques de importación que fueron guardados como ZL ──
+// Aplica la corrección en memoria + sincroniza a Supabase.
+// La regla: si el escenario es Sababa y el embarque es de importación, snap.tipo debe ser 'IMP'.
+// Para embarques futuros el sistema aplica correctamente; este fix cubre los históricos.
+function _fixImportacionTipo(){
+  if(!tendData || !tendData.length) return;
+  // Lista de embarques de importación que fueron procesados como ZL incorrectamente
+  var EMB_IMP = ['22032','22033','22034','22038','22039'];
+  var fixed = 0;
+  tendData.forEach(function(d){
+    var nro = (d.nro||'').toString().trim();
+    if(EMB_IMP.indexOf(nro) === -1) return;
+    // Corregir snap.tipo
+    if(d.snap && d.snap.tipo !== 'IMP'){
+      d.snap.tipo = 'IMP';
+      fixed++;
+    }
+    if(d.tipo && d.tipo !== 'IMP'){
+      d.tipo = 'IMP';
+    }
+    // Corregir tipoProv en todas las líneas del snap
+    var lines = (d.snap && d.snap.invLines) || d.invLines || [];
+    lines.forEach(function(l){
+      if(l.tipoProv && l.tipoProv !== 'IMP'){
+        l.tipoProv = 'IMP';
+      } else if(!l.tipoProv){
+        l.tipoProv = 'IMP';
+      }
+    });
+  });
+  if(fixed > 0){
+    saveTendData();
+    if(typeof _syncTendToCloud === 'function') _syncTendToCloud();
+    console.log('[fixImportacionTipo] Corregidos '+fixed+' embarques de importación (snap.tipo ZL→IMP)');
+  }
+  return fixed;
+}
 
 function renderTend(){
   _populateYearFilter();
@@ -10011,33 +10071,42 @@ function _buildHistProvRows(){
     var escLabel=(esc.toLowerCase().includes('cif')||esc.toLowerCase().includes('express'))?'CIF Express'
                 :(esc.toLowerCase().includes('sababa')||esc.toLowerCase().includes('sab'))?'Sababa'
                 :(esc.toLowerCase().includes('único')||esc.toLowerCase().includes('unico')||d.modoUnico||d.tipoEsc==='unico')?'Único':'Liq. Aduanal';
-    var isHomol = (escLabel==='Sababa') && !!(d.snap && d.snap.sc3 && ((d.snap.sc3.mercHomol||0)>0 || (d.snap.sc3.comision||0)>0));
+    var isSabEmb = (escLabel==='Sababa');
     var dIdx=tendData.indexOf(d);
     var isUnico2 = !!(d.modoUnico || d.tipoEsc==='unico');
+    // Tipo del embarque según cómo se procesó (ZL o EXT/IMP)
+    var tipoEmb = (d.snap&&d.snap.tipo) ? d.snap.tipo : (d.tipo||'ZL');
+    var tipoEmbNorm = (tipoEmb==='EXT'||tipoEmb==='IMP') ? 'IMP' : 'ZL';
+
     lines.forEach(function(l){
       var tf=l.tipoFac||'mercancia';
       var prov=(l.prov||l.dept||'').trim(); if(!prov) return;
-      // Solo aplicar prefijo S.I en Sababa, NUNCA en Único
-      if(isHomol && !isUnico2 && typeof _PROV_SI !== 'undefined'){
-        var provKey=prov.toUpperCase();
-        var siMatch=Object.keys(_PROV_SI).find(function(k){ return k.toUpperCase()===provKey; });
-        if(siMatch) prov=_PROV_SI[siMatch];
-      }
-      // ── REGLA S.I.: si la línea tiene montoHomologado > 0 en embarque Sababa,
-      //    FORZAR el nombre S.I. correspondiente sin excepción ──
-      if(isHomol && !isUnico2 && (l.montoHomologado||0) > 0 && typeof _PROV_SI !== 'undefined'){
-        var provKeyH = prov.toUpperCase();
-        // Buscar si ya tiene prefijo S.I — si no, buscarlo en el mapa
-        var yaEsSI = prov.toUpperCase().startsWith('S.I') || prov.toUpperCase().startsWith('S. I');
-        if(!yaEsSI){
-          var siMatchH = Object.keys(_PROV_SI).find(function(k){ return k.toUpperCase()===provKeyH || (typeof _PROV_SI[k]==='string'&&_PROV_SI[k].toUpperCase()===provKeyH); });
-          if(siMatchH) prov = _PROV_SI[siMatchH];
+
+      // ── REGLA S.I. DEFINITIVA: aplica solo en Sababa, nunca en Único ──
+      // Si la línea tiene montoHomologado > 0 ó ocHomologada → forzar S.I- (ZL o IMP, no importa)
+      // Si NO → proveedor padre (sin S.I-)
+      if(isSabEmb && !isUnico2 && typeof _PROV_SI !== 'undefined'){
+        var tieneHomol = (l.montoHomologado||0) > 0 || !!(l.ocHomologada&&l.ocHomologada.trim());
+        var yaEsSI = /^S\.I\s*[-–]/i.test(prov);
+        if(tieneHomol && !yaEsSI){
+          // Buscar proveedor hijo en el mapa
+          var provKeyU = prov.toUpperCase();
+          var siKey = Object.keys(_PROV_SI).find(function(k){
+            return k.toUpperCase()===provKeyU || (_PROV_SI[k]||'').toUpperCase()===provKeyU;
+          });
+          if(siKey) prov = _PROV_SI[siKey];
+        } else if(!tieneHomol && yaEsSI){
+          // Sin homologado → usar padre
+          prov = prov.replace(/^S\.I\s*[-–]\s*/i,'').trim();
         }
       }
-      // Tipo ZL/IMP: usar el tipo real del embarque (cómo se procesó), no el nombre del proveedor
+
+      // Tipo ZL/IMP: usar el tipo real del embarque, no deducir del nombre
       var tipoP = isUnico2
         ? ((l.tipoProv||l.tipoProveedor||'ZL').toUpperCase()==='IMP' ? 'IMP' : 'ZL')
-        : (l.tipoProv && l.tipoProv!=='' ? l.tipoProv : ((tipoEmb==='EXT'||tipoEmb==='IMP') ? 'IMP' : 'ZL'));
+        : (l.tipoProv && (l.tipoProv==='IMP'||l.tipoProv==='ZL') ? l.tipoProv : tipoEmbNorm);
+
+      var isHomol = isSabEmb && ((l.montoHomologado||0)>0 || !!(l.ocHomologada&&l.ocHomologada.trim()));
       var base={prov,oc:l.oc||l.nfac||'—',numFact:l.numFact||l.nroFact||l.nfac||l.factura||'—',ocHomologada:l.ocHomologada||'',montoHomologado:l.montoHomologado||0,
         depto:(l.deptCat||l.dept||'Sin categoría').toUpperCase(),
         piezas:l.piezas||0,bultos:l.bultos||0,costo:l.costo||0,
@@ -10217,11 +10286,16 @@ function renderDashboardKPIs(data){
   const _showHomol = window._kpiShowHomol === true && hasHomolData;
   const cifToShow = _showHomol ? totalHomol : totalCIF;
   const pctAhorroCIF=totalCIF>0?(totalAhorro/totalCIF*100).toFixed(1):'0';
-  const totalFact=all.reduce((s,d)=>{
+  // Facturas únicas de mercancía — por número de factura, sin duplicados entre embarques
+  const _kpiFacSet=new Set(); let _kpiFacSinNum=0;
+  all.forEach(d=>{
     const lines=(d.snap?.invLines||d.invLines||[]);
-    // Only count mercancía lines, not expense lines (tipoFac !== 'mercancia')
-    return s + lines.filter(l=>(l.tipoFac||'mercancia')==='mercancia').length;
-  },0);
+    lines.filter(l=>(l.tipoFac||'mercancia')==='mercancia').forEach(l=>{
+      const n=(l.numFact||l.nfac||'').trim();
+      if(n) _kpiFacSet.add(n.toUpperCase()); else _kpiFacSinNum++;
+    });
+  });
+  const totalFact=_kpiFacSet.size+_kpiFacSinNum;
   // Top landed: best factor % across all snaps (lowest factor = most efficient)
   const factorVals=all.map(d=>{
     const sc=d.snap?.sc2||d.snap?.sc3||d.snap?.sc1||{};
@@ -10940,6 +11014,9 @@ function _renderDeptChart(all){
   all.forEach(d=>{
     const invL=d.snap?.invLines||d.invLines||[];
     const tipoEmb=((d.snap?.tipo)||d.tipo||'ZL');
+    const tipoEmbNorm=(tipoEmb==='EXT'||tipoEmb==='IMP')?'IMP':'ZL';
+    const escLow=(d.esc||'').toLowerCase();
+    const isSabEmb=escLow.includes('sababa')||escLow.includes('sab');
     const dIdx=tendData.indexOf(d);
     invL.forEach(l=>{
       if((l.tipoFac||'mercancia') !== 'mercancia') return;
@@ -10947,11 +11024,24 @@ function _renderDeptChart(all){
       if(!byDept[k]) byDept[k]={cif:0,count:0,provs:[]};
       byDept[k].cif   += l.costo||0;
       byDept[k].count += 1;
+      // ── REGLA S.I. definitiva en render de departamento ──
+      let provName = l.prov||l.dept||'—';
+      if(isSabEmb && typeof _PROV_SI !== 'undefined'){
+        const tieneHomol=(l.montoHomologado||0)>0||!!(l.ocHomologada&&l.ocHomologada.trim());
+        const yaEsSI=/^S\.I\s*[-–]/i.test(provName);
+        if(tieneHomol && !yaEsSI){
+          const pk=provName.toUpperCase();
+          const sk=Object.keys(_PROV_SI).find(k=>k.toUpperCase()===pk||(_PROV_SI[k]||'').toUpperCase()===pk);
+          if(sk) provName=_PROV_SI[sk];
+        } else if(!tieneHomol && yaEsSI){
+          provName=provName.replace(/^S\.I\s*[-–]\s*/i,'').trim();
+        }
+      }
       byDept[k].provs.push({
-        prov: l.prov||l.dept||'—',
+        prov: provName,
         oc:   l.oc||'—',
         costo: l.costo||0,
-        tipo: tipoEmb,
+        tipo: l.tipoProv||(tipoEmbNorm),
         nro:  d.nro||'—',
         idx:  dIdx
       });
@@ -15811,6 +15901,8 @@ window.onload=function(){
     if(!_sb) return;
     // Silent load — no badge, no interruption to user
     const pulled = await _pullTendFromCloud();
+    // Fix embarques de importación guardados incorrectamente como ZL
+    if(typeof _fixImportacionTipo === 'function') _fixImportacionTipo();
     const total = tendData.length;
     // Update header badge only
     const cloudBadge = document.getElementById('cloud-status-badge');
