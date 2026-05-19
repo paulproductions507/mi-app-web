@@ -2330,7 +2330,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
     <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Herramientas para corregir y normalizar datos de proveedores en el historial de embarques.</div>
     <button onclick="_correrProcesoProveedores()" style="background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.3);color:var(--red-l);border-radius:8px;padding:8px 18px;font-size:12px;font-weight:700;cursor:pointer">🔄 Correr Proceso de Proveedores</button>
     <div style="font-size:10px;color:var(--muted2);margin-top:6px">Normaliza nombres de proveedores (S.I., homologados, etc.) en todos los embarques del historial.</div>
-    <button onclick="var n=_fixImportacionTipo();_showToast(n>0?'✅ '+n+' embarque(s) corregidos a IMP':'✅ Sin cambios necesarios',n>0?'green':'blue',3000);" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:8px;padding:8px 18px;font-size:12px;font-weight:700;cursor:pointer;margin-top:8px">🚢 Fix: Embarques Importación (22032/33/34/38/39)</button>
+    <button onclick="var n=_fixImportacionTipo();if(n>0){_showToast('✅ '+n+' embarque(s) corregidos a IMP','green',3500);}else{var nros=(tendData||[]).map(function(d){return d.nro||'?';}).join(', ');alert('Sin coincidencias.\n\nNROs en memoria ('+tendData.length+'):\n'+nros);}" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:8px;padding:8px 18px;font-size:12px;font-weight:700;cursor:pointer;margin-top:8px">🚢 Fix: Embarques Importación (22032/33/34/38/39)</button>
     <div style="font-size:10px;color:var(--muted2);margin-top:4px">Corrige snap.tipo ZL→IMP para embarques Sababa procesados incorrectamente como Zona Libre.</div>
   </div>
 </div>
@@ -8611,35 +8611,51 @@ function _correrProcesoProveedores(){
 // La regla: si el escenario es Sababa y el embarque es de importación, snap.tipo debe ser 'IMP'.
 // Para embarques futuros el sistema aplica correctamente; este fix cubre los históricos.
 function _fixImportacionTipo(){
-  if(!tendData || !tendData.length) return;
-  // Lista de embarques de importación que fueron procesados como ZL incorrectamente
+  if(!tendData || !tendData.length) return 0;
+  // Lista de embarques de importación procesados incorrectamente como ZL
   var EMB_IMP = ['22032','22033','22034','22038','22039'];
   var fixed = 0;
+
   tendData.forEach(function(d){
-    var nro = (d.nro||'').toString().trim();
-    if(EMB_IMP.indexOf(nro) === -1) return;
-    // Corregir snap.tipo
-    if(d.snap && d.snap.tipo !== 'IMP'){
-      d.snap.tipo = 'IMP';
-      fixed++;
-    }
-    if(d.tipo && d.tipo !== 'IMP'){
-      d.tipo = 'IMP';
-    }
-    // Corregir tipoProv en todas las líneas del snap
-    var lines = (d.snap && d.snap.invLines) || d.invLines || [];
-    lines.forEach(function(l){
-      if(l.tipoProv && l.tipoProv !== 'IMP'){
-        l.tipoProv = 'IMP';
-      } else if(!l.tipoProv){
-        l.tipoProv = 'IMP';
-      }
+    // Buscar el nro en múltiples ubicaciones posibles
+    var nro = (d.nro || d.snap?.nro || '').toString().trim().toUpperCase();
+    // También buscar sin el nro exacto — comparar contra variantes
+    var matchFound = EMB_IMP.some(function(e){
+      return nro === e || nro === ('EMB'+e) || nro.includes(e);
     });
+    if(!matchFound) return;
+
+    var cambio = false;
+
+    // 1. Corregir d.tipo
+    if(d.tipo !== 'IMP'){ d.tipo = 'IMP'; cambio = true; }
+
+    // 2. Corregir d.snap.tipo (la fuente principal que usa el historial)
+    if(d.snap){
+      if(d.snap.tipo !== 'IMP'){ d.snap.tipo = 'IMP'; cambio = true; }
+      // 3. Corregir dentro de d.snap.snap (doble anidado que a veces genera la app)
+      if(d.snap.snap && d.snap.snap.tipo !== 'IMP'){ d.snap.snap.tipo = 'IMP'; cambio = true; }
+    }
+
+    // 4. Corregir tipoProv en todas las líneas — tanto en d.invLines como en d.snap.invLines
+    var allLines = [];
+    if(Array.isArray(d.invLines)) allLines = allLines.concat(d.invLines);
+    if(d.snap && Array.isArray(d.snap.invLines)) allLines = allLines.concat(d.snap.invLines);
+    if(d.snap && d.snap.snap && Array.isArray(d.snap.snap.invLines)) allLines = allLines.concat(d.snap.snap.invLines);
+    allLines.forEach(function(l){
+      if(l.tipoProv !== 'IMP'){ l.tipoProv = 'IMP'; cambio = true; }
+    });
+
+    if(cambio) fixed++;
   });
+
   if(fixed > 0){
     saveTendData();
     if(typeof _syncTendToCloud === 'function') _syncTendToCloud();
-    console.log('[fixImportacionTipo] Corregidos '+fixed+' embarques de importación (snap.tipo ZL→IMP)');
+    console.log('[fixImportacionTipo] Corregidos '+fixed+' embarques de importación (ZL→IMP)');
+  } else {
+    // Debug: listar nros disponibles en tendData para diagnóstico
+    console.log('[fixImportacionTipo] Sin cambios. NROs en tendData:', tendData.map(function(d){ return d.nro||'(sin nro)'; }).join(', '));
   }
   return fixed;
 }
