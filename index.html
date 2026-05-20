@@ -1954,6 +1954,11 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
         <input type="file" id="inv-file-input" accept=".csv,.xlsx,.xls" style="display:none" onchange="loadInvFile(this)">
         <button onclick="_guardarTodasFacturas()" style="flex:1;min-width:100px;background:rgba(63,185,80,.15);border:1px solid rgba(63,185,80,.4);color:var(--green-l);border-radius:8px;padding:8px;font-size:11px;font-weight:700;cursor:pointer">💾 Guardar Todas</button>
       </div>
+      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
+        <button onclick="document.getElementById('art-file-input').click()" style="flex:1;min-width:140px;background:rgba(167,113,247,.08);border:1px solid rgba(167,113,247,.3);color:#a371f7;border-radius:8px;padding:8px;font-size:11px;cursor:pointer">🔗 Cargar Plantilla Artículos (auto-rellena Piezas · OC Homol · Monto Homol)</button>
+        <input type="file" id="art-file-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="_loadArticulosPlantilla(this)">
+        <div id="art-status" style="font-size:10px;color:var(--muted);flex:1;min-width:120px"></div>
+      </div>
       <!-- Search -->
       <div style="margin-bottom:8px">
         <input type="text" id="inv-search" placeholder="🔍 Filtrar por proveedor o departamento..."
@@ -3323,13 +3328,12 @@ window._plnOpenPicker = async function(mon, di){
   _PLN_CTX = {mon:mon, di:di, ci:null, tab:'res'};
   var q = document.getElementById('_pln_picker_q'); if(q) q.value='';
   var m = document.querySelector('#_PLN_OV #_pln_picker'); if(m) m.classList.add('open');
-  // Si tendData está vacío, cargar y esperar antes de renderizar
+  // Si tendData está vacío, usar _plnPickerReload que hace query directo a Supabase
   if(!window.tendData || !window.tendData.length){
-    var el=document.getElementById('_pln_picker_list');
-    if(el) el.innerHTML='<div style="text-align:center;padding:30px;color:var(--muted);font-size:12px"><div style="font-size:28px;margin-bottom:8px">⏳</div>Cargando embarques desde Supabase...</div>';
-    try{ if(typeof _pullTendFromCloud==='function') await _pullTendFromCloud(); }catch(e){}
+    await window._plnPickerReload();
+  } else {
+    _plnPickerRender('');
   }
-  _plnPickerRender('');
 };
 window._plnClosePicker = function(){
   var m = document.querySelector('#_PLN_OV #_pln_picker'); if(m) m.classList.remove('open');
@@ -3399,8 +3403,36 @@ function _plnPickerRender(q){
 
 window._plnPickerReload = async function(){
   var el=document.getElementById('_pln_picker_list');
-  if(el) el.innerHTML='<div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">⏳ Recargando desde Supabase...</div>';
-  try{ if(typeof _pullTendFromCloud==='function') await _pullTendFromCloud(); }catch(e){}
+  if(el) el.innerHTML='<div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">⏳ Cargando embarques...</div>';
+  try{
+    // Inicializar Supabase si no está listo
+    if(!window._sb && typeof initSupabase==='function') initSupabase();
+    var sb = window._sb || (_PLN_SB);
+    if(sb){
+      var r = await sb.from('simulador_sesiones').select('nombre,datos,updated_at').order('updated_at',{ascending:false});
+      if(!r.error && r.data && r.data.length){
+        // Reconstruir tendData desde simulador_sesiones
+        var loaded = [];
+        r.data.forEach(function(row){
+          try{
+            var parsed = typeof row.datos==='string' ? JSON.parse(row.datos) : row.datos;
+            var arr = Array.isArray(parsed.tendData) ? parsed.tendData : (Array.isArray(parsed) ? parsed : []);
+            arr.forEach(function(d){ if(d.nro && d.fecha) loaded.push(d); });
+          }catch(e){}
+        });
+        // Deduplicar por nro
+        var seen={};
+        loaded = loaded.filter(function(d){ if(seen[d.nro]) return false; seen[d.nro]=true; return true; });
+        if(loaded.length){
+          window.tendData = loaded;
+          if(typeof saveTendData==='function') saveTendData();
+        }
+      }
+    } else {
+      // Fallback: usar _pullTendFromCloud si está disponible
+      if(typeof _pullTendFromCloud==='function') await _pullTendFromCloud();
+    }
+  }catch(e){ console.warn('[PLN picker] Error cargando:', e); }
   _plnPickerRender((document.getElementById('_pln_picker_q')||{}).value||'');
 };
 
@@ -13675,6 +13707,98 @@ function downloadInvTemplate(fmt){
   XLSX.writeFile(wb,'plantilla_facturas_embarque.xlsx');
 }
 
+
+// ── Plantilla de Artículos — auto-rellena Piezas, OC Homologada, Monto Homologado ──
+// Columnas esperadas: OC Original, Piezas, OC Homologada, Costo Homologado Total
+window._loadArticulosPlantilla = function(input){
+  var file = input.files[0]; if(!file) return;
+  var statEl = document.getElementById('art-status');
+  if(statEl) statEl.textContent = '⏳ Procesando...';
+
+  function processRows(rows){
+    // Encontrar fila de encabezado
+    var hdrIdx = -1, hdr = [];
+    for(var i=0;i<Math.min(rows.length,5);i++){
+      var r = rows[i].map(function(c){return (c||'').toString().toUpperCase().trim();});
+      if(r.some(function(c){return c.includes('OC') || c.includes('PIEZAS') || c.includes('PRODUCTO');})){
+        hdrIdx=i; hdr=r; break;
+      }
+    }
+    if(hdrIdx===-1){ if(statEl) statEl.textContent='⚠️ No se encontró encabezado válido'; return; }
+
+    // Mapear columnas
+    function col(terms){ return hdr.findIndex(function(h){return terms.some(function(t){return h.includes(t);});}); }
+    var cOC   = col(['OC ORIGINAL','OC_ORIGINAL','ORDEN.*ORIG']);
+    var cPz   = col(['PIEZAS','PIECES','QTY','CANTIDAD']);
+    var cOCH  = col(['OC HOMOLOGADA','OC_HOMOLOGADA','ORDEN.*HOMOL']);
+    var cMH   = col(['COSTO HOMOLOGADO TOTAL','MONTO_HOMOLOGADO','HOMOLOGADO TOTAL','MONTO HOMOL']);
+    if(cOC===-1){ if(statEl) statEl.textContent='⚠️ No se encontró columna OC Original'; return; }
+
+    // Agrupar por OC Original
+    var byOC = {}; // { ocOriginal: { piezas, ocHomol, montoHomol } }
+    for(var i=hdrIdx+1;i<rows.length;i++){
+      var r=rows[i];
+      var oc=(r[cOC]||'').toString().trim(); if(!oc) continue;
+      if(!byOC[oc]) byOC[oc]={piezas:0, ocHomol:'', montoHomol:0};
+      if(cPz>-1)  byOC[oc].piezas  += parseFloat(r[cPz])||0;
+      if(cOCH>-1 && !byOC[oc].ocHomol) byOC[oc].ocHomol = (r[cOCH]||'').toString().trim();
+      if(cMH>-1)  byOC[oc].montoHomol += parseFloat(r[cMH])||0;
+    }
+
+    var ocKeys = Object.keys(byOC);
+    if(!ocKeys.length){ if(statEl) statEl.textContent='⚠️ Sin datos de OC'; return; }
+
+    // Aplicar a las líneas de mercancía actuales
+    var lines = window.invLines || [];
+    // También buscar en los contenedores del DOM
+    var containers = document.querySelectorAll('[id="inv-lines"]');
+    var updated=0, notFound=[];
+
+    lines.forEach(function(l){
+      var oc=(l.oc||l.ordenCompra||'').toString().trim();
+      if(!oc) return;
+      var match = byOC[oc];
+      if(match){
+        if(cPz>-1 && match.piezas)  l.piezas = match.piezas;
+        if(cOCH>-1 && match.ocHomol) l.ocHomologada = match.ocHomol;
+        if(cMH>-1 && match.montoHomol) l.montoHomologado = parseFloat(match.montoHomol.toFixed(2));
+        updated++;
+      } else {
+        notFound.push(oc);
+      }
+    });
+
+    // Refrescar UI
+    if(typeof renderInvLines==='function') renderInvLines();
+    if(typeof _unicoRenderLines==='function') _unicoRenderLines();
+
+    var msg = '✅ '+updated+' factura(s) actualizadas';
+    if(notFound.length) msg += ' · ⚠️ '+[...new Set(notFound)].slice(0,3).join(', ')+(notFound.length>3?' y más':'')+ ' sin match';
+    if(statEl) statEl.innerHTML = '<span style="color:'+( notFound.length?'var(--orange-l)':'var(--green-l)')+'">'+msg+'</span>';
+    if(typeof _showToast==='function') _showToast(msg, notFound.length?'orange':'green', 4000);
+    input.value='';
+  }
+
+  var ext=file.name.split('.').pop().toLowerCase();
+  if(ext==='csv'){
+    var reader=new FileReader();
+    reader.onload=function(e){
+      var rows=e.target.result.split('\n').map(function(l){return l.split(',').map(function(c){return c.replace(/^"|"$/g,'').trim();});});
+      processRows(rows);
+    };
+    reader.readAsText(file,'UTF-8');
+  } else {
+    if(typeof XLSX==='undefined'){ _showToast('Cargando librería Excel… reintenta.','orange',3000); return; }
+    var reader=new FileReader();
+    reader.onload=function(e){
+      var wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+      var ws=wb.Sheets[wb.SheetNames[0]];
+      var rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''}).map(function(r){return r.map(function(c){return String(c===null||c===undefined?'':c).trim();});});
+      processRows(rows);
+    };
+    reader.readAsArrayBuffer(file);
+  }
+};
 
 function loadInvFile(input){
   const file=input.files[0]; if(!file) return;
