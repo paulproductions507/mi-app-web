@@ -3405,34 +3405,12 @@ window._plnPickerReload = async function(){
   var el=document.getElementById('_pln_picker_list');
   if(el) el.innerHTML='<div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">⏳ Cargando embarques...</div>';
   try{
-    // Inicializar Supabase si no está listo
+    // Usar exactamente la misma ruta que usa Tendencias al abrirse
     if(!window._sb && typeof initSupabase==='function') initSupabase();
-    var sb = window._sb || (_PLN_SB);
-    if(sb){
-      var r = await sb.from('simulador_sesiones').select('nombre,datos,updated_at').order('updated_at',{ascending:false});
-      if(!r.error && r.data && r.data.length){
-        // Reconstruir tendData desde simulador_sesiones
-        var loaded = [];
-        r.data.forEach(function(row){
-          try{
-            var parsed = typeof row.datos==='string' ? JSON.parse(row.datos) : row.datos;
-            var arr = Array.isArray(parsed.tendData) ? parsed.tendData : (Array.isArray(parsed) ? parsed : []);
-            arr.forEach(function(d){ if(d.nro && d.fecha) loaded.push(d); });
-          }catch(e){}
-        });
-        // Deduplicar por nro
-        var seen={};
-        loaded = loaded.filter(function(d){ if(seen[d.nro]) return false; seen[d.nro]=true; return true; });
-        if(loaded.length){
-          window.tendData = loaded;
-          if(typeof saveTendData==='function') saveTendData();
-        }
-      }
-    } else {
-      // Fallback: usar _pullTendFromCloud si está disponible
-      if(typeof _pullTendFromCloud==='function') await _pullTendFromCloud();
+    if(window._sb && typeof _pullTendFromCloud==='function'){
+      await _pullTendFromCloud();
     }
-  }catch(e){ console.warn('[PLN picker] Error cargando:', e); }
+  }catch(e){ console.warn('[PLN picker] Error:', e); }
   _plnPickerRender((document.getElementById('_pln_picker_q')||{}).value||'');
 };
 
@@ -8534,7 +8512,8 @@ function deleteTend(idx){
   const skA=document.getElementById('sk-ahorro'); if(skA) skA.textContent=totalAhorro>0?('$'+Number(totalAhorro).toLocaleString('en-US',{minimumFractionDigits:2})):'—';
   const skC=document.getElementById('sk-cif'); if(skC) skC.textContent=totalCIF>0?('$'+Number(totalCIF).toLocaleString('en-US',{minimumFractionDigits:2})):'—';
   const skF=document.getElementById('sk-facturas'); if(skF) skF.textContent=totalFact>0?totalFact:'—';
-  const skE=document.getElementById('sk-embarques'); if(skE) skE.textContent=tendData.length||'—';
+  const _embUniqSet=new Set(tendData.map(function(d){return (d.nro||'').trim().toUpperCase();}).filter(Boolean));
+  const skE=document.getElementById('sk-embarques'); if(skE) skE.textContent=(_embUniqSet.size||tendData.length)||'—';
   _showToast('🗑 Registro eliminado', 'red', 1800);
 }
 // ── Toggle genérico para secciones de Tendencias ──
