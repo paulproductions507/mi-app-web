@@ -2626,6 +2626,12 @@ function abrirPlaneacion(){
   ov.innerHTML = _PLN_BUILD_HTML();
   document.body.appendChild(ov);
   _PLN_INIT();
+  // Cargar tendData en background para que esté listo cuando abran el picker
+  if(!window.tendData || !window.tendData.length){
+    if(typeof _pullTendFromCloud==='function'){
+      _pullTendFromCloud().catch(function(){});
+    }
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -2698,7 +2704,7 @@ function _PLN_BUILD_HTML(){
   +'#_PLN_OV .kpiv{font-family:"IBM Plex Mono",monospace;font-size:14px;font-weight:800;}'
   // tabs
   +'#_PLN_OV .tabs{display:flex;background:var(--s1);border-bottom:1px solid var(--border);flex-shrink:0;}'
-  +'#_PLN_OV .tabt{flex:1;padding:9px;text-align:center;font-size:12px;font-weight:700;cursor:pointer;border:none;background:none;color:var(--muted);border-bottom:3px solid transparent;}'
+  +'#_PLN_OV .tabt{flex:0 0 auto;padding:9px 20px;text-align:center;font-size:12px;font-weight:700;cursor:pointer;border:none;background:none;color:var(--muted);border-bottom:3px solid transparent;}'
   +'#_PLN_OV .tabt.on{color:var(--text);border-bottom-color:var(--orange-l);}'
   // scroll + grid
   +'#_PLN_OV .gscroll{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;}'
@@ -3313,10 +3319,16 @@ window._plnCSV=function(){
 };
 
 // ── Picker — lee window.tendData (misma var que Tendencias) ──
-window._plnOpenPicker = function(mon, di){
+window._plnOpenPicker = async function(mon, di){
   _PLN_CTX = {mon:mon, di:di, ci:null, tab:'res'};
   var q = document.getElementById('_pln_picker_q'); if(q) q.value='';
   var m = document.querySelector('#_PLN_OV #_pln_picker'); if(m) m.classList.add('open');
+  // Si tendData está vacío, cargar y esperar antes de renderizar
+  if(!window.tendData || !window.tendData.length){
+    var el=document.getElementById('_pln_picker_list');
+    if(el) el.innerHTML='<div style="text-align:center;padding:30px;color:var(--muted);font-size:12px"><div style="font-size:28px;margin-bottom:8px">⏳</div>Cargando embarques desde Supabase...</div>';
+    try{ if(typeof _pullTendFromCloud==='function') await _pullTendFromCloud(); }catch(e){}
+  }
   _plnPickerRender('');
 };
 window._plnClosePicker = function(){
