@@ -2628,7 +2628,7 @@ function abrirPlaneacion(){
   // Crear overlay fullscreen independiente — mismo patrón que comparativo
   var ov = document.createElement('div');
   ov.id = '_PLN_OV';
-  ov.style.cssText = 'position:fixed;inset:0;z-index:9998;display:flex;flex-direction:column;overflow:hidden;font-family:\'Inter\',system-ui,sans-serif';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:9998;display:block;overflow-y:auto;overflow-x:hidden;font-family:\'Inter\',system-ui,sans-serif';
   ov.innerHTML = _PLN_BUILD_HTML();
   document.body.appendChild(ov);
   _PLN_INIT();
@@ -2713,10 +2713,10 @@ function _PLN_BUILD_HTML(){
   +'#_PLN_OV .tabt{flex:0 0 auto;padding:9px 20px;text-align:center;font-size:12px;font-weight:700;cursor:pointer;border:none;background:none;color:var(--muted);border-bottom:3px solid transparent;}'
   +'#_PLN_OV .tabt.on{color:var(--text);border-bottom-color:var(--orange-l);}'
   // scroll + grid
-  +'#_PLN_OV .gscroll{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory;}'
+  +'#_PLN_OV .gscroll{overflow-x:auto;overflow-y:visible;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory;}'
   +'#_PLN_OV .cal{display:grid;grid-template-columns:repeat(5,minmax(min(100vw - 24px, 320px),1fr));border-top:1px solid var(--border);border-left:1px solid var(--border);border-right:1px solid var(--border);border-bottom:1px solid var(--border);min-width:900px;border-radius:0 0 10px 10px;overflow:hidden;}'
   // day header
-  +'#_PLN_OV .dh{text-align:center;padding:8px 6px;font-size:14px;font-weight:900;letter-spacing:.04em;border-bottom:3px solid;border-right:1px solid rgba(255,255,255,.08);position:sticky;top:180px;z-index:5;scroll-snap-align:start;}'
+  +'#_PLN_OV .dh{text-align:center;padding:8px 6px;font-size:14px;font-weight:900;letter-spacing:.04em;border-bottom:3px solid;border-right:1px solid rgba(255,255,255,.08);position:sticky;top:178px;z-index:5;scroll-snap-align:start;}'
   +'#_PLN_OV .dhs{font-size:10px;font-weight:500;opacity:.75;margin-top:2px;}'
   +'#_PLN_OV .dh0{background:#1e3a8a;color:#93c5fd;border-color:#3b82f6;}'
   +'#_PLN_OV .dh1{background:#4c1d95;color:#c4b5fd;border-color:#7c3aed;}'
@@ -2955,6 +2955,18 @@ function _PLN_RENDER(){
   cal.innerHTML=h;
   _PLN_KPIS(wk);
   _PLN_DEPTS(wk);
+  // Recalcular offsets sticky dinámicamente
+  requestAnimationFrame(function(){
+    var ov=document.getElementById('_PLN_OV'); if(!ov) return;
+    var pb=ov.querySelector('.pb'), wknav=ov.querySelector('.wknav'), kpis=ov.querySelector('.kpis'), tabs=ov.querySelector('.tabs');
+    var h=0;
+    if(pb){ pb.style.top=h+'px'; h+=pb.offsetHeight; }
+    if(wknav){ wknav.style.top=h+'px'; h+=wknav.offsetHeight; }
+    if(kpis){ kpis.style.top=h+'px'; h+=kpis.offsetHeight; }
+    if(tabs){ tabs.style.top=h+'px'; h+=tabs.offsetHeight; }
+    // Aplicar a todos los .dh
+    ov.querySelectorAll('.dh').forEach(function(dh){ dh.style.top=h+'px'; });
+  });
 }
 
 function _plnCubHtml(cub,di,ci,tab,mon){
