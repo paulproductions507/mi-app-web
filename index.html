@@ -2959,32 +2959,43 @@ function _plnCubHtml(cub,di,ci,tab,mon){
       +(cub.eta?'<span style="font-size:9px;color:var(--muted)">ETA '+_plnFD(cub.eta)+'</span>':'')
       +(cub.status?'<span style="font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;background:rgba(255,255,255,.06);color:'+sc+'">'+_plnESC(cub.status)+'</span>':'')
       +'<span style="margin-left:auto;font-family:\'IBM Plex Mono\',monospace;font-size:10px;font-weight:700;color:var(--green-l)">'+_plnF(totFob)+'</span>'
+    +'<button onclick="event.stopPropagation();_plnDelCub(\''+_PLN_TAB+'\','+di+','+ci+')" style="margin-left:8px;background:rgba(218,54,51,.15);border:1px solid rgba(218,54,51,.3);color:#f47067;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;flex-shrink:0">×</button>'
     +'</div>';
   if(rows.length){
     // Column headers — fiel al Excel: Ctns | Suplidores | Valor FOB | Depto | Merc.%
-    h+='<div class="cch">'
-      +'<span style="width:32px;text-align:center">Ctns</span>'
-      +'<span style="flex:1">Suplidores</span>'
-      +'<span style="width:72px;text-align:right">Valor FOB</span>'
-      +'<span style="width:64px;text-align:right">Landed</span>'
-      +'<span style="width:58px">Depto.</span>'
-      +'<span style="width:38px;text-align:right">Merc.%</span>'
+    h+='<div class="cch" style="min-width:420px">'
+      +'<span style="width:30px;text-align:center;flex-shrink:0">Btos</span>'
+      +'<span style="width:120px;flex-shrink:0">Suplidor</span>'
+      +'<span style="width:50px;flex-shrink:0">Dept</span>'
+      +'<span style="width:72px;text-align:right;flex-shrink:0">FOB</span>'
+      +'<span style="width:72px;text-align:right;flex-shrink:0">Landed</span>'
+      +'<span style="width:72px;text-align:right;flex-shrink:0">Homol.</span>'
+      +'<span style="width:48px;text-align:right;flex-shrink:0">Pzas</span>'
     +'</div>';
     rows.forEach(function(r){
       var pct=totLnd>0?((parseFloat(r.landed)||parseFloat(r.fob)||0)/totLnd*100).toFixed(2)+'%':'—';
       var nm=r.prov||'—'; var nmS=nm.length>20?nm.slice(0,18)+'…':nm;
+      var homolV=r.homol||0;
       h+='<div class="sr'+(r.matched?' mat':'')+'">'
-        +'<div class="sc" style="width:32px;text-align:center;color:var(--muted)">'+(r.bultos||'—')+'</div>'
-        +'<div class="sc" style="flex:1" title="'+_plnESC(nm)+'">'+_plnESC(nmS)+'</div>'
-        +'<div class="sc mo" style="width:72px;text-align:right;color:var(--blue-l)">'+_plnF(r.fob)+'</div>'
-        +'<div class="sc mo" style="width:64px;text-align:right;color:var(--orange-l)">'+_plnF(r.landed||r.fob)+'</div>'
-        +'<div class="sc" style="width:58px;color:var(--muted)">'+(r.dept||'')+'</div>'
-        +'<div class="sc" style="width:38px;text-align:right;color:var(--muted)">'+pct+'</div>'
+        +'<div class="sc" style="width:30px;text-align:center;color:var(--muted);flex-shrink:0">'+(r.bultos||'—')+'</div>'
+        +'<div class="sc" style="width:120px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+_plnESC(nm)+'">'+_plnESC(nmS)+'</div>'
+        +'<div class="sc" style="width:50px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)">'+(r.dept||'')+'</div>'
+        +'<div class="sc mo" style="width:72px;text-align:right;color:var(--blue-l);flex-shrink:0">'+_plnF(r.fob)+'</div>'
+        +'<div class="sc mo" style="width:72px;text-align:right;color:var(--orange-l);flex-shrink:0">'+_plnF(r.landed||r.fob)+'</div>'
+        +'<div class="sc mo" style="width:72px;text-align:right;color:'+(homolV>0?'var(--green-l)':'var(--muted)')+';flex-shrink:0">'+(homolV>0?_plnF(homolV):'—')+'</div>'
+        +'<div class="sc" style="width:48px;text-align:right;color:var(--muted);flex-shrink:0">'+(r.piezas||0).toLocaleString()+'</div>'
       +'</div>';
     });
-    h+='<div class="cft">'
-      +'<span>'+totBlt+' ctns · '+rows.length+' sup</span>'
-      +'<span style="font-family:\'IBM Plex Mono\',monospace;font-weight:700;color:var(--green-l)">'+_plnFF(totFob)+'</span>'
+    var totLndF=rows.reduce(function(s,r){return s+(parseFloat(r.landed)||parseFloat(r.fob)||0);},0);
+    var totHomolF=rows.reduce(function(s,r){return s+(parseFloat(r.homol)||0);},0);
+    var totPzF=rows.reduce(function(s,r){return s+(parseInt(r.piezas)||0);},0);
+    h+='<div class="cft" style="flex-direction:column;gap:3px">'
+      +'<div style="display:flex;justify-content:space-between"><span>'+totBlt+' btos · '+rows.length+' sup · '+totPzF.toLocaleString()+' pzas</span></div>'
+      +'<div style="display:flex;gap:10px;flex-wrap:wrap">'
+      +'<span>FOB: <strong style="color:var(--blue-l);font-family:IBM Plex Mono,monospace">'+_plnFF(totFob)+'</strong></span>'
+      +'<span>Landed: <strong style="color:var(--orange-l);font-family:IBM Plex Mono,monospace">'+_plnFF(totLndF)+'</strong></span>'
+      +(totHomolF>0?'<span>Homol: <strong style="color:var(--green-l);font-family:IBM Plex Mono,monospace">'+_plnFF(totHomolF)+'</strong></span>':'')
+      +'</div>'
     +'</div>';
   }
   h+='</div>';
@@ -3001,27 +3012,62 @@ function _PLN_KPIS(wk){
 
 function _PLN_DEPTS(wk){
   var el=document.getElementById('_pln_depts'); if(!el) return;
-  var dm={},tl=0;
-  (wk[_PLN_TAB]||[]).forEach(function(day){ (day.cubiculos||[]).forEach(function(cub){ (cub.rows||[]).forEach(function(r){ var d=(r.dept||'Sin depto').toUpperCase(); var v=parseFloat(r.landed)||parseFloat(r.fob)||0; dm[d]=(dm[d]||0)+v; tl+=v; }); }); });
-  var ents=Object.entries(dm).sort(function(a,b){return b[1]-a[1];});
-  if(!ents.length){ el.innerHTML=''; return; }
-  var h='<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">📊 FOB/Landed por Departamento</div>'
-    +'<table style="border-collapse:collapse;font-size:11px;max-width:560px;width:100%"><thead><tr style="background:var(--s2)">'
-    +'<th style="padding:5px 10px;border:1px solid var(--border);font-size:9px;color:var(--muted);text-align:left">Departamento</th>'
-    +'<th style="padding:5px 10px;border:1px solid var(--border);font-size:9px;color:var(--muted);text-align:right">F.O.B / Landed</th>'
-    +'<th style="padding:5px 10px;border:1px solid var(--border);font-size:9px;color:var(--muted);text-align:right">% Merc.</th>'
-    +'<th style="border:1px solid var(--border);min-width:70px;padding:4px 8px"></th>'
-    +'</tr></thead><tbody>';
+  // Accumulate by dept: FOB, Landed, Homol, ZL, IMP, Piezas, Bultos
+  var dm={},totFob=0,totLnd=0,totHom=0,totPz=0,totBt=0,totZL=0,totIMP=0,totEq=0;
+  (wk[_PLN_TAB]||[]).forEach(function(day){ (day.cubiculos||[]).forEach(function(cub){
+    totEq++;
+    var isIMP=(cub.tipoCarga||'').toLowerCase().includes('cont')||(cub.via==='res');
+    (cub.rows||[]).forEach(function(r){
+      var d=(r.dept||'SIN DEPTO').toUpperCase();
+      if(!dm[d]) dm[d]={fob:0,lnd:0,hom:0,pz:0,bt:0,zl:0,imp:0};
+      var fv=parseFloat(r.fob)||0, lv=parseFloat(r.landed)||fv, hv=parseFloat(r.homol)||0;
+      dm[d].fob+=fv; dm[d].lnd+=lv; dm[d].hom+=hv;
+      dm[d].pz+=parseInt(r.piezas)||0; dm[d].bt+=parseInt(r.bultos)||0;
+      totFob+=fv; totLnd+=lv; totHom+=hv;
+      totPz+=parseInt(r.piezas)||0; totBt+=parseInt(r.bultos)||0;
+    });
+  }); });
+  if(!Object.keys(dm).length){ el.innerHTML=''; return; }
+  var ents=Object.entries(dm).sort(function(a,b){return b[1].lnd-a[1].lnd;});
+  // KPI chips
+  var h='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px">';
+  h+='<div style="background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:8px;text-align:center"><div style="font-size:9px;color:var(--muted);text-transform:uppercase">FOB Total</div><div style="font-size:12px;font-weight:700;color:var(--blue-l);font-family:monospace">'+_plnFF(totFob)+'</div></div>';
+  h+='<div style="background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:8px;text-align:center"><div style="font-size:9px;color:var(--muted);text-transform:uppercase">Landed Total</div><div style="font-size:12px;font-weight:700;color:var(--orange-l);font-family:monospace">'+_plnFF(totLnd)+'</div></div>';
+  h+='<div style="background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:8px;text-align:center"><div style="font-size:9px;color:var(--muted);text-transform:uppercase">Homologado</div><div style="font-size:12px;font-weight:700;color:var(--green-l);font-family:monospace">'+(totHom>0?_plnFF(totHom):'—')+'</div></div>';
+  h+='</div>';
+  h+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px">';
+  h+='<div style="background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:8px;text-align:center"><div style="font-size:9px;color:var(--muted);text-transform:uppercase">Equipos</div><div style="font-size:14px;font-weight:700;color:var(--text)">'+totEq+'</div></div>';
+  h+='<div style="background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:8px;text-align:center"><div style="font-size:9px;color:var(--muted);text-transform:uppercase">Piezas</div><div style="font-size:12px;font-weight:700;color:var(--text)">'+totPz.toLocaleString()+'</div></div>';
+  h+='<div style="background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:8px;text-align:center"><div style="font-size:9px;color:var(--muted);text-transform:uppercase">Bultos</div><div style="font-size:12px;font-weight:700;color:var(--text)">'+totBt.toLocaleString()+'</div></div>';
+  h+='</div>';
+  // Dept table
+  h+='<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">📊 Por Departamento</div>';
+  h+='<div style="overflow-x:auto"><table style="border-collapse:collapse;font-size:11px;width:100%;min-width:440px"><thead><tr style="background:var(--s2)">';
+  h+='<th style="padding:5px 8px;border:1px solid var(--border);font-size:9px;color:var(--muted);text-align:left">Departamento</th>';
+  h+='<th style="padding:5px 8px;border:1px solid var(--border);font-size:9px;color:var(--muted);text-align:right">FOB</th>';
+  h+='<th style="padding:5px 8px;border:1px solid var(--border);font-size:9px;color:var(--muted);text-align:right">Landed</th>';
+  h+='<th style="padding:5px 8px;border:1px solid var(--border);font-size:9px;color:var(--muted);text-align:right">% Total</th>';
+  h+='<th style="border:1px solid var(--border);min-width:60px;padding:4px 6px"></th>';
+  h+='</tr></thead><tbody>';
   ents.forEach(function(e,i){
-    var pct=tl>0?(e[1]/tl*100).toFixed(2):'0';
+    var pct=totLnd>0?(e[1].lnd/totLnd*100).toFixed(1):'0';
+    var clr=['#f97316','#3b82f6','#10b981','#8b5cf6','#ec4899','#f59e0b'][i%6];
     h+='<tr style="background:'+(i%2?'var(--s1)':'var(--bg)')+'">'
-      +'<td style="padding:5px 10px;border:1px solid var(--border);font-weight:600">'+e[0]+'</td>'
-      +'<td style="padding:5px 10px;border:1px solid var(--border);text-align:right;font-family:\'IBM Plex Mono\',monospace;color:var(--green-l)">'+_plnFF(e[1])+'</td>'
-      +'<td style="padding:5px 10px;border:1px solid var(--border);text-align:right;color:var(--muted)">'+pct+'%</td>'
-      +'<td style="border:1px solid var(--border);padding:4px 8px"><div style="height:7px;border-radius:4px;background:linear-gradient(90deg,#f8d122,#f97316);width:'+Math.max(2,parseFloat(pct))+'%"></div></td>'
+      +'<td style="padding:5px 8px;border:1px solid var(--border);font-weight:600">'+e[0]+'</td>'
+      +'<td style="padding:5px 8px;border:1px solid var(--border);text-align:right;font-family:IBM Plex Mono,monospace;color:var(--blue-l)">'+_plnFF(e[1].fob)+'</td>'
+      +'<td style="padding:5px 8px;border:1px solid var(--border);text-align:right;font-family:IBM Plex Mono,monospace;color:var(--orange-l)">'+_plnFF(e[1].lnd)+'</td>'
+      +'<td style="padding:5px 8px;border:1px solid var(--border);text-align:right;color:var(--muted)">'+pct+'%</td>'
+      +'<td style="border:1px solid var(--border);padding:4px 6px"><div style="height:7px;border-radius:4px;background:'+clr+';width:'+Math.max(2,parseFloat(pct))+'%"></div></td>'
     +'</tr>';
   });
-  h+='<tr style="background:rgba(88,166,255,.06);font-weight:800"><td style="padding:5px 10px;border:1px solid var(--border)">TOTAL</td><td style="padding:5px 10px;border:1px solid var(--border);text-align:right;font-family:\'IBM Plex Mono\',monospace;color:var(--blue-l)">'+_plnFF(tl)+'</td><td style="padding:5px 10px;border:1px solid var(--border);text-align:right">100%</td><td style="border:1px solid var(--border)"></td></tr>'
+  h+='<tr style="background:rgba(88,166,255,.06);font-weight:800">'
+    +'<td style="padding:5px 8px;border:1px solid var(--border)">TOTAL</td>'
+    +'<td style="padding:5px 8px;border:1px solid var(--border);text-align:right;font-family:IBM Plex Mono,monospace;color:var(--blue-l)">'+_plnFF(totFob)+'</td>'
+    +'<td style="padding:5px 8px;border:1px solid var(--border);text-align:right;font-family:IBM Plex Mono,monospace;color:var(--orange-l)">'+_plnFF(totLnd)+'</td>'
+    +'<td style="padding:5px 8px;border:1px solid var(--border);text-align:right">100%</td>'
+    +'<td style="border:1px solid var(--border)"></td>'
+  +'</tr>'
+
   +'</tbody></table>';
   el.innerHTML=h;
 }
@@ -3325,11 +3371,9 @@ window._plnCSV=function(){
 };
 
 // ── Picker — lee window.tendData (misma var que Tendencias) ──
-window._plnOpenPicker = async function(mon, di){
+window._plnOpenPicker = function(mon, di){
   _PLN_CTX = {mon:mon, di:di, ci:null, tab:'res'};
-  var q = document.getElementById('_pln_picker_q'); if(q) q.value='';
-  var m = document.querySelector('#_PLN_OV #_pln_picker'); if(m) m.classList.add('open');
-  await window._plnPickerReload();
+  _plnModuloEmbarques();
 };
 window._plnClosePicker = function(){
   var m = document.querySelector('#_PLN_OV #_pln_picker'); if(m) m.classList.remove('open');
@@ -3400,27 +3444,18 @@ function _plnPickerRender(q){
 window._plnPickerReload = async function(){
   var el=document.getElementById('_pln_picker_list');
   if(el) el.innerHTML='<div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">&#9203; Cargando...</div>';
-  if(!window._sb){ if(typeof initSupabase==='function') initSupabase(); await new Promise(function(r){ setTimeout(r,600); }); }
-  var lista=null;
-  try{ lista=await cargarDeSupabase(); }catch(e){}
-  if(lista && lista.length){
-    var master=lista.find(function(s){ return s.nombre==='_TEND_MASTER'; });
-    if(master){
-      try{
-        var parsed=typeof master.datos==='string'?JSON.parse(master.datos):master.datos;
-        var arr=Array.isArray(parsed.tendData)?parsed.tendData:[];
-        if(arr.length){ window.tendData=arr; if(typeof saveTendData==='function') saveTendData(); }
-      }catch(e){}
-    }
+  try{
+    if(!window._sb && typeof initSupabase==='function') initSupabase();
+    if(window._sb && typeof _pullTendFromCloud==='function') await _pullTendFromCloud();
+  }catch(e){}
+  if(!window.tendData || !window.tendData.length){
+    if(el) el.innerHTML='<div style="text-align:center;padding:24px"><div style="font-size:32px;margin-bottom:10px">&#128279;</div><div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:6px">Abre Tendencias primero</div><div style="font-size:11px;color:var(--muted);margin-bottom:16px">La app necesita conectarse via Tendencias.</div><button onclick="_plnGoToTend()" style="background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.4);color:var(--blue-l);border-radius:8px;padding:10px 20px;font-size:12px;font-weight:700;cursor:pointer;width:100%">&#128640; Ir a Tendencias y volver</button></div>';
+    return;
   }
   _plnPickerRender((document.getElementById('_pln_picker_q')||{}).value||'');
 };
 
 window._plnPickerSelect = function(nro){
-  var td=window.tendData||[];
-  var nros=td.slice(0,5).map(function(d){return d.nro;}).join(', ');
-  alert('PRESIONADO: '+nro+'\ntendData: '+td.length+' registros\nPrimeros NROs: '+nros+'\nCTX: '+JSON.stringify(_PLN_CTX));
-  return;
   var found=(window.tendData||[]).find(function(d){return (d.nro||'')===nro;});
   if(!found){ if(typeof _showToast==='function') _showToast('⚠️ Embarque '+nro+' no encontrado','orange',3000); return; }
   var snap=found.snap||{};
@@ -17519,5 +17554,171 @@ function _plnGoToTend(){
   if(typeof iniciarApp==='function') iniciarApp('tendencias');
   setTimeout(function(){ if(typeof abrirPlaneacion==='function') abrirPlaneacion(); },2500);
 }
+
+window._plnDelCub = function(tab, di, ci){
+  if(!confirm('\u00bfEliminar este embarque del plan?')) return;
+  var wk = _plnMkWeek(_PLN_CUR);
+  if(wk[tab] && wk[tab][di] && wk[tab][di].cubiculos){
+    wk[tab][di].cubiculos.splice(ci, 1);
+    _PLN_SAVE(); _PLN_RENDER();
+    if(typeof _showToast==='function') _showToast('Embarque eliminado','red',2000);
+  }
+};
+
+window._plnModuloEmbarques = async function(){
+  var old=document.getElementById('_plnEmbMod'); if(old) old.remove();
+  var mod=document.createElement('div');
+  mod.id='_plnEmbMod';
+  mod.style.cssText='position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,.92);display:flex;align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto';
+  mod.innerHTML=
+    '<div style="background:var(--s1);border:1px solid var(--border);border-radius:14px;width:100%;max-width:640px;margin:auto;display:flex;flex-direction:column;overflow:hidden">'
+    +'<div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">'
+    +'<div style="font-size:13px;font-weight:700;color:var(--text)">&#128230; Seleccionar Embarque</div>'
+    +'<button id="_plnEmbClose" style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;line-height:1;padding:0 4px">&#215;</button>'
+    +'</div>'
+    +'<div style="padding:10px 14px;border-bottom:1px solid var(--border);flex-shrink:0">'
+    +'<input id="_plnEmbQ" type="text" placeholder="Escribe el N&#176; de embarque..." autocomplete="off" '
+    +'style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:13px;box-sizing:border-box;outline:none">'
+    +'</div>'
+    +'<div id="_plnEmbList" style="overflow-y:auto;max-height:70vh;padding:8px 14px"></div>'
+    +'<div id="_plnEmbFooter" style="display:none;padding:10px 14px;border-top:1px solid var(--border);flex-shrink:0"></div>'
+    +'</div>';
+  document.body.appendChild(mod);
+  document.getElementById('_plnEmbClose').addEventListener('click',function(){ mod.remove(); });
+  mod.addEventListener('click',function(e){ if(e.target===mod) mod.remove(); });
+  var listEl=document.getElementById('_plnEmbList');
+  var footEl=document.getElementById('_plnEmbFooter');
+  var input=document.getElementById('_plnEmbQ');
+  listEl.innerHTML='<div style="text-align:center;padding:30px;color:var(--muted);font-size:12px">&#9203; Cargando...</div>';
+  if(!window._sb && typeof initSupabase==='function') initSupabase();
+  await new Promise(function(r){ setTimeout(r,500); });
+  try{
+    var lista=await cargarDeSupabase();
+    if(lista&&lista.length){
+      var master=lista.find(function(s){return s.nombre==='_TEND_MASTER';});
+      if(master){
+        var p=typeof master.datos==='string'?JSON.parse(master.datos):master.datos;
+        var arr=Array.isArray(p.tendData)?p.tendData:[];
+        if(arr.length) window.tendData=arr;
+      }
+    }
+  }catch(e){}
+  var td=window.tendData||[];
+  if(!td.length){ listEl.innerHTML='<div style="text-align:center;padding:30px;color:var(--muted);font-size:13px">Sin embarques.<br>Abre Tendencias primero.</div>'; return; }
+  function fmt(n){ return '$'+(parseFloat(n)||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  function getLandedTotal(d){
+    var snap=d.snap||{};
+    var inner=snap.snap||snap;
+    var escLow=(d.esc||'').toLowerCase();
+    var isSab=escLow.includes('sababa')||escLow.includes('sab');
+    var isCif=escLow.includes('cif');
+    if(isSab && inner.sc3 && inner.sc3.landedG) return parseFloat(inner.sc3.landedG);
+    if(isCif && inner.sc2 && inner.sc2.landedG) return parseFloat(inner.sc2.landedG);
+    if(inner.sc1 && inner.sc1.landedG) return parseFloat(inner.sc1.landedG);
+    return parseFloat(snap.sc1Base||d.sc1Base||0);
+  }
+  function renderList(q){
+    q=(q||'').trim().toLowerCase();
+    var items=td.filter(function(d){ return !q||(d.nro||'').toLowerCase().includes(q)||(d.desc||'').toLowerCase().includes(q); }).slice(0,40);
+    if(!items.length){ listEl.innerHTML='<div style="padding:20px;text-align:center;color:var(--muted);font-size:12px">Sin resultados</div>'; return; }
+    listEl.innerHTML=items.map(function(d){
+      var lines=(d.snap&&d.snap.invLines||d.invLines||[]).filter(function(l){return !l.tipoFac||l.tipoFac==='mercancia';});
+      var fob=parseFloat((d.snap&&d.snap.sc1&&(d.snap.sc1.cif||d.snap.sc1.fob))||d.cif||0);
+      var landed=getLandedTotal(d);
+      var deptos=[...new Set(lines.map(function(l){return l.dept||l.deptCat||'';}).filter(Boolean))].slice(0,3).join(', ');
+      var snap=d.snap||{};
+      var tipoEq=(snap.campos&&snap.campos.s1_equipo)||d.tipoEquipo||'';
+      var nEquip=parseInt((snap.campos&&snap.campos.s1_equipos)||1)||1;
+      return '<div class="_plnEmbItem" data-nro="'+d.nro+'" style="padding:11px 12px;border:1px solid var(--border);border-radius:9px;margin-bottom:7px;cursor:pointer;background:var(--bg)">'
+        +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'
+        +'<div style="flex:1;min-width:0">'
+        +'<div style="font-size:13px;font-weight:700;color:var(--orange-l)">Emb. '+d.nro+'</div>'
+        +'<div style="font-size:11px;color:var(--text);margin:2px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(d.desc||'')+'</div>'
+        +'<div style="font-size:10px;color:var(--muted)">'+(d.fecha||'')+' &middot; '+(d.esc||'')+(tipoEq?' &middot; '+nEquip+'x '+tipoEq:'')+(lines.length?' &middot; '+lines.length+' prov.':'')+(deptos?' &middot; '+deptos:'')+'</div>'
+        +'</div>'
+        +'<div style="text-align:right;flex-shrink:0">'
+        +'<div style="font-size:11px;font-weight:700;color:var(--green-l);font-family:monospace">'+fmt(fob)+'</div>'
+        +'<div style="font-size:10px;color:var(--orange-l);font-family:monospace">'+fmt(landed)+'</div>'
+        +'<div style="font-size:9px;color:var(--muted)">FOB/Landed</div>'
+        +'</div></div></div>';
+    }).join('');
+    listEl.querySelectorAll('._plnEmbItem').forEach(function(el){
+      el.addEventListener('click',function(){ selectEmbarque(el.getAttribute('data-nro')); });
+    });
+  }
+  function selectEmbarque(nro){
+    var d=td.find(function(x){return (x.nro||'').trim()===nro.trim();});
+    if(!d){alert('No encontrado: '+nro);return;}
+    var snap=d.snap||{};
+    var inner=snap.snap||snap;
+    var lines=(snap.invLines||d.invLines||[]).filter(function(l){return !l.tipoFac||l.tipoFac==='mercancia';});
+    var fob=parseFloat((snap.sc1&&(snap.sc1.cif||snap.sc1.fob))||d.cif||0);
+    var landedTotal=getLandedTotal(d);
+    var totCIF=lines.reduce(function(s,l){return s+(parseFloat(l.costo)||0);},0);
+    var nEquip=parseInt((snap.campos&&snap.campos.s1_equipos)||1)||1;
+    var tipoEq=(snap.campos&&snap.campos.s1_equipo)||d.tipoEquipo||'Contenedor';
+    var escLow=(d.esc||'').toLowerCase();
+    var isSab=escLow.includes('sababa')||escLow.includes('sab');
+    var rows=lines.map(function(l){
+      var fobOrig=parseFloat(l.costo||0);
+      var prop=totCIF>0?fobOrig/totCIF:0;
+      var lnd=landedTotal>0?Math.round(landedTotal*prop*100)/100:fobOrig;
+      var homol=isSab?parseFloat(l.montoHomologado||0):0;
+      return {prov:l.prov||'—',bultos:parseInt(l.bultos||l.cajas||0),piezas:parseInt(l.piezas||0),
+        fob:fobOrig,landed:lnd,homol:homol,dept:l.dept||l.deptCat||'',matched:true};
+    });
+    var totHomol=rows.reduce(function(s,r){return s+r.homol;},0);
+    listEl.innerHTML=
+      '<div style="background:rgba(88,166,255,.06);border:1px solid rgba(88,166,255,.2);border-radius:9px;padding:12px;margin-bottom:12px">'
+      +'<div style="font-size:13px;font-weight:700;color:var(--blue-l)">Emb. '+d.nro+' \u2014 '+(d.desc||'')+'</div>'
+      +'<div style="font-size:11px;color:var(--muted);margin-top:3px">'+(d.fecha||'')+' &middot; '+(d.esc||'')+' &middot; '+nEquip+'x '+tipoEq+'</div>'
+      +'<div style="display:flex;gap:12px;margin-top:6px;flex-wrap:wrap">'
+      +'<div><div style="font-size:9px;color:var(--muted)">FOB</div><div style="font-size:12px;font-weight:700;color:var(--blue-l);font-family:monospace">'+fmt(fob)+'</div></div>'
+      +'<div><div style="font-size:9px;color:var(--muted)">Landed</div><div style="font-size:12px;font-weight:700;color:var(--orange-l);font-family:monospace">'+fmt(landedTotal)+'</div></div>'
+      +(isSab&&totHomol>0?'<div><div style="font-size:9px;color:var(--muted)">Homologado</div><div style="font-size:12px;font-weight:700;color:var(--green-l);font-family:monospace">'+fmt(totHomol)+'</div></div>':'')
+      +'</div></div>'
+      +(nEquip>1?'<div style="background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.2);border-radius:8px;padding:10px;margin-bottom:10px;font-size:11px;color:var(--orange-l)"><strong>'+nEquip+' equipos.</strong> Agrega al mismo d\xeda o repite en otro d\xeda para dividirlos.</div>':'')
+      +'<div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">Proveedores ('+lines.length+')</div>'
+      +'<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--border);border-radius:8px;margin-bottom:4px">'
+      +'<table style="width:100%;min-width:520px;border-collapse:collapse;font-size:11px">'
+      +'<thead><tr style="background:var(--s2)">'
+      +'<th style="padding:6px 8px;text-align:left;color:var(--muted);font-weight:700">Proveedor</th>'
+      +'<th style="padding:6px 8px;text-align:left;color:var(--muted);font-weight:700">Dept</th>'
+      +'<th style="padding:6px 8px;text-align:right;color:var(--muted);font-weight:700;white-space:nowrap">FOB Orig.</th>'
+      +'<th style="padding:6px 8px;text-align:right;color:var(--muted);font-weight:700">Landed</th>'
+      +(isSab?'<th style="padding:6px 8px;text-align:right;color:var(--muted);font-weight:700">Homol.</th>':'')
+      +'<th style="padding:6px 8px;text-align:right;color:var(--muted);font-weight:700">Pzas</th>'
+      +'<th style="padding:6px 8px;text-align:right;color:var(--muted);font-weight:700">Btos</th>'
+      +'</tr></thead><tbody>'
+      +rows.map(function(r){
+        return '<tr style="border-top:1px solid var(--border)">'
+          +'<td style="padding:7px 8px;color:var(--text);font-weight:600;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+r.prov+'</td>'
+          +'<td style="padding:7px 8px;color:var(--muted);white-space:nowrap">'+r.dept+'</td>'
+          +'<td style="padding:7px 8px;text-align:right;color:var(--blue-l);font-family:monospace;font-weight:700;white-space:nowrap">'+fmt(r.fob)+'</td>'
+          +'<td style="padding:7px 8px;text-align:right;color:var(--orange-l);font-family:monospace;font-weight:700;white-space:nowrap">'+fmt(r.landed)+'</td>'
+          +(isSab?'<td style="padding:7px 8px;text-align:right;color:'+(r.homol>0?'var(--green-l)':'var(--muted)')+';font-family:monospace;font-weight:700;white-space:nowrap">'+(r.homol>0?fmt(r.homol):'—')+'</td>':'')
+          +'<td style="padding:7px 8px;text-align:right;color:var(--muted)">'+r.piezas.toLocaleString()+'</td>'
+          +'<td style="padding:7px 8px;text-align:right;color:var(--muted)">'+r.bultos+'</td>'
+          +'</tr>';
+      }).join('')
+      +'</tbody></table></div>';
+    footEl.style.display='block';
+    footEl.innerHTML=
+      '<button id="_plnEmbConfirm" style="width:100%;background:rgba(63,185,80,.15);border:1px solid rgba(63,185,80,.4);color:var(--green-l);border-radius:9px;padding:12px;font-size:13px;font-weight:700;cursor:pointer">\u2713 Agregar al d\xeda seleccionado</button>'
+      +'<button id="_plnEmbBack" style="width:100%;background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;margin-top:6px">\u2190 Volver al listado</button>';
+    document.getElementById('_plnEmbConfirm').addEventListener('click',function(){
+      var wk=_plnMkWeek(_PLN_CTX.mon);
+      wk[_PLN_CTX.tab][_PLN_CTX.di].cubiculos.push({
+        via:'res',tipoCarga:tipoEq,nroEmb:d.nro,nroCont:'',eta:d.fecha,status:'Recibido en CDF',rows:rows
+      });
+      _PLN_SAVE(); _PLN_RENDER(); mod.remove();
+      if(typeof _showToast==='function') _showToast('\u2705 Emb. '+d.nro+' \u00b7 '+rows.length+' proveedores','green',3000);
+    });
+    document.getElementById('_plnEmbBack').addEventListener('click',function(){ footEl.style.display='none'; renderList(input.value); });
+  }
+  input.addEventListener('input',function(){ renderList(input.value); });
+  renderList('');
+  setTimeout(function(){ input.focus(); },300);
+};
 </script>
 </body>
