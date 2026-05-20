@@ -3329,12 +3329,7 @@ window._plnOpenPicker = async function(mon, di){
   _PLN_CTX = {mon:mon, di:di, ci:null, tab:'res'};
   var q = document.getElementById('_pln_picker_q'); if(q) q.value='';
   var m = document.querySelector('#_PLN_OV #_pln_picker'); if(m) m.classList.add('open');
-  // Si tendData está vacío, usar _plnPickerReload que hace query directo a Supabase
-  if(!window.tendData || !window.tendData.length){
-    await window._plnPickerReload();
-  } else {
-    _plnPickerRender('');
-  }
+  await window._plnPickerReload();
 };
 window._plnClosePicker = function(){
   var m = document.querySelector('#_PLN_OV #_pln_picker'); if(m) m.classList.remove('open');
@@ -3375,7 +3370,7 @@ function _plnPickerRender(q){
 
   meses.forEach(function(mes){
     var items=byMes[mes].sort(function(a,b){return (b.fecha||'').localeCompare(a.fecha||'');});
-    var dmParts=mes.split('-'); // ['2026','05']
+    var dmParts=mes.split('-');
     var label=MESES[parseInt(dmParts[1],10)-1]+' '+dmParts[0];
     var totMes=items.reduce(function(s,d){var sc1=(d.snap||{}).sc1||{}; return s+(sc1.fob||sc1.cif||d.cif||0);},0);
 
@@ -3405,6 +3400,7 @@ function _plnPickerRender(q){
 window._plnPickerReload = async function(){
   var el=document.getElementById('_pln_picker_list');
   if(el) el.innerHTML='<div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">&#9203; Cargando...</div>';
+  if(!window._sb){ if(typeof initSupabase==='function') initSupabase(); await new Promise(function(r){ setTimeout(r,600); }); }
   var lista=null;
   try{ lista=await cargarDeSupabase(); }catch(e){}
   if(lista && lista.length){
@@ -3416,29 +3412,15 @@ window._plnPickerReload = async function(){
         if(arr.length){ window.tendData=arr; if(typeof saveTendData==='function') saveTendData(); }
       }catch(e){}
     }
-    if(!window.tendData||!window.tendData.length){
-      var loaded=[];
-      lista.forEach(function(s){
-        if(s.nombre==='_TEND_MASTER'||s.nombre==='_FACTDISP_MASTER') return;
-        try{
-          var p=typeof s.datos==='string'?JSON.parse(s.datos):s.datos;
-          if(p&&p.nro&&p.fecha) loaded.push(p);
-          else if(p&&p.campos&&p.campos.s1_nro_emb){
-            var nro=(p.campos.s1_nro_emb||'').trim();
-            var fecha=(p.campos.s1_fecha_emb||s.updated_at||'').slice(0,10);
-            if(nro) loaded.push({nro:nro,fecha:fecha,desc:p.campos.s1_desc_emb||'',snap:p,esc:p.compar||''});
-          }
-        }catch(e){}
-      });
-      var seen={};
-      loaded=loaded.filter(function(d){ if(seen[d.nro]) return false; seen[d.nro]=true; return true; });
-      if(loaded.length){ window.tendData=loaded; if(typeof saveTendData==='function') saveTendData(); }
-    }
   }
   _plnPickerRender((document.getElementById('_pln_picker_q')||{}).value||'');
 };
 
 window._plnPickerSelect = function(nro){
+  var td=window.tendData||[];
+  var nros=td.slice(0,5).map(function(d){return d.nro;}).join(', ');
+  alert('PRESIONADO: '+nro+'\ntendData: '+td.length+' registros\nPrimeros NROs: '+nros+'\nCTX: '+JSON.stringify(_PLN_CTX));
+  return;
   var found=(window.tendData||[]).find(function(d){return (d.nro||'')===nro;});
   if(!found){ if(typeof _showToast==='function') _showToast('⚠️ Embarque '+nro+' no encontrado','orange',3000); return; }
   var snap=found.snap||{};
