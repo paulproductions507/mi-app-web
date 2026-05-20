@@ -2777,6 +2777,7 @@ function _PLN_BUILD_HTML(){
     +'<div><div class="pb-brand">📋 PLANEACIÓN DE CARGA SEMANAL ®</div><div class="pb-sub" id="_pln_sub">ZLC Panamá</div></div>'
     +'<div class="pb-acts">'
       +'<span id="_pln_cloud" style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:6px;background:rgba(139,148,158,.1);border:1px solid rgba(139,148,158,.25);color:var(--muted)">☁️ ...</span>'
+      +'<button class="xbtn" onclick="(function(){var b=document.body;var isLight=b.classList.contains(\'theme-light\');b.classList.toggle(\'theme-light\',!isLight);b.style.colorScheme=isLight?\'dark\':\'light\';document.getElementById(\'_pln_themeBtn\').textContent=isLight?\'☀️ Claro\':\'🌙 Oscuro\';})()" id="_pln_themeBtn" title="Cambiar tema">🌙 Oscuro</button>'
       +'<button class="xbtn yw" onclick="_plnModalSemana()">+ Semana</button>'
       +'<button class="xbtn gn" onclick="_plnCSV()">📊 CSV</button>'
       +'<button class="xbtn rd" onclick="document.getElementById(\'_PLN_OV\').style.display=\'none\';if(typeof switchTab===\'function\'){var t=document.querySelector(\'.tab\');if(t)switchTab(\'sim\',t);}">✕ Cerrar</button>'
@@ -2903,6 +2904,9 @@ function _PLN_INIT(){
   _PLN_TAB = 'prog';
   _PLN_RENDER();
   if(!_PLN_SB && window._sb){ _PLN_SB=window._sb; _plnBadge('ok'); _PLN_SB_LOAD(); }
+  // Sync theme button label
+  var tb=document.getElementById('_pln_themeBtn');
+  if(tb){ var isL=document.body.classList.contains('theme-light')||document.body.style.colorScheme==='light'; tb.textContent=isL?'🌙 Oscuro':'☀️ Claro'; }
 }
 
 // ── Render ──
@@ -2992,8 +2996,19 @@ function _plnCubHtml(cub,di,ci,tab,mon){
       +'<span class="ctag '+viaCls+'">'+_plnESC(headerTag)+'</span>'
       +(embStr?'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:9px;color:var(--muted)">'+_plnESC(embStr)+'</span>':'')
       +(cubContNum?'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:8px;color:#2dd4bf;background:rgba(45,212,191,.1);border:1px solid rgba(45,212,191,.25);padding:1px 5px;border-radius:3px">📦 '+_plnESC(cubContNum)+'</span>':'')
-      +(cub.eta?'<span style="font-size:9px;color:var(--muted)">ETA '+_plnFD(cub.eta)+'</span>':'')
+      +(cub.eta?'<span style="font-size:9px;color:var(--muted)">'+_plnFD(cub.eta)+'</span>':'')
       +(cub.status?'<span style="font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;background:rgba(255,255,255,.06);color:'+sc+'">'+_plnESC(cub.status)+'</span>':'')
+      // Escenario / corredor desde tendData
+      +(function(){
+          var td2=window.tendData||[];
+          var embs2=(cub.nroEmb||'').split('+').map(function(s){return s.trim();}).filter(Boolean);
+          var fe=embs2.map(function(n){return td2.find(function(d){return (d.nro||'').trim()===n;})||null;}).filter(Boolean)[0]||{};
+          var esc2=fe.esc||''; var cor2=fe.corredor||fe.provCorredor||'';
+          var chips='';
+          if(esc2) chips+='<span style="font-size:8px;background:rgba(240,136,62,.12);border:1px solid rgba(240,136,62,.3);color:var(--orange-l);padding:1px 5px;border-radius:3px;font-weight:700">'+_plnESC(esc2)+'</span>';
+          if(cor2) chips+='<span style="font-size:8px;background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.25);color:var(--green-l);padding:1px 5px;border-radius:3px;font-weight:700">🤝'+_plnESC(cor2)+'</span>';
+          return chips;
+        })()
       +'<span style="margin-left:auto;font-family:\'IBM Plex Mono\',monospace;font-size:10px;font-weight:700;color:var(--green-l)">'+_plnF(totFob)+'</span>'
       +'<button onclick="event.stopPropagation();_plnEditCont(\''+cubKey+'\')" title="Editar N° Contenedor" style="margin-left:4px;background:rgba(45,212,191,.1);border:1px solid rgba(45,212,191,.3);color:#2dd4bf;border-radius:4px;padding:1px 6px;font-size:9px;cursor:pointer;flex-shrink:0">✏️</button>'
     +'<button onclick="event.stopPropagation();_plnDelCub(\''+_PLN_TAB+'\','+di+','+ci+')" style="margin-left:4px;background:rgba(218,54,51,.15);border:1px solid rgba(218,54,51,.3);color:#f47067;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;flex-shrink:0">×</button>'
@@ -3013,34 +3028,35 @@ function _plnCubHtml(cub,di,ci,tab,mon){
     var totFobRef = totFob || 1;
     h+='<table style="width:100%;border-collapse:collapse;font-size:10px;min-width:'+(isSabCub?'520px':'420px')+'">'
       +'<thead><tr style="background:var(--s2)">'
-      +'<th style="padding:3px 4px;text-align:center;color:var(--muted);font-size:7px;font-weight:700;text-transform:uppercase;border-bottom:1px solid var(--border);width:28px">Bts</th>'
-      +'<th style="padding:3px 3px;text-align:center;color:var(--muted);font-size:7px;font-weight:700;text-transform:uppercase;border-bottom:1px solid var(--border);width:24px">Org</th>'
-      +'<th style="padding:3px 4px;text-align:left;color:var(--muted);font-size:7px;font-weight:700;text-transform:uppercase;border-bottom:1px solid var(--border)">Suplidor</th>'
-      +'<th style="padding:3px 4px;text-align:left;color:var(--muted);font-size:7px;font-weight:700;text-transform:uppercase;border-bottom:1px solid var(--border);width:46px">Dept</th>'
-      +'<th style="padding:3px 4px;text-align:right;color:var(--muted);font-size:7px;font-weight:700;text-transform:uppercase;border-bottom:1px solid var(--border);width:56px">FOB</th>'
-      +'<th style="padding:3px 3px;text-align:right;color:var(--muted);font-size:7px;font-weight:700;text-transform:uppercase;border-bottom:1px solid var(--border);width:30px">%</th>'
-      +(isSabCub?'<th style="padding:3px 4px;text-align:right;color:var(--muted);font-size:7px;font-weight:700;text-transform:uppercase;border-bottom:1px solid var(--border);width:56px">Hmol</th>':'')
-      +'<th style="padding:3px 4px;text-align:right;color:var(--muted);font-size:7px;font-weight:700;text-transform:uppercase;border-bottom:1px solid var(--border);width:56px">Lnd</th>'
-      +'<th style="padding:3px 4px;text-align:right;color:var(--muted);font-size:7px;font-weight:700;text-transform:uppercase;border-bottom:1px solid var(--border);width:42px">Pzas</th>'
+      +'<th style="padding:6px 4px;text-align:center;color:var(--muted);font-size:7px;font-weight:700;text-transform:uppercase;border-bottom:1px solid var(--border);width:28px">Bts</th>'
+      +'<th style="padding:6px 3px;text-align:center;color:var(--muted);font-size:7px;font-weight:700;text-transform:uppercase;border-bottom:1px solid var(--border);width:24px">Org</th>'
+      +'<th style="padding:6px 4px;text-align:left;color:var(--muted);font-size:7px;font-weight:700;text-transform:uppercase;border-bottom:1px solid var(--border)">Suplidor</th>'
+      +'<th style="padding:6px 4px;text-align:left;color:var(--muted);font-size:7px;font-weight:700;text-transform:uppercase;border-bottom:1px solid var(--border);width:46px">Dept</th>'
+      +'<th style="padding:6px 4px;text-align:right;color:var(--muted);font-size:7px;font-weight:700;text-transform:uppercase;border-bottom:1px solid var(--border);width:56px">FOB</th>'
+      +(isSabCub?'<th style="padding:6px 4px;text-align:right;color:var(--muted);font-size:7px;font-weight:700;text-transform:uppercase;border-bottom:1px solid var(--border);width:56px">Hmol</th>':'')
+      +'<th style="padding:6px 4px;text-align:right;color:var(--muted);font-size:7px;font-weight:700;text-transform:uppercase;border-bottom:1px solid var(--border);width:56px">Lnd</th>'
+      +'<th style="padding:6px 4px;text-align:right;color:var(--muted);font-size:7px;font-weight:700;text-transform:uppercase;border-bottom:1px solid var(--border);width:42px">Pzas</th>'
+      +'<th style="padding:6px 3px;text-align:right;color:var(--muted);font-size:7px;font-weight:700;text-transform:uppercase;border-bottom:1px solid var(--border);width:30px">%</th>'
       +'</tr></thead><tbody>';
     rows.forEach(function(r){
       var nm=r.prov||'—';
-      // Truncar inteligentemente para table-layout:fixed
-      var nmS=nm.length>16?nm.slice(0,14)+'…':nm;
+      // Quitar prefijo S.I - para mostrar proveedor padre
+      var nmClean=nm.replace(/^S\.I\s*[-–]\s*/i,'').replace(/^S\.I\.\s*[-–]\s*/i,'').trim();
+      var nmS=nmClean.length>16?nmClean.slice(0,14)+'…':nmClean;
       var homolV=parseFloat(r.homol)||0;
       var fobV=parseFloat(r.fob)||0;
       var pct=totFobRef>0?((fobV/totFobRef)*100).toFixed(0)+'%':'—';
       var orgBadge=r.tipo==='IMP'?'<span style="font-size:7px;font-weight:800;color:#f97316">IMP</span>':'<span style="font-size:7px;font-weight:800;color:#60a5fa">ZL</span>';
       h+='<tr style="border-bottom:1px solid rgba(255,255,255,.06)'+(r.matched?';background:rgba(63,185,80,.05)':'')+'">'
-        +'<td style="padding:3px 4px;text-align:center;color:var(--muted);font-family:IBM Plex Mono,monospace;font-size:9px">'+(r.bultos||0)+'</td>'
-        +'<td style="padding:3px 3px;text-align:center">'+orgBadge+'</td>'
-        +'<td style="padding:3px 4px;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px" title="'+_plnESC(nm)+'">'+_plnESC(nmS)+'</td>'
-        +'<td style="padding:3px 4px;color:var(--muted);font-size:8px;white-space:nowrap">'+(r.dept||'—')+'</td>'
-        +'<td style="padding:3px 4px;text-align:right;color:var(--blue-l);font-family:IBM Plex Mono,monospace;font-weight:700;font-size:9px;white-space:nowrap">'+_plnF(fobV)+'</td>'
-        +'<td style="padding:3px 3px;text-align:right;color:var(--muted);font-size:8px;font-family:IBM Plex Mono,monospace;white-space:nowrap">'+pct+'</td>'
-        +(isSabCub?'<td style="padding:3px 4px;text-align:right;color:'+(homolV>0?'var(--green-l)':'var(--muted)')+';font-family:IBM Plex Mono,monospace;font-weight:700;font-size:9px;white-space:nowrap">'+(homolV>0?_plnF(homolV):'—')+'</td>':'')
-        +'<td style="padding:3px 4px;text-align:right;color:var(--orange-l);font-family:IBM Plex Mono,monospace;font-weight:700;font-size:9px;white-space:nowrap">'+_plnF(r.landed||r.fob)+'</td>'
-        +'<td style="padding:3px 4px;text-align:right;color:var(--muted);font-size:8px;white-space:nowrap">'+(r.piezas||0).toLocaleString('es-PA')+'</td>'
+        +'<td style="padding:6px 4px;text-align:center;color:var(--muted);font-family:IBM Plex Mono,monospace;font-size:9px">'+(r.bultos||0)+'</td>'
+        +'<td style="padding:6px 3px;text-align:center">'+orgBadge+'</td>'
+        +'<td style="padding:6px 4px;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px" title="'+_plnESC(nm)+'">'+_plnESC(nmS)+'</td>'
+        +'<td style="padding:6px 4px;color:var(--muted);font-size:8px;white-space:nowrap">'+(r.dept||'—')+'</td>'
+        +'<td style="padding:6px 4px;text-align:right;color:var(--blue-l);font-family:IBM Plex Mono,monospace;font-weight:700;font-size:9px;white-space:nowrap">'+_plnF(fobV)+'</td>'
+        +(isSabCub?'<td style="padding:6px 4px;text-align:right;color:'+(homolV>0?'var(--green-l)':'var(--muted)')+';font-family:IBM Plex Mono,monospace;font-weight:700;font-size:9px;white-space:nowrap">'+(homolV>0?_plnF(homolV):'—')+'</td>':'')
+        +'<td style="padding:6px 4px;text-align:right;color:var(--orange-l);font-family:IBM Plex Mono,monospace;font-weight:700;font-size:9px;white-space:nowrap">'+_plnF(r.landed||r.fob)+'</td>'
+        +'<td style="padding:6px 4px;text-align:right;color:var(--muted);font-size:8px;white-space:nowrap">'+(r.piezas||0).toLocaleString('es-PA')+'</td>'
+        +'<td style="padding:6px 3px;text-align:right;color:var(--muted);font-size:8px;font-family:IBM Plex Mono,monospace;white-space:nowrap">'+pct+'</td>'
       +'</tr>';
     });
     h+='</tbody></table></div>';
@@ -3110,12 +3126,12 @@ function _PLN_DEPTS(wk){
   var ents=Object.entries(dm).sort(function(a,b){return b[1].lnd-a[1].lnd;});
   if(!ents.length){ el.innerHTML=''; return; }
   var h='<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">📊 Por Departamento</div>'
-    +'<div style="overflow-x:auto"><table style="border-collapse:collapse;font-size:11px;min-width:480px;width:100%"><thead><tr style="background:var(--s2)">'
-    +'<th style="padding:6px 10px;border:1px solid var(--border);font-size:9px;color:var(--muted);text-align:left;text-transform:uppercase">Departamento</th>'
-    +'<th style="padding:6px 10px;border:1px solid var(--border);font-size:9px;color:var(--muted);text-align:right;text-transform:uppercase">FOB</th>'
-    +'<th style="padding:6px 10px;border:1px solid var(--border);font-size:9px;color:var(--muted);text-align:right;text-transform:uppercase">Landed</th>'
-    +'<th style="padding:6px 10px;border:1px solid var(--border);font-size:9px;color:var(--muted);text-align:right;text-transform:uppercase">% Total</th>'
-    +'<th style="border:1px solid var(--border);min-width:80px;padding:4px 8px"></th>'
+    +'<div style="overflow-x:auto;border-radius:10px;overflow:hidden;border:1px solid var(--border)"><table style="border-collapse:collapse;font-size:11px;min-width:480px;width:100%"><thead><tr style="background:var(--s2)">'
+    +'<th style="padding:6px 10px;border-bottom:1px solid var(--border);border-right:1px solid var(--border);font-size:9px;color:var(--muted);text-align:left;text-transform:uppercase">Departamento</th>'
+    +'<th style="padding:6px 10px;border-bottom:1px solid var(--border);border-right:1px solid var(--border);font-size:9px;color:var(--muted);text-align:right;text-transform:uppercase">FOB</th>'
+    +'<th style="padding:6px 10px;border-bottom:1px solid var(--border);border-right:1px solid var(--border);font-size:9px;color:var(--muted);text-align:right;text-transform:uppercase">Landed</th>'
+    +'<th style="padding:6px 10px;border-bottom:1px solid var(--border);border-right:1px solid var(--border);font-size:9px;color:var(--muted);text-align:right;text-transform:uppercase">% Total</th>'
+    +'<th style="border-bottom:1px solid var(--border);min-width:80px;padding:4px 8px"></th>'
     +'</tr></thead><tbody>';
   ents.forEach(function(e,i){
     var pct=tllnd>0?(e[1].lnd/tllnd*100).toFixed(2):'0';
@@ -17702,7 +17718,7 @@ window._plnCubDetalle = function(key){
     +'</div>'
     // Table
     +'<div style="overflow:auto;flex:1;padding:12px 16px">'
-    +'<table style="width:100%;border-collapse:collapse;font-size:12px;min-width:580px">'
+    +'<table style="width:100%;border-collapse:collapse;font-size:12px;min-width:580px;border-radius:8px;overflow:hidden;border:1px solid var(--border)">'
     +'<thead><tr style="background:var(--s2);position:sticky;top:0;z-index:2">'
       +'<th style="padding:8px 10px;text-align:center;color:var(--muted);font-weight:700;border:1px solid var(--border);width:46px">Btos</th>'
       +'<th style="padding:8px 10px;text-align:center;color:var(--muted);font-weight:700;border:1px solid var(--border);width:36px">Org</th>'
@@ -17735,17 +17751,22 @@ window._plnCubDetalle = function(key){
         +'</tr>';
       }).join('')
     // Totals row
-    +'<tr style="background:rgba(88,166,255,.08);font-weight:800;border-top:2px solid rgba(88,166,255,.3)">'
-      +'<td style="padding:8px 10px;text-align:center;border:1px solid var(--border);font-family:IBM Plex Mono,monospace;color:#2dd4bf">'+totBlt.toLocaleString('es-PA')+'</td>'
-      +'<td style="border:1px solid var(--border)"></td>'
-      +'<td style="padding:8px 10px;font-weight:800;color:var(--text);border:1px solid var(--border)">TOTAL ('+rows.length+' prov.)</td>'
-      +'<td style="border:1px solid var(--border)"></td>'
-      +'<td style="padding:8px 10px;text-align:right;color:#58a6ff;font-family:IBM Plex Mono,monospace;font-weight:800;border:1px solid var(--border)">'+_plnFF(totFob)+'</td>'
-      +'<td style="padding:8px 10px;text-align:center;color:var(--muted);border:1px solid var(--border);font-size:11px">100%</td>'
-      +(isSab?'<td style="padding:8px 10px;text-align:right;color:#3fb950;font-family:IBM Plex Mono,monospace;font-weight:800;border:1px solid var(--border)">'+_plnFF(totHom)+'</td>':'')
-      +'<td style="padding:8px 10px;text-align:right;color:#f0883e;font-family:IBM Plex Mono,monospace;font-weight:800;border:1px solid var(--border)">'+_plnFF(totLnd)+'</td>'
-      +'<td style="padding:8px 10px;text-align:right;color:#a371f7;font-family:IBM Plex Mono,monospace;font-weight:800;border:1px solid var(--border)">'+totPzs.toLocaleString('es-PA')+'</td>'
-    +'</tr>'
+    + (function(){
+        var deptSet = new Set(rows.map(function(r){ return (r.dept||'').toUpperCase(); }).filter(Boolean));
+        var deptCount = deptSet.size;
+        var deptLabel = deptCount===1 ? '1 Depto' : deptCount+' Deptos';
+        return '<tr style="background:rgba(88,166,255,.08);font-weight:800;border-top:2px solid rgba(88,166,255,.3)">'
+          +'<td style="padding:8px 10px;text-align:center;border:1px solid var(--border);font-family:IBM Plex Mono,monospace;color:#2dd4bf">'+totBlt.toLocaleString('es-PA')+'</td>'
+          +'<td style="border:1px solid var(--border)"></td>'
+          +'<td style="padding:8px 10px;font-weight:800;color:var(--text);border:1px solid var(--border)">TOTAL ('+rows.length+' prov.)</td>'
+          +'<td style="padding:6px 10px;text-align:center;border:1px solid var(--border);font-size:10px;font-weight:700;color:var(--muted)">'+deptLabel+'</td>'
+          +'<td style="padding:8px 10px;text-align:right;color:#58a6ff;font-family:IBM Plex Mono,monospace;font-weight:800;border:1px solid var(--border)">'+_plnFF(totFob)+'</td>'
+          +'<td style="padding:8px 10px;text-align:center;color:var(--muted);border:1px solid var(--border);font-size:11px">100%</td>'
+          +(isSab?'<td style="padding:8px 10px;text-align:right;color:#3fb950;font-family:IBM Plex Mono,monospace;font-weight:800;border:1px solid var(--border)">'+_plnFF(totHom)+'</td>':'')
+          +'<td style="padding:8px 10px;text-align:right;color:#f0883e;font-family:IBM Plex Mono,monospace;font-weight:800;border:1px solid var(--border)">'+_plnFF(totLnd)+'</td>'
+          +'<td style="padding:8px 10px;text-align:right;color:#a371f7;font-family:IBM Plex Mono,monospace;font-weight:800;border:1px solid var(--border)">'+totPzs.toLocaleString('es-PA')+'</td>'
+          +'</tr>';
+      })()
     +'</tbody></table></div></div>';
 
   ov.addEventListener('click', function(e){ if(e.target===ov) ov.remove(); });
