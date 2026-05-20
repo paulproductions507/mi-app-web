@@ -662,7 +662,8 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
     </div>
 
     <!-- KPI CHIPS -->
-    <div class="splash-kpi-strip" id="splash-kpi-strip">
+    <div style="padding:0 16px 6px;text-align:right"><button id="kpi-toggle-btn" onclick="_showKpis()" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:var(--muted);border-radius:8px;padding:4px 12px;font-size:10px;cursor:pointer;font-weight:600">&#128202; Ver KPIs</button></div>
+    <div class="splash-kpi-strip" id="splash-kpi-strip" style="display:none">
       <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-embarques">—</div><div class="splash-kpi-chip-lbl">Emb. Mes</div></div>
       <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-ahorro">—</div><div class="splash-kpi-chip-lbl">Ahorro Total</div></div>
       <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-cif">—</div><div class="splash-kpi-chip-lbl">Compras Mes</div></div>
@@ -3403,14 +3404,15 @@ function _plnPickerRender(q){
 
 window._plnPickerReload = async function(){
   var el=document.getElementById('_pln_picker_list');
-  if(el) el.innerHTML='<div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">⏳ Cargando embarques...</div>';
+  if(el) el.innerHTML='<div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">&#9203; Cargando...</div>';
   try{
-    // Usar exactamente la misma ruta que usa Tendencias al abrirse
     if(!window._sb && typeof initSupabase==='function') initSupabase();
-    if(window._sb && typeof _pullTendFromCloud==='function'){
-      await _pullTendFromCloud();
-    }
-  }catch(e){ console.warn('[PLN picker] Error:', e); }
+    if(window._sb && typeof _pullTendFromCloud==='function') await _pullTendFromCloud();
+  }catch(e){}
+  if(!window.tendData || !window.tendData.length){
+    if(el) el.innerHTML='<div style="text-align:center;padding:24px"><div style="font-size:32px;margin-bottom:10px">&#128279;</div><div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:6px">Abre Tendencias primero</div><div style="font-size:11px;color:var(--muted);margin-bottom:16px">La app necesita conectarse via Tendencias.</div><button onclick="_plnGoToTend()" style="background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.4);color:var(--blue-l);border-radius:8px;padding:10px 20px;font-size:12px;font-weight:700;cursor:pointer;width:100%">&#128640; Ir a Tendencias y volver</button></div>';
+    return;
+  }
   _plnPickerRender((document.getElementById('_pln_picker_q')||{}).value||'');
 };
 
@@ -8512,8 +8514,7 @@ function deleteTend(idx){
   const skA=document.getElementById('sk-ahorro'); if(skA) skA.textContent=totalAhorro>0?('$'+Number(totalAhorro).toLocaleString('en-US',{minimumFractionDigits:2})):'—';
   const skC=document.getElementById('sk-cif'); if(skC) skC.textContent=totalCIF>0?('$'+Number(totalCIF).toLocaleString('en-US',{minimumFractionDigits:2})):'—';
   const skF=document.getElementById('sk-facturas'); if(skF) skF.textContent=totalFact>0?totalFact:'—';
-  const _embUniqSet=new Set(tendData.map(function(d){return (d.nro||'').trim().toUpperCase();}).filter(Boolean));
-  const skE=document.getElementById('sk-embarques'); if(skE) skE.textContent=(_embUniqSet.size||tendData.length)||'—';
+  const skE=document.getElementById('sk-embarques'); if(skE) skE.textContent=tendData.length||'—';
   _showToast('🗑 Registro eliminado', 'red', 1800);
 }
 // ── Toggle genérico para secciones de Tendencias ──
@@ -17500,5 +17501,19 @@ body:not(.sidebar-pinned) #app-wrapper {
 })();
 </script>
 </div><!-- /app-wrapper -->
+<script>
+function _showKpis(){
+  var s=document.getElementById('splash-kpi-strip');
+  var b=document.getElementById('kpi-toggle-btn');
+  if(!s||!b) return;
+  s.style.display='flex'; b.style.display='none';
+  clearTimeout(window._kpiT);
+  window._kpiT=setTimeout(function(){ s.style.display='none'; b.style.display='block'; },10000);
+}
+function _plnGoToTend(){
+  if(typeof window._plnClosePicker==='function') window._plnClosePicker();
+  if(typeof iniciarApp==='function') iniciarApp('tendencias');
+  setTimeout(function(){ if(typeof abrirPlaneacion==='function') abrirPlaneacion(); },2500);
+}
+</script>
 </body>
-</html>
