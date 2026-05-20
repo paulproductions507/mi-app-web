@@ -2714,7 +2714,7 @@ function _PLN_BUILD_HTML(){
   +'#_PLN_OV .tabt.on{color:var(--text);border-bottom-color:var(--orange-l);}'
   // scroll + grid
   +'#_PLN_OV .gscroll{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory;}'
-  +'#_PLN_OV .cal{display:grid;grid-template-columns:repeat(5,minmax(min(100vw - 24px, 320px),1fr));border-top:1px solid var(--border);min-width:900px;}'
+  +'#_PLN_OV .cal{display:grid;grid-template-columns:repeat(5,minmax(min(100vw - 24px, 320px),1fr));border-top:1px solid var(--border);border-left:1px solid var(--border);border-right:1px solid var(--border);border-bottom:1px solid var(--border);min-width:900px;border-radius:0 0 10px 10px;overflow:hidden;}'
   // day header
   +'#_PLN_OV .dh{text-align:center;padding:8px 6px;font-size:14px;font-weight:900;letter-spacing:.04em;border-bottom:3px solid;border-right:1px solid rgba(255,255,255,.08);position:sticky;top:0;z-index:5;scroll-snap-align:start;}'
   +'#_PLN_OV .dhs{font-size:10px;font-weight:500;opacity:.75;margin-top:2px;}'
@@ -2723,16 +2723,16 @@ function _PLN_BUILD_HTML(){
   +'#_PLN_OV .dh2{background:#064e3b;color:#6ee7b7;border-color:#059669;}'
   +'#_PLN_OV .dh3{background:#78350f;color:#fcd34d;border-color:#d97706;}'
   +'#_PLN_OV .dh4{background:#7f1d1d;color:#fca5a5;border-color:#dc2626;}'
-  +'#_PLN_OV .db{vertical-align:top;align-self:start;display:flex;flex-direction:column;scroll-snap-align:start;border-right:1px solid var(--border);border-bottom:1px solid var(--border);}'
-  +'#_PLN_OV .db0{background:rgba(30,58,138,.04);border-left:1px solid var(--border);}'
+  // day body — stretch al alto de la columna más larga, borde derecho
+  +'#_PLN_OV .db{vertical-align:top;align-self:stretch;display:flex;flex-direction:column;scroll-snap-align:start;border-right:1px solid var(--border);}'
+  +'#_PLN_OV .db0{background:rgba(30,58,138,.04);}'
   +'#_PLN_OV .db1{background:rgba(76,29,149,.05);}'
   +'#_PLN_OV .db2{background:rgba(6,78,59,.04);}'
   +'#_PLN_OV .db3{background:rgba(120,53,15,.04);}'
   +'#_PLN_OV .db4{background:rgba(127,29,29,.04);}'
-  // cubículo — borde gris uniforme, mismo grosor en todos lados
+  // cubículo — borde gris, solo el top tiene color de acento del tipo
   +'#_PLN_OV .cub{border:1px solid var(--border);border-top-width:2px;margin:6px 6px 0 6px;border-radius:6px;overflow:hidden;}'
   +'#_PLN_OV .cub:last-of-type{margin-bottom:6px;}'
-  // color accent en borde superior del cub según tipo
   +'#_PLN_OV .cub.sea{border-top-color:#3b82f6;}'
   +'#_PLN_OV .cub.land{border-top-color:#d97706;}'
   +'#_PLN_OV .cub.air{border-top-color:#7c3aed;}'
@@ -2930,8 +2930,7 @@ function _PLN_RENDER(){
   });
   // Day bodies
   days.forEach(function(day,di){
-    var cornerStyle=di===0?'border-radius:0 0 0 10px;':di===4?'border-radius:0 0 10px 0;':'';
-    h+='<div class="db db'+di+'" style="'+cornerStyle+'">';
+    h+='<div class="db db'+di+'">';
     // Botón ARRIBA — siempre visible sin necesidad de scroll
     if(_PLN_TAB==='prog'){
       h+='<div class="addeq">'
@@ -17703,19 +17702,22 @@ window._plnCubDetalle = function(key){
     +'</div>'
     // Table
     +'<div style="overflow:auto;flex:1;padding:12px 16px">'
-    +'<table style="width:100%;border-collapse:collapse;font-size:12px;min-width:560px">'
+    +'<table style="width:100%;border-collapse:collapse;font-size:12px;min-width:580px">'
     +'<thead><tr style="background:var(--s2);position:sticky;top:0;z-index:2">'
       +'<th style="padding:8px 10px;text-align:center;color:var(--muted);font-weight:700;border:1px solid var(--border);width:46px">Btos</th>'
       +'<th style="padding:8px 10px;text-align:center;color:var(--muted);font-weight:700;border:1px solid var(--border);width:36px">Org</th>'
       +'<th style="padding:8px 10px;text-align:left;color:var(--muted);font-weight:700;border:1px solid var(--border)">Suplidor</th>'
-      +'<th style="padding:8px 10px;text-align:left;color:var(--muted);font-weight:700;border:1px solid var(--border);width:90px">Dept</th>'
-      +'<th style="padding:8px 10px;text-align:right;color:var(--muted);font-weight:700;border:1px solid var(--border);width:110px">FOB</th>'
-      +(isSab?'<th style="padding:8px 10px;text-align:right;color:var(--muted);font-weight:700;border:1px solid var(--border);width:110px">Homol.</th>':'')
-      +'<th style="padding:8px 10px;text-align:right;color:var(--muted);font-weight:700;border:1px solid var(--border);width:110px">Landed</th>'
-      +'<th style="padding:8px 10px;text-align:right;color:var(--muted);font-weight:700;border:1px solid var(--border);width:80px">Piezas</th>'
+      +'<th style="padding:8px 10px;text-align:left;color:var(--muted);font-weight:700;border:1px solid var(--border);width:80px">Dept</th>'
+      +'<th style="padding:8px 10px;text-align:right;color:var(--muted);font-weight:700;border:1px solid var(--border);width:100px">FOB</th>'
+      +'<th style="padding:8px 10px;text-align:right;color:var(--muted);font-weight:700;border:1px solid var(--border);width:46px">%</th>'
+      +(isSab?'<th style="padding:8px 10px;text-align:right;color:var(--muted);font-weight:700;border:1px solid var(--border);width:100px">Homol.</th>':'')
+      +'<th style="padding:8px 10px;text-align:right;color:var(--muted);font-weight:700;border:1px solid var(--border);width:100px">Landed</th>'
+      +'<th style="padding:8px 10px;text-align:right;color:var(--muted);font-weight:700;border:1px solid var(--border);width:70px">Piezas</th>'
     +'</tr></thead><tbody>'
     + rows.map(function(r,idx){
         var homolV = parseFloat(r.homol)||0;
+        var fobV = parseFloat(r.fob)||0;
+        var pct = totFob>0 ? ((fobV/totFob)*100).toFixed(1)+'%' : '—';
         var orgBadge = r.tipo==='IMP'
           ? '<span style="font-size:9px;font-weight:800;color:#f97316;background:rgba(249,115,22,.12);padding:1px 5px;border-radius:3px">IMP</span>'
           : '<span style="font-size:9px;font-weight:800;color:#60a5fa;background:rgba(88,166,255,.12);padding:1px 5px;border-radius:3px">ZL</span>';
@@ -17725,7 +17727,8 @@ window._plnCubDetalle = function(key){
           +'<td style="padding:8px 10px;text-align:center;border:1px solid var(--border)">'+orgBadge+'</td>'
           +'<td style="padding:8px 10px;color:var(--text);font-weight:700;border:1px solid var(--border)">'+(r.prov||'—')+'</td>'
           +'<td style="padding:8px 10px;color:var(--muted);border:1px solid var(--border)">'+(r.dept||'—')+'</td>'
-          +'<td style="padding:8px 10px;text-align:right;color:#58a6ff;font-family:IBM Plex Mono,monospace;font-weight:700;border:1px solid var(--border)">'+_plnFF(r.fob)+'</td>'
+          +'<td style="padding:8px 10px;text-align:right;color:#58a6ff;font-family:IBM Plex Mono,monospace;font-weight:700;border:1px solid var(--border)">'+_plnFF(fobV)+'</td>'
+          +'<td style="padding:8px 10px;text-align:right;color:var(--muted);font-family:IBM Plex Mono,monospace;font-size:11px;border:1px solid var(--border)">'+pct+'</td>'
           +(isSab?'<td style="padding:8px 10px;text-align:right;color:'+(homolV>0?'#3fb950':'var(--muted)')+';font-family:IBM Plex Mono,monospace;font-weight:700;border:1px solid var(--border)">'+(homolV>0?_plnFF(homolV):'—')+'</td>':'')
           +'<td style="padding:8px 10px;text-align:right;color:#f0883e;font-family:IBM Plex Mono,monospace;font-weight:700;border:1px solid var(--border)">'+_plnFF(r.landed||r.fob)+'</td>'
           +'<td style="padding:8px 10px;text-align:right;color:var(--muted);font-family:IBM Plex Mono,monospace;border:1px solid var(--border)">'+(r.piezas||0).toLocaleString('es-PA')+'</td>'
@@ -17738,6 +17741,7 @@ window._plnCubDetalle = function(key){
       +'<td style="padding:8px 10px;font-weight:800;color:var(--text);border:1px solid var(--border)">TOTAL ('+rows.length+' prov.)</td>'
       +'<td style="border:1px solid var(--border)"></td>'
       +'<td style="padding:8px 10px;text-align:right;color:#58a6ff;font-family:IBM Plex Mono,monospace;font-weight:800;border:1px solid var(--border)">'+_plnFF(totFob)+'</td>'
+      +'<td style="padding:8px 10px;text-align:center;color:var(--muted);border:1px solid var(--border);font-size:11px">100%</td>'
       +(isSab?'<td style="padding:8px 10px;text-align:right;color:#3fb950;font-family:IBM Plex Mono,monospace;font-weight:800;border:1px solid var(--border)">'+_plnFF(totHom)+'</td>':'')
       +'<td style="padding:8px 10px;text-align:right;color:#f0883e;font-family:IBM Plex Mono,monospace;font-weight:800;border:1px solid var(--border)">'+_plnFF(totLnd)+'</td>'
       +'<td style="padding:8px 10px;text-align:right;color:#a371f7;font-family:IBM Plex Mono,monospace;font-weight:800;border:1px solid var(--border)">'+totPzs.toLocaleString('es-PA')+'</td>'
