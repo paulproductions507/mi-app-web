@@ -3375,8 +3375,8 @@ function _plnPickerRender(q){
 
   meses.forEach(function(mes){
     var items=byMes[mes].sort(function(a,b){return (b.fecha||'').localeCompare(a.fecha||'');});
-    var dm=new Date(mes+'-01');
-    var label=MESES[dm.getMonth()]+' '+dm.getFullYear();
+    var dmParts=mes.split('-'); // ['2026','05']
+    var label=MESES[parseInt(dmParts[1],10)-1]+' '+dmParts[0];
     var totMes=items.reduce(function(s,d){var sc1=(d.snap||{}).sc1||{}; return s+(sc1.fob||sc1.cif||d.cif||0);},0);
 
     h+='<div class="ep-month"><div class="ep-month-hdr"><span>📅 '+label+'</span><span>'+items.length+' emb · '+_plnFF(totMes)+'</span></div>';
@@ -3405,30 +3405,34 @@ function _plnPickerRender(q){
 window._plnPickerReload = async function(){
   var el=document.getElementById('_pln_picker_list');
   if(el) el.innerHTML='<div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">&#9203; Cargando...</div>';
-  // Usar cargarDeSupabase — la misma función que usa "Sesiones en la Nube"
-  var lista = null;
-  try{ lista = await cargarDeSupabase(); }catch(e){}
+  var lista=null;
+  try{ lista=await cargarDeSupabase(); }catch(e){}
   if(lista && lista.length){
-    // Extraer embarques del _TEND_MASTER
-    var master = lista.find(function(s){ return s.nombre==='_TEND_MASTER'; });
+    var master=lista.find(function(s){ return s.nombre==='_TEND_MASTER'; });
     if(master){
       try{
-        var parsed = typeof master.datos==='string' ? JSON.parse(master.datos) : master.datos;
-        var arr = Array.isArray(parsed.tendData) ? parsed.tendData : [];
-        if(arr.length) window.tendData = arr;
+        var parsed=typeof master.datos==='string'?JSON.parse(master.datos):master.datos;
+        var arr=Array.isArray(parsed.tendData)?parsed.tendData:[];
+        if(arr.length){ window.tendData=arr; if(typeof saveTendData==='function') saveTendData(); }
       }catch(e){}
     }
-    // Si no hay master, intentar reconstruir de sesiones individuales
-    if(!window.tendData || !window.tendData.length){
+    if(!window.tendData||!window.tendData.length){
       var loaded=[];
       lista.forEach(function(s){
         if(s.nombre==='_TEND_MASTER'||s.nombre==='_FACTDISP_MASTER') return;
         try{
           var p=typeof s.datos==='string'?JSON.parse(s.datos):s.datos;
-          if(p && p.nro && p.fecha) loaded.push(p);
+          if(p&&p.nro&&p.fecha) loaded.push(p);
+          else if(p&&p.campos&&p.campos.s1_nro_emb){
+            var nro=(p.campos.s1_nro_emb||'').trim();
+            var fecha=(p.campos.s1_fecha_emb||s.updated_at||'').slice(0,10);
+            if(nro) loaded.push({nro:nro,fecha:fecha,desc:p.campos.s1_desc_emb||'',snap:p,esc:p.compar||''});
+          }
         }catch(e){}
       });
-      if(loaded.length) window.tendData=loaded;
+      var seen={};
+      loaded=loaded.filter(function(d){ if(seen[d.nro]) return false; seen[d.nro]=true; return true; });
+      if(loaded.length){ window.tendData=loaded; if(typeof saveTendData==='function') saveTendData(); }
     }
   }
   _plnPickerRender((document.getElementById('_pln_picker_q')||{}).value||'');
