@@ -3405,13 +3405,31 @@ function _plnPickerRender(q){
 window._plnPickerReload = async function(){
   var el=document.getElementById('_pln_picker_list');
   if(el) el.innerHTML='<div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">&#9203; Cargando...</div>';
-  try{
-    if(!window._sb && typeof initSupabase==='function') initSupabase();
-    if(window._sb && typeof _pullTendFromCloud==='function') await _pullTendFromCloud();
-  }catch(e){}
-  if(!window.tendData || !window.tendData.length){
-    if(el) el.innerHTML='<div style="text-align:center;padding:24px"><div style="font-size:32px;margin-bottom:10px">&#128279;</div><div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:6px">Abre Tendencias primero</div><div style="font-size:11px;color:var(--muted);margin-bottom:16px">La app necesita conectarse via Tendencias.</div><button onclick="_plnGoToTend()" style="background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.4);color:var(--blue-l);border-radius:8px;padding:10px 20px;font-size:12px;font-weight:700;cursor:pointer;width:100%">&#128640; Ir a Tendencias y volver</button></div>';
-    return;
+  // Usar cargarDeSupabase — la misma función que usa "Sesiones en la Nube"
+  var lista = null;
+  try{ lista = await cargarDeSupabase(); }catch(e){}
+  if(lista && lista.length){
+    // Extraer embarques del _TEND_MASTER
+    var master = lista.find(function(s){ return s.nombre==='_TEND_MASTER'; });
+    if(master){
+      try{
+        var parsed = typeof master.datos==='string' ? JSON.parse(master.datos) : master.datos;
+        var arr = Array.isArray(parsed.tendData) ? parsed.tendData : [];
+        if(arr.length) window.tendData = arr;
+      }catch(e){}
+    }
+    // Si no hay master, intentar reconstruir de sesiones individuales
+    if(!window.tendData || !window.tendData.length){
+      var loaded=[];
+      lista.forEach(function(s){
+        if(s.nombre==='_TEND_MASTER'||s.nombre==='_FACTDISP_MASTER') return;
+        try{
+          var p=typeof s.datos==='string'?JSON.parse(s.datos):s.datos;
+          if(p && p.nro && p.fecha) loaded.push(p);
+        }catch(e){}
+      });
+      if(loaded.length) window.tendData=loaded;
+    }
   }
   _plnPickerRender((document.getElementById('_pln_picker_q')||{}).value||'');
 };
