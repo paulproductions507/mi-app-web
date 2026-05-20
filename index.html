@@ -2336,8 +2336,8 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
     <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Herramientas para corregir y normalizar datos de proveedores en el historial de embarques.</div>
     <button onclick="_correrProcesoProveedores()" style="background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.3);color:var(--red-l);border-radius:8px;padding:8px 18px;font-size:12px;font-weight:700;cursor:pointer">🔄 Correr Proceso de Proveedores</button>
     <div style="font-size:10px;color:var(--muted2);margin-top:6px">Normaliza nombres de proveedores (S.I., homologados, etc.) en todos los embarques del historial.</div>
-    <button onclick="var n=_fixImportacionTipo();if(n>0){_showToast('✅ '+n+' embarque(s) corregidos a IMP','green',3500);}else{var nros=(tendData||[]).map(function(d){return d.nro||'?';}).join(', ');alert('Sin coincidencias.\n\nNROs en memoria ('+tendData.length+'):\n'+nros);}" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:8px;padding:8px 18px;font-size:12px;font-weight:700;cursor:pointer;margin-top:8px">🚢 Fix: Embarques Importación (22032/33/34/38/39)</button>
-    <div style="font-size:10px;color:var(--muted2);margin-top:4px">Corrige snap.tipo ZL→IMP para embarques Sababa procesados incorrectamente como Zona Libre.</div>
+    <button onclick="var n=_fixImportacionTipo();if(n>0){_showToast('✅ '+n+' embarque(s) corregidos a IMP','green',3500);}else{var nros=(tendData||[]).map(function(d){return d.nro||'?';}).join(', ');alert('Sin coincidencias.\n\nNROs en memoria ('+tendData.length+'):\n'+nros);}" style="display:none">🚢 Fix: Embarques Importación (22032/33/34/38/39)</button>
+    <div style="display:none;font-size:10px;color:var(--muted2);margin-top:4px">Corrige snap.tipo ZL→IMP para embarques Sababa procesados incorrectamente como Zona Libre.</div>
   </div>
 </div>
 
@@ -2713,20 +2713,26 @@ function _PLN_BUILD_HTML(){
   +'#_PLN_OV .tabt{flex:0 0 auto;padding:9px 20px;text-align:center;font-size:12px;font-weight:700;cursor:pointer;border:none;background:none;color:var(--muted);border-bottom:3px solid transparent;}'
   +'#_PLN_OV .tabt.on{color:var(--text);border-bottom-color:var(--orange-l);}'
   // scroll + grid
-  +'#_PLN_OV .gscroll{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;}'
-  +'#_PLN_OV .cal{display:grid;grid-template-columns:repeat(5,minmax(220px,1fr));border-top:1px solid var(--border);min-width:900px;}'
+  +'#_PLN_OV .gscroll{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory;}'
+  +'#_PLN_OV .cal{display:grid;grid-template-columns:repeat(5,minmax(min(100vw - 24px, 320px),1fr));border-top:1px solid var(--border);min-width:900px;}'
   // day header
-  +'#_PLN_OV .dh{text-align:center;padding:8px 6px;font-size:14px;font-weight:900;letter-spacing:.04em;border-bottom:3px solid;border-right:1px solid rgba(255,255,255,.08);position:sticky;top:0;z-index:5;}'
+  +'#_PLN_OV .dh{text-align:center;padding:8px 6px;font-size:14px;font-weight:900;letter-spacing:.04em;border-bottom:3px solid;border-right:1px solid rgba(255,255,255,.08);position:sticky;top:0;z-index:5;scroll-snap-align:start;}'
   +'#_PLN_OV .dhs{font-size:10px;font-weight:500;opacity:.75;margin-top:2px;}'
   +'#_PLN_OV .dh0{background:#1e3a8a;color:#93c5fd;border-color:#3b82f6;}'
   +'#_PLN_OV .dh1{background:#4c1d95;color:#c4b5fd;border-color:#7c3aed;}'
   +'#_PLN_OV .dh2{background:#064e3b;color:#6ee7b7;border-color:#059669;}'
   +'#_PLN_OV .dh3{background:#78350f;color:#fcd34d;border-color:#d97706;}'
   +'#_PLN_OV .dh4{background:#7f1d1d;color:#fca5a5;border-color:#dc2626;}'
-  // day body
-  +'#_PLN_OV .db{border-right:1px solid var(--border);vertical-align:top;align-self:start;display:flex;flex-direction:column;}'
-  // cubículo
-  +'#_PLN_OV .cub{border-top:3px solid var(--border);}'
+  +'#_PLN_OV .db{vertical-align:top;align-self:start;display:flex;flex-direction:column;scroll-snap-align:start;border-right:1px solid var(--border);border-bottom:1px solid var(--border);}'
+  +'#_PLN_OV .db0{background:rgba(30,58,138,.04);border-left:1px solid var(--border);}'
+  +'#_PLN_OV .db1{background:rgba(76,29,149,.05);}'
+  +'#_PLN_OV .db2{background:rgba(6,78,59,.04);}'
+  +'#_PLN_OV .db3{background:rgba(120,53,15,.04);}'
+  +'#_PLN_OV .db4{background:rgba(127,29,29,.04);}'
+  // cubículo — borde gris uniforme, mismo grosor en todos lados
+  +'#_PLN_OV .cub{border:1px solid var(--border);border-top-width:2px;margin:6px 6px 0 6px;border-radius:6px;overflow:hidden;}'
+  +'#_PLN_OV .cub:last-of-type{margin-bottom:6px;}'
+  // color accent en borde superior del cub según tipo
   +'#_PLN_OV .cub.sea{border-top-color:#3b82f6;}'
   +'#_PLN_OV .cub.land{border-top-color:#d97706;}'
   +'#_PLN_OV .cub.air{border-top-color:#7c3aed;}'
@@ -2749,8 +2755,9 @@ function _PLN_BUILD_HTML(){
   +'#_PLN_OV .sc.mo{font-family:"IBM Plex Mono",monospace;font-weight:700;}'
   // cub footer
   +'#_PLN_OV .cft{padding:5px 8px;display:flex;justify-content:space-between;background:var(--s2);border-top:2px solid var(--border);font-size:10px;color:var(--muted);}'
-  // add btn
-  +'#_PLN_OV .addeq{padding:6px 8px;display:flex;gap:5px;border-top:2px dashed rgba(255,255,255,.08);}'
+  // add btn — al tope de cada columna de día
+  +'#_PLN_OV .addeq{padding:6px 8px;display:flex;gap:5px;border-bottom:2px dashed rgba(255,255,255,.08);}'
+  +'@media(min-width:960px){#_PLN_OV .cal{grid-template-columns:repeat(5,minmax(180px,1fr));}#_PLN_OV .gscroll{scroll-snap-type:none;}}'
   // modal
   +'#_PLN_OV .mo{position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:99999;display:none;align-items:center;justify-content:center;padding:12px;}'
   +'#_PLN_OV .mo.open{display:flex;}'
@@ -2772,7 +2779,7 @@ function _PLN_BUILD_HTML(){
       +'<span id="_pln_cloud" style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:6px;background:rgba(139,148,158,.1);border:1px solid rgba(139,148,158,.25);color:var(--muted)">☁️ ...</span>'
       +'<button class="xbtn yw" onclick="_plnModalSemana()">+ Semana</button>'
       +'<button class="xbtn gn" onclick="_plnCSV()">📊 CSV</button>'
-      +'<button class="xbtn rd" onclick="document.getElementById(\'_PLN_OV\').style.display=\'none\'">✕ Cerrar</button>'
+      +'<button class="xbtn rd" onclick="document.getElementById(\'_PLN_OV\').style.display=\'none\';if(typeof switchTab===\'function\'){var t=document.querySelector(\'.tab\');if(t)switchTab(\'sim\',t);}">✕ Cerrar</button>'
     +'</div>'
   +'</div>'
   +'<div class="wknav">'
@@ -2795,8 +2802,8 @@ function _PLN_BUILD_HTML(){
   +'</div>'
   +'<div class="gscroll">'
     +'<div class="cal" id="_pln_cal"></div>'
-    +'<div id="_pln_stats"></div>'
-    +'<div id="_pln_depts" style="padding:12px 16px 40px"></div>'
+    +'<div id="_pln_stats" style="min-width:900px"></div>'
+    +'<div id="_pln_depts" style="padding:12px 16px 40px;min-width:900px"></div>'
   +'</div>'
 
   // ── Modal Equipo ──
@@ -2923,20 +2930,24 @@ function _PLN_RENDER(){
   });
   // Day bodies
   days.forEach(function(day,di){
-    h+='<div class="db">';
+    var cornerStyle=di===0?'border-radius:0 0 0 10px;':di===4?'border-radius:0 0 10px 0;':'';
+    h+='<div class="db db'+di+'" style="'+cornerStyle+'">';
+    // Botón ARRIBA — siempre visible sin necesidad de scroll
+    if(_PLN_TAB==='prog'){
+      h+='<div class="addeq">'
+       +'<button class="xbtn bl" style="flex:1;font-size:10px;padding:4px" onclick="_plnOpenEq(\''+_PLN_CUR+'\','+di+',null,\'prog\',\'SEA\')">🚢 +SEA</button>'
+       +'<button class="xbtn or" style="flex:1;font-size:10px;padding:4px" onclick="_plnOpenEq(\''+_PLN_CUR+'\','+di+',null,\'prog\',\'LAND\')">🚛 +LAND</button>'
+       +'<button class="xbtn" style="flex:1;font-size:10px;padding:4px" onclick="_plnOpenEq(\''+_PLN_CUR+'\','+di+',null,\'prog\',\'AIR\')">✈️</button>'
+       +'</div>';
+    } else {
+      h+='<div class="addeq">'
+       +'<button class="xbtn gn" style="width:100%;font-size:10px;padding:5px" onclick="_plnOpenPicker(\''+_PLN_CUR+'\','+di+')">➕ Agregar embarque</button>'
+       +'</div>';
+    }
     (day.cubiculos||[]).forEach(function(cub,ci){
       h+=_plnCubHtml(cub,di,ci,_PLN_TAB,_PLN_CUR);
     });
-    // ONE single add-button per day — always last, always alone
-    h+='<div class="addeq" style="flex-shrink:0">';
-    if(_PLN_TAB==='prog'){
-      h+='<button class="xbtn bl" style="flex:1;font-size:10px;padding:4px" onclick="_plnOpenEq(\''+_PLN_CUR+'\','+di+',null,\'prog\',\'SEA\')">🚢 +SEA</button>'
-       +'<button class="xbtn or" style="flex:1;font-size:10px;padding:4px" onclick="_plnOpenEq(\''+_PLN_CUR+'\','+di+',null,\'prog\',\'LAND\')">🚛 +LAND</button>'
-       +'<button class="xbtn" style="flex:1;font-size:10px;padding:4px" onclick="_plnOpenEq(\''+_PLN_CUR+'\','+di+',null,\'prog\',\'AIR\')">✈️</button>';
-    } else {
-      h+='<button class="xbtn gn" style="width:100%;font-size:10px;padding:5px" onclick="_plnOpenPicker(\''+_PLN_CUR+'\','+di+')">➕ Agregar embarque</button>';
-    }
-    h+='</div></div>';
+    h+='</div>';
   });
   cal.innerHTML=h;
   _PLN_KPIS(wk);
@@ -2952,16 +2963,41 @@ function _plnCubHtml(cub,di,ci,tab,mon){
   var SCOL={'Recibido en CDF':'var(--green-l)','Tránsito Marítimo':'var(--blue-l)','En aduana':'var(--orange-l)','Llegada a Puerto':'#2dd4bf','En tránsito de Liq.':'var(--orange-l)','Cancelado':'var(--red-l)','Programado':'var(--blue-l)'};
   var sc=SCOL[cub.status]||'var(--muted)';
   var m=_plnESC(mon);
+
+  // ── Enrich header label ──
+  var tc=(cub.tipoCarga||cub.via||'').toUpperCase();
+  // Detect size from tipoCarga string e.g. "40" HQ CONTENEDOR → show "40HQ"
+  var sizeMatch=tc.match(/[""]?(\d{2})[""]?\s*(HQ)?/);
+  var sizeLabel=sizeMatch?(sizeMatch[1]+(sizeMatch[2]?'HQ':'')):'';
+  // Detect # of containers from nroCont/nroEmb (multiple = ' + ')
+  var embStr=(cub.nroCont||cub.nroEmb||'');
+  var embCount=(embStr.match(/\+/g)||[]).length+1;
+  var nEquipLabel=embCount>1?embCount+'×':'';
+  // Build compact tag: e.g. "Contenedor" or "Camión/SABABA"
+  var tipoLabel=tc.includes('CAMION')||tc.includes('CAMIÓN')||tc.includes('SABABA')?'Camión'
+    :tc.includes('CONTENEDOR')||tc.includes('CONTAINER')?'Contenedor'
+    :tc.includes('LCL')?'LCL'
+    :tc.includes('FURGON')||tc.includes('FURGÓN')?'Furgón'
+    :tc.includes('SUELTA')?'Carga Suelta'
+    :tc.includes('AIR')||tc.includes('AÉREO')?'Aéreo'
+    :(cub.tipoCarga||cub.via||'—');
+  var headerTag=nEquipLabel+(sizeLabel?sizeLabel+' ':'')+tipoLabel;
+
+  // ── N° contenedor del cubículo (manual o heredado) ──
+  var cubContNum = cub.nroCont || '';
+  var cubKey='cub_'+di+'_'+ci+'_'+(mon||'').replace(/-/g,'');
+
   var h='<div class="cub '+viaCls+'">'
-    // Header del cubículo — clickeable para editar
     +'<div class="chdr" onclick="_plnOpenEq(\''+m+'\','+di+','+ci+',\''+tab+'\')" title="Editar equipo">'
       +'<span style="font-size:13px">'+viaIco+'</span>'
-      +'<span class="ctag '+viaCls+'">'+_plnESC(cub.tipoCarga||cub.via||'—')+'</span>'
-      +(cub.nroCont||cub.nroEmb?'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:9px;color:var(--muted)">'+_plnESC(cub.nroCont||cub.nroEmb)+'</span>':'')
+      +'<span class="ctag '+viaCls+'">'+_plnESC(headerTag)+'</span>'
+      +(embStr?'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:9px;color:var(--muted)">'+_plnESC(embStr)+'</span>':'')
+      +(cubContNum?'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:8px;color:#2dd4bf;background:rgba(45,212,191,.1);border:1px solid rgba(45,212,191,.25);padding:1px 5px;border-radius:3px">📦 '+_plnESC(cubContNum)+'</span>':'')
       +(cub.eta?'<span style="font-size:9px;color:var(--muted)">ETA '+_plnFD(cub.eta)+'</span>':'')
       +(cub.status?'<span style="font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;background:rgba(255,255,255,.06);color:'+sc+'">'+_plnESC(cub.status)+'</span>':'')
       +'<span style="margin-left:auto;font-family:\'IBM Plex Mono\',monospace;font-size:10px;font-weight:700;color:var(--green-l)">'+_plnF(totFob)+'</span>'
-    +'<button onclick="event.stopPropagation();_plnDelCub(\''+_PLN_TAB+'\','+di+','+ci+')" style="margin-left:8px;background:rgba(218,54,51,.15);border:1px solid rgba(218,54,51,.3);color:#f47067;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;flex-shrink:0">×</button>'
+      +'<button onclick="event.stopPropagation();_plnEditCont(\''+cubKey+'\')" title="Editar N° Contenedor" style="margin-left:4px;background:rgba(45,212,191,.1);border:1px solid rgba(45,212,191,.3);color:#2dd4bf;border-radius:4px;padding:1px 6px;font-size:9px;cursor:pointer;flex-shrink:0">✏️</button>'
+    +'<button onclick="event.stopPropagation();_plnDelCub(\''+_PLN_TAB+'\','+di+','+ci+')" style="margin-left:4px;background:rgba(218,54,51,.15);border:1px solid rgba(218,54,51,.3);color:#f47067;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;flex-shrink:0">×</button>'
     +'</div>';
   if(rows.length){
     var totLndR=rows.reduce(function(s,r){return s+(parseFloat(r.landed)||parseFloat(r.fob)||0);},0);
@@ -2970,38 +3006,45 @@ function _plnCubHtml(cub,di,ci,tab,mon){
     var deptSetR=new Set(rows.map(function(r){return r.dept||'';}).filter(Boolean));
     var zlR=rows.filter(function(r){return r.tipo!=='IMP';}).length;
     var impR=rows.filter(function(r){return r.tipo==='IMP';}).length;
-    var cubKey='cub_'+di+'_'+ci+'_'+(mon||'').replace(/-/g,'');
+    var cubKey2=cubKey; // ya declarado arriba
     window._PLN_CUB_CACHE = window._PLN_CUB_CACHE || {};
     window._PLN_CUB_CACHE[cubKey] = {cub:cub,di:di,ci:ci,tab:tab,mon:mon};
     h+='<div style="overflow-x:auto;-webkit-overflow-scrolling:touch">';
     var isSabCub = rows.some(function(r){ return parseFloat(r.homol)>0; });
-    h+='<table style="width:100%;border-collapse:collapse;font-size:10px;min-width:'+(isSabCub?'580px':'500px')+'">'
+    var totFobRef = totFob || 1;
+    h+='<table style="width:100%;border-collapse:collapse;font-size:10px;min-width:'+(isSabCub?'520px':'420px')+'">'
       +'<thead><tr style="background:var(--s2)">'
-      +'<th style="padding:3px 6px;text-align:center;color:var(--muted);font-size:8px;font-weight:700;text-transform:uppercase;border-bottom:1px solid var(--border);width:34px">Btos</th>'
-      +'<th style="padding:3px 5px;text-align:center;color:var(--muted);font-size:8px;font-weight:700;text-transform:uppercase;border-bottom:1px solid var(--border);width:28px">Org</th>'
-      +'<th style="padding:3px 6px;text-align:left;color:var(--muted);font-size:8px;font-weight:700;text-transform:uppercase;border-bottom:1px solid var(--border)">Suplidor</th>'
-      +'<th style="padding:3px 6px;text-align:left;color:var(--muted);font-size:8px;font-weight:700;text-transform:uppercase;border-bottom:1px solid var(--border);width:56px">Dept</th>'
-      +'<th style="padding:3px 6px;text-align:right;color:var(--muted);font-size:8px;font-weight:700;text-transform:uppercase;border-bottom:1px solid var(--border);width:78px">FOB</th>'
-      +(isSabCub?'<th style="padding:3px 6px;text-align:right;color:var(--muted);font-size:8px;font-weight:700;text-transform:uppercase;border-bottom:1px solid var(--border);width:78px">Homol.</th>':'')
-      +'<th style="padding:3px 6px;text-align:right;color:var(--muted);font-size:8px;font-weight:700;text-transform:uppercase;border-bottom:1px solid var(--border);width:78px">Landed</th>'
-      +'<th style="padding:3px 6px;text-align:right;color:var(--muted);font-size:8px;font-weight:700;text-transform:uppercase;border-bottom:1px solid var(--border);width:58px">Pzas</th>'
+      +'<th style="padding:3px 4px;text-align:center;color:var(--muted);font-size:7px;font-weight:700;text-transform:uppercase;border-bottom:1px solid var(--border);width:28px">Bts</th>'
+      +'<th style="padding:3px 3px;text-align:center;color:var(--muted);font-size:7px;font-weight:700;text-transform:uppercase;border-bottom:1px solid var(--border);width:24px">Org</th>'
+      +'<th style="padding:3px 4px;text-align:left;color:var(--muted);font-size:7px;font-weight:700;text-transform:uppercase;border-bottom:1px solid var(--border)">Suplidor</th>'
+      +'<th style="padding:3px 4px;text-align:left;color:var(--muted);font-size:7px;font-weight:700;text-transform:uppercase;border-bottom:1px solid var(--border);width:46px">Dept</th>'
+      +'<th style="padding:3px 4px;text-align:right;color:var(--muted);font-size:7px;font-weight:700;text-transform:uppercase;border-bottom:1px solid var(--border);width:56px">FOB</th>'
+      +'<th style="padding:3px 3px;text-align:right;color:var(--muted);font-size:7px;font-weight:700;text-transform:uppercase;border-bottom:1px solid var(--border);width:30px">%</th>'
+      +(isSabCub?'<th style="padding:3px 4px;text-align:right;color:var(--muted);font-size:7px;font-weight:700;text-transform:uppercase;border-bottom:1px solid var(--border);width:56px">Hmol</th>':'')
+      +'<th style="padding:3px 4px;text-align:right;color:var(--muted);font-size:7px;font-weight:700;text-transform:uppercase;border-bottom:1px solid var(--border);width:56px">Lnd</th>'
+      +'<th style="padding:3px 4px;text-align:right;color:var(--muted);font-size:7px;font-weight:700;text-transform:uppercase;border-bottom:1px solid var(--border);width:42px">Pzas</th>'
       +'</tr></thead><tbody>';
     rows.forEach(function(r){
-      var nm=r.prov||'—'; var nmS=nm.length>22?nm.slice(0,20)+'…':nm;
+      var nm=r.prov||'—';
+      // Truncar inteligentemente para table-layout:fixed
+      var nmS=nm.length>16?nm.slice(0,14)+'…':nm;
       var homolV=parseFloat(r.homol)||0;
+      var fobV=parseFloat(r.fob)||0;
+      var pct=totFobRef>0?((fobV/totFobRef)*100).toFixed(0)+'%':'—';
       var orgBadge=r.tipo==='IMP'?'<span style="font-size:7px;font-weight:800;color:#f97316">IMP</span>':'<span style="font-size:7px;font-weight:800;color:#60a5fa">ZL</span>';
-      h+='<tr style="border-bottom:1px solid rgba(255,255,255,.04)'+(r.matched?';background:rgba(63,185,80,.05)':'')+'">'
-        +'<td style="padding:4px 6px;text-align:center;color:var(--muted);font-family:IBM Plex Mono,monospace">'+(r.bultos||0).toLocaleString()+'</td>'
-        +'<td style="padding:4px 5px;text-align:center">'+orgBadge+'</td>'
-        +'<td style="padding:4px 6px;overflow:hidden;max-width:120px" title="'+_plnESC(nm)+'">'+_plnESC(nmS)+'</td>'
-        +'<td style="padding:4px 6px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(r.dept||'—')+'</td>'
-        +'<td style="padding:4px 6px;text-align:right;color:var(--blue-l);font-family:IBM Plex Mono,monospace;font-weight:700;white-space:nowrap">'+_plnF(r.fob)+'</td>'
-        +(isSabCub?'<td style="padding:4px 6px;text-align:right;color:'+(homolV>0?'var(--green-l)':'var(--muted)')+';font-family:IBM Plex Mono,monospace;font-weight:700;white-space:nowrap">'+(homolV>0?_plnF(homolV):'—')+'</td>':'')
-        +'<td style="padding:4px 6px;text-align:right;color:var(--orange-l);font-family:IBM Plex Mono,monospace;font-weight:700;white-space:nowrap">'+_plnF(r.landed||r.fob)+'</td>'
-        +'<td style="padding:4px 6px;text-align:right;color:var(--muted)">'+(r.piezas||0).toLocaleString('es-PA')+'</td>'
+      h+='<tr style="border-bottom:1px solid rgba(255,255,255,.06)'+(r.matched?';background:rgba(63,185,80,.05)':'')+'">'
+        +'<td style="padding:3px 4px;text-align:center;color:var(--muted);font-family:IBM Plex Mono,monospace;font-size:9px">'+(r.bultos||0)+'</td>'
+        +'<td style="padding:3px 3px;text-align:center">'+orgBadge+'</td>'
+        +'<td style="padding:3px 4px;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px" title="'+_plnESC(nm)+'">'+_plnESC(nmS)+'</td>'
+        +'<td style="padding:3px 4px;color:var(--muted);font-size:8px;white-space:nowrap">'+(r.dept||'—')+'</td>'
+        +'<td style="padding:3px 4px;text-align:right;color:var(--blue-l);font-family:IBM Plex Mono,monospace;font-weight:700;font-size:9px;white-space:nowrap">'+_plnF(fobV)+'</td>'
+        +'<td style="padding:3px 3px;text-align:right;color:var(--muted);font-size:8px;font-family:IBM Plex Mono,monospace;white-space:nowrap">'+pct+'</td>'
+        +(isSabCub?'<td style="padding:3px 4px;text-align:right;color:'+(homolV>0?'var(--green-l)':'var(--muted)')+';font-family:IBM Plex Mono,monospace;font-weight:700;font-size:9px;white-space:nowrap">'+(homolV>0?_plnF(homolV):'—')+'</td>':'')
+        +'<td style="padding:3px 4px;text-align:right;color:var(--orange-l);font-family:IBM Plex Mono,monospace;font-weight:700;font-size:9px;white-space:nowrap">'+_plnF(r.landed||r.fob)+'</td>'
+        +'<td style="padding:3px 4px;text-align:right;color:var(--muted);font-size:8px;white-space:nowrap">'+(r.piezas||0).toLocaleString('es-PA')+'</td>'
       +'</tr>';
     });
-    h+='</tbody></table>';
+    h+='</tbody></table></div>';
     h+='<div class="cft" style="flex-direction:column;gap:3px;min-width:0">'
       +'<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px">'
       +'<span>'+totBlt.toLocaleString()+' btos &middot; '+rows.length+' sup &middot; Dept:'+deptSetR.size+' &middot; '+totPzR.toLocaleString('es-PA')+' pzas</span>'
@@ -17593,6 +17636,39 @@ window._plnCubDetalle = function(key){
   var isSab = totHom > 0;
   var viaIco = {'sea':'🚢','land':'🚛','air':'✈️','res':'✅'}[(cub.via||'sea').toLowerCase()]||'📦';
 
+  // Cruzar con tendData para obtener info completa del embarque
+  var td = (window.tendData||[]);
+  var nrosBuscar = (cub.nroEmb||'').split('+').map(function(s){return s.trim();}).filter(Boolean);
+  var embSnaps = nrosBuscar.map(function(nro){ return td.find(function(d){return (d.nro||'').trim()===nro;})||null; }).filter(Boolean);
+  var firstEmb = embSnaps[0] || {};
+  var firstSnap = firstEmb.snap || {};
+
+  // Campos reales según estructura del snap (ver guardarEmbarque)
+  var tipoEquipoStr = firstEmb.tipoEquipo || cub.tipoCarga || '';
+  var nEquipos = parseInt(firstEmb.equipos||1)||1;
+  var viaTransporte = firstEmb.viaTransporte || '';
+  var origenPais = firstEmb.pais || firstEmb.origen || '';
+  var origenCiudad = firstEmb.ciudad || '';
+  var origenStr = [origenCiudad, origenPais].filter(Boolean).join(', ');
+  var escenario = firstEmb.esc || '';
+  var corredor = firstEmb.corredor || firstEmb.provCorredor || '';
+  // N° contenedor
+  var nroCont = cub.nroCont
+    || firstEmb.contenedor
+    || (firstEmb.contenedores && firstEmb.contenedores[0] && firstEmb.contenedores[0].nro)
+    || '';
+  // Tipo de embarque derivado
+  var tipoEmbStr = '';
+  var tcU = tipoEquipoStr.toUpperCase();
+  if(viaTransporte==='AIR') tipoEmbStr='Aéreo';
+  else if(viaTransporte==='LAND') tipoEmbStr='Terrestre';
+  else if(tcU.includes('LCL')) tipoEmbStr='LCL / Consolidado';
+  else if(tcU.includes('SUELTA')) tipoEmbStr='Carga Suelta';
+  else if(tcU.includes('CAMION')||tcU.includes('CAMIÓN')||tcU.includes('SABABA')) tipoEmbStr='Camión / SABABA';
+  else if(tipoEquipoStr) tipoEmbStr='Contenedor Directo';
+  // Todos los NROs del cubículo
+  var todosNros = nrosBuscar.join(' + ') || cub.nroCont || '';
+
   var ov = document.createElement('div');
   ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;padding:16px';
   ov.innerHTML =
@@ -17601,8 +17677,18 @@ window._plnCubDetalle = function(key){
     +'<div style="padding:12px 16px;background:var(--s2);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0">'
       +'<span style="font-size:18px">'+viaIco+'</span>'
       +'<div style="flex:1;min-width:0">'
-        +'<div style="font-size:14px;font-weight:800;color:var(--text)">'+(cub.tipoCarga||cub.via||'—').toUpperCase()+(cub.nroCont||cub.nroEmb?' &nbsp;·&nbsp; <span style="font-family:IBM Plex Mono,monospace;font-size:12px;color:var(--muted)">'+(cub.nroCont||cub.nroEmb)+'</span>':'')+'</div>'
-        +(cub.eta?'<div style="font-size:10px;color:var(--muted)">ETA: '+(cub.eta)+(cub.status?' &nbsp;·&nbsp; <span style="color:#3fb950">'+cub.status+'</span>':'')+'</div>':'')
+        +'<div style="font-size:14px;font-weight:800;color:var(--text)">'+(cub.tipoCarga||cub.via||'—').toUpperCase()+(todosNros?' &nbsp;·&nbsp; <span style="font-family:IBM Plex Mono,monospace;font-size:12px;color:var(--muted)">'+todosNros+'</span>':'')+'</div>'
+        +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;align-items:center">'
+        +(cub.eta?'<span style="font-size:10px;color:var(--muted)">📅 ETA: <strong style="color:var(--text)">'+cub.eta+'</strong></span>':'')
+        +(cub.status?'<span style="font-size:10px;font-weight:700;color:#3fb950">● '+cub.status+'</span>':'')
+        +(nroCont?'<span style="font-size:10px;color:var(--muted)">📦 Cont: <strong style="color:var(--text);font-family:monospace">'+nroCont+'</strong></span>':'')
+        +(nEquipos>1?'<span style="font-size:10px;background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.25);color:var(--blue-l);padding:1px 6px;border-radius:4px;font-weight:700">'+nEquipos+'× Equipos</span>':'')
+        +(tipoEquipoStr?'<span style="font-size:10px;color:var(--muted)">🚢 <strong style="color:var(--text)">'+tipoEquipoStr+'</strong></span>':'')
+        +(tipoEmbStr?'<span style="font-size:10px;background:rgba(248,209,34,.1);border:1px solid rgba(248,209,34,.25);color:#f8d122;padding:1px 6px;border-radius:4px;font-weight:700">'+tipoEmbStr+'</span>':'')
+        +(origenStr?'<span style="font-size:10px;color:var(--muted)">🌎 <strong style="color:var(--text)">'+origenStr+'</strong></span>':'')
+        +(corredor?'<span style="font-size:10px;background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.25);color:var(--green-l);padding:1px 6px;border-radius:4px;font-weight:700">🤝 '+corredor+'</span>':'')
+        +(escenario?'<span style="font-size:10px;background:rgba(240,136,62,.1);border:1px solid rgba(240,136,62,.25);color:var(--orange-l);padding:1px 6px;border-radius:4px;font-weight:700">'+escenario+'</span>':'')
+        +'</div>'
       +'</div>'
       +'<button id="_plnDetCerrar" style="background:rgba(218,54,51,.15);border:1px solid rgba(248,81,73,.3);color:#f47067;border-radius:6px;padding:4px 12px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0">✕ Cerrar</button>'
     +'</div>'
@@ -17671,6 +17757,21 @@ window._plnDelCub = function(tab, di, ci){
     wk[tab][di].cubiculos.splice(ci,1);
     _PLN_SAVE(); _PLN_RENDER();
     if(typeof _showToast==='function') _showToast('Eliminado','red',2000);
+  }
+};
+
+window._plnEditCont = function(key){
+  var data = (window._PLN_CUB_CACHE||{})[key];
+  if(!data){ return; }
+  var cub = data.cub;
+  var actual = cub.nroCont || '';
+  var nuevo = prompt('N\u00famero de Contenedor:\n(Deja vac\u00edo para borrar)', actual);
+  if(nuevo === null) return; // cancelado
+  var wk = _plnMkWeek(data.mon);
+  if(wk[data.tab] && wk[data.tab][data.di] && wk[data.tab][data.di].cubiculos[data.ci]){
+    wk[data.tab][data.di].cubiculos[data.ci].nroCont = nuevo.trim();
+    _PLN_SAVE(); _PLN_RENDER();
+    if(typeof _showToast==='function') _showToast('\u2705 Contenedor actualizado: '+(nuevo.trim()||'(borrado)'), 'green', 2500);
   }
 };
 
