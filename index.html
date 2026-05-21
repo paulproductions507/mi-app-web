@@ -1759,8 +1759,24 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
             <div class="seg-btn on b" onclick="setExon(true,this)">Exonerado</div>
           </div>
         </div>
-        <div class="field"><label>ITBMS de Impuesto (USD)</label>
-          <input type="number" id="sc2_itbms_display" readonly style="background:var(--bg);color:var(--orange-l)">
+        <div class="field"><label>ITBMS de Impuesto (USD)
+          <span style="font-size:9px;font-weight:400;color:var(--muted);margin-left:4px">editable — manual prevalece</span>
+        </label>
+          <input type="number" id="sc2_itbms_display" step="0.01"
+            style="background:var(--s2);color:var(--orange-l);border:1px solid rgba(240,136,62,.3)"
+            oninput="
+              var v=parseFloat(this.value)||0;
+              window._itbms_manual_cif=v;
+              window._itbms_override_cif=true;
+              if(window._lastSnap&&window._lastSnap.sc2) window._lastSnap.sc2.itbms=v;
+              calc();
+            "
+            onfocus="this.style.background='var(--s2)'"
+          >
+          <div style="margin-top:3px;display:flex;align-items:center;gap:8px">
+            <span id="_itbms_auto_label" style="font-size:9px;color:var(--muted)">Auto: $0.00</span>
+            <button onclick="window._itbms_override_cif=false;window._itbms_manual_cif=undefined;calc();_showToast('↩️ ITBMS restaurado','green',1500)" style="font-size:9px;background:rgba(240,136,62,.1);border:1px solid rgba(240,136,62,.25);color:var(--orange-l);border-radius:4px;padding:1px 8px;cursor:pointer">↩ Restaurar auto</button>
+          </div>
         </div>
       </div>
       <div class="r2">
@@ -1793,8 +1809,35 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
           <input type="number" id="sc2_itbms_hon_display" readonly style="background:var(--bg);color:var(--orange-l)">
         </div>
       </div>
-      <div class="field" style="margin-top:12px"><label style="font-weight:700">Master Value (diferencia Esc.#1 − Esc.#2)</label>
-        <input type="number" id="sc_costo_zl" readonly style="background:var(--bg);color:var(--blue-l);font-weight:700">
+      <div class="field" style="margin-top:12px">
+        <label style="font-weight:700">Master Value (diferencia Esc.#1 − Esc.#2)
+          <span style="font-size:9px;font-weight:400;color:var(--muted);margin-left:6px">editable · máx ±$5</span>
+        </label>
+        <input type="number" id="sc_costo_zl" step="0.01"
+          style="background:var(--s2);color:var(--blue-l);font-weight:700;border:1px solid rgba(88,166,255,.3)"
+          oninput="
+            var auto=parseFloat(window._mv_auto_cif||0);
+            var manual=parseFloat(this.value)||0;
+            var diff=Math.abs(manual-auto);
+            if(diff>5){
+              this.style.borderColor='rgba(248,81,73,.5)';
+              this.title='Diferencia con el valor automático supera $5.00';
+            } else {
+              this.style.borderColor='rgba(88,166,255,.3)';
+              this.title='';
+            }
+            window._mv_manual_cif=manual;
+            window._mv_override_cif=true;
+            if(window._lastSnap&&window._lastSnap.sc2) window._lastSnap.sc2.mv=manual;
+            calc();
+          "
+          onfocus="this.style.background='var(--s2)'"
+          onblur="if(window._mv_override_cif){var a=parseFloat(window._mv_auto_cif||0);var m=parseFloat(this.value)||0;if(Math.abs(m-a)>5){_showToast('⚠️ Master Value supera ±$5 del valor calculado','orange',3000);}}"
+        >
+        <div style="margin-top:4px;display:flex;align-items:center;gap:8px">
+          <span id="_mv_auto_label" style="font-size:10px;color:var(--muted)">Auto: $0.00</span>
+          <button onclick="window._mv_override_cif=false;window._mv_manual_cif=undefined;var el=document.getElementById('sc_costo_zl');if(el){el.value=window._mv_auto_cif||0;el.style.borderColor='rgba(88,166,255,.3)';}calc();_showToast('↩️ Master Value restaurado','green',1500)" style="font-size:9px;background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);color:var(--blue-l);border-radius:4px;padding:1px 8px;cursor:pointer">↩ Restaurar auto</button>
+        </div>
         <div style="margin-top:6px">
           <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);cursor:pointer">
             <input type="checkbox" id="chk_omit_mv_cif" onchange="window._omitMV_cif=this.checked;if(this.checked&&document.getElementById('chk_omit_mv_ambos'))document.getElementById('chk_omit_mv_ambos').checked=false;calc();" style="accent-color:var(--blue-l)">
@@ -3673,7 +3716,12 @@ function updateCifExpDisplays(){
   sd('sc_cif_display', CIF);
   sd('sc_flete_display', vv('s1_flete_fob'));
   sd('sc_agente_display', vv('s1_agente'));
-  sd('sc2_itbms_display', sc2.itbms||0);
+  // ITBMS de Impuesto — respeta override manual
+  const itbmsAuto = sc2.itbms||0;
+  window._itbms_auto_cif = itbmsAuto;
+  var itbmsLabel=document.getElementById('_itbms_auto_label');
+  if(itbmsLabel) itbmsLabel.textContent='Auto: $'+itbmsAuto.toFixed(2);
+  if(!window._itbms_override_cif) sd('sc2_itbms_display', itbmsAuto);
   sd('sc2_tasa_display', tasa);
   sd('sc2_itbms_tasa_display', Math.round(tasa*itbPct*100)/100);
 
@@ -3701,13 +3749,17 @@ function updateCifExpDisplays(){
   sd('sc2_hon_g_display',     honG);
   sd('sc2_itbms_hon_display', itbmsHon);
 
-  // Master Value
+  // Master Value — respeta override manual (±$5)
   const mv = sc2.mv || 0;
-  sd('sc_costo_zl', mv);
+  window._mv_auto_cif = mv;
+  var mvLabel=document.getElementById('_mv_auto_label');
+  if(mvLabel) mvLabel.textContent='Auto: $'+mv.toFixed(2);
+  var mvEff = (window._mv_override_cif && window._mv_manual_cif!==undefined) ? window._mv_manual_cif : mv;
+  if(!window._mv_override_cif) sd('sc_costo_zl', mv);
   document.querySelectorAll('[id="sc_costo_zl"]').forEach(function(mvEl){
-    mvEl.style.color = mv>0 ? 'var(--blue-l)' : 'var(--muted)';
-    mvEl.style.fontWeight = mv>0 ? '700' : '';
-    if(mv>0) mvEl.title = 'Master Value = diferencia entre Landed Esc.#1 y Esc.#2';
+    mvEl.style.color = mvEff>0 ? 'var(--blue-l)' : 'var(--muted)';
+    mvEl.style.fontWeight = mvEff>0 ? '700' : '';
+    if(mvEff>0) mvEl.title = 'Master Value = diferencia entre Landed Esc.#1 y Esc.#2';
   });
 }
 
@@ -8184,6 +8236,9 @@ function reabrirEmbarquePendiente(idx){
 }
 
 function _clearFormSilent(){
+  // Reset manual overrides for CIF Express
+  window._mv_override_cif=false; window._mv_manual_cif=undefined; window._mv_auto_cif=0;
+  window._itbms_override_cif=false; window._itbms_manual_cif=undefined; window._itbms_auto_cif=0;
   // Clear all form fields without confirmation
   ['s1_cif','s1_fob','s1_flete_fob','s1_seguro','s1_cif_calc',
    's1_acarreo','s1_dmce','s1_agente','s1_nro_emb','s1_desc_emb','s1_origen_emb','s1_destino'].forEach(id=>{
