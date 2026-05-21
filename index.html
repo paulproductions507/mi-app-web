@@ -4843,7 +4843,11 @@ function calc(){
   // ESCENARIO #2 — CIF Express
   // Total Hon SC2 = CIF*3%, Gran Total SC2 excluye ITBMS para No Merc
   const sc2_arancel = exon ? 0 : CIF*arPct;
-  const sc2_itbms   = CIF*itbPct;
+  // sc2_itbms: si el usuario editó manualmente, prevalece — con límite de ±$0.05 sobre el automático
+  const _sc2_itbms_auto = CIF*itbPct;
+  const sc2_itbms = (window._itbms_override_cif && window._itbms_manual_cif !== undefined)
+    ? Math.max(_sc2_itbms_auto - 0.05, Math.min(_sc2_itbms_auto + 0.05, window._itbms_manual_cif))
+    : _sc2_itbms_auto;
   const sc2_granTot_noMerc = sc2_arancel + sc2_hon + tasa + form2;
   const sc2_flete_nm= (termino==='FOB'&&tipo==='EXT') ? flete : 0;
   // SC2 no incluye acarreo ni DMCE — son gastos exclusivos del Escenario #1
@@ -5743,12 +5747,16 @@ function _autoFillGastosProveedores(){
   // ESCENARIO: CIF EXPRESS
   // ══════════════════════════════════════════════════════
   if(isCif){
-    // TESORO NACIONAL — exonerado de arancel, solo: ITBMS(pago arancelario), Tasa, ITBMS(Tasa), Uso Sistema
-    // "ITBMS del pago arancelario" = el ITBMS que habría pagado sobre el arancel (referencia, lo absorbe MV)
-    add('itbms',       'TESORO NACIONAL', 'ITBMS s/Arancel (ref.)', itbmsAr);
-    add('liquidacion', 'TESORO NACIONAL', 'Tasa Aduana',            tasa);
-    add('itbms',       'TESORO NACIONAL', 'ITBMS s/Tasa',           itbmsTasa);
-    add('liquidacion', 'TESORO NACIONAL', 'Uso Sistema',            form1);
+    // TESORO NACIONAL — exonerado de arancel, solo: ITBMS(sobre CIF), Tasa, ITBMS(Tasa), Uso Sistema
+    // Para CIF Express exonerado: ITBMS = CIF*7% (sc2.itbms), NO (CIF+arancel)*7% del escenario regular
+    const cifItbmsReal = (window._itbms_override_cif && window._itbms_manual_cif !== undefined)
+      ? Math.min(window._itbms_manual_cif, window._itbms_auto_cif + 0.05)   // máx diferencia 5 cts
+      : (sc2.itbms || 0);
+    const cifUsoReal   = sc2.form2 || form1;  // Uso del Sistema del escenario CIF (form2), no sc1
+    add('itbms',       'TESORO NACIONAL', 'ITBMS s/Pago Arancelario', cifItbmsReal);
+    add('liquidacion', 'TESORO NACIONAL', 'Tasa Aduana',               tasa);
+    add('itbms',       'TESORO NACIONAL', 'ITBMS s/Tasa',              itbmsTasa);
+    add('liquidacion', 'TESORO NACIONAL', 'Uso Sistema',               cifUsoReal);
 
     // CIF EXPRESS TRÁMITE S.A. — Honorarios 3% CIF, desglosados
     const honTotal = sc2.hon   || 0;
@@ -7468,6 +7476,7 @@ async function _pullTendFromCloud(){
     // 4. Correcciones y migraciones en memoria
     _corregirEmbarque('22035', 'Sababa');
     tendData.forEach(d => { if(!d._gastosMigrados) _migrarGastosDesdeSnap(d); });
+    tendData.forEach(d => { _corregirItbmsCifExpress(d); });
 
     // 5. Si encontramos embarques nuevos en sesiones individuales,
     //    actualizar el maestro para que la próxima vez ya estén ahí
@@ -7501,6 +7510,56 @@ async function _syncManualTend(btn){
 }
 
 // ══════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
+// _corregirItbmsCifExpress
+// Corrige embarques CIF Express ya guardados cuyas líneas ITBMS
+// en invLines usan sc1.itbms (escenario regular) en lugar de
+// sc2.itbms (exonerado, solo CIF×7%).
+// Se ejecuta en memoria cada vez que se carga desde Supabase.
+// ══════════════════════════════════════════════════════════════
+function _corregirItbmsCifExpress(d){
+  if(!d || !d.snap) return;
+  const escElegido = (d.esc||'').toLowerCase();
+  const isCif = escElegido.includes('cif') || escElegido.includes('express');
+  if(!isCif) return;
+
+  const snap = d.snap;
+  const sc1  = snap.sc1 || {};
+  const sc2  = snap.sc2 || {};
+  const sc1Itbms = sc1.itbms || 0;   // valor incorrecto (regular)
+  const sc2Itbms = sc2.itbms || 0;   // valor correcto  (exonerado)
+
+  // Si no hay diferencia o no hay referencia, nada que corregir
+  if(Math.abs(sc1Itbms - sc2Itbms) < 0.005) return;
+
+  const lines = d.invLines || (snap.invLines) || [];
+  let fixed = false;
+  lines.forEach(function(l){
+    if(l.tipoFac === 'itbms' && (l.prov||'').toUpperCase().includes('TESORO')){
+      // Si el valor almacenado coincide con sc1.itbms (dentro de 1 centavo),
+      // reemplazarlo con sc2.itbms (el real exonerado)
+      if(Math.abs((l.costo||0) - sc1Itbms) < 0.01){
+        l.costo = Math.round(sc2Itbms * 100) / 100;
+        l.oc    = (l.oc||'').replace('(ref.)', '').trim() || 'ITBMS s/Pago Arancelario';
+        fixed   = true;
+      }
+    }
+  });
+
+  // También corregir el Uso del Sistema si usa form1 en vez de form2
+  const form1 = sc1.form1 || 0;
+  const form2 = sc2.form2 || 0;
+  if(fixed && Math.abs(form1 - form2) > 0.005){
+    lines.forEach(function(l){
+      if(l.tipoFac === 'liquidacion' && (l.oc||'').toLowerCase().includes('uso') &&
+         Math.abs((l.costo||0) - form1) < 0.01){
+        l.costo = Math.round(form2 * 100) / 100;
+        fixed = true;
+      }
+    });
+  }
+}
+
 // _migrarGastosDesdeSnap
 // Lee el snap de un embarque histórico y crea líneas de gasto
 // con tipoFac correcto si no existen ya.
@@ -9994,7 +10053,10 @@ async function renderFactDisp(){
         '</div>'+
         '<div>'+
           '<label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px">Notas (opcional)</label>'+
-          '<input id="fd-notas" type="text" placeholder="Embarque relacionado, observación..." style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;box-sizing:border-box">'+
+          (function(){
+            var _nroActivo=(document.getElementById('s1_nro_emb')?.value||'').trim();
+            return '<input id="fd-notas" type="text" placeholder="Embarque relacionado, observación..." value="'+((_nroActivo)?_nroActivo:'')+'" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;box-sizing:border-box">';
+          })()+
         '</div>'+
       '</div>'+
       // ── Rubros / líneas ──
@@ -10127,15 +10189,21 @@ async function _fdMarcarConsumida(fid){
   var saldoActual = (f.saldo != null ? f.saldo : f.monto) || 0;
   var fmt = function(n){ return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
 
-  // Pedir número de embarque
-  var nro = prompt(
-    '✅ Marcar "'+f.num+'" como consumida\n\n'+
-    'Proveedor: '+f.prov+'\n'+
-    'Total: '+fmt(f.monto)+' · Saldo actual: '+fmt(saldoActual)+'\n\n'+
-    'Ingresa el N° de embarque al que se asignó esta factura:'
-  );
-  if(nro === null) return; // canceló
-  nro = (nro||'').trim() || '—';
+  // Tomar el N° de embarque activo si existe, sino pedir al usuario
+  var nroActivo = (document.getElementById('s1_nro_emb')?.value||'').trim();
+  var nro;
+  if(nroActivo){
+    nro = nroActivo;
+  } else {
+    nro = prompt(
+      '✅ Marcar "'+f.num+'" como consumida\n\n'+
+      'Proveedor: '+f.prov+'\n'+
+      'Total: '+fmt(f.monto)+' · Saldo actual: '+fmt(saldoActual)+'\n\n'+
+      'Ingresa el N° de embarque al que se asignó esta factura:'
+    );
+    if(nro === null) return; // canceló
+    nro = (nro||'').trim() || '—';
+  }
 
   // Registrar uso y bajar saldo a 0
   if(!f.usos) f.usos = [];
@@ -10166,7 +10234,7 @@ async function _fdConsumirParcial(numFact, montoUsado){
       // Track usage
       if(!f.usos) f.usos = [];
       f.usos.push({
-        embarque: v('s1_nro') || '—',
+        embarque: (document.getElementById('s1_nro_emb')?.value||'').trim() || v('s1_nro') || '—',
         monto:    montoUsado,
         fecha:    new Date().toISOString().slice(0,10)
       });
