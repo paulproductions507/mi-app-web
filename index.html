@@ -2681,7 +2681,7 @@ function _PLN_BUILD_HTML(){
   return '<style>'
   +'#_PLN_OV{background:var(--bg);color:var(--text);}'
   +'#_PLN_OV .pb{display:flex;align-items:center;justify-content:space-between;padding:0 12px;height:46px;background:var(--s1);border-bottom:2px solid #f8d122;flex-shrink:0;gap:8px;}'
-  +'#_PLN_OV .pb-brand{font-size:12px;font-weight:900;color:#f8d122;}'
+  +'#_PLN_OV .pb-brand{font-size:11px;font-weight:800;color:#f8d122;letter-spacing:.02em;}'
   +'#_PLN_OV .pb-sub{font-size:9px;color:var(--muted);}'
   +'#_PLN_OV .pb-acts{display:flex;gap:5px;align-items:center;}'
   +'#_PLN_OV .xbtn{display:inline-flex;align-items:center;gap:4px;padding:4px 9px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid var(--border);background:var(--s2);color:var(--text);white-space:nowrap;}'
@@ -2700,9 +2700,9 @@ function _PLN_BUILD_HTML(){
   +'#_PLN_OV .ep-month-hdr{padding:8px 14px;font-size:10px;font-weight:700;color:var(--orange-l);text-transform:uppercase;letter-spacing:.05em;display:flex;justify-content:space-between;align-items:center;background:rgba(240,136,62,.08);}'
   +'#_PLN_OV .xbtn.or{background:rgba(240,136,62,.1);border-color:rgba(240,136,62,.3);color:var(--orange-l);}'
   // week nav
-  +'#_PLN_OV .wknav{background:var(--s2);border-bottom:1px solid var(--border);padding:5px 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex-shrink:0;}'
+  +'#_PLN_OV .wknav{background:var(--s2);border-bottom:1px solid var(--border);padding:12px 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex-shrink:0;}'
   +'#_PLN_OV .wnbtn{background:var(--s1);border:1px solid var(--border);color:var(--muted);border-radius:5px;padding:2px 10px;cursor:pointer;font-size:13px;font-weight:700;line-height:1.4;}'
-  +'#_PLN_OV .wklbl{font-size:13px;font-weight:800;color:var(--text);min-width:200px;text-align:center;}'
+  +'#_PLN_OV .wklbl{font-size:12px;font-weight:800;color:var(--text);min-width:200px;text-align:center;}'
   // KPIs
   +'#_PLN_OV .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:7px 12px;background:var(--s1);border-bottom:1px solid var(--border);flex-shrink:0;}@media(min-width:500px){#_PLN_OV .kpis{grid-template-columns:repeat(6,1fr);}}'
   +'#_PLN_OV .kpi{background:var(--s2);border:1px solid var(--border);border-radius:7px;padding:6px 8px;text-align:center;}'
@@ -2710,7 +2710,7 @@ function _PLN_BUILD_HTML(){
   +'#_PLN_OV .kpiv{font-family:"IBM Plex Mono",monospace;font-size:14px;font-weight:800;}'
   // tabs
   +'#_PLN_OV .tabs{display:flex;background:var(--s1);border-bottom:1px solid var(--border);flex-shrink:0;}'
-  +'#_PLN_OV .tabt{flex:0 0 auto;padding:9px 20px;text-align:center;font-size:12px;font-weight:700;cursor:pointer;border:none;background:none;color:var(--muted);border-bottom:3px solid transparent;}'
+  +'#_PLN_OV .tabt{flex:0 0 auto;padding:10px 22px;text-align:center;font-size:12px;font-weight:700;cursor:pointer;border:none;background:none;color:var(--muted);border-bottom:3px solid transparent;}'
   +'#_PLN_OV .tabt.on{color:var(--text);border-bottom-color:var(--orange-l);}'
   // scroll + grid
   +'#_PLN_OV .gscroll{overflow-x:auto;overflow-y:visible;-webkit-overflow-scrolling:touch;}'
@@ -3016,11 +3016,18 @@ function _plnCubHtml(cub,di,ci,tab,mon){
   var fe2=embs2.map(function(n){return td2.find(function(d){return (d.nro||'').trim()===n;})||null;}).filter(Boolean)[0]||{};
   var esc2=fe2.esc||''; var cor2=fe2.corredor||fe2.provCorredor||'';
 
-  // Etiqueta compacta: "2×\"45\" Contenedor" o "Camión / SABABA"
+  // Etiqueta: "1×\"45\" Contenedor" — siempre con cantidad
   var equipLabel='';
-  if(cubEquipos>1) equipLabel+=cubEquipos+'\xd7';
+  equipLabel+=cubEquipos+'\xd7';
   if(cubSize) equipLabel+=cubSize;
   else if(cubTipoEmb) equipLabel+=cubTipoEmb;
+
+  // Pre-calcular IMP/ZL desde rows para badge inline en fila 2
+  var impRPre=rows.filter(function(r){return r.tipo==='IMP';}).length;
+  var zlRPre=rows.filter(function(r){return r.tipo!=='IMP';}).length;
+  var impzlInline='';
+  if(impRPre>0) impzlInline+='<span style="font-size:8px;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.3);color:#f97316;border-radius:4px;padding:2px 5px;font-weight:700">IMP:'+impRPre+'</span>';
+  if(zlRPre>0)  impzlInline+='<span style="font-size:8px;background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:#60a5fa;border-radius:4px;padding:2px 5px;font-weight:700">ZL:'+zlRPre+'</span>';
 
   var h='<div class="cub '+viaCls+'">'
     // ── Fila 1: ✅ · Estado · Fecha · FOB · ✕
@@ -3031,13 +3038,17 @@ function _plnCubHtml(cub,di,ci,tab,mon){
       +'<span style="margin-left:auto;font-family:\'IBM Plex Mono\',monospace;font-size:10px;font-weight:800;color:var(--green-l);white-space:nowrap">'+_plnF(totFob)+'</span>'
       +'<button onclick="event.stopPropagation();_plnDelCub(\''+_PLN_TAB+'\','+di+','+ci+')" style="margin-left:6px;background:rgba(218,54,51,.15);border:1px solid rgba(218,54,51,.3);color:#f47067;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;flex-shrink:0">×</button>'
     +'</div>'
-    // ── Fila 2: Tipo×Cant Tamaño · Escenario · Editar (N° cont va en Ver Detalle)
-    +'<div style="display:flex;flex-wrap:wrap;gap:4px;padding:4px 8px 6px;border-bottom:1px dashed rgba(255,255,255,.08);align-items:center">'
+    // ── Fila 2: 1×tamaño · IMP:N · [espacio] · 🔍Ver detalle · [espacio] · ✏️Editar
+    +'<div id="cub-f2-'+cubKey+'" style="display:flex;flex-wrap:nowrap;gap:4px;padding:4px 8px 4px;align-items:center">'
       +(equipLabel?'<span style="font-size:8px;background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:4px;padding:2px 6px;font-weight:700;white-space:nowrap">'+_plnESC(equipLabel)+'</span>':'')
-      +(esc2?'<span style="font-size:8px;background:rgba(240,136,62,.12);border:1px solid rgba(240,136,62,.3);color:var(--orange-l);border-radius:4px;padding:2px 6px;font-weight:700;white-space:nowrap">'+_plnESC(esc2)+'</span>':'')
-      +(cor2?'<span style="font-size:8px;background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.25);color:var(--green-l);border-radius:4px;padding:2px 6px;font-weight:700;white-space:nowrap">🤝'+_plnESC(cor2)+'</span>':'')
-      +'<button onclick="event.stopPropagation();_plnEditarCubInfo(\''+cubKey+'\')" style="margin-left:auto;background:rgba(139,148,158,.1);border:1px solid rgba(139,148,158,.3);color:var(--muted);border-radius:5px;padding:2px 8px;font-size:9px;font-weight:700;cursor:pointer;flex-shrink:0">✏️ Editar</button>'
-    +'</div>';
+      +impzlInline
+      +'<div style="flex:1"></div>'
+      +'<button onclick="event.stopPropagation();_plnCubDetalle(\''+cubKey+'\')" style="background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:5px;padding:2px 9px;font-size:9px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0">🔍 Ver detalle</button>'
+      +'<div style="flex:1"></div>'
+      +'<button onclick="event.stopPropagation();_plnEditarCubInfo(\''+cubKey+'\')" style="background:rgba(139,148,158,.1);border:1px solid rgba(139,148,158,.3);color:var(--muted);border-radius:5px;padding:2px 8px;font-size:9px;font-weight:700;cursor:pointer;flex-shrink:0">✏️ Editar</button>'
+    +'</div>'
+    // ── Fila 3: N° contenedores (si existen)
+    +(cubContNum?'<div style="padding:2px 8px 5px;font-size:8px;color:var(--muted);font-family:\'IBM Plex Mono\',monospace;border-bottom:1px dashed rgba(255,255,255,.08)">📦 '+_plnESC(cubContNum)+'</div>':'<div style="border-bottom:1px dashed rgba(255,255,255,.08);height:2px"></div>');
   if(rows.length){
     var totLndR=rows.reduce(function(s,r){return s+(parseFloat(r.landed)||parseFloat(r.fob)||0);},0);
     var totHomR=rows.reduce(function(s,r){return s+(parseFloat(r.homol)||0);},0);
@@ -3085,16 +3096,21 @@ function _plnCubHtml(cub,di,ci,tab,mon){
       +'</tr>';
     });
     h+='</tbody></table></div>';
+    // Inject IMP/ZL badge into fila 2
+    var impzlHtml='';
+    if(impR>0) impzlHtml+='<span style="font-size:8px;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.3);color:#f97316;border-radius:4px;padding:2px 5px;font-weight:700">IMP:'+impR+'</span> ';
+    if(zlR>0)  impzlHtml+='<span style="font-size:8px;background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:#60a5fa;border-radius:4px;padding:2px 5px;font-weight:700">ZL:'+zlR+'</span>';
+    h+='<script>requestAnimationFrame(function(){ var el=document.getElementById("cub-impzl-'+cubKey+'"); if(el) el.innerHTML='+JSON.stringify(impzlHtml)+'; });<\/script>';
     h+='<div class="cft" style="flex-direction:column;gap:3px;min-width:0">'
-      +'<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px">'
-      +'<span>'+totBlt.toLocaleString()+' btos &middot; '+rows.length+' sup &middot; Dept:'+deptSetR.size+' &middot; '+totPzR.toLocaleString('es-PA')+' pzas</span>'
-      +(zlR>0||impR>0?'<span style="font-size:9px">'+(impR>0?'<span style="color:#f97316">IMP:'+impR+'</span> ':'')+( zlR>0?'<span style="color:#60a5fa">ZL:'+zlR+'</span>':'')+'</span>':'')
-      +'</div>'
-      +'<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">'
-      +'<span>FOB: <strong style="color:var(--blue-l);font-family:IBM Plex Mono,monospace">'+_plnFF(totFob)+'</strong></span>'
-      +(totHomR>0?'<span>Homol: <strong style="color:var(--green-l);font-family:IBM Plex Mono,monospace">'+_plnFF(totHomR)+'</strong></span>':'')
-      +'<span>Landed: <strong style="color:var(--orange-l);font-family:IBM Plex Mono,monospace">'+_plnFF(totLndR)+'</strong></span>'
-      +'<button onclick="event.stopPropagation();_plnCubDetalle(\''+cubKey+'\')" style="margin-left:auto;background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:5px;padding:2px 9px;font-size:9px;font-weight:700;cursor:pointer;white-space:nowrap">🔍 Ver detalle</button>'
+      // Línea 1: btos · sup · Dept · pzas
+      +'<div style="font-size:10px;color:var(--muted)">'+totBlt.toLocaleString()+' btos &middot; '+rows.length+' sup &middot; Dept:'+deptSetR.size+' &middot; '+totPzR.toLocaleString('es-PA')+' pzas</div>'
+      // Línea 2: FOB
+      +'<div style="font-size:10px">FOB: <strong style="color:var(--blue-l);font-family:IBM Plex Mono,monospace">'+_plnFF(totFob)+'</strong></div>'
+      // Línea 3: Escenario: Homol · Landed (o solo Landed si no hay escenario)
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:10px">'
+        +(esc2?'<span style="font-weight:700;color:var(--orange-l)">'+_plnESC(esc2)+':</span> ':'')
+        +(totHomR>0?'<span>Homol: <strong style="color:var(--green-l);font-family:IBM Plex Mono,monospace">'+_plnFF(totHomR)+'</strong></span>':'')
+        +'<span>Landed: <strong style="color:var(--orange-l);font-family:IBM Plex Mono,monospace">'+_plnFF(totLndR)+'</strong></span>'
       +'</div>'
     +'</div>';
   }
@@ -3155,8 +3171,8 @@ function _PLN_DEPTS(wk){
     +'<th style="padding:6px 10px;border-bottom:1px solid var(--border);border-right:1px solid var(--border);font-size:9px;color:var(--muted);text-align:left;text-transform:uppercase">Departamento</th>'
     +'<th style="padding:6px 10px;border-bottom:1px solid var(--border);border-right:1px solid var(--border);font-size:9px;color:var(--muted);text-align:right;text-transform:uppercase">FOB</th>'
     +'<th style="padding:6px 10px;border-bottom:1px solid var(--border);border-right:1px solid var(--border);font-size:9px;color:var(--muted);text-align:right;text-transform:uppercase">Landed</th>'
-    +'<th style="padding:6px 10px;border-bottom:1px solid var(--border);border-right:1px solid var(--border);font-size:9px;color:var(--muted);text-align:right;text-transform:uppercase">% Total</th>'
-    +'<th style="border-bottom:1px solid var(--border);min-width:80px;padding:4px 8px"></th>'
+    +'<th style="border-bottom:1px solid var(--border);border-right:1px solid var(--border);min-width:80px;padding:4px 8px"></th>'
+    +'<th style="padding:6px 10px;border-bottom:1px solid var(--border);font-size:9px;color:var(--muted);text-align:right;text-transform:uppercase">% Total</th>'
     +'</tr></thead><tbody>';
   ents.forEach(function(e,i){
     var pct=tllnd>0?(e[1].lnd/tllnd*100).toFixed(2):'0';
@@ -3164,16 +3180,16 @@ function _PLN_DEPTS(wk){
       +'<td style="padding:6px 10px;border:1px solid var(--border);font-weight:600">'+e[0]+'</td>'
       +'<td style="padding:6px 10px;border:1px solid var(--border);text-align:right;font-family:\'IBM Plex Mono\',monospace;color:var(--blue-l)">'+_plnFF(e[1].fob)+'</td>'
       +'<td style="padding:6px 10px;border:1px solid var(--border);text-align:right;font-family:\'IBM Plex Mono\',monospace;color:var(--green-l)">'+_plnFF(e[1].lnd)+'</td>'
-      +'<td style="padding:6px 10px;border:1px solid var(--border);text-align:right;color:var(--muted)">'+pct+'%</td>'
       +'<td style="border:1px solid var(--border);padding:4px 8px"><div style="height:7px;border-radius:4px;background:linear-gradient(90deg,#f8d122,#f97316);width:'+Math.max(2,parseFloat(pct))+'%"></div></td>'
+      +'<td style="padding:6px 10px;border:1px solid var(--border);text-align:right;color:var(--muted)">'+pct+'%</td>'
     +'</tr>';
   });
   h+='<tr style="background:rgba(88,166,255,.06);font-weight:800">'
     +'<td style="padding:6px 10px;border:1px solid var(--border)">TOTAL</td>'
     +'<td style="padding:6px 10px;border:1px solid var(--border);text-align:right;font-family:\'IBM Plex Mono\',monospace;color:var(--blue-l)">'+_plnFF(tlfob)+'</td>'
     +'<td style="padding:6px 10px;border:1px solid var(--border);text-align:right;font-family:\'IBM Plex Mono\',monospace;color:var(--green-l)">'+_plnFF(tllnd)+'</td>'
-    +'<td style="padding:6px 10px;border:1px solid var(--border);text-align:right">100%</td>'
     +'<td style="border:1px solid var(--border)"></td>'
+    +'<td style="padding:6px 10px;border:1px solid var(--border);text-align:right">100%</td>'
     +'</tr>'
   +'</tbody></table></div>';
   el.innerHTML=h;
@@ -17803,21 +17819,29 @@ window._plnCubDetalle = function(key){
   ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;padding:16px';
   ov.innerHTML =
     '<div style="background:var(--s1);border:1px solid var(--border);border-radius:14px;width:100%;max-width:780px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,.6)">'
-    // Header
-    +'<div style="padding:12px 16px;background:var(--s2);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0">'
-      +'<span style="font-size:18px">'+viaIco+'</span>'
-      +'<div style="flex:1;min-width:0">'
-        +'<div style="font-size:14px;font-weight:800;color:var(--text)">'+(cub.tipoCarga||cub.via||'—').toUpperCase()+(todosNros?' &nbsp;·&nbsp; <span style="font-family:IBM Plex Mono,monospace;font-size:12px;color:var(--muted)">'+todosNros+'</span>':'')+'</div>'
-        +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;align-items:center">'
-        +(cub.eta?'<span style="font-size:10px;color:var(--muted)">📅 ETA: <strong style="color:var(--text)">'+cub.eta+'</strong></span>':'')
-        +(cub.status?'<span style="font-size:10px;font-weight:700;color:#3fb950">● '+cub.status+'</span>':'')
-        +(nroCont?'<span style="font-size:10px;color:var(--muted)">📦 Cont: <strong style="color:var(--text);font-family:monospace">'+nroCont+'</strong></span>':'')
-        +(nEquipos>1?'<span style="font-size:10px;background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.25);color:var(--blue-l);padding:1px 6px;border-radius:4px;font-weight:700">'+nEquipos+'× Equipos</span>':'')
-        +(tipoEquipoStr?'<span style="font-size:10px;color:var(--muted)">🚢 <strong style="color:var(--text)">'+tipoEquipoStr+'</strong></span>':'')
-        +(tipoEmbStr?'<span style="font-size:10px;background:rgba(248,209,34,.1);border:1px solid rgba(248,209,34,.25);color:#f8d122;padding:1px 6px;border-radius:4px;font-weight:700">'+tipoEmbStr+'</span>':'')
-        +(origenStr?'<span style="font-size:10px;color:var(--muted)">🌎 <strong style="color:var(--text)">'+origenStr+'</strong></span>':'')
-        +(corredor?'<span style="font-size:10px;background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.25);color:var(--green-l);padding:1px 6px;border-radius:4px;font-weight:700">🤝 '+corredor+'</span>':'')
-        +(escenario?'<span style="font-size:10px;background:rgba(240,136,62,.1);border:1px solid rgba(240,136,62,.25);color:var(--orange-l);padding:1px 6px;border-radius:4px;font-weight:700">'+escenario+'</span>':'')
+    // Header — 3 líneas lógicas
+    +'<div style="padding:12px 16px;background:var(--s2);border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:10px;flex-shrink:0">'
+      +'<span style="font-size:18px;margin-top:2px">'+viaIco+'</span>'
+      +'<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:5px">'
+        // Línea 1: Tipo de equipo · N° embarques · Estado
+        +'<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">'
+          +'<span style="font-size:13px;font-weight:800;color:var(--text)">'+(cub.tipoCarga||cub.via||'—').toUpperCase()+'</span>'
+          +(todosNros?'<span style="font-family:IBM Plex Mono,monospace;font-size:11px;color:var(--muted);background:var(--s1);padding:1px 7px;border-radius:4px;border:1px solid var(--border)">'+_plnESC(todosNros)+'</span>':'')
+          +(cub.status?'<span style="font-size:9px;font-weight:700;color:#3fb950;background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.25);padding:1px 6px;border-radius:4px">● '+_plnESC(cub.status)+'</span>':'')
+        +'</div>'
+        // Línea 2: Tipo · Tamaño · N°Cont (sin origen — va en línea 3)
+        +'<div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center">'
+          +(tipoEmbStr?'<span style="font-size:9px;background:rgba(248,209,34,.1);border:1px solid rgba(248,209,34,.25);color:#f8d122;padding:1px 6px;border-radius:4px;font-weight:700">'+_plnESC(tipoEmbStr)+'</span>':'')
+          +(tipoEquipoStr?'<span style="font-size:9px;background:rgba(88,166,255,.08);border:1px solid rgba(88,166,255,.2);color:var(--blue-l);padding:1px 6px;border-radius:4px">'+_plnESC(tipoEquipoStr)+'</span>':'')
+          +(nEquipos>1?'<span style="font-size:9px;background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.25);color:var(--blue-l);padding:1px 6px;border-radius:4px;font-weight:700">×'+nEquipos+'</span>':'')
+          +(nroCont?'<span style="font-size:9px;background:rgba(45,212,191,.08);border:1px solid rgba(45,212,191,.25);color:#2dd4bf;padding:1px 6px;border-radius:4px;font-family:monospace">📦 '+_plnESC(nroCont)+'</span>':'')
+        +'</div>'
+        // Línea 3: Origen · Fecha · Corredor · Escenario
+        +'<div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center">'
+          +(origenStr?'<span style="font-size:9px;background:rgba(45,212,191,.06);border:1px solid rgba(45,212,191,.2);color:#2dd4bf;padding:1px 6px;border-radius:4px">🌎 '+_plnESC(origenStr)+'</span>':'')
+          +(escenario?'<span style="font-size:9px;background:rgba(240,136,62,.1);border:1px solid rgba(240,136,62,.25);color:var(--orange-l);padding:1px 6px;border-radius:4px;font-weight:700">'+_plnESC(escenario)+'</span>':'')
+          +(cub.eta?'<span style="font-size:9px;color:var(--muted)">📅 <strong style="color:var(--text)">'+cub.eta+'</strong></span>':'')
+          +(corredor?'<span style="font-size:9px;background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.25);color:var(--green-l);padding:1px 6px;border-radius:4px;font-weight:700">🤝 '+_plnESC(corredor)+'</span>':'')
         +'</div>'
       +'</div>'
       +'<button id="_plnDetCerrar" style="background:rgba(218,54,51,.15);border:1px solid rgba(248,81,73,.3);color:#f47067;border-radius:6px;padding:4px 12px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0">✕ Cerrar</button>'
@@ -17835,12 +17859,13 @@ window._plnCubDetalle = function(key){
     +'<div style="overflow:auto;flex:1;padding:12px 16px">'
     +(nroCont?'<div style="background:rgba(45,212,191,.06);border:1px solid rgba(45,212,191,.3);border-radius:8px;padding:6px 12px;margin-bottom:8px;display:flex;align-items:center;gap:8px;font-size:11px"><span style="color:var(--muted)">📦 N° Contenedor:</span><span style="font-family:IBM Plex Mono,monospace;font-weight:700;color:#2dd4bf">'+_plnESC(nroCont)+'</span></div>':'')
     +'<div style="border:1px solid var(--border);border-radius:10px;overflow:hidden">'
-    +'<table style="width:100%;border-collapse:collapse;font-size:12px;min-width:640px">'
+    +'<table style="width:100%;border-collapse:collapse;font-size:12px;min-width:680px">'
     +'<thead><tr style="background:var(--s2);position:sticky;top:0;z-index:2">'
-      +'<th style="padding:8px 10px;text-align:center;color:var(--muted);font-weight:700;border:1px solid var(--border);width:46px">Btos</th>'
+      +'<th style="padding:8px 6px;text-align:center;color:var(--muted);font-weight:700;border:1px solid var(--border);width:30px">#</th>'
       +'<th style="padding:8px 10px;text-align:center;color:var(--muted);font-weight:700;border:1px solid var(--border);width:36px">Org</th>'
       +'<th style="padding:8px 10px;text-align:left;color:var(--muted);font-weight:700;border:1px solid var(--border)">Suplidor</th>'
       +'<th style="padding:8px 10px;text-align:left;color:var(--muted);font-weight:700;border:1px solid var(--border);width:100px">N° Factura</th>'
+      +'<th style="padding:8px 10px;text-align:center;color:var(--muted);font-weight:700;border:1px solid var(--border);width:46px">Btos</th>'
       +'<th style="padding:8px 10px;text-align:left;color:var(--muted);font-weight:700;border:1px solid var(--border);width:80px">Dept</th>'
       +'<th style="padding:8px 10px;text-align:right;color:var(--muted);font-weight:700;border:1px solid var(--border);width:100px">FOB</th>'
       +(isSab?'<th style="padding:8px 10px;text-align:right;color:var(--muted);font-weight:700;border:1px solid var(--border);width:100px">Homol.</th>':'')
@@ -17858,10 +17883,11 @@ window._plnCubDetalle = function(key){
           : '<span style="font-size:9px;font-weight:800;color:#60a5fa;background:rgba(88,166,255,.12);padding:1px 5px;border-radius:3px">ZL</span>';
         var bg = idx%2 ? 'background:var(--s1)' : 'background:var(--bg)';
         return '<tr style="'+bg+';border-top:1px solid var(--border)">'
-          +'<td style="padding:8px 10px;text-align:center;color:var(--muted);border:1px solid var(--border);font-family:IBM Plex Mono,monospace">'+(r.bultos||0).toLocaleString('es-PA')+'</td>'
+          +'<td style="padding:8px 6px;text-align:center;color:var(--muted);border:1px solid var(--border);font-size:10px;font-weight:600">'+(idx+1)+'</td>'
           +'<td style="padding:8px 10px;text-align:center;border:1px solid var(--border)">'+orgBadge+'</td>'
-          +'<td style="padding:8px 10px;color:var(--text);font-weight:700;border:1px solid var(--border)">'+(r.prov||'—')+'</td>'
+          +'<td style="padding:8px 10px;color:var(--text);font-weight:700;border:1px solid var(--border)">'+(r.prov||'—').replace(/^S\.I\s*[-–]\s*/i,'')+'</td>'
           +'<td style="padding:8px 10px;color:var(--muted);font-family:IBM Plex Mono,monospace;font-size:10px;border:1px solid var(--border)">'+_plnESC(nfact)+'</td>'
+          +'<td style="padding:8px 10px;text-align:center;color:var(--muted);border:1px solid var(--border);font-family:IBM Plex Mono,monospace">'+(r.bultos||0).toLocaleString('es-PA')+'</td>'
           +'<td style="padding:8px 10px;color:var(--muted);border:1px solid var(--border)">'+(r.dept||'—')+'</td>'
           +'<td style="padding:8px 10px;text-align:right;color:#58a6ff;font-family:IBM Plex Mono,monospace;font-weight:700;border:1px solid var(--border)">'+_plnFF(fobV)+'</td>'
           +(isSab?'<td style="padding:8px 10px;text-align:right;color:'+(homolV>0?'#3fb950':'var(--muted)')+';font-family:IBM Plex Mono,monospace;font-weight:700;border:1px solid var(--border)">'+(homolV>0?_plnFF(homolV):'—')+'</td>':'')
@@ -17879,11 +17905,14 @@ window._plnCubDetalle = function(key){
         var factSet = new Set(rows.map(function(r){ return (r.numFact||r.nfac||r.factura||'').trim(); }).filter(function(f){return f&&f!=='—';}));
         var factCount = factSet.size || rows.length;
         var colCount = isSab ? 10 : 9;
+        var provSet = new Set(rows.map(function(r){ return (r.prov||'').trim(); }).filter(Boolean));
+        var provCount = provSet.size;
         return '<tr style="background:rgba(88,166,255,.08);font-weight:800;border-top:2px solid rgba(88,166,255,.3)">'
+          +'<td style="padding:6px 6px;text-align:center;border:1px solid var(--border);font-size:9px;font-weight:800;color:var(--muted)">TOTAL</td>'
+          +'<td style="padding:8px 10px;text-align:center;border:1px solid var(--border);font-size:14px">'+(viaTransporte==='AIR'?'✈️':viaTransporte==='LAND'?'🚛':'🚢')+'</td>'
+          +'<td style="padding:8px 10px;font-weight:800;color:var(--text);border:1px solid var(--border)">'+provCount+' sup.</td>'
+          +'<td style="padding:6px 10px;text-align:center;border:1px solid var(--border);font-size:10px;font-weight:700;color:var(--muted)">'+factCount+' fact.</td>'
           +'<td style="padding:8px 10px;text-align:center;border:1px solid var(--border);font-family:IBM Plex Mono,monospace;color:#2dd4bf">'+totBlt.toLocaleString('es-PA')+'</td>'
-          +'<td style="border:1px solid var(--border)"></td>'
-          +'<td style="padding:8px 10px;font-weight:800;color:var(--text);border:1px solid var(--border)">TOTAL ('+factCount+' fact.)</td>'
-          +'<td style="border:1px solid var(--border)"></td>'
           +'<td style="padding:6px 10px;text-align:center;border:1px solid var(--border);font-size:10px;font-weight:700;color:var(--muted)">'+deptLabel+'</td>'
           +'<td style="padding:8px 10px;text-align:right;color:#58a6ff;font-family:IBM Plex Mono,monospace;font-weight:800;border:1px solid var(--border)">'+_plnFF(totFob)+'</td>'
           +(isSab?'<td style="padding:8px 10px;text-align:right;color:#3fb950;font-family:IBM Plex Mono,monospace;font-weight:800;border:1px solid var(--border)">'+_plnFF(totHom)+'</td>':'')
@@ -17951,8 +17980,8 @@ window._plnEditarCubInfo = function(key){
     return '<option value="'+t.replace(/"/g,'&quot;')+'"'+(t===curTam?' selected':'')+'>'+t+'</option>';
   }).join('');
 
-  var numDisplay=curInfo.hasNum?'':'display:none';
-  var numLabel=curInfo.lbl||'N\u00b0 Referencia';
+  var numDisplay=''; // always visible
+  var numLabel=curInfo.lbl||'N\u00b0 Contenedor / Referencia';
 
   ov.innerHTML='<div style="background:var(--s1);border:1px solid var(--border);border-radius:14px;width:100%;max-width:420px;overflow:hidden">'
     +'<div style="padding:12px 16px;background:var(--s2);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">'
@@ -18233,6 +18262,26 @@ window._plnModuloEmbarques = async function(){
       var nfact=l.numFact||l.nroFact||l.nfac||l.factura||l.oc||'';
       return {prov:l.prov||'—',bultos:parseInt(l.bultos||l.cajas||0),piezas:parseInt(l.piezas||0),fob:fo,landed:lnd,homol:hom,dept:l.dept||l.deptCat||'',tipo:tipo,matched:true,numFact:nfact};
     });
+
+    // ── Auto-sincronizar tipoEmbarque y sizeEquipo desde el snap ──
+    var snapCampos=snap.campos||{};
+    var autoTipo=''; var autoSize=''; var autoVia='res';
+    var snapEquipo=(snapCampos.s1_equipo||d.tipoEquipo||'').toLowerCase();
+    if(snapEquipo.includes('contenedor')||snapEquipo.includes('fcl')){
+      autoVia='sea';
+      if(snapEquipo.includes('20')) { autoTipo='Contenedor Directo'; autoSize='"20" Contenedor'; }
+      else if(snapEquipo.includes('40hq')||snapEquipo.includes('40 hq')) { autoTipo='Contenedor Directo'; autoSize='"40" HQ Contenedor'; }
+      else if(snapEquipo.includes('40')) { autoTipo='Contenedor Directo'; autoSize='"40" Contenedor'; }
+      else if(snapEquipo.includes('45')) { autoTipo='Contenedor Directo'; autoSize='"45" Contenedor'; }
+      else { autoTipo='Contenedor Directo'; autoSize='"40" Contenedor'; }
+    } else if(snapEquipo.includes('lcl')||snapEquipo.includes('consolidado')) {
+      autoVia='sea'; autoTipo='Consolidado Marítimo'; autoSize='LCL';
+    } else if(snapEquipo.includes('aér')||snapEquipo.includes('air')) {
+      autoVia='air'; autoTipo='Aéreo'; autoSize='No aplica';
+    } else if(snapEquipo.includes('camion')||snapEquipo.includes('camión')||snapEquipo.includes('furgon')||snapEquipo.includes('furgón')) {
+      autoVia='land'; autoTipo='Camión / SABABA'; autoSize='Camión';
+    }
+    var autoNEquipos=parseInt(snapCampos.s1_equipos||d.nEquipos||1)||1;
     var totHom=rows.reduce(function(s,r){return s+r.homol;},0);
     var zlCnt=rows.filter(function(r){return r.tipo!=='IMP';}).length;
     var impCnt=rows.filter(function(r){return r.tipo==='IMP';}).length;
@@ -18313,7 +18362,7 @@ window._plnModuloEmbarques = async function(){
       var wk=_plnMkWeek(_PLN_CTX.mon);
       var dayIdx=_PLN_CTX.di;
       var dayCubs=(wk[_PLN_CTX.tab][dayIdx].cubiculos||[]);
-      var newCub={via:'res',tipoCarga:tipoEq,nroEmb:d.nro,nroCont:'',eta:d.fecha,status:'Recibido en CDF',rows:rows};
+      var newCub={via:autoVia||'res',tipoCarga:tipoEq,tipoEmbarque:autoTipo,sizeEquipo:autoSize,nEquipos:autoNEquipos,nroEmb:d.nro,nroCont:'',eta:d.fecha,status:'Recibido en CDF',rows:rows};
 
       // Si ya hay cubículos ese día, preguntar si fusionar o nuevo
       if(dayCubs.length>0){
