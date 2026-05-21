@@ -1633,7 +1633,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       <div class="sep-lbl">Valor de la Mercancía</div>
       <div class="field">
         <label>Monto CIF Total (USD)</label>
-        <input type="number" id="unico_cif" placeholder="Ej: 34,802.50" step="0.01" oninput="calcUnico()" style="font-size:15px;font-weight:700;color:var(--green-l);border-color:rgba(63,185,80,.4)">
+        <input type="number" id="unico_cif" placeholder="Ej: 34,802.50" step="0.01" oninput="window._unico_itbms_override=false;window._unico_itbms_manual=undefined;calcUnico()" style="font-size:15px;font-weight:700;color:var(--green-l);border-color:rgba(63,185,80,.4)">
       </div>
 
       <!-- SECCIÓN 5: ARANCELES E ITBMS CON MONTOS CALCULADOS -->
@@ -1656,8 +1656,15 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
         </div>
         <div style="text-align:center;padding-bottom:8px;color:var(--muted);font-size:16px">→</div>
         <div class="field" style="margin:0">
-          <label style="color:var(--blue-l)">ITBMS a pagar (USD)</label>
-          <input type="number" id="unico_itbms_monto" readonly style="background:var(--bg);color:var(--blue-l);font-weight:700;border-color:rgba(88,166,255,.3)">
+          <label style="color:var(--blue-l)">ITBMS a pagar (USD) <span style="font-size:9px;font-weight:400;color:var(--muted)">✏️ editable</span></label>
+          <input type="number" id="unico_itbms_monto" step="0.01"
+            style="color:var(--blue-l);font-weight:700;border-color:rgba(88,166,255,.4);background:var(--s2)"
+            title="Editable — ingresa el monto exacto del documento. Máx. ±$0.05 vs. calculado."
+            oninput="window._unico_itbms_override=true; window._unico_itbms_manual=parseFloat(this.value)||0; calcUnico();">
+          <div style="margin-top:3px;display:flex;align-items:center;gap:8px">
+            <span id="_unico_itbms_auto_lbl" style="font-size:9px;color:var(--muted)">Auto: $0.00</span>
+            <button onclick="window._unico_itbms_override=false;window._unico_itbms_manual=undefined;calcUnico();_showToast('↩️ ITBMS restaurado','green',1500)" style="font-size:9px;background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);color:var(--blue-l);border-radius:4px;padding:1px 8px;cursor:pointer">↩ Auto</button>
+          </div>
         </div>
       </div>
       <div class="r2">
@@ -4514,7 +4521,7 @@ function showSplashNav(){
     const cifOriginal = mercLines2.reduce((a,l) => a+(l.costo||0), 0);
     const mercInv = isSabD && (sn.sc3?.mercHomol||0) > 0 ? (sn.sc3.mercHomol) : cifOriginal;
     const noMercInv = isUnicoD2 ? (sn.sc1?.noMerc != null ? sn.sc1.noMerc
-        : ((sn.sc1?.arancel||0)+(sn.sc1?.hon||0)+(sn.sc1?.tasa||0)+(sn.sc1?.uso||0)+(sn.sc1?.itbmsTasa||0)+(sn.sc1?.agente||0)+(sn.sc1?.extras||0)))
+        : ((sn.sc1?.arancel||0)+(sn.sc1?.hon||0)+(sn.sc1?.tasa||0)+(sn.sc1?.uso||0)+(sn.sc1?.agente||0)+(sn.sc1?.extras||0)))
       : isSabD ? (sn.sc3?.noMerc||0)
       : (sn.sc2?.noMerc||0);
     return s + mercInv + noMercInv;
@@ -7477,6 +7484,7 @@ async function _pullTendFromCloud(){
     _corregirEmbarque('22035', 'Sababa');
     tendData.forEach(d => { if(!d._gastosMigrados) _migrarGastosDesdeSnap(d); });
     tendData.forEach(d => { _corregirItbmsCifExpress(d); });
+    tendData.forEach(d => { _corregirLandedUnico(d); });
 
     // 5. Si encontramos embarques nuevos en sesiones individuales,
     //    actualizar el maestro para que la próxima vez ya estén ahí
@@ -7558,6 +7566,48 @@ function _corregirItbmsCifExpress(d){
       }
     });
   }
+}
+
+// ══════════════════════════════════════════════════════════════
+// _corregirLandedUnico
+// Corrige embarques Escenario Único ya guardados cuyo snap.sc1.landed
+// incluye incorrectamente itbmsTasa (gasto fiscal no costeable).
+// Se ejecuta en memoria cada vez que se carga desde Supabase.
+// ══════════════════════════════════════════════════════════════
+function _corregirLandedUnico(d){
+  if(!d || !d.snap) return;
+  const isUnico = !!(d.modoUnico || d.tipoEsc==='unico'
+    || (d.esc||'').toLowerCase().includes('único')
+    || (d.esc||'').toLowerCase().includes('unico')
+    || (d.snap.sc1 && !d.snap.sc2 && !d.snap.sc3));
+  if(!isUnico) return;
+
+  const sc1 = d.snap.sc1 || {};
+  const itbmsTasa = sc1.itbmsTasa || 0;
+
+  // Si no hay itbmsTasa guardado, nada que corregir
+  if(itbmsTasa < 0.005) return;
+
+  // landed actual almacenado (con itbmsTasa inflado)
+  const landedActual = sc1.landed || 0;
+  // landed correcto = landed - itbmsTasa
+  const landedCorr = Math.round((landedActual - itbmsTasa) * 100) / 100;
+  if(Math.abs(landedActual - landedCorr) < 0.005) return;
+
+  sc1.landed  = landedCorr;
+  sc1.noMerc  = Math.round((landedCorr - (sc1.cif||0)) * 100) / 100;
+  // factor también se recalcula
+  if((sc1.cif||0) > 0) sc1.factor = Math.round(((landedCorr / sc1.cif) - 1) * 10000) / 100;
+
+  // Corregir también en la invLine de itbmsTasa: cambiar de 'tasa' a 'itbms'
+  // para que no se acumule en Tesoro costeable
+  const lines = d.invLines || (d.snap.invLines) || [];
+  lines.forEach(function(l){
+    if(l.tipoFac === 'tasa' && (l.oc||'').toLowerCase().includes('itbm')){
+      l.tipoFac = 'itbms'; // fiscal, no costeable
+    }
+    // También corregir si quedó con tipoFac='itbms' y oc='ITBM s/Tasa' — ya está bien, no tocar
+  });
 }
 
 // _migrarGastosDesdeSnap
@@ -15662,9 +15712,14 @@ function calcUnico(){
   var corredor = document.getElementById('unico_corredor')?.value||'cifexp';
 
   var arancel   = R(cif * arPct);
-  var itbms     = R((cif + arancel) * itbPct);
+  var itbmsAuto = R((cif + arancel) * itbPct);
   var itbmsTasa = R(tasa * itbPct);
   var hon       = R(cif * honPct);
+
+  // ITBMS: manual override si el usuario editó el monto directamente (±$0.05 máx)
+  var itbms = (window._unico_itbms_override && window._unico_itbms_manual !== undefined)
+    ? Math.max(itbmsAuto - 0.05, Math.min(itbmsAuto + 0.05, window._unico_itbms_manual))
+    : itbmsAuto;
 
   // Gastos adicionales de la lista dinámica
   var extrasTotal = 0;
@@ -15673,14 +15728,18 @@ function calcUnico(){
     extrasTotal += parseFloat(inp?.value)||0;
   });
 
-  var landed = R(cif + arancel + hon + tasa + itbmsTasa + uso + agente + dmce + extrasTotal);
+  // landed COSTEABLE = excluye itbmsTasa e itbms (ambos fiscales, no costeables)
+  var landed = R(cif + arancel + hon + tasa + uso + agente + dmce + extrasTotal);
   var factor = cif > 0 ? ((landed/cif)-1)*100 : 0;
 
   // Actualizar campos calculados
   var _set = function(id, val){ var el=document.getElementById(id); if(el) el.value=val>0?val.toFixed(2):''; };
-  _set('unico_ar_monto',    arancel);
-  _set('unico_itbms_monto', itbms);
-  _set('unico_hon_result',  hon);
+  _set('unico_ar_monto', arancel);
+  // Solo actualizar monto ITBMS si NO está en override manual
+  if(!window._unico_itbms_override) _set('unico_itbms_monto', itbms);
+  var autoLbl = document.getElementById('_unico_itbms_auto_lbl');
+  if(autoLbl) autoLbl.textContent = 'Auto: $'+itbmsAuto.toFixed(2);
+  _set('unico_hon_result', hon);
 
   // Actualizar label del factor honorarios
   var lblEl = document.getElementById('unico_hon_lbl');
@@ -15882,9 +15941,14 @@ function calcUnicoFull(){
 
   const R = n=>Math.round(n*100)/100;
   const arancel   = R(cif * arPct);
-  const itbms     = R((cif + arancel) * itbPct);
+  const itbmsAuto = R((cif + arancel) * itbPct);
   const itbmsTasa = R(tasa * itbPct);
   const hon       = R(cif * honPct);
+
+  // ITBMS: manual override si el usuario editó el monto directamente (±$0.05 máx)
+  const itbms = (window._unico_itbms_override && window._unico_itbms_manual !== undefined)
+    ? Math.max(itbmsAuto - 0.05, Math.min(itbmsAuto + 0.05, window._unico_itbms_manual))
+    : itbmsAuto;
 
   // Gastos adicionales
   const gastosRows = [];
@@ -15899,9 +15963,10 @@ function calcUnicoFull(){
   });
   const extrasTotal = gastosRows.reduce((s,g)=>s+g.monto,0);
 
-  const landed  = R(cif + arancel + hon + tasa + itbmsTasa + uso + agente + dmce + extrasTotal);
+  // landed COSTEABLE = excluye itbmsTasa e itbms (ambos fiscales, no costeables)
+  const landed  = R(cif + arancel + hon + tasa + uso + agente + dmce + extrasTotal);
   const factor  = cif > 0 ? landed/cif : 1;
-  const landedG = R(landed + itbms);
+  const landedG = R(landed + itbms + itbmsTasa);
 
   const corName  = corredor==='cifexp'?'⚡ CIF Express':corredor==='sababa'?'🤝 Sababa Imports':'✏️ '+(document.getElementById('unico_nombre_corredor')?.value||'Corredor');
   const corColor = corredor==='cifexp'?'var(--blue-l)':corredor==='sababa'?'var(--orange-l)':'#a371f7';
