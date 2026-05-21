@@ -2716,6 +2716,8 @@ function _PLN_BUILD_HTML(){
   +'#_PLN_OV .gscroll{overflow-x:auto;overflow-y:visible;-webkit-overflow-scrolling:touch;}'
   +'#_PLN_OV .cal-headers{display:grid;grid-template-columns:repeat(5,minmax(min(100vw - 24px, 320px),1fr));min-width:900px;}'
   +'#_PLN_OV .cal-headers{display:grid;grid-template-columns:repeat(5,minmax(min(100vw - 24px, 320px),1fr));min-width:900px;background:var(--bg);}'
+  +'#_PLN_OV #_pln_hdr_scroll{overflow-x:auto;overflow-y:visible;scrollbar-width:none;position:sticky;top:0;z-index:8;background:var(--bg);}'
+  +'#_PLN_OV #_pln_hdr_scroll::-webkit-scrollbar{display:none;}'
   +'#_PLN_OV .cal-bodies{display:grid;grid-template-columns:repeat(5,minmax(min(100vw - 24px, 320px),1fr));border-left:1px solid var(--border);border-right:1px solid var(--border);border-bottom:1px solid var(--border);min-width:900px;border-radius:0 0 10px 10px;overflow:hidden;}'
   +'#_PLN_OV .cal{display:none;}'
   // day header
@@ -2780,10 +2782,9 @@ function _PLN_BUILD_HTML(){
     +'<div><div class="pb-brand">📋 PLANEACIÓN DE CARGA SEMANAL ®</div><div class="pb-sub" id="_pln_sub">ZLC Panamá</div></div>'
     +'<div class="pb-acts">'
       +'<span id="_pln_cloud" style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:6px;background:rgba(139,148,158,.1);border:1px solid rgba(139,148,158,.25);color:var(--muted)">☁️ ...</span>'
-      +'<button class="xbtn" onclick="(function(){var b=document.body;var isLight=b.classList.contains(\'theme-light\');b.classList.toggle(\'theme-light\',!isLight);b.style.colorScheme=isLight?\'dark\':\'light\';document.getElementById(\'_pln_themeBtn\').textContent=isLight?\'☀️ Claro\':\'🌙 Oscuro\';})()" id="_pln_themeBtn" title="Cambiar tema">🌙 Oscuro</button>'
       +'<button class="xbtn yw" onclick="_plnModalSemana()">+ Semana</button>'
       +'<button class="xbtn gn" onclick="_plnCSV()">📊 CSV</button>'
-      +'<button class="xbtn rd" onclick="document.getElementById(\'_PLN_OV\').style.display=\'none\';if(typeof switchTab===\'function\'){var t=document.querySelector(\'.tab\');if(t)switchTab(\'sim\',t);}">✕ Cerrar</button>'
+      +'<button class="xbtn rd" onclick="document.getElementById(\'_PLN_OV\').style.display=\'none\';if(typeof volverInicio===\'function\')volverInicio();else if(typeof switchTab===\'function\')switchTab(\'sim\',document.querySelector(\'.tab\'));">✕ Cerrar</button>'
     +'</div>'
   +'</div>'
   +'<div class="wknav">'
@@ -2794,7 +2795,7 @@ function _PLN_BUILD_HTML(){
   +'</div>'
   +'<div class="kpis">'
     +'<div class="kpi"><div class="kpil">Equipos</div><div class="kpiv" id="_pln_keq" style="color:#f8d122">0</div></div>'
-    +'<div class="kpi"><div class="kpil">Proveedores</div><div class="kpiv" id="_pln_kpv" style="color:var(--green-l)">0</div></div>'
+    +'<div class="kpi"><div class="kpil">Facturas</div><div class="kpiv" id="_pln_kpv" style="color:var(--green-l)">0</div></div>'
     +'<div class="kpi"><div class="kpil">FOB Total</div><div class="kpiv" id="_pln_kfob" style="color:var(--blue-l);font-size:12px">$0</div></div>'
     +'<div class="kpi"><div class="kpil">Landed Total</div><div class="kpiv" id="_pln_klnd" style="color:var(--orange-l);font-size:12px">$0</div></div>'
     +'<div class="kpi"><div class="kpil">Bultos</div><div class="kpiv" id="_pln_kblt" style="color:#2dd4bf">0</div></div>'
@@ -2804,8 +2805,10 @@ function _PLN_BUILD_HTML(){
     +'<button class="tabt on" id="_pln_tbp" onclick="_PLN_SWITCH(\'prog\')">🚢 Programado</button>'
     +'<button class="tabt" id="_pln_tbr" onclick="_PLN_SWITCH(\'res\')">✅ Resultado</button>'
   +'</div>'
-  +'<div class="gscroll">'
+  +'<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;" id="_pln_hdr_scroll">'
     +'<div class="cal-headers" id="_pln_cal_hdr"></div>'
+  +'</div>'
+  +'<div class="gscroll">'
     +'<div class="cal-bodies" id="_pln_cal"></div>'
     +'<div id="_pln_stats" style="min-width:900px"></div>'
     +'<div id="_pln_depts" style="padding:12px 16px 40px;min-width:900px"></div>'
@@ -2962,6 +2965,13 @@ function _PLN_RENDER(){
   cal.innerHTML=h;
   _PLN_KPIS(wk);
   _PLN_DEPTS(wk);
+  // Sincronizar scroll horizontal entre header y cuerpo
+  var hdrScroll=document.getElementById('_pln_hdr_scroll');
+  var gscroll=document.querySelector('#_PLN_OV .gscroll');
+  if(hdrScroll && gscroll){
+    hdrScroll.onscroll=function(){ gscroll.scrollLeft=hdrScroll.scrollLeft; };
+    gscroll.onscroll=function(){ hdrScroll.scrollLeft=gscroll.scrollLeft; };
+  }
 }
 
 function _plnCubHtml(cub,di,ci,tab,mon){
@@ -2995,30 +3005,38 @@ function _plnCubHtml(cub,di,ci,tab,mon){
 
   // ── N° contenedor del cubículo (manual o heredado) ──
   var cubContNum = cub.nroCont || '';
+  var cubEquipos = parseInt(cub.nEquipos||1)||1;
+  var cubSize = cub.sizeEquipo||sizeLabel||'';
+  var cubTipoEmb = cub.tipoEmbarque||tipoLabel||'';
   var cubKey='cub_'+di+'_'+ci+'_'+(mon||'').replace(/-/g,'');
 
+  // Escenario / corredor desde tendData
+  var td2=window.tendData||[];
+  var embs2=(cub.nroEmb||'').split('+').map(function(s){return s.trim();}).filter(Boolean);
+  var fe2=embs2.map(function(n){return td2.find(function(d){return (d.nro||'').trim()===n;})||null;}).filter(Boolean)[0]||{};
+  var esc2=fe2.esc||''; var cor2=fe2.corredor||fe2.provCorredor||'';
+
+  // Etiqueta compacta: "2×\"45\" Contenedor" o "Camión / SABABA"
+  var equipLabel='';
+  if(cubEquipos>1) equipLabel+=cubEquipos+'\xd7';
+  if(cubSize) equipLabel+=cubSize;
+  else if(cubTipoEmb) equipLabel+=cubTipoEmb;
+
   var h='<div class="cub '+viaCls+'">'
-    +'<div class="chdr" onclick="_plnOpenEq(\''+m+'\','+di+','+ci+',\''+tab+'\')" title="Editar equipo">'
+    // ── Fila 1: ✅ · Estado · Fecha · FOB · ✕
+    +'<div class="chdr" style="cursor:default">'
       +'<span style="font-size:13px">'+viaIco+'</span>'
-      +'<span class="ctag '+viaCls+'">'+_plnESC(headerTag)+'</span>'
-      +(cubContNum?'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:8px;color:#2dd4bf;background:rgba(45,212,191,.1);border:1px solid rgba(45,212,191,.25);padding:2px 6px;border-radius:3px;font-weight:700">'+_plnESC(cubContNum)+'</span>':'')
-      +(embStr&&!cubContNum?'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:9px;color:var(--muted)">'+_plnESC(embStr)+'</span>':'')
-      +(cub.eta?'<span style="font-size:9px;color:var(--muted)">'+_plnFD(cub.eta)+'</span>':'')
-      +(cub.status?'<span style="font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;background:rgba(255,255,255,.06);color:'+sc+'">'+_plnESC(cub.status)+'</span>':'')
-      // Escenario / corredor desde tendData
-      +(function(){
-          var td2=window.tendData||[];
-          var embs2=(cub.nroEmb||'').split('+').map(function(s){return s.trim();}).filter(Boolean);
-          var fe=embs2.map(function(n){return td2.find(function(d){return (d.nro||'').trim()===n;})||null;}).filter(Boolean)[0]||{};
-          var esc2=fe.esc||''; var cor2=fe.corredor||fe.provCorredor||'';
-          var chips='';
-          if(esc2) chips+='<span style="font-size:8px;background:rgba(240,136,62,.12);border:1px solid rgba(240,136,62,.3);color:var(--orange-l);padding:1px 5px;border-radius:3px;font-weight:700">'+_plnESC(esc2)+'</span>';
-          if(cor2) chips+='<span style="font-size:8px;background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.25);color:var(--green-l);padding:1px 5px;border-radius:3px;font-weight:700">🤝'+_plnESC(cor2)+'</span>';
-          return chips;
-        })()
-      +'<span style="margin-left:auto;font-family:\'IBM Plex Mono\',monospace;font-size:10px;font-weight:700;color:var(--green-l)">'+_plnF(totFob)+'</span>'
-      +'<button onclick="event.stopPropagation();_plnEditCont(\''+cubKey+'\')" title="Editar N° Contenedor" style="margin-left:4px;background:rgba(45,212,191,.1);border:1px solid rgba(45,212,191,.3);color:#2dd4bf;border-radius:4px;padding:1px 6px;font-size:9px;cursor:pointer;flex-shrink:0">✏️</button>'
-    +'<button onclick="event.stopPropagation();_plnDelCub(\''+_PLN_TAB+'\','+di+','+ci+')" style="margin-left:4px;background:rgba(218,54,51,.15);border:1px solid rgba(218,54,51,.3);color:#f47067;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;flex-shrink:0">×</button>'
+      +(cub.status?'<span style="font-size:8px;font-weight:700;padding:2px 6px;border-radius:4px;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green-l);white-space:nowrap">'+_plnESC(cub.status)+'</span>':'')
+      +(cub.eta?'<span style="font-size:9px;color:var(--muted);white-space:nowrap">'+_plnFD(cub.eta)+'</span>':'')
+      +'<span style="margin-left:auto;font-family:\'IBM Plex Mono\',monospace;font-size:10px;font-weight:800;color:var(--green-l);white-space:nowrap">'+_plnF(totFob)+'</span>'
+      +'<button onclick="event.stopPropagation();_plnDelCub(\''+_PLN_TAB+'\','+di+','+ci+')" style="margin-left:6px;background:rgba(218,54,51,.15);border:1px solid rgba(218,54,51,.3);color:#f47067;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;flex-shrink:0">×</button>'
+    +'</div>'
+    // ── Fila 2: Tipo×Cant Tamaño · Escenario · Editar (N° cont va en Ver Detalle)
+    +'<div style="display:flex;flex-wrap:wrap;gap:4px;padding:4px 8px 6px;border-bottom:1px dashed rgba(255,255,255,.08);align-items:center">'
+      +(equipLabel?'<span style="font-size:8px;background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:4px;padding:2px 6px;font-weight:700;white-space:nowrap">'+_plnESC(equipLabel)+'</span>':'')
+      +(esc2?'<span style="font-size:8px;background:rgba(240,136,62,.12);border:1px solid rgba(240,136,62,.3);color:var(--orange-l);border-radius:4px;padding:2px 6px;font-weight:700;white-space:nowrap">'+_plnESC(esc2)+'</span>':'')
+      +(cor2?'<span style="font-size:8px;background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.25);color:var(--green-l);border-radius:4px;padding:2px 6px;font-weight:700;white-space:nowrap">🤝'+_plnESC(cor2)+'</span>':'')
+      +'<button onclick="event.stopPropagation();_plnEditarCubInfo(\''+cubKey+'\')" style="margin-left:auto;background:rgba(139,148,158,.1);border:1px solid rgba(139,148,158,.3);color:var(--muted);border-radius:5px;padding:2px 8px;font-size:9px;font-weight:700;cursor:pointer;flex-shrink:0">✏️ Editar</button>'
     +'</div>';
   if(rows.length){
     var totLndR=rows.reduce(function(s,r){return s+(parseFloat(r.landed)||parseFloat(r.fob)||0);},0);
@@ -3087,7 +3105,7 @@ function _plnCubHtml(cub,di,ci,tab,mon){
 function _PLN_KPIS(wk){
   var days=wk[_PLN_TAB];
   var eq=0,pv=0,fob=0,lnd=0,hom=0,blt=0,pzs=0,mat=0,tot=0;
-  days.forEach(function(day){ (day.cubiculos||[]).forEach(function(cub){ eq++; (cub.rows||[]).forEach(function(r){ pv++; tot++; fob+=parseFloat(r.fob)||0; lnd+=parseFloat(r.landed)||parseFloat(r.fob)||0; hom+=parseFloat(r.homol)||0; blt+=parseInt(r.bultos)||0; pzs+=parseInt(r.piezas)||0; if(r.matched) mat++; }); }); });
+  days.forEach(function(day){ (day.cubiculos||[]).forEach(function(cub){ eq+=parseInt(cub.nEquipos||1)||1; (cub.rows||[]).forEach(function(r){ pv++; tot++; fob+=parseFloat(r.fob)||0; lnd+=parseFloat(r.landed)||parseFloat(r.fob)||0; hom+=parseFloat(r.homol)||0; blt+=parseInt(r.bultos)||0; pzs+=parseInt(r.piezas)||0; if(r.matched) mat++; }); }); });
   function s(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; }
   s('_pln_keq',eq); s('_pln_kpv',pv); s('_pln_kfob',_plnF(fob)); s('_pln_klnd',_plnF(lnd)); s('_pln_kblt',blt.toLocaleString('es-PA')); s('_pln_kmat',tot>0?Math.round(mat/tot*100)+'%':'0%');
   // Stats summary panel (below calendar, above depts table)
@@ -3192,7 +3210,7 @@ window._plnOpenEq=function(mon,di,ci,tab,via){
     if(cub){
       if(vs) vs.value=cub.via||'SEA'; if(ts) ts.value=cub.tipoCarga||'';
       var ne=document.getElementById('_pln_nro'); if(ne) ne.value=cub.nroCont||'';
-      var ee=document.getElementById('_pln_emb'); if(ee){ ee.value=cub.nroEmb||''; if(ee.value){ var clr2=document.getElementById('_pln_emb_clr'); if(clr2) clr2.style.display='inline'; } }
+      var ee=document.getElementById('_pln_emb'); if(ee){ ee.value=(cub.nroEmb||'').replace(/\(parcial\)/gi,'').trim(); if(ee.value){ var clr2=document.getElementById('_pln_emb_clr'); if(clr2) clr2.style.display='inline'; } }
       var etae=document.getElementById('_pln_eta'); if(etae) etae.value=cub.eta||'';
       if(ss) ss.value=cub.status||'Programado';
       _plnViaChange();
@@ -9904,22 +9922,23 @@ async function renderFactDisp(){
           (_fdBuildProvSelect())+
         '</div>'+
         '<div>'+
-          '<label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px">Monto Total (USD) *</label>'+
-          '<input id="fd-monto" type="number" placeholder="0.00" step="0.01" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;box-sizing:border-box">'+
-        '</div>'+
-        '<div>'+
-          '<label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px">Tipo</label>'+
-          (function(){
-  var rubros = (typeof _RUBROS_GASTO!=='undefined'?_RUBROS_GASTO:window._RUBROS_GASTO)||[];
-  var opts = rubros.map(function(r){
-    return '<option value="'+(r.val||r.lbl||'').replace(/"/g,'&quot;')+'">'+(r.icon?r.icon+' ':'')+(r.lbl||r.val||'')+'</option>';
-  }).join('');
-  return '<select id="fd-tipo" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;box-sizing:border-box">'+opts+'</select>';
-})()+
-        '</div>'+
-        '<div>'+
           '<label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px">Notas (opcional)</label>'+
           '<input id="fd-notas" type="text" placeholder="Embarque relacionado, observación..." style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;box-sizing:border-box">'+
+        '</div>'+
+      '</div>'+
+      // ── Rubros / líneas ──
+      '<div style="margin-bottom:8px">'+
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'+
+          '<span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Rubros / Líneas de Gasto</span>'+
+          '<button onclick="_fdAddRubro()" style="background:rgba(168,85,247,.15);border:1px solid rgba(168,85,247,.3);color:#a371f7;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer">+ Agregar rubro</button>'+
+        '</div>'+
+        '<div id="fd-rubros-list">'+
+          // Primera línea siempre visible
+          _fdRubroLineHTML(0)+
+        '</div>'+
+        '<div style="margin-top:6px;padding:6px 10px;background:rgba(88,166,255,.06);border:1px solid rgba(88,166,255,.15);border-radius:6px;display:flex;justify-content:space-between;align-items:center">'+
+          '<span style="font-size:10px;color:var(--muted)">Total calculado:</span>'+
+          '<span id="fd-total-calc" style="font-family:\'IBM Plex Mono\',monospace;font-size:13px;font-weight:800;color:var(--blue-l)">$0.00</span>'+
         '</div>'+
       '</div>'+
       '<button onclick="_fdAgregar()" style="background:#a371f7;border:none;color:#fff;border-radius:8px;padding:9px 20px;font-size:12px;font-weight:700;cursor:pointer;width:100%">➕ Agregar Factura</button>'+
@@ -10089,20 +10108,69 @@ async function _fdConsumirParcial(numFact, montoUsado){
   }
 }
 
+// ── Helpers para rubros de factura ──
+function _fdGetRubroOpts(sel){
+  var rubros=(window._RUBROS_GASTO||[]);
+  return rubros.map(function(r){
+    var v=r.val||r.lbl||'';
+    return '<option value="'+v.replace(/"/g,'&quot;')+'"'+(v===sel?' selected':'')+'>'+
+      (r.icon?r.icon+' ':'')+(r.lbl||v)+'</option>';
+  }).join('');
+}
+function _fdRubroLineHTML(idx){
+  return '<div id="fd-rubro-'+idx+'" style="display:grid;grid-template-columns:1fr auto auto;gap:6px;margin-bottom:6px;align-items:center">'+
+    '<select id="fd-rubro-tipo-'+idx+'" onchange="_fdCalcTotal()" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text);font-size:12px">'+_fdGetRubroOpts('')+'</select>'+
+    '<input id="fd-rubro-monto-'+idx+'" type="number" placeholder="0.00" step="0.01" oninput="_fdCalcTotal()" style="width:100px;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text);font-size:12px">'+
+    (idx>0?'<button onclick="_fdRemoveRubro('+idx+')" style="background:rgba(218,54,51,.1);border:1px solid rgba(218,54,51,.2);color:var(--red-l);border-radius:5px;width:28px;height:28px;cursor:pointer;font-size:14px;flex-shrink:0">×</button>':'<span style="width:28px"></span>')+
+  '</div>';
+}
+window._fdRubroCount=1;
+function _fdAddRubro(){
+  var list=document.getElementById('fd-rubros-list'); if(!list) return;
+  var idx=window._fdRubroCount++;
+  var div=document.createElement('div');
+  div.innerHTML=_fdRubroLineHTML(idx);
+  list.appendChild(div.firstChild);
+}
+function _fdRemoveRubro(idx){
+  var el=document.getElementById('fd-rubro-'+idx); if(el) el.remove();
+  _fdCalcTotal();
+}
+function _fdCalcTotal(){
+  var total=0;
+  var list=document.getElementById('fd-rubros-list'); if(!list) return;
+  list.querySelectorAll('input[type=number]').forEach(function(inp){
+    total+=parseFloat(inp.value||'0')||0;
+  });
+  var el=document.getElementById('fd-total-calc');
+  if(el) el.textContent='$'+total.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+
 async function _fdAgregar(){
   var num   =(document.getElementById('fd-num')?.value||'').trim();
   var fecha =(document.getElementById('fd-fecha')?.value||'');
   var provHidden=document.getElementById('fd-prov'); var provSearch=document.getElementById('fd-prov-search'); var prov=((provHidden&&provHidden.value?provHidden.value:'')||(provSearch&&provSearch.value?provSearch.value:'')).trim();
-  var monto =parseFloat(document.getElementById('fd-monto')?.value||'0')||0;
-  var tipo  =(document.getElementById('fd-tipo')?.value||'Otro');
   var notas =(document.getElementById('fd-notas')?.value||'').trim();
+
+  // Recoger rubros
+  var list=document.getElementById('fd-rubros-list');
+  var rubros=[];
+  if(list){
+    list.querySelectorAll('div[id^="fd-rubro-"]').forEach(function(row){
+      var idx=row.id.replace('fd-rubro-','');
+      var tipo=(document.getElementById('fd-rubro-tipo-'+idx)||{}).value||'Otro';
+      var monto=parseFloat((document.getElementById('fd-rubro-monto-'+idx)||{}).value||'0')||0;
+      if(monto>0) rubros.push({tipo:tipo,monto:monto});
+    });
+  }
+  var monto=rubros.reduce(function(s,r){return s+r.monto;},0);
+  var tipo=rubros.length===1?rubros[0].tipo:(rubros.length>0?rubros[0].tipo:'Otro');
 
   if(!num){ _showToast('⚠️ El número de factura es obligatorio','orange',2000); return; }
   if(!prov){ _showToast('⚠️ El proveedor es obligatorio','orange',2000); return; }
-  if(monto<=0){ _showToast('⚠️ El monto debe ser mayor a 0','orange',2000); return; }
+  if(monto<=0){ _showToast('⚠️ Agrega al menos un rubro con monto > 0','orange',2000); return; }
 
   var data=await _fdLoad();
-  // Check duplicate
   if(data.find(function(f){ return f.num.toUpperCase()===num.toUpperCase(); })){
     _showToast('⚠️ Ya existe una factura con ese número','orange',3000); return;
   }
@@ -10114,12 +10182,13 @@ async function _fdAgregar(){
     prov: prov,
     monto:monto,
     tipo: tipo,
+    rubros:rubros,
     notas:notas,
     creadoEn:new Date().toISOString()
   });
   await _fdSave(data);
   _fdInvalidateCache();
-  _showToast('✅ Factura '+num+' guardada en nube ☁️','green',2000);
+  _showToast('✅ Factura '+num+' guardada ☁️ · $'+monto.toLocaleString('en-US',{minimumFractionDigits:2}),'green',2500);
   renderFactDisp();
 }
 
@@ -10529,7 +10598,7 @@ function renderDashboardKPIs(data){
     <!-- Gráfica de departamentos — botón toggle Vista Gráfica / Vista Lista -->
     <div style="margin-bottom:10px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em">📊 Valor Mercancía por Departamento</div>
+        <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em">📊 Valor Mercancía por Departamento <span style="font-size:9px;font-weight:500;color:var(--muted2);text-transform:none;letter-spacing:0">— toca para ver proveedores</span></div>
         <div style="display:flex;gap:4px">
           <button id="_btn-vista-grafica" onclick="_setDeptVista('grafica',this)"
             style="background:rgba(88,166,255,.2);border:1px solid rgba(88,166,255,.4);color:var(--blue-l);border-radius:6px;padding:3px 10px;font-size:10px;font-weight:700;cursor:pointer">
@@ -11237,10 +11306,7 @@ function _renderDeptChart(all){
 
   let html=`
   <div style="margin-bottom:14px">
-    <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px;display:flex;align-items:center;gap:6px">
-      📊 Valor Mercancía por Departamento
-      <span style="font-size:9px;font-weight:500;color:var(--muted2);text-transform:none;letter-spacing:0">— toca para ver proveedores</span>
-    </div>`;
+    <div style="margin-bottom:10px">`;
 
   entries.forEach(([k,v],i)=>{
     const pctBar=(v.cif/maxCif*100).toFixed(1);
@@ -14192,6 +14258,48 @@ function loadInvFile(input){
       msg += '\n\nTOTAL PAGO: $'+pagoRealizadoDetectado.toFixed(2);
       msg += '\nBase (Merc.+Flete): $'+baseParaDif.toFixed(2);
       msg += '\nDiferencia ('+(diferencia>=0?'+':'')+diferencia.toFixed(2)+'): aplicada automáticamente.';
+
+      // ── ALERTA DE DIFERENCIA SIGNIFICATIVA ──
+      if(Math.abs(diferencia) > 2){
+        setTimeout(function(){
+          var signo = diferencia > 0 ? '+' : '';
+          var tipo = diferencia > 0 ? 'Sababa facturó de MÁS' : 'Sababa facturó de MENOS';
+          var alertMsg = '⚠️ DIFERENCIA EN PLANTILLA SABABA\n\n'
+            + tipo + '\n\n'
+            + 'Total Pago plantilla:  $' + pagoRealizadoDetectado.toFixed(2) + '\n'
+            + 'Base (Merc.+Flete):    $' + baseParaDif.toFixed(2) + '\n'
+            + 'Diferencia:            ' + signo + '$' + Math.abs(diferencia).toFixed(2) + '\n\n'
+            + 'Revisa la plantilla antes de procesar.\n'
+            + 'Si es correcto, el ajuste ya fue aplicado automáticamente.';
+          if(typeof _showToast === 'function'){
+            _showToast('⚠️ Diferencia Sababa: ' + signo + '$' + Math.abs(diferencia).toFixed(2) + ' — Revisa la plantilla', 'orange', 8000);
+          }
+          // También mostrar en un banner visible en la UI
+          var banner = document.getElementById('_sab_diff_banner');
+          if(!banner){
+            banner = document.createElement('div');
+            banner.id = '_sab_diff_banner';
+            banner.style.cssText = 'position:fixed;top:60px;left:50%;transform:translateX(-50%);z-index:99999;'
+              + 'background:rgba(248,209,34,.15);border:2px solid #f8d122;border-radius:10px;'
+              + 'padding:12px 20px;max-width:480px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.4);';
+            document.body.appendChild(banner);
+          }
+          banner.innerHTML = '<div style="display:flex;align-items:flex-start;gap:10px">'
+            + '<span style="font-size:22px;flex-shrink:0">⚠️</span>'
+            + '<div style="flex:1">'
+            + '<div style="font-size:13px;font-weight:800;color:#f8d122;margin-bottom:4px">Diferencia en Plantilla Sababa</div>'
+            + '<div style="font-size:12px;color:var(--text);line-height:1.6">'
+            + '<b>'+tipo+'</b><br>'
+            + 'Pago: <b>$'+pagoRealizadoDetectado.toFixed(2)+'</b> · Base: <b>$'+baseParaDif.toFixed(2)+'</b><br>'
+            + 'Diferencia aplicada: <b style="color:'+(diferencia>0?'#3fb950':'#f47067')+'">'+signo+'$'+Math.abs(diferencia).toFixed(2)+'</b>'
+            + '</div>'
+            + '</div>'
+            + '<button onclick="document.getElementById(\'_sab_diff_banner\').remove()" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;flex-shrink:0;line-height:1">×</button>'
+            + '</div>';
+          // Auto-remove after 20 seconds
+          setTimeout(function(){ if(banner.parentNode) banner.remove(); }, 20000);
+        }, 600);
+      }
     }
 
     // ── PASO 7: Domino → Sababa ──
@@ -17721,26 +17829,30 @@ window._plnCubDetalle = function(key){
       +(isSab?'<div style="text-align:center"><div style="font-size:8px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">Homologado</div><div style="font-family:IBM Plex Mono,monospace;font-size:15px;font-weight:800;color:#3fb950">'+_plnFF(totHom)+'</div></div>':'')
       +'<div style="text-align:center"><div style="font-size:8px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">Bultos</div><div style="font-family:IBM Plex Mono,monospace;font-size:15px;font-weight:800;color:#2dd4bf">'+totBlt.toLocaleString('es-PA')+'</div></div>'
       +'<div style="text-align:center"><div style="font-size:8px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">Piezas</div><div style="font-family:IBM Plex Mono,monospace;font-size:15px;font-weight:800;color:#a371f7">'+totPzs.toLocaleString('es-PA')+'</div></div>'
-      +'<div style="text-align:center"><div style="font-size:8px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">Proveedores</div><div style="font-family:IBM Plex Mono,monospace;font-size:15px;font-weight:800;color:#f8d122">'+rows.length+'</div></div>'
+      +'<div style="text-align:center"><div style="font-size:8px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">Facturas</div><div style="font-family:IBM Plex Mono,monospace;font-size:15px;font-weight:800;color:#f8d122">'+rows.length+'</div></div>'
     +'</div>'
-    // Table
+    // Table — con borde visible alrededor como en selector de embarque
     +'<div style="overflow:auto;flex:1;padding:12px 16px">'
-    +'<table style="width:100%;border-collapse:collapse;font-size:12px;min-width:580px;border-radius:8px;overflow:hidden;border:2px solid var(--border)">'
+    +(nroCont?'<div style="background:rgba(45,212,191,.06);border:1px solid rgba(45,212,191,.3);border-radius:8px;padding:6px 12px;margin-bottom:8px;display:flex;align-items:center;gap:8px;font-size:11px"><span style="color:var(--muted)">📦 N° Contenedor:</span><span style="font-family:IBM Plex Mono,monospace;font-weight:700;color:#2dd4bf">'+_plnESC(nroCont)+'</span></div>':'')
+    +'<div style="border:1px solid var(--border);border-radius:10px;overflow:hidden">'
+    +'<table style="width:100%;border-collapse:collapse;font-size:12px;min-width:640px">'
     +'<thead><tr style="background:var(--s2);position:sticky;top:0;z-index:2">'
       +'<th style="padding:8px 10px;text-align:center;color:var(--muted);font-weight:700;border:1px solid var(--border);width:46px">Btos</th>'
       +'<th style="padding:8px 10px;text-align:center;color:var(--muted);font-weight:700;border:1px solid var(--border);width:36px">Org</th>'
-      +'<th style="padding:8px 10px;text-align:left;color:var(--muted);font-weight:700;border:1px solid var(--border)">Factura / Suplidor</th>'
+      +'<th style="padding:8px 10px;text-align:left;color:var(--muted);font-weight:700;border:1px solid var(--border)">Suplidor</th>'
+      +'<th style="padding:8px 10px;text-align:left;color:var(--muted);font-weight:700;border:1px solid var(--border);width:100px">N° Factura</th>'
       +'<th style="padding:8px 10px;text-align:left;color:var(--muted);font-weight:700;border:1px solid var(--border);width:80px">Dept</th>'
       +'<th style="padding:8px 10px;text-align:right;color:var(--muted);font-weight:700;border:1px solid var(--border);width:100px">FOB</th>'
-      +'<th style="padding:8px 10px;text-align:right;color:var(--muted);font-weight:700;border:1px solid var(--border);width:46px">%</th>'
       +(isSab?'<th style="padding:8px 10px;text-align:right;color:var(--muted);font-weight:700;border:1px solid var(--border);width:100px">Homol.</th>':'')
       +'<th style="padding:8px 10px;text-align:right;color:var(--muted);font-weight:700;border:1px solid var(--border);width:100px">Landed</th>'
-      +'<th style="padding:8px 10px;text-align:right;color:var(--muted);font-weight:700;border:1px solid var(--border);width:70px">Piezas</th>'
+      +'<th style="padding:8px 10px;text-align:right;color:var(--muted);font-weight:700;border:1px solid var(--border);width:60px">Pzas</th>'
+      +'<th style="padding:8px 10px;text-align:right;color:var(--muted);font-weight:700;border:1px solid var(--border);width:46px">%</th>'
     +'</tr></thead><tbody>'
     + rows.map(function(r,idx){
         var homolV = parseFloat(r.homol)||0;
         var fobV = parseFloat(r.fob)||0;
         var pct = totFob>0 ? ((fobV/totFob)*100).toFixed(1)+'%' : '—';
+        var nfact = r.numFact||r.nfac||r.factura||'—';
         var orgBadge = r.tipo==='IMP'
           ? '<span style="font-size:9px;font-weight:800;color:#f97316;background:rgba(249,115,22,.12);padding:1px 5px;border-radius:3px">IMP</span>'
           : '<span style="font-size:9px;font-weight:800;color:#60a5fa;background:rgba(88,166,255,.12);padding:1px 5px;border-radius:3px">ZL</span>';
@@ -17749,32 +17861,38 @@ window._plnCubDetalle = function(key){
           +'<td style="padding:8px 10px;text-align:center;color:var(--muted);border:1px solid var(--border);font-family:IBM Plex Mono,monospace">'+(r.bultos||0).toLocaleString('es-PA')+'</td>'
           +'<td style="padding:8px 10px;text-align:center;border:1px solid var(--border)">'+orgBadge+'</td>'
           +'<td style="padding:8px 10px;color:var(--text);font-weight:700;border:1px solid var(--border)">'+(r.prov||'—')+'</td>'
+          +'<td style="padding:8px 10px;color:var(--muted);font-family:IBM Plex Mono,monospace;font-size:10px;border:1px solid var(--border)">'+_plnESC(nfact)+'</td>'
           +'<td style="padding:8px 10px;color:var(--muted);border:1px solid var(--border)">'+(r.dept||'—')+'</td>'
           +'<td style="padding:8px 10px;text-align:right;color:#58a6ff;font-family:IBM Plex Mono,monospace;font-weight:700;border:1px solid var(--border)">'+_plnFF(fobV)+'</td>'
-          +'<td style="padding:8px 10px;text-align:right;color:var(--muted);font-family:IBM Plex Mono,monospace;font-size:11px;border:1px solid var(--border)">'+pct+'</td>'
           +(isSab?'<td style="padding:8px 10px;text-align:right;color:'+(homolV>0?'#3fb950':'var(--muted)')+';font-family:IBM Plex Mono,monospace;font-weight:700;border:1px solid var(--border)">'+(homolV>0?_plnFF(homolV):'—')+'</td>':'')
           +'<td style="padding:8px 10px;text-align:right;color:#f0883e;font-family:IBM Plex Mono,monospace;font-weight:700;border:1px solid var(--border)">'+_plnFF(r.landed||r.fob)+'</td>'
           +'<td style="padding:8px 10px;text-align:right;color:var(--muted);font-family:IBM Plex Mono,monospace;border:1px solid var(--border)">'+(r.piezas||0).toLocaleString('es-PA')+'</td>'
+          +'<td style="padding:8px 10px;text-align:right;color:var(--muted);font-family:IBM Plex Mono,monospace;font-size:11px;border:1px solid var(--border)">'+pct+'</td>'
         +'</tr>';
       }).join('')
-    // Totals row
+    // Totals row — Fix 5: count unique invoice numbers
     + (function(){
         var deptSet = new Set(rows.map(function(r){ return (r.dept||'').toUpperCase(); }).filter(Boolean));
         var deptCount = deptSet.size;
         var deptLabel = deptCount===1 ? '1 Depto' : deptCount+' Deptos';
+        // Unique facturas by N°Factura (same invoice in multiple depts = 1 factura)
+        var factSet = new Set(rows.map(function(r){ return (r.numFact||r.nfac||r.factura||'').trim(); }).filter(function(f){return f&&f!=='—';}));
+        var factCount = factSet.size || rows.length;
+        var colCount = isSab ? 10 : 9;
         return '<tr style="background:rgba(88,166,255,.08);font-weight:800;border-top:2px solid rgba(88,166,255,.3)">'
           +'<td style="padding:8px 10px;text-align:center;border:1px solid var(--border);font-family:IBM Plex Mono,monospace;color:#2dd4bf">'+totBlt.toLocaleString('es-PA')+'</td>'
           +'<td style="border:1px solid var(--border)"></td>'
-          +'<td style="padding:8px 10px;font-weight:800;color:var(--text);border:1px solid var(--border)">TOTAL ('+rows.length+' prov.)</td>'
+          +'<td style="padding:8px 10px;font-weight:800;color:var(--text);border:1px solid var(--border)">TOTAL ('+factCount+' fact.)</td>'
+          +'<td style="border:1px solid var(--border)"></td>'
           +'<td style="padding:6px 10px;text-align:center;border:1px solid var(--border);font-size:10px;font-weight:700;color:var(--muted)">'+deptLabel+'</td>'
           +'<td style="padding:8px 10px;text-align:right;color:#58a6ff;font-family:IBM Plex Mono,monospace;font-weight:800;border:1px solid var(--border)">'+_plnFF(totFob)+'</td>'
-          +'<td style="padding:8px 10px;text-align:center;color:var(--muted);border:1px solid var(--border);font-size:11px">100%</td>'
           +(isSab?'<td style="padding:8px 10px;text-align:right;color:#3fb950;font-family:IBM Plex Mono,monospace;font-weight:800;border:1px solid var(--border)">'+_plnFF(totHom)+'</td>':'')
           +'<td style="padding:8px 10px;text-align:right;color:#f0883e;font-family:IBM Plex Mono,monospace;font-weight:800;border:1px solid var(--border)">'+_plnFF(totLnd)+'</td>'
           +'<td style="padding:8px 10px;text-align:right;color:#a371f7;font-family:IBM Plex Mono,monospace;font-weight:800;border:1px solid var(--border)">'+totPzs.toLocaleString('es-PA')+'</td>'
+          +'<td style="padding:8px 10px;text-align:center;color:var(--muted);border:1px solid var(--border);font-size:11px">100%</td>'
           +'</tr>';
       })()
-    +'</tbody></table></div></div>';
+    +'</tbody></table></div></div></div>';
 
   ov.addEventListener('click', function(e){ if(e.target===ov) ov.remove(); });
   document.body.appendChild(ov);
@@ -17789,6 +17907,159 @@ window._plnDelCub = function(tab, di, ci){
     wk[tab][di].cubiculos.splice(ci,1);
     _PLN_SAVE(); _PLN_RENDER();
     if(typeof _showToast==='function') _showToast('Eliminado','red',2000);
+  }
+};
+
+// Ventana unificada para editar info del cubículo
+window._plnEditarCubInfo = function(key){
+  var data=(window._PLN_CUB_CACHE||{})[key]; if(!data) return;
+  var wk=_plnMkWeek(data.mon);
+  var cub=wk[data.tab]&&wk[data.tab][data.di]&&wk[data.tab][data.di].cubiculos[data.ci];
+  if(!cub) return;
+
+  var old=document.getElementById('_plnCubInfoEdit'); if(old) old.remove();
+  var ov=document.createElement('div');
+  ov.id='_plnCubInfoEdit';
+  ov.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;padding:16px';
+
+  // Tipos con lógica de vía y campo de número
+  var TIPOS=[
+    {v:'Contenedor Directo',    via:'sea', hasNum:true,  lbl:'N\u00b0 Contenedor'},
+    {v:'Consolidado Mar\u00edtimo',  via:'sea', hasNum:true,  lbl:'N\u00b0 Contenedor'},
+    {v:'Carga Suelta Mar\u00edtima', via:'sea', hasNum:false, lbl:''},
+    {v:'LCL',                   via:'sea', hasNum:true,  lbl:'N\u00b0 Contenedor'},
+    {v:'Cami\u00f3n / SABABA',  via:'land',hasNum:false, lbl:''},
+    {v:'Camiones / SABABA',     via:'land',hasNum:false, lbl:''},
+    {v:'Consolidado Terrestre', via:'land',hasNum:false, lbl:''},
+    {v:'Furg\u00f3n',           via:'land',hasNum:false, lbl:''},
+    {v:'A\u00e9reo',            via:'air', hasNum:true,  lbl:'N\u00b0 Gu\u00eda A\u00e9rea'}
+  ];
+  var TAMS=['"20" Contenedor','"40" Contenedor','"40" HQ Contenedor','"45" Contenedor','Cami\u00f3n','Camiones / SABABA','Carga Suelta','Furg\u00f3n','LCL','No aplica'];
+
+  function getTipoInfo(v){ return TIPOS.find(function(t){return t.v===v;})||{hasNum:false,lbl:''}; }
+
+  var curTipo=cub.tipoEmbarque||'';
+  var curTam=cub.sizeEquipo||'';
+  var curEq=parseInt(cub.nEquipos||1)||1;
+  var curCont=cub.nroCont||'';
+  var curInfo=getTipoInfo(curTipo);
+
+  var tipoOpts=TIPOS.map(function(t){
+    return '<option value="'+t.v.replace(/"/g,'&quot;')+'"'+(t.v===curTipo?' selected':'')+'>'+t.v+'</option>';
+  }).join('');
+  var tamOpts=TAMS.map(function(t){
+    return '<option value="'+t.replace(/"/g,'&quot;')+'"'+(t===curTam?' selected':'')+'>'+t+'</option>';
+  }).join('');
+
+  var numDisplay=curInfo.hasNum?'':'display:none';
+  var numLabel=curInfo.lbl||'N\u00b0 Referencia';
+
+  ov.innerHTML='<div style="background:var(--s1);border:1px solid var(--border);border-radius:14px;width:100%;max-width:420px;overflow:hidden">'
+    +'<div style="padding:12px 16px;background:var(--s2);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">'
+      +'<span style="font-size:13px;font-weight:800;color:var(--text)">\u270f\ufe0f Editar Equipo</span>'
+      +'<button id="_ceClose" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer">\u00d7</button>'
+    +'</div>'
+    +'<div style="padding:16px;display:flex;flex-direction:column;gap:12px">'
+      +'<div><label style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">Tipo de Embarque</label>'
+        +'<select id="ce-tipo" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px">'+tipoOpts+'</select></div>'
+      +'<div><label style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">Tama\u00f1o del Equipo</label>'
+        +'<select id="ce-tam" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px">'+tamOpts+'</select></div>'
+      +'<div><label style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">Cantidad de Equipos</label>'
+        +'<input id="ce-eq" type="number" min="1" max="99" value="'+curEq+'" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;box-sizing:border-box"></div>'
+      +'<div id="ce-num-row" style="'+numDisplay+'"><label id="ce-num-lbl" style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">'+numLabel+'</label>'
+        +'<input id="ce-cont" type="text" placeholder="Ej: MSKU4759460" value="'+curCont.replace(/"/g,'&quot;')+'" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;font-family:monospace;box-sizing:border-box"></div>'
+      +'<button id="ce-save" style="background:rgba(63,185,80,.15);border:1px solid rgba(63,185,80,.4);color:var(--green-l);border-radius:9px;padding:10px;font-size:13px;font-weight:700;cursor:pointer;width:100%">\u2713 Guardar</button>'
+    +'</div>'
+  +'</div>';
+  document.body.appendChild(ov);
+  ov.addEventListener('click',function(e){ if(e.target===ov) ov.remove(); });
+  document.getElementById('_ceClose').addEventListener('click',function(){ ov.remove(); });
+
+  // Actualizar campo num al cambiar tipo
+  document.getElementById('ce-tipo').addEventListener('change',function(){
+    var info=getTipoInfo(this.value);
+    var row=document.getElementById('ce-num-row');
+    var lbl=document.getElementById('ce-num-lbl');
+    if(row) row.style.display=info.hasNum?'':'none';
+    if(lbl&&info.lbl) lbl.textContent=info.lbl;
+  });
+
+  document.getElementById('ce-save').addEventListener('click',function(){
+    var wk2=_plnMkWeek(data.mon);
+    var c=wk2[data.tab]&&wk2[data.tab][data.di]&&wk2[data.tab][data.di].cubiculos[data.ci];
+    if(!c){ ov.remove(); return; }
+    var tipoVal=(document.getElementById('ce-tipo').value||'').trim();
+    c.tipoEmbarque=tipoVal;
+    c.sizeEquipo=(document.getElementById('ce-tam').value||'').trim();
+    c.nEquipos=parseInt(document.getElementById('ce-eq').value||'1')||1;
+    var numRow=document.getElementById('ce-num-row');
+    if(numRow&&numRow.style.display!=='none'){
+      c.nroCont=(document.getElementById('ce-cont').value||'').trim();
+    }
+    var info3=getTipoInfo(tipoVal);
+    if(info3.via) c.via=info3.via;
+    _PLN_SAVE(); _PLN_RENDER(); ov.remove();
+    if(typeof _showToast==='function') _showToast('\u2705 Equipo actualizado','green',2000);
+  });
+}
+// Editar un campo libre del cubículo con lista de opciones (usado internamente)
+window._plnEditField = function(key, field, label, opciones, actual){
+  var data = (window._PLN_CUB_CACHE||{})[key];
+  if(!data) return;
+  // Mostrar mini modal con opciones
+  var old = document.getElementById('_plnFieldPicker'); if(old) old.remove();
+  var ov = document.createElement('div');
+  ov.id = '_plnFieldPicker';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;padding:16px';
+  var opts = opciones.map(function(o){
+    return '<button data-val="'+o.replace(/"/g,'&quot;')+'" style="display:block;width:100%;text-align:left;padding:10px 14px;background:'+(o===actual?'rgba(88,166,255,.2)':'transparent')+';border:none;border-bottom:1px solid var(--border);color:var(--text);font-size:13px;font-weight:'+(o===actual?'700':'400')+';cursor:pointer;">'+o+(o===actual?' ✓':'')+'</button>';
+  }).join('');
+  ov.innerHTML = '<div style="background:var(--s1);border:1px solid var(--border);border-radius:12px;width:100%;max-width:360px;overflow:hidden">'
+    +'<div style="padding:12px 16px;background:var(--s2);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">'
+      +'<span style="font-size:13px;font-weight:700;color:var(--text)">'+label+'</span>'
+      +'<button id="_plnFieldClose" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer">×</button>'
+    +'</div>'
+    +'<div style="overflow-y:auto;max-height:60vh">'+opts+'</div>'
+    +'<div style="padding:10px 14px;border-top:1px solid var(--border)">'
+      +'<input id="_plnFieldCustom" type="text" placeholder="O escribe un valor personalizado..." value="'+actual.replace(/"/g,'&quot;')+'" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;box-sizing:border-box">'
+      +'<button id="_plnFieldSave" style="width:100%;margin-top:6px;background:rgba(63,185,80,.15);border:1px solid rgba(63,185,80,.4);color:var(--green-l);border-radius:8px;padding:8px;font-size:12px;font-weight:700;cursor:pointer">✓ Guardar</button>'
+    +'</div>'
+  +'</div>';
+  document.body.appendChild(ov);
+  function saveVal(v){
+    var wk=_plnMkWeek(data.mon);
+    var cub=wk[data.tab]&&wk[data.tab][data.di]&&wk[data.tab][data.di].cubiculos[data.ci];
+    if(cub){ cub[field]=v; _PLN_SAVE(); _PLN_RENDER(); }
+    ov.remove();
+    if(typeof _showToast==='function') _showToast('✅ '+label+': '+v,'green',2000);
+  }
+  ov.querySelectorAll('[data-val]').forEach(function(btn){
+    btn.addEventListener('click',function(){ saveVal(btn.getAttribute('data-val')); });
+    btn.addEventListener('mouseover',function(){ btn.style.background='rgba(88,166,255,.1)'; });
+    btn.addEventListener('mouseout',function(){ btn.style.background=btn.getAttribute('data-val')===actual?'rgba(88,166,255,.2)':'transparent'; });
+  });
+  document.getElementById('_plnFieldClose').addEventListener('click',function(){ ov.remove(); });
+  document.getElementById('_plnFieldSave').addEventListener('click',function(){
+    var v=(document.getElementById('_plnFieldCustom').value||'').trim();
+    if(v) saveVal(v);
+  });
+  ov.addEventListener('click',function(e){ if(e.target===ov) ov.remove(); });
+};
+
+// Editar cantidad de equipos
+window._plnEditEquipos = function(key){
+  var data=(window._PLN_CUB_CACHE||{})[key]; if(!data) return;
+  var cub=(_plnMkWeek(data.mon)[data.tab]||[])[data.di]&&_plnMkWeek(data.mon)[data.tab][data.di].cubiculos[data.ci];
+  var actual=parseInt((cub&&cub.nEquipos)||1)||1;
+  var nuevo=prompt('Cantidad de equipos (contenedores/camiones):', actual);
+  if(nuevo===null) return;
+  var n=parseInt(nuevo)||1;
+  if(n<1||n>99){ alert('Ingresa un número entre 1 y 99'); return; }
+  var wk=_plnMkWeek(data.mon);
+  if(wk[data.tab]&&wk[data.tab][data.di]&&wk[data.tab][data.di].cubiculos[data.ci]){
+    wk[data.tab][data.di].cubiculos[data.ci].nEquipos=n;
+    _PLN_SAVE(); _PLN_RENDER();
+    if(typeof _showToast==='function') _showToast('✅ Equipos: ×'+n,'green',2000);
   }
 };
 
@@ -17857,7 +18128,21 @@ window._plnModuloEmbarques = async function(){
   }
   function renderList(q){
     q=(q||'').trim().toLowerCase();
-    var items=td.filter(function(d){ return !q||(d.nro||'').toLowerCase().includes(q)||(d.desc||'').toLowerCase().includes(q); }).slice(0,40);
+    // Obtener NROs ya asignados en la semana actual
+    var wkChkR=_plnMkWeek(_PLN_CTX.mon);
+    var asignados={};
+    var DIAS=['Lunes','Martes','Miércoles','Jueves','Viernes'];
+    (wkChkR[_PLN_CTX.tab]||[]).forEach(function(day,di){
+      (day.cubiculos||[]).forEach(function(cub){
+        (cub.nroEmb||'').split('+').forEach(function(n){
+          var t=n.trim().replace(/\(parcial\)/gi,'').trim();
+          if(t) asignados[t]=di;
+        });
+      });
+    });
+    var items=td.filter(function(d){
+      return !q||(d.nro||'').toLowerCase().includes(q)||(d.desc||'').toLowerCase().includes(q);
+    }).slice(0,40);
     if(!items.length){ listEl.innerHTML='<div style="padding:20px;text-align:center;color:var(--muted)">Sin resultados</div>'; return; }
     listEl.innerHTML=items.map(function(d){
       var lines=(d.snap&&d.snap.invLines||d.invLines||[]).filter(function(l){return !l.tipoFac||l.tipoFac==='mercancia';});
@@ -17867,11 +18152,19 @@ window._plnModuloEmbarques = async function(){
       var tipoEq=(snap.campos&&snap.campos.s1_equipo)||d.tipoEquipo||'';
       var nEquip=parseInt((snap.campos&&snap.campos.s1_equipos)||1)||1;
       var deptos=[...new Set(lines.map(function(l){return l.dept||l.deptCat||'';}).filter(Boolean))].slice(0,3).join(', ');
-      return '<div class="_plnEmbItem" data-nro="'+d.nro+'" style="padding:11px 12px;border:1px solid var(--border);border-radius:9px;margin-bottom:7px;cursor:pointer;background:var(--bg)">'
+      var nro=(d.nro||'').trim();
+      var diaAsig=asignados[nro];
+      var yaAsignado=diaAsig!==undefined;
+      var borderColor=yaAsignado?'rgba(248,81,73,.4)':'var(--border)';
+      var badge=yaAsignado?'<span style="font-size:9px;font-weight:700;background:rgba(248,81,73,.15);border:1px solid rgba(248,81,73,.4);color:#f47067;padding:1px 6px;border-radius:4px;margin-left:4px">📍 En '+DIAS[diaAsig]+'</span>':'';
+      return '<div class="_plnEmbItem" data-nro="'+nro+'" style="padding:11px 12px;border:1px solid '+borderColor+';border-radius:9px;margin-bottom:7px;cursor:pointer;background:var(--bg)'+(yaAsignado?';border-left:3px solid #f47067':'')+'">'
         +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'
-        +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;color:var(--orange-l)">Emb. '+d.nro+'</div>'
+        +'<div style="flex:1;min-width:0">'
+        +'<div style="font-size:13px;font-weight:700;color:'+(yaAsignado?'#f47067':'var(--orange-l)')+'">Emb. '+nro+badge+'</div>'
         +'<div style="font-size:11px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(d.desc||'')+'</div>'
-        +'<div style="font-size:10px;color:var(--muted)">'+(d.fecha||'')+' &middot; '+(d.esc||'')+(tipoEq?' &middot; '+nEquip+'x '+tipoEq:'')+(lines.length?' &middot; '+lines.length+' prov.':'')+(deptos?' &middot; '+deptos:'')+'</div></div>'
+        +'<div style="font-size:10px;color:var(--muted)">'+(d.fecha||'')+' &middot; '+(d.esc||'')+(tipoEq?' &middot; '+nEquip+'x '+tipoEq:'')+(lines.length?' &middot; '+lines.length+' prov.':'')+(deptos?' &middot; '+deptos:'')+'</div>'
+        +(yaAsignado?'<div style="font-size:10px;color:#f47067;margin-top:3px">⚡ Toca para mover a '+DIAS[_PLN_CTX.di]+'</div>':'')
+        +'</div>'
         +'<div style="text-align:right;flex-shrink:0">'
         +'<div style="font-size:11px;font-weight:700;color:var(--green-l);font-family:monospace">'+fmt(fob)+'</div>'
         +'<div style="font-size:10px;color:var(--orange-l);font-family:monospace">'+fmt(lnd)+'</div>'
@@ -17885,46 +18178,43 @@ window._plnModuloEmbarques = async function(){
   function selectEmbarque(nro){
     var d=td.find(function(x){return (x.nro||'').trim()===nro.trim();}); if(!d){alert('No encontrado: '+nro);return;}
 
-    // ── Verificar si ya fue asignado esta semana ──
-    var wkCheck=_plnMkWeek(_PLN_CTX.mon);
-    var alreadyDay=-1, alreadyCubIdx=-1;
-    (wkCheck[_PLN_CTX.tab]||[]).forEach(function(day,di){
+    // ── Verificar duplicado en la semana actual ──
+    var DIAS=['Lunes','Martes','Miércoles','Jueves','Viernes'];
+    var wkChk=_plnMkWeek(_PLN_CTX.mon);
+    var dupDay=-1, dupCub=-1;
+    (wkChk[_PLN_CTX.tab]||[]).forEach(function(day,di){
       (day.cubiculos||[]).forEach(function(cub,ci){
         if((cub.nroEmb||'').split('+').map(function(s){return s.trim();}).indexOf(nro.trim())>=0){
-          alreadyDay=di; alreadyCubIdx=ci;
+          dupDay=di; dupCub=ci;
         }
       });
     });
-    var DIAS=['Lunes','Martes','Miércoles','Jueves','Viernes'];
-    if(alreadyDay>=0){
+    if(dupDay>=0){
       footEl.style.display='block';
-      footEl.innerHTML=
-        '<div style="background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.3);border-radius:8px;padding:10px 12px;margin-bottom:8px">'
-        +'<div style="font-size:12px;font-weight:700;color:#f47067;margin-bottom:6px">⚠️ Emb. '+nro+' ya está asignado en <strong>'+DIAS[alreadyDay]+'</strong></div>'
-        +'<button id="_plnEmbMover" style="display:block;width:100%;text-align:left;background:rgba(248,209,34,.1);border:1px solid rgba(248,209,34,.3);color:#f8d122;border-radius:8px;padding:9px 12px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:6px">🔀 Mover a '+DIAS[_PLN_CTX.di]+' (quitar del '+DIAS[alreadyDay]+')</button>'
-        +'<button id="_plnEmbCancelarAsig" style="width:100%;background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer">← Volver al listado</button>'
+      footEl.innerHTML='<div style="background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.3);border-radius:8px;padding:12px;margin-bottom:8px">'
+        +'<div style="font-size:12px;font-weight:700;color:#f47067;margin-bottom:8px">⚠️ Emb. '+nro+' ya está en <strong>'+DIAS[dupDay]+'</strong></div>'
+        +'<button id="_plnEmbMover" style="display:block;width:100%;text-align:left;background:rgba(248,209,34,.1);border:1px solid rgba(248,209,34,.3);color:#f8d122;border-radius:8px;padding:9px 12px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:6px">🔀 Mover a '+DIAS[_PLN_CTX.di]+'</button>'
+        +'<button id="_plnEmbCancelDup" style="width:100%;background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer">← Volver</button>'
         +'</div>';
+      document.getElementById('_plnEmbCancelDup').addEventListener('click',function(){ footEl.style.display='none'; renderList(input.value); });
       document.getElementById('_plnEmbMover').addEventListener('click',function(){
         var wk2=_plnMkWeek(_PLN_CTX.mon);
-        // Quitar del día original
-        wk2[_PLN_CTX.tab][alreadyDay].cubiculos.splice(alreadyCubIdx,1);
-        // Agregar al día nuevo (como nuevo cubículo)
-        var snap2=d.snap||{}, lines2=(snap2.invLines||d.invLines||[]).filter(function(l){return !l.tipoFac||l.tipoFac==='mercancia';});
-        var lndTotal2=getLanded(d);
-        var totCIF2=lines2.reduce(function(s,l){return s+(parseFloat(l.costo)||0);},0);
-        var isSab2=(d.esc||'').toLowerCase().includes('sabab');
+        var snap2=d.snap||{};
+        var lines2=(snap2.invLines||d.invLines||[]).filter(function(l){return !l.tipoFac||l.tipoFac==='mercancia';});
+        var lnd2=getLanded(d);
+        var tot2=lines2.reduce(function(s,l){return s+(parseFloat(l.costo)||0);},0);
+        var isSab2=(d.esc||'').toLowerCase().includes('sab');
         var rows2=lines2.map(function(l){
-          var fo=parseFloat(l.costo||0),prop=totCIF2>0?fo/totCIF2:0;
-          var lnd=lndTotal2>0?Math.round(lndTotal2*prop*100)/100:fo;
-          return {prov:l.prov||'—',bultos:parseInt(l.bultos||l.cajas||0),piezas:parseInt(l.piezas||0),fob:fo,landed:lnd,homol:isSab2?parseFloat(l.montoHomologado||0):0,dept:l.dept||l.deptCat||'',tipo:(l.tipoProv==='IMP'||l.tipoProveedor==='IMP')?'IMP':'ZL',matched:true};
+          var fo=parseFloat(l.costo||0),prop=tot2>0?fo/tot2:0;
+          return {prov:l.prov||'—',bultos:parseInt(l.bultos||l.cajas||0),piezas:parseInt(l.piezas||0),fob:fo,landed:lnd2>0?Math.round(lnd2*prop*100)/100:fo,homol:isSab2?parseFloat(l.montoHomologado||0):0,dept:l.dept||l.deptCat||'',tipo:(l.tipoProv==='IMP'||l.tipoProveedor==='IMP')?'IMP':'ZL',matched:true};
         });
         var tipoEq2=(snap2.campos&&snap2.campos.s1_equipo)||d.tipoEquipo||'Contenedor';
+        wk2[_PLN_CTX.tab][dupDay].cubiculos.splice(dupCub,1);
         wk2[_PLN_CTX.tab][_PLN_CTX.di].cubiculos.push({via:'res',tipoCarga:tipoEq2,nroEmb:d.nro,nroCont:'',eta:d.fecha,status:'Recibido en CDF',rows:rows2});
         _PLN_SAVE(); _PLN_RENDER(); mod.remove();
         if(typeof _showToast==='function') _showToast('🔀 Emb. '+d.nro+' movido a '+DIAS[_PLN_CTX.di],'green',3000);
       });
-      document.getElementById('_plnEmbCancelarAsig').addEventListener('click',function(){ footEl.style.display='none'; renderList(input.value); });
-      return; // stop here — don't show normal detail
+      return;
     }
     var snap=d.snap||{}, inner=snap.snap||snap;
     var lines=(snap.invLines||d.invLines||[]).filter(function(l){return !l.tipoFac||l.tipoFac==='mercancia';});
@@ -17940,7 +18230,8 @@ window._plnModuloEmbarques = async function(){
       var lnd=lndTotal>0?Math.round(lndTotal*prop*100)/100:fo;
       var hom=isSab?parseFloat(l.montoHomologado||0):0;
       var tipo=(l.tipoProv==='IMP'||l.tipoProveedor==='IMP')?'IMP':'ZL';
-      return {prov:l.prov||'—',bultos:parseInt(l.bultos||l.cajas||0),piezas:parseInt(l.piezas||0),fob:fo,landed:lnd,homol:hom,dept:l.dept||l.deptCat||'',tipo:tipo,matched:true};
+      var nfact=l.numFact||l.nroFact||l.nfac||l.factura||l.oc||'';
+      return {prov:l.prov||'—',bultos:parseInt(l.bultos||l.cajas||0),piezas:parseInt(l.piezas||0),fob:fo,landed:lnd,homol:hom,dept:l.dept||l.deptCat||'',tipo:tipo,matched:true,numFact:nfact};
     });
     var totHom=rows.reduce(function(s,r){return s+r.homol;},0);
     var zlCnt=rows.filter(function(r){return r.tipo!=='IMP';}).length;
@@ -17989,7 +18280,35 @@ window._plnModuloEmbarques = async function(){
       +'<button id="_plnEmbConfirm" style="flex:2;background:rgba(63,185,80,.15);border:1px solid rgba(63,185,80,.4);color:var(--green-l);border-radius:9px;padding:10px;font-size:12px;font-weight:700;cursor:pointer">✓ Total — Agregar todo</button>'
       +'<button id="_plnEmbParcial" style="flex:1;background:rgba(248,209,34,.1);border:1px solid rgba(248,209,34,.3);color:#f8d122;border-radius:9px;padding:10px;font-size:12px;font-weight:700;cursor:pointer">✂️ Parcial</button>'
       +'</div>'
-      +'<button id="_plnEmbBack" style="width:100%;background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;margin-top:2px">← Volver al listado</button>';
+      +'<button id="_plnEmbBack" style="width:100%;background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;margin-top:2px">\u2190 Volver al listado</button>';
+    document.getElementById('_plnEmbBack').addEventListener('click',function(){ footEl.style.display='none'; renderList(input.value); });
+    // Botón Parcial — seleccionar facturas individuales
+    document.getElementById('_plnEmbParcial').addEventListener('click',function(){
+      footEl.innerHTML='<div style="background:rgba(248,209,34,.06);border:1px solid rgba(248,209,34,.25);border-radius:8px;padding:10px 12px">'
+        +'<div style="font-size:11px;font-weight:700;color:#f8d122;margin-bottom:8px">✂️ Selecciona las facturas a incluir:</div>'
+        +'<div style="max-height:200px;overflow-y:auto;margin-bottom:8px">'
+        +rows.map(function(r,i){
+          return '<label style="display:flex;align-items:center;gap:8px;padding:5px 4px;border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer">'
+            +'<input type="checkbox" data-ridx="'+i+'" checked style="width:14px;height:14px;accent-color:#3fb950;cursor:pointer">'
+            +'<span style="font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_plnESC((r.prov||'—').replace(/^S\.I\s*[-\u2013]\s*/i,''))+'</span>'
+            +'<span style="font-size:9px;color:var(--muted)">'+r.dept+'</span>'
+            +'<span style="font-size:9px;font-family:monospace;color:var(--blue-l)">'+fmt(r.fob)+'</span>'
+          +'</label>';
+        }).join('')
+        +'</div>'
+        +'<button id="_plnParcialOk" style="width:100%;background:rgba(63,185,80,.15);border:1px solid rgba(63,185,80,.4);color:var(--green-l);border-radius:8px;padding:9px;font-size:12px;font-weight:700;cursor:pointer">✓ Agregar seleccionadas</button>'
+        +'<button id="_plnParcialBack" style="width:100%;background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;margin-top:4px">← Cancelar</button>'
+        +'</div>';
+      document.getElementById('_plnParcialBack').addEventListener('click',function(){ footEl.style.display='none'; renderList(input.value); });
+      document.getElementById('_plnParcialOk').addEventListener('click',function(){
+        var sel=Array.from(footEl.querySelectorAll('input[type=checkbox]:checked')).map(function(cb){return rows[parseInt(cb.getAttribute('data-ridx'))];}).filter(Boolean);
+        if(!sel.length){alert('Selecciona al menos una factura.');return;}
+        var wk=_plnMkWeek(_PLN_CTX.mon);
+        wk[_PLN_CTX.tab][_PLN_CTX.di].cubiculos.push({via:'res',tipoCarga:tipoEq,nroEmb:d.nro+'(parcial)',nroCont:'',eta:d.fecha,status:'Recibido en CDF',rows:sel});
+        _PLN_SAVE(); _PLN_RENDER(); mod.remove();
+        if(typeof _showToast==='function') _showToast('✅ '+sel.length+' facturas agregadas (parcial)','green',3000);
+      });
+    });
     document.getElementById('_plnEmbConfirm').addEventListener('click',function(){
       var wk=_plnMkWeek(_PLN_CTX.mon);
       var dayIdx=_PLN_CTX.di;
@@ -18050,39 +18369,6 @@ window._plnModuloEmbarques = async function(){
         _PLN_SAVE(); _PLN_RENDER(); mod.remove();
         if(typeof _showToast==='function') _showToast('\u2705 Emb. '+d.nro+' \u00b7 '+rows.length+' prov.','green',3000);
       }
-    });
-    document.getElementById('_plnEmbBack').addEventListener('click',function(){ footEl.style.display='none'; renderList(input.value); });
-
-    // ── Parcial: seleccionar facturas específicas ──
-    document.getElementById('_plnEmbParcial').addEventListener('click',function(){
-      var chkHtml='<div style="background:rgba(248,209,34,.06);border:1px solid rgba(248,209,34,.25);border-radius:8px;padding:10px 12px;margin-bottom:8px">'
-        +'<div style="font-size:11px;font-weight:700;color:#f8d122;margin-bottom:8px">✂️ Selecciona las facturas a incluir:</div>'
-        +'<div style="max-height:200px;overflow-y:auto;margin-bottom:8px">'
-        +rows.map(function(r,i){
-          return '<label style="display:flex;align-items:center;gap:8px;padding:5px 4px;border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer">'
-            +'<input type="checkbox" data-ridx="'+i+'" checked style="width:14px;height:14px;accent-color:#3fb950;cursor:pointer">'
-            +'<span style="font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+_plnESC(r.prov||'')+'">'+_plnESC((r.prov||'—').replace(/^S\.I\s*[-–]\s*/i,''))+'</span>'
-            +'<span style="font-size:10px;color:var(--muted)">'+r.dept+'</span>'
-            +'<span style="font-size:10px;font-family:monospace;color:var(--blue-l)">'+_plnF(r.fob)+'</span>'
-          +'</label>';
-        }).join('')
-        +'</div>'
-        +'<button id="_plnParcialOk" style="width:100%;background:rgba(63,185,80,.15);border:1px solid rgba(63,185,80,.4);color:var(--green-l);border-radius:8px;padding:9px;font-size:12px;font-weight:700;cursor:pointer">✓ Agregar seleccionadas</button>'
-        +'<button id="_plnParcialBack" style="width:100%;background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;margin-top:4px">← Cancelar</button>'
-        +'</div>';
-      footEl.innerHTML=chkHtml;
-      document.getElementById('_plnParcialBack').addEventListener('click',function(){
-        footEl.style.display='none'; renderList(input.value);
-      });
-      document.getElementById('_plnParcialOk').addEventListener('click',function(){
-        var selected=Array.from(footEl.querySelectorAll('input[type=checkbox]:checked')).map(function(cb){ return rows[parseInt(cb.getAttribute('data-ridx'))]; }).filter(Boolean);
-        if(!selected.length){ alert('Selecciona al menos una factura.'); return; }
-        var wk=_plnMkWeek(_PLN_CTX.mon);
-        var newCubP={via:'res',tipoCarga:tipoEq,nroEmb:d.nro+'(parcial)',nroCont:'',eta:d.fecha,status:'Recibido en CDF',rows:selected};
-        wk[_PLN_CTX.tab][_PLN_CTX.di].cubiculos.push(newCubP);
-        _PLN_SAVE(); _PLN_RENDER(); mod.remove();
-        if(typeof _showToast==='function') _showToast('✅ '+selected.length+' facturas agregadas (parcial)','green',3000);
-      });
     });
   }
   input.addEventListener('input',function(){ renderList(input.value); });
