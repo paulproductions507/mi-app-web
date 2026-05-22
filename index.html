@@ -608,6 +608,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
   width: 100% !important;
   box-sizing: border-box !important;
 }
+@keyframes _slideInLeft{from{opacity:0;transform:translateX(-32px)}to{opacity:1;transform:translateX(0)}}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
@@ -1465,6 +1466,8 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
 
   <!-- ACTION BUTTONS — sticky so always visible while scrolling -->
   <div id="sim-action-bar" style="display:flex;gap:8px;margin-bottom:16px;padding:8px 0 4px;border-top:1px solid var(--border);position:sticky;bottom:0;background:var(--s1);z-index:10">
+    <button onclick="if(typeof openSidebar==='function')openSidebar();" style="background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:7px 10px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0" title="Abrir panel de navegación">☰ Panel</button>
+    <button onclick="(function(){ var nro=(document.getElementById('s1_nro_emb')||{}).value||''; if(typeof openTabModal==='function') openTabModal('facturas','🧾 Proveedores'); if(nro && typeof _jumpToFac==='function') setTimeout(function(){_jumpToFac(nro);},400); })()" style="background:rgba(88,166,255,.08);border:1px solid rgba(88,166,255,.25);color:var(--blue-l);border-radius:8px;padding:7px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0" title="Ver facturas del embarque">🔍 Facturas</button>
     <button id="btn-aplicar-cambios" class="btn" style="flex:1;background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.2);color:#f97316;opacity:.45;pointer-events:none;transition:all .25s;padding:7px 10px;font-size:11px;font-weight:600" onclick="calc();if(typeof syncSC3fromSC1==='function')syncSC3fromSC1();setTimeout(function(){if(typeof calcSab2==='function')calcSab2();},80);_showToast('✅ Cambios aplicados','green',1500)">✓ Aplicar</button>
     <button id="btn-procesar-sim" class="btn btn-ghost" style="flex:1;background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.25);color:var(--green-l);padding:7px 10px;font-size:11px;font-weight:700" onclick="_startProgress();procesarEmbarque()">✅ Procesar</button>
     <button id="btn-calcular-sim" class="btn btn-green" style="display:none;flex:1;padding:7px 10px;font-size:11px" onclick="_startProgress();calcAndShow()">⚡ Calcular</button>
@@ -3683,7 +3686,8 @@ function _plnBadge(st){ var b=document.getElementById('_pln_cloud'); if(!b) retu
 
 // ── Supabase ──
 async function _PLN_SB_SAVE(){ if(!_PLN_SB||!_PLN_CUR) return; _plnBadge('saving'); try{ var wk=_PLN_DATA[_PLN_CUR]; if(!wk){_plnBadge('ok');return;} var r=await _PLN_SB.from(_PLN_TABLE).upsert({semana:_PLN_CUR,datos:wk,updated_at:new Date().toISOString()},{onConflict:'semana'}); _plnBadge(r.error?'err':'ok'); }catch(e){_plnBadge('err');} }
-async function _PLN_SB_LOAD(){ if(!_PLN_SB) return; try{ var r=await _PLN_SB.from(_PLN_TABLE).select('semana,datos,updated_at').order('updated_at',{ascending:false}); if(r.error) return; (r.data||[]).forEach(function(row){if(row.semana&&row.datos)_PLN_DATA[row.semana]=row.datos;}); try{localStorage.setItem(_PLN_KEY,JSON.stringify(_PLN_DATA));}catch(e){} _PLN_RENDER(); _plnBadge('ok'); }catch(e){ _plnBadge('err'); } }
+async function _PLN_SB_LOAD(){ if(!_PLN_SB) return; try{ var r=await _PLN_SB.from(_PLN_TABLE).select('semana,datos,updated_at').order('updated_at',{ascending:false}); if(r.error) return; _PLN_DATA={}; // limpiar antes de cargar SB
+  (r.data||[]).forEach(function(row){if(row.semana&&row.datos)_PLN_DATA[row.semana]=row.datos;}); try{localStorage.setItem(_PLN_KEY,JSON.stringify(_PLN_DATA));}catch(e){} _PLN_RENDER(); _plnBadge('ok'); }catch(e){ _plnBadge('err'); } }
 
 function abrirUnicoModulo(){
   // Open standalone Escenario Único module
@@ -3709,11 +3713,31 @@ function switchTab(id,el){
   document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
   const pane=document.getElementById('tab-'+id);
-  if(pane) pane.classList.add('on');
+  if(pane){
+    pane.classList.add('on');
+    // Slide-in animation for simulator panes
+    pane.style.animation='none';
+    pane.offsetHeight; // reflow
+    pane.style.animation='_slideInLeft .32s cubic-bezier(.22,.61,.36,1) both';
+  }
   if(el) el.classList.add('on');
   if(id==='config'){ renderConfig(); if(typeof renderDeptConfig==='function') renderDeptConfig(); }
   if(id==='cifexp'){ updateCifExpDisplays(); }
   if(id==='facturas'){ renderInvLines(); }
+  // Open sidebar when entering main simulator tabs (if not already pinned)
+  if(['sim','cifexp','sababa','aduanal'].indexOf(id) !== -1){
+    var _sb_el = document.getElementById('sidebar');
+    if(_sb_el && !_sb_el.classList.contains('pinned') && !_sb_el.classList.contains('open')){
+      setTimeout(openSidebar, 150);
+    }
+  }
+  // Close sidebar when going to analysis tabs (unless pinned)
+  if(['tendencias','facturas','aranceles','config','histprov'].indexOf(id) !== -1){
+    var _sb_el2 = document.getElementById('sidebar');
+    if(_sb_el2 && !_sb_el2.classList.contains('pinned') && _sb_el2.classList.contains('open')){
+      setTimeout(closeSidebar, 100);
+    }
+  }
   if(id==='tendencias'){
     setTimeout(async ()=>{
       if(_sb) await _pullTendFromCloud();
@@ -8123,9 +8147,8 @@ function procesarEmbarque(){
   renderTopProvs();
   updateCmpNroList();
 
-  // Save to cloud silently
+  // Save to cloud — wait for it, then reload
   const _nroGuardar = nro || ('EMB-'+Date.now());
-  autoGuardarSupabase(_nroGuardar);
 
   // If multiple equipment units, show invoice assignment step first
   const _conts = window._contenedores || [];
@@ -8133,20 +8156,18 @@ function procesarEmbarque(){
     const _mercLines = (snap.invLines||[]).filter(function(l){ return !l.tipoFac || l.tipoFac === 'mercancia'; });
     if(_mercLines.length > 0){
       _showAsignacionFacturas(snap, _conts, function(){
-        // After assignment: show overlay
         window._procOverlayNro = nro;
         _showProcessingOverlay(nro, desc, window._sc1_base||window._lastCIF||0, window._lastAhorroNeto||0, function(){
-          window.location.reload();
+          _guardarYRecargar(_nroGuardar);
         });
       });
-      return; // wait for assignment
+      return;
     }
   }
-  // Show processing overlay
+  // Show processing overlay, then save+reload
   window._procOverlayNro = nro;
-  _showProcessingOverlay(nro, desc, window._sc1_base||window._lastCIF||0, window._lastAhorroNeto||0, ()=>{
-    // After overlay dismissal: reload page so all data starts fresh from Supabase
-    window.location.reload();
+  _showProcessingOverlay(nro, desc, window._sc1_base||window._lastCIF||0, window._lastAhorroNeto||0, function(){
+    _guardarYRecargar(_nroGuardar);
   });
 }
 
@@ -10699,7 +10720,20 @@ function _renderHistProvList(){
 }
 
 function _setDeptVista(modo, btn){
-  var root = btn ? (btn.closest('#tab-modal-body')||document) : document;
+  // Find container — works inside tab-modal-body OR dash-kpi-block
+  var root = document;
+  if(btn){
+    var r = btn.closest('#tab-modal-body') || btn.closest('[id="dash-kpi-block"]');
+    // If neither, walk up to find whichever has the dept-vista divs
+    if(!r){
+      var el = btn.parentElement;
+      while(el && el !== document.body){
+        if(el.querySelector('#_dept-vista-grafica')){ r = el; break; }
+        el = el.parentElement;
+      }
+    }
+    if(r) root = r;
+  }
   var vG = root.querySelector('#_dept-vista-grafica');
   var vL = root.querySelector('#_dept-vista-lista');
   var bG = root.querySelector('#_btn-vista-grafica');
@@ -10839,9 +10873,9 @@ function renderDashboardKPIs(data){
       <div id="_dept-vista-grafica">
         ${_renderDeptChart(all)}
       </div>
-      <!-- Vista Lista (proveedores por depto, oculta por defecto) -->
+      <!-- Vista Lista — agrupada por mes -->
       <div id="_dept-vista-lista" style="display:none">
-        ${_renderGroupSections(all)}
+        ${_renderGroupByMonth(all)}
       </div>
     </div>
 
@@ -11615,6 +11649,66 @@ function _renderDeptChart(all){
 
 // ── AGRUPACIONES COLAPSABLES ─────────────────────────
 // ═══════════════════════════════════════════════════════════
+// Toggle helper for month accordion
+function _gbmToggle(bodyId, hdr){
+  var el = document.getElementById(bodyId);
+  var chev = hdr ? hdr.querySelector('.gbm-chev') : null;
+  if(!el) return;
+  var open = el.style.display !== 'none';
+  el.style.display = open ? 'none' : 'block';
+  if(chev) chev.textContent = open ? '▶' : '▼';
+}
+
+// ═══════════════════════════════════════════════════════════
+//  _renderGroupByMonth — proveedores agrupados por mes
+//  Mes actual siempre desplegado, meses anteriores recogidos
+// ═══════════════════════════════════════════════════════════
+function _renderGroupByMonth(data){
+  if(!data||!data.length) return '<div style="padding:16px;color:var(--muted);font-size:12px">Sin datos.</div>';
+
+  var MONTH_NAMES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  var now = new Date();
+  var curMonthKey = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+
+  // Group tendData by month
+  var byMonth = {};
+  data.forEach(function(d){
+    var f = d.fecha||d.ts;
+    var dt = f ? new Date(f) : null;
+    if(!dt||isNaN(dt)) return;
+    var mk = dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0');
+    if(!byMonth[mk]) byMonth[mk]=[];
+    byMonth[mk].push(d);
+  });
+
+  var months = Object.keys(byMonth).sort().reverse(); // más reciente primero
+  if(!months.length) return '<div style="padding:16px;color:var(--muted);font-size:12px">Sin datos.</div>';
+
+  var html = '';
+  months.forEach(function(mk,mi){
+    var isCurrent = (mk === curMonthKey);
+    var parts = mk.split('-');
+    var label = MONTH_NAMES[parseInt(parts[1])-1]+' '+parts[0];
+    var monthData = byMonth[mk];
+    var bodyId = '_gbm_body_'+mk.replace('-','_');
+
+    // Build the providers list for this month using _renderGroupSections logic inline
+    var inner = _renderGroupSections(monthData);
+
+    html += '<div style="margin-bottom:8px;border:1px solid var(--border);border-radius:10px;overflow:hidden">';
+    // Header — tappable
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;cursor:pointer;background:var(--s1);user-select:none" onclick="_gbmToggle(\''+ bodyId +'\',this)">';
+    html += '<span style="font-size:13px;font-weight:700;color:var(--text)">📅 '+label+'</span>';
+    html += '<div style="display:flex;align-items:center;gap:8px"><span style="font-size:10px;color:var(--muted)">'+monthData.length+' emb.</span><span class="gbm-chev" style="font-size:10px;color:var(--muted)">'+(isCurrent?'▼':'▶')+'</span></div>';
+    html += '</div>';
+    // Body — expanded if current month
+    html += '<div id="'+bodyId+'" style="display:'+(isCurrent?'block':'none')+'">'+inner+'</div>';
+    html += '</div>';
+  });
+
+  return html;
+}
+
 //  _renderGroupSections  —  v7.5.3
 //  Por Departamento: ZL vs EXT expandible + proveedores
 //  Por Escenario: igual que antes
@@ -14153,10 +14247,15 @@ window._loadArticulosPlantilla = function(input){
     var containers = document.querySelectorAll('[id="inv-lines"]');
     var updated=0, notFound=[];
 
+    // Normalize OC keys for fuzzy match (remove leading zeros, spaces)
+    function normOC(v){ return (v||'').toString().trim().replace(/^0+/,'').toUpperCase(); }
+    var byOCNorm = {};
+    ocKeys.forEach(function(k){ byOCNorm[normOC(k)] = byOC[k]; });
+
     lines.forEach(function(l){
-      var oc=(l.oc||l.ordenCompra||'').toString().trim();
+      var oc=(l.oc||l.ordenCompra||l.oc_original||l.OC||'').toString().trim();
       if(!oc) return;
-      var match = byOC[oc];
+      var match = byOC[oc] || byOCNorm[normOC(oc)];
       if(match){
         if(cPz>-1 && match.piezas)  l.piezas = match.piezas;
         if(cOCH>-1 && match.ocHomol) l.ocHomologada = match.ocHomol;
@@ -15246,6 +15345,39 @@ async function eliminarSesionNube(nombre, btnEl){
 
 
 // Auto-save silently to Supabase (called on procesado)
+// ── _guardarYRecargar: guarda en Supabase con spinner, luego recarga ──
+async function _guardarYRecargar(nombre){
+  // Show saving spinner overlay
+  const spin = document.createElement('div');
+  spin.id = '_savingSpinner';
+  spin.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:999999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;backdrop-filter:blur(4px)';
+  spin.innerHTML = `
+    <style>@keyframes _spin{to{transform:rotate(360deg)}}</style>
+    <div style="width:56px;height:56px;border:4px solid rgba(255,255,255,.15);border-top-color:#3fb950;border-radius:50%;animation:_spin .8s linear infinite"></div>
+    <div style="color:#fff;font-size:14px;font-weight:600;letter-spacing:.02em">Guardando embarque…</div>
+    <div style="color:rgba(255,255,255,.5);font-size:11px">Sincronizando con la nube</div>
+  `;
+  document.body.appendChild(spin);
+
+  try {
+    await autoGuardarSupabase(nombre);
+    // Update spinner to success
+    spin.innerHTML = `
+      <div style="width:56px;height:56px;background:rgba(63,185,80,.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:30px">✅</div>
+      <div style="color:#3fb950;font-size:14px;font-weight:700">¡Guardado!</div>
+      <div style="color:rgba(255,255,255,.5);font-size:11px">Recargando sistema…</div>
+    `;
+  } catch(e) {
+    spin.innerHTML = `
+      <div style="font-size:30px">⚠️</div>
+      <div style="color:#f85149;font-size:13px;font-weight:600">Error al guardar</div>
+      <div style="color:rgba(255,255,255,.5);font-size:11px">Recargando de todas formas…</div>
+    `;
+  }
+  // Small pause to show result, then reload
+  setTimeout(function(){ window.location.reload(); }, 900);
+}
+
 async function autoGuardarSupabase(nombre){
   try {
     const snap=window._lastSnap||{};
@@ -16396,6 +16528,21 @@ function _guardarFactura(idx, inputId, opts){
           document.body.style.overflow = 'hidden';
           if(typeof renderInvLines === 'function') renderInvLines();
         }
+        // Auto-scroll a la línea guardada
+        setTimeout(function(){
+          var target = document.getElementById('nfact-merc-'+idx) || document.getElementById('nfact-gasto-'+idx);
+          if(target){
+            var row = target.closest('[data-inv-row]') || target.closest('.inv-row') || target.parentElement;
+            if(row) row.scrollIntoView({behavior:'smooth', block:'center'});
+            // Highlight briefly
+            var card = target.closest('.inv-card') || target.closest('[style*="border"]') || target.parentElement.parentElement;
+            if(card){
+              card.style.transition='box-shadow .3s';
+              card.style.boxShadow='0 0 0 2px rgba(63,185,80,.6)';
+              setTimeout(function(){ card.style.boxShadow=''; }, 1800);
+            }
+          }
+        }, 350);
       }, 60);
     }, 800); // esperar la animación del botón antes de cerrar
   }
