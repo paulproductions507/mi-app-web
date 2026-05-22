@@ -7947,13 +7947,13 @@ function _showAsignacionFacturas(snap, contenedores, onComplete){
       '<div style="font-size:11px;color:var(--muted);margin-bottom:16px">Selecciona a qué equipo va cada factura. Puedes asignar varias facturas al mismo equipo.</div>'+
       '<div id="_asign_rows">'+rowsHtml+'</div>'+
       '<div style="display:flex;gap:10px;margin-top:16px">'+
-        '<button onclick="_asignConfirmar('+JSON.stringify(snap).replace(/</g,'&lt;')+')" '+
-          'style="flex:1;background:#a371f7;border:none;color:#fff;border-radius:8px;padding:10px;font-size:13px;font-weight:700;cursor:pointer">'+
+        '<button id="_asign_confirm_btn" onclick="(function(btn){btn.style.background=\'#6e40c9\';btn.style.transform=\'scale(.97)\';btn.textContent=\'⏳ Confirmando…\';setTimeout(function(){_asignConfirmar();},300);})(this)" '+
+          'style="flex:1;background:#a371f7;border:none;color:#fff;border-radius:8px;padding:10px;font-size:13px;font-weight:700;cursor:pointer;transition:all .15s">'+
           '✅ Confirmar Asignación'+
         '</button>'+
         '<button onclick="_asignSaltar()" '+
           'style="background:var(--s2);border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:10px 16px;font-size:12px;cursor:pointer">'+
-          'Saltar'+
+          'Omitir'+
         '</button>'+
       '</div>'+
     '</div>';
@@ -9252,7 +9252,9 @@ function renderTend(){
     }
     const rows2=[...filteredData].map((d,ri)=>{
       const idx=tendData.indexOf(d);
-      const pct=d.cif>0?(d.ahorro/d.cif*100).toFixed(2)+'%':'—';
+      const _dGastoComp = (d.snap?.gastoComp || d.gastoComp || 0);
+      const _ahorroDisplay = _dGastoComp > 0 ? 0 : (d.ahorro||0);
+      const pct=_dGastoComp>0?'—':d.cif>0?(d.ahorro/d.cif*100).toFixed(2)+'%':'—';
       const isPend = d.status === 'pendiente'; const isParcial = d.status === 'parcial';
       const viaIco = d.viaTransporte==='AIR'?'✈️':d.viaTransporte==='LAND'?'🚛':'🚢';
       const viaLabel = d.viaTransporte||'SEA';
@@ -9260,8 +9262,9 @@ function renderTend(){
       const tramiteBg = d.tramiteTipo==='Local'?'rgba(63,185,80,.12)':'rgba(240,136,62,.12)';
       return `<div style="display:grid;grid-template-columns:auto 1fr auto auto auto;gap:8px;align-items:center;padding:9px 14px;border-bottom:1px solid rgba(48,54,61,.4);cursor:pointer;transition:background .15s${(isPend||isParcial)?';border-left:3px solid '+(isPend?'var(--orange-l)':'var(--blue-l)'):''}" onclick="if(event.target.classList.contains('del-btn')||event.target.classList.contains('btn-reabrir')){return;}abrirModuloComparativo_idx(${idx})" onmouseover="this.style.background='rgba(255,255,255,.03)'" onmouseout="this.style.background=''">
         <div style="font-size:10px;font-weight:700;color:var(--orange-l);white-space:nowrap">${d.nro||'—'}</div>
-        <div><div style="font-size:12px;font-weight:500;color:var(--text)">${d.desc}${isPend?'&nbsp;<span class="badge-pendiente">🟡 PENDIENTE</span>':''}${d.status==='parcial'?'&nbsp;<span style="background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:3px;padding:1px 5px;font-size:9px;font-weight:700">🚢 PARCIAL</span>':''}</div><div style="font-size:10px;color:var(--muted);display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-top:2px">${d.fecha} · ${d.esc||''}&nbsp;<span style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:var(--blue-l)">${viaIco} ${viaLabel}</span>${d.tramiteTipo?`<span style="background:${tramiteBg};border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:${tramiteColor}">${d.tramiteTipo}</span>`:''}${d.lugarRecep?`<span style="background:rgba(45,212,191,.1);border:1px solid rgba(45,212,191,.25);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:#2dd4bf">🏭 ${d.lugarRecep}</span>`:''}</div></div>
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--green-l);font-weight:700;white-space:nowrap">$${(d.ahorro/1000).toFixed(2)}k</div>
+        <div><div style="font-size:12px;font-weight:500;color:var(--text)">${d.desc}${isPend?'&nbsp;<span class="badge-pendiente">🟡 PENDIENTE</span>':''}${d.status==='parcial'?'&nbsp;<span style="background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:3px;padding:1px 5px;font-size:9px;font-weight:700">🚢 PARCIAL</span>':''}</div><div style="font-size:10px;color:var(--muted);display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-top:2px">${d.fecha} · ${d.esc||''}&nbsp;<span style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:var(--blue-l)">${viaIco} ${viaLabel}</span>${d.tramiteTipo?`<span style="background:${tramiteBg};border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:${tramiteColor}">${d.tramiteTipo}</span>`:''}${d.lugarRecep?`<span style="background:rgba(45,212,191,.1);border:1px solid rgba(45,212,191,.25);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:#2dd4bf">🏭 ${d.lugarRecep}</span>`:''}
+${_dGastoComp>0?`<span style="background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.25);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:#f47067">⚠️ Gasto Comp.</span>`:''}</div></div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--green-l);font-weight:700;white-space:nowrap">${_dGastoComp>0?'$0.00':'$'+(_ahorroDisplay/1000).toFixed(2)+'k'}</div>
         <div style="font-size:11px;color:var(--orange-l);white-space:nowrap">${pct}</div>
         <div style="display:flex;gap:4px;align-items:center">
           <button class="btn-reabrir" onclick="event.stopPropagation();reabrirEmbarquePendiente(${idx})" style="${isPend?'':'background:rgba(88,166,255,.1);border-color:rgba(88,166,255,.3);color:var(--blue-l)'}">✏️ ${isPend?'Reabrir':'Editar'}</button>
@@ -16543,14 +16546,21 @@ function _guardarFactura(idx, inputId, opts){
         function _tryScroll(attempts){
           var target = document.getElementById('nfact-merc-'+idx) || document.getElementById('nfact-gasto-'+idx);
           if(target){
+            // Scroll the modal body container, not window
+            var modalBody = document.getElementById('tab-modal-body') || document.querySelector('.tab-modal-scroll') || document.body;
+            var targetTop = target.getBoundingClientRect().top;
+            var modalTop = modalBody.getBoundingClientRect().top;
+            var offset = targetTop - modalTop - (modalBody.clientHeight/2) + (target.clientHeight/2);
+            modalBody.scrollBy({top: offset, behavior: 'smooth'});
+            // Also try scrollIntoView as fallback
             target.scrollIntoView({behavior:'smooth', block:'center'});
             var card = target.closest('[style*="border-radius"]') || target.parentElement;
-            if(card){ card.style.transition='box-shadow .3s'; card.style.boxShadow='0 0 0 2px rgba(63,185,80,.6)'; setTimeout(function(){card.style.boxShadow='';},1800); }
+            if(card){ card.style.transition='box-shadow .3s'; card.style.boxShadow='0 0 0 2px rgba(63,185,80,.6)'; setTimeout(function(){card.style.boxShadow='';},2000); }
           } else if(attempts > 0){
-            setTimeout(function(){ _tryScroll(attempts-1); }, 200);
+            setTimeout(function(){ _tryScroll(attempts-1); }, 300);
           }
         }
-        setTimeout(function(){ _tryScroll(5); }, 400);
+        setTimeout(function(){ _tryScroll(8); }, 600);
       }, 60);
     }, 800); // esperar la animación del botón antes de cerrar
   }
