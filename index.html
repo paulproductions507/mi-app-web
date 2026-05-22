@@ -6517,12 +6517,13 @@ function calcSab2(){
           const _gastoCompReal = parseFloat(document.getElementById('s1_gasto_comp')?.value)||0;
           const sc1desemb = (snap1.base||0)+(snap1.arancel||0)+_s1itbms+(snap1.hon||0)+(snap1.tasa||0)+_s1itbmsTasa+(snap1.form1||0)
                           +(snap1.acarreo||0)+(snap1.dmce||0)+(snap1.agente||0)
-                          +((window._lastSnap?.termino==='FOB'&&window._lastSnap?.tipo==='EXT')?(window._lastSnap?.flete||0):0)
-                          - _gastoCompReal; // Gasto complementario no es desembolso real
+                          +((window._lastSnap?.termino==='FOB'&&window._lastSnap?.tipo==='EXT')?(window._lastSnap?.flete||0):0);
+          // Cuando hay gasto complementario, el ahorro honesto es 0 — ambos landeds son iguales por diseño
+          const _ahorroForzadoCero = _gastoCompReal > 0;
           // sc3desemb = CIF_original + comision (NOT pagFinal which is CIF-trasp)
           const _cifOrig = v('s2_costo_zl') || (window._lastSnap?.CIF || (snap1.base||0));
           const sc3desemb = _cifOrig + comision + fleteStd + agente;
-          const ahorroReal = sc1desemb - sc3desemb;
+          const ahorroReal = _ahorroForzadoCero ? 0 : (sc1desemb - sc3desemb);
           const itbmsEnComision = itbmsHomol;              // ITBMS del valor homologado
           const honorarioNeto = comision - itbmsEnComision; // Honorario neto real Sababa
           return `<div style="margin:14px;background:linear-gradient(135deg,rgba(63,185,80,.07),rgba(240,136,62,.05));border:1px solid rgba(63,185,80,.2);border-radius:8px;padding:12px 14px;">
@@ -6548,7 +6549,7 @@ function calcSab2(){
             <span class="ar-lbl" style="color:var(--green-l);font-weight:700;font-size:13px">AHORRO NETO REAL</span>
             <span class="ar-val" style="color:${ahorroReal>=0?'var(--green-l)':'var(--red-l)'};font-size:16px;font-weight:700">${fmt(ahorroReal)}</span>
           </div>
-          <div style="font-size:10px;color:var(--muted);margin-top:5px;text-align:right">= Esc.#1 (${fmt(sc1desemb)}) − Sababa (${fmt(sc3desemb)})</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:5px;text-align:right">${_ahorroForzadoCero?'ℹ️ Gasto complementario activo — ambos escenarios equivalentes':'= Esc.#1 ('+fmt(sc1desemb)+') − Sababa ('+fmt(sc3desemb)+')'}</div>
         </div>`;
         })():'<div style="padding:14px;font-size:11px;color:var(--muted);text-align:center">ℹ️ Calcula el Escenario #1 para ver el comparativo de ahorro.</div>'}
       </div>
