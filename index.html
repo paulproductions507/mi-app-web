@@ -7914,6 +7914,7 @@ function _showAsignacionFacturas(snap, contenedores, onComplete){
     var label = 'Equipo ' + (ci+1) + (c.num ? ' — ' + c.num : '') + (c.fecha ? ' (' + c.fecha + ')' : '');
     return '<option value="'+ci+'">'+label+'</option>';
   }).join('');
+  if(contenedores.length > 1) contOpts += '<option value="-1">📦📦 Ambos equipos</option>';
 
   var rowsHtml = gastoLines.map(function(l, i){
     var tipoLabel = (window._RUBROS_GASTO||[]).find(function(r){ return r.val===l.tipoFac; });
@@ -7970,8 +7971,17 @@ function _asignConfirmar(){
   
   // Save assignment to each line
   gastoLines.forEach(function(l, i){
-    l._equipoIdx = map[i] || 0;
-    l._equipoNum = (window._contenedores||[])[map[i]||0]?.num || '';
+    var asignIdx = (map[i] !== undefined) ? map[i] : 0;
+    if(asignIdx === -1){
+      // Ambos equipos — assign to all
+      l._equipoIdx = -1;
+      l._equipoNum = (window._contenedores||[]).map(function(c){ return c.num||''; }).filter(Boolean).join(' + ');
+      l._ambosEquipos = true;
+    } else {
+      l._equipoIdx = asignIdx;
+      l._equipoNum = (window._contenedores||[])[asignIdx]?.num || '';
+      l._ambosEquipos = false;
+    }
   });
   
   // Update snap in tendData
