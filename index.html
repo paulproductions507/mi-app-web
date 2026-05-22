@@ -2972,11 +2972,12 @@ function _PLN_BUILD_HTML(){
 
 // ── Inicializar ──
 function _PLN_INIT(){
-  _PLN_LOAD();
+  _PLN_LOAD(); // carga localStorage como fallback rápido
   _PLN_CUR = _plnLunes(_plnISO(new Date()));
   _PLN_TAB = 'prog';
   _PLN_RENDER();
   if(!_PLN_SB && window._sb){ _PLN_SB=window._sb; _plnBadge('ok'); _PLN_SB_LOAD(); }
+  else if(_PLN_SB){ _PLN_SB_LOAD(); } // ya conectado, recargar desde Supabase
   // Sync theme button label
   var tb=document.getElementById('_pln_themeBtn');
   if(tb){ var isL=document.body.classList.contains('theme-light')||document.body.style.colorScheme==='light'; tb.textContent=isL?'🌙 Oscuro':'☀️ Claro'; }
@@ -3682,7 +3683,7 @@ function _plnBadge(st){ var b=document.getElementById('_pln_cloud'); if(!b) retu
 
 // ── Supabase ──
 async function _PLN_SB_SAVE(){ if(!_PLN_SB||!_PLN_CUR) return; _plnBadge('saving'); try{ var wk=_PLN_DATA[_PLN_CUR]; if(!wk){_plnBadge('ok');return;} var r=await _PLN_SB.from(_PLN_TABLE).upsert({semana:_PLN_CUR,datos:wk,updated_at:new Date().toISOString()},{onConflict:'semana'}); _plnBadge(r.error?'err':'ok'); }catch(e){_plnBadge('err');} }
-async function _PLN_SB_LOAD(){ if(!_PLN_SB) return; try{ var r=await _PLN_SB.from(_PLN_TABLE).select('semana,datos,updated_at').order('updated_at',{ascending:false}); if(r.error) return; (r.data||[]).forEach(function(row){if(row.semana&&row.datos)_PLN_DATA[row.semana]=row.datos;}); try{localStorage.setItem(_PLN_KEY,JSON.stringify(_PLN_DATA));}catch(e){} _PLN_RENDER(); _plnBadge('ok'); if(typeof _showToast==='function')_showToast('☁️ Plan cargado','green',2000); }catch(e){} }
+async function _PLN_SB_LOAD(){ if(!_PLN_SB) return; try{ var r=await _PLN_SB.from(_PLN_TABLE).select('semana,datos,updated_at').order('updated_at',{ascending:false}); if(r.error) return; (r.data||[]).forEach(function(row){if(row.semana&&row.datos)_PLN_DATA[row.semana]=row.datos;}); try{localStorage.setItem(_PLN_KEY,JSON.stringify(_PLN_DATA));}catch(e){} _PLN_RENDER(); _plnBadge('ok'); }catch(e){ _plnBadge('err'); } }
 
 function abrirUnicoModulo(){
   // Open standalone Escenario Único module
@@ -8135,7 +8136,7 @@ function procesarEmbarque(){
         // After assignment: show overlay
         window._procOverlayNro = nro;
         _showProcessingOverlay(nro, desc, window._sc1_base||window._lastCIF||0, window._lastAhorroNeto||0, function(){
-          _clearFormSilent(); volverInicio();
+          window.location.reload();
         });
       });
       return; // wait for assignment
@@ -8144,9 +8145,8 @@ function procesarEmbarque(){
   // Show processing overlay
   window._procOverlayNro = nro;
   _showProcessingOverlay(nro, desc, window._sc1_base||window._lastCIF||0, window._lastAhorroNeto||0, ()=>{
-    // After overlay dismissal: clear all and go to splash
-    _clearFormSilent();
-    volverInicio();
+    // After overlay dismissal: reload page so all data starts fresh from Supabase
+    window.location.reload();
   });
 }
 
@@ -11541,7 +11541,7 @@ function _renderDeptChart(all){
     const did=uid+'_'+i;
 
     // Build provider rows
-    const sortedProvs=[...v.provs].sort((a,b)=>b.costo-a.costo);
+    const sortedProvs=[...v.provs].sort((a,b)=>{ const na=parseInt((a.nro||'0').replace(/[^0-9]/g,''))||0; const nb=parseInt((b.nro||'0').replace(/[^0-9]/g,''))||0; return nb-na; });
     const totalProv=sortedProvs.reduce((s,p)=>s+p.costo,0);
     const provRows=sortedProvs.map(p=>{
       const tipoBadge=(p.tipo==='EXT'||p.tipo==='IMP')
