@@ -1287,6 +1287,15 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
         </div>
       </div>
 
+      <!-- GASTO COMPLEMENTARIO -->
+      <div class="r2" style="margin-top:4px">
+        <div class="field">
+          <label>📎 Gasto Complementario (USD) <span style="font-size:10px;color:var(--muted);font-weight:400">— suma directa al Landed</span></label>
+          <input type="number" id="s1_gasto_comp" value="" placeholder="0.00" step="0.01" oninput="calc()">
+        </div>
+        <div class="field"></div>
+      </div>
+
       <!-- CHECK: No aplicar DMCE/Acarreo -->
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 0;font-size:12px;color:var(--text);margin-top:4px">
         <input type="checkbox" id="chk_no_dmce_acarreo" onchange="_toggleNoDmceAcarreo(this.checked);calc()"
@@ -2733,8 +2742,8 @@ function _plnSumLND(rows){ return (rows||[]).reduce(function(s,r){return s+(pars
 function _plnSumBLT(rows){ return (rows||[]).reduce(function(s,r){return s+(parseInt(r.bultos)||0);},0); }
 
 // ── persistencia ──
-function _PLN_LOAD(){ try{ _PLN_DATA=JSON.parse(localStorage.getItem(_PLN_KEY)||'{}'); }catch(e){ _PLN_DATA={}; } }
-function _PLN_SAVE(){ try{ localStorage.setItem(_PLN_KEY,JSON.stringify(_PLN_DATA)); }catch(e){} if(_PLN_TIMER) clearTimeout(_PLN_TIMER); _PLN_TIMER=setTimeout(_PLN_SB_SAVE,2000); }
+function _PLN_LOAD(){ _PLN_DATA={}; } // Siempre desde Supabase — localStorage ignorado
+function _PLN_SAVE(){ if(_PLN_TIMER) clearTimeout(_PLN_TIMER); _PLN_TIMER=setTimeout(_PLN_SB_SAVE,2000); } // Solo Supabase
 
 // ── semana ──
 function _plnMkWeek(mon){
@@ -2779,11 +2788,11 @@ function _PLN_BUILD_HTML(){
   +'#_PLN_OV .tabt.on{color:var(--text);border-bottom-color:var(--orange-l);}'
   // scroll + grid
   +'#_PLN_OV .gscroll{overflow-x:auto;overflow-y:visible;-webkit-overflow-scrolling:touch;}'
-  +'#_PLN_OV .cal-headers{display:grid;grid-template-columns:repeat(5,280px);min-width:1400px;}'
-  +'#_PLN_OV .cal-headers{display:grid;grid-template-columns:repeat(5,280px);min-width:1400px;background:var(--bg);}'
+  +'#_PLN_OV .cal-headers{display:grid;grid-template-columns:repeat(5,320px);min-width:1600px;}'
+  +'#_PLN_OV .cal-headers{display:grid;grid-template-columns:repeat(5,320px);min-width:1600px;background:var(--bg);}'
   +'#_PLN_OV #_pln_hdr_scroll{overflow-x:auto;overflow-y:visible;scrollbar-width:none;}'
   +'#_PLN_OV #_pln_hdr_scroll::-webkit-scrollbar{display:none;}'
-  +'#_PLN_OV .cal-bodies{display:grid;grid-template-columns:repeat(5,280px);min-width:1400px;border-left:1px solid var(--border);border-right:1px solid var(--border);border-bottom:1px solid var(--border);border-radius:0 0 10px 10px;overflow:hidden;}'
+  +'#_PLN_OV .cal-bodies{display:grid;grid-template-columns:repeat(5,320px);min-width:1600px;border-left:1px solid var(--border);border-right:1px solid var(--border);border-bottom:1px solid var(--border);border-radius:0 0 10px 10px;overflow:hidden;}'
   +'#_PLN_OV .cal{display:none;}'
   // day header
   +'#_PLN_OV .dh{text-align:center;padding:8px 6px;font-size:14px;font-weight:900;letter-spacing:.04em;border-bottom:3px solid;border-right:1px solid rgba(255,255,255,.08);border-top:1px solid var(--border);}'
@@ -2808,7 +2817,7 @@ function _PLN_BUILD_HTML(){
   +'#_PLN_OV .cub.air{border-top-color:#7c3aed;}'
   +'#_PLN_OV .cub.res{border-top-color:var(--green-l);}'
   // cub header
-  +'#_PLN_OV .chdr{padding:5px 8px;display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.025);border-bottom:1px solid var(--border);cursor:pointer;flex-wrap:wrap;}'
+  +'#_PLN_OV .chdr{padding:5px 8px;display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.025);border-bottom:1px solid var(--border);cursor:pointer;flex-wrap:nowrap;justify-content:space-between;}'
   +'#_PLN_OV .chdr:hover{background:rgba(255,255,255,.05);}'
   +'#_PLN_OV .ctag{font-size:8px;font-weight:700;padding:2px 6px;border-radius:3px;}'
   +'#_PLN_OV .ctag.sea{background:rgba(59,130,246,.2);color:#60a5fa;}'
@@ -2827,7 +2836,7 @@ function _PLN_BUILD_HTML(){
   +'#_PLN_OV .cft{padding:5px 8px;display:flex;justify-content:space-between;background:var(--s2);border-top:2px solid var(--border);font-size:10px;color:var(--muted);}'
   // add btn — al tope de cada columna de día
   +'#_PLN_OV .addeq{padding:6px 8px;display:flex;gap:5px;border-bottom:2px dashed rgba(255,255,255,.08);}'
-  +'@media(min-width:1400px){#_PLN_OV .cal-headers,#_PLN_OV .cal-bodies{grid-template-columns:repeat(5,1fr);min-width:0;}#_PLN_OV .gscroll,#_PLN_OV #_pln_hdr_scroll{overflow-x:hidden;}}'
+  +'@media(min-width:1600px){#_PLN_OV .cal-headers,#_PLN_OV .cal-bodies{grid-template-columns:repeat(5,1fr);min-width:0;}#_PLN_OV .gscroll,#_PLN_OV #_pln_hdr_scroll{overflow-x:hidden;}}'
   // modal
   +'#_PLN_OV .mo{position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:99999;display:none;align-items:center;justify-content:center;padding:12px;}'
   +'#_PLN_OV .mo.open{display:flex;}'
@@ -2873,7 +2882,7 @@ function _PLN_BUILD_HTML(){
   +'<div class="gscroll" id="_pln_hdr_scroll">'
     +'<div class="cal-headers" id="_pln_cal_hdr" style="position:sticky;top:0;z-index:8;background:var(--bg);"></div>'
     +'<div class="cal-bodies" id="_pln_cal"></div>'
-    +'<div id="_pln_stats" style="min-width:1400px"></div>'
+    +'<div id="_pln_stats" style="min-width:1600px"></div>'
     +'<div id="_pln_depts" style="padding:12px 16px 40px;min-width:1400px"></div>'
   +'</div>'
 
@@ -3024,7 +3033,7 @@ function _PLN_RENDER(){
        +'</div>';
     } else {
       h+='<div class="addeq">'
-       +'<button class="xbtn gn" style="width:100%;font-size:10px;padding:5px" onclick="_plnOpenPicker(\''+_PLN_CUR+'\','+di+')">➕ Agregar embarque</button>'
+       +'<button class="xbtn gn" style="font-size:10px;padding:5px 14px" onclick="_plnOpenPicker(\''+_PLN_CUR+'\','+di+')">➕ Agregar embarque</button>'
        +'</div>';
     }
     (day.cubiculos||[]).forEach(function(cub,ci){
@@ -3112,16 +3121,14 @@ function _plnCubHtml(cub,di,ci,tab,mon){
     // ── Fila 1: ✅ · Estado · Fecha · FOB · ✕
     +'<div class="chdr" style="cursor:default">'
       +'<span style="font-size:13px">'+viaIco+'</span>'
-      +(function(){var _lr=cub.lugarRecep||fe2.lugarRecep||'';var _st=cub.status||'';var _label=(_st&&_lr)?'Recibido: '+_lr:_st;return _label?'<span style="font-size:8px;font-weight:700;padding:2px 6px;border-radius:4px;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green-l);white-space:nowrap">'+_plnESC(_label)+'</span>':'';})()
-      +(cub.eta?'<span style="font-size:9px;color:var(--muted);white-space:nowrap">'+_plnFD(cub.eta)+'</span>':'')
-      +'<span style="margin-left:auto;font-family:\'IBM Plex Mono\',monospace;font-size:10px;font-weight:800;color:var(--green-l);white-space:nowrap">'+_plnF(totFob)+'</span>'
-      +'<button onclick="event.stopPropagation();_plnDelCub(\''+_PLN_TAB+'\','+di+','+ci+')" style="margin-left:6px;background:rgba(218,54,51,.15);border:1px solid rgba(218,54,51,.3);color:#f47067;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;flex-shrink:0">×</button>'
+      +(function(){var _lr=cub.lugarRecep||fe2.lugarRecep||'';var _st=cub.status||'';var _label=(_st&&_lr)?'Recibido: '+_lr:_st;var _fecha=cub.eta?'<span style="font-size:9px;color:var(--muted);white-space:nowrap">'+_plnFD(cub.eta)+'</span>':'';var _nro=cub.nroEmb?'<span style="font-size:8px;font-weight:800;padding:2px 5px;border-radius:4px;background:rgba(139,148,158,.12);border:1px solid rgba(139,148,158,.3);color:var(--muted);white-space:nowrap;font-family:monospace">EMB#'+_plnESC((cub.nroEmb||'').replace('(parcial)','').trim())+'</span>':'';return (_label?'<span style="font-size:8px;font-weight:700;padding:2px 6px;border-radius:4px;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green-l);white-space:nowrap">'+_plnESC(_label)+'</span>':'')+_fecha+_nro;})()
+      +'<button onclick="event.stopPropagation();_plnDelCub(\''+_PLN_TAB+'\','+di+','+ci+')" style="margin-left:auto;background:rgba(218,54,51,.15);border:1px solid rgba(218,54,51,.3);color:#f47067;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;flex-shrink:0">×</button>'
     +'</div>'
     // ── Fila 2: 1×tamaño · IMP:N · [espacio] · 🔍Ver detalle · [espacio] · ✏️Editar
-    +'<div id="cub-f2-'+cubKey+'" style="display:flex;flex-wrap:nowrap;gap:4px;padding:4px 8px;align-items:center">'
-      +(equipLabel?'<span style="font-size:8px;background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:4px;padding:1px 4px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:80px">'+_plnESC(equipLabel)+'</span>':'')
+    +'<div id="cub-f2-'+cubKey+'" style="display:flex;flex-wrap:nowrap;gap:6px;padding:4px 8px;align-items:center;justify-content:space-between">'
+      +(equipLabel?'<span style="font-size:8px;background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:4px;padding:1px 6px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px">'+_plnESC(equipLabel)+'</span>':'')
       +impzlInline
-      +'<div style="flex:1"></div>'
+
       +'<button onclick="event.stopPropagation();_plnCubDetalle(\''+cubKey+'\')" style="background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:5px;padding:2px 7px;font-size:9px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0">🔍 Detalle</button>'
       +'<button onclick="event.stopPropagation();_plnEditarCubInfo(\''+cubKey+'\')" style="background:rgba(139,148,158,.1);border:1px solid rgba(139,148,158,.3);color:var(--muted);border-radius:5px;padding:2px 7px;font-size:9px;font-weight:700;cursor:pointer;flex-shrink:0">✏️ Editar</button>'
     +'</div>'
@@ -4790,6 +4797,7 @@ function calc(){
   // Solo mode: exclude acarreo and DMCE
   const acarreo= (window._soloMode||window._noDmceAcarreo) ? 0 : v('s1_acarreo')*v('s1_equipos');
   const dmce   = (window._soloMode||window._noDmceAcarreo) ? 0 : v('s1_dmce');
+  const gastoComp = v('s1_gasto_comp') || 0;
   const agente = v('s1_agente');
   const renglones = Math.max(1, v('s1_reng'));
 
@@ -5641,8 +5649,8 @@ function _renderContenedores(){
   while(window._contenedores.length < nEq) window._contenedores.push({num:'',fecha:''});
   while(window._contenedores.length > nEq) window._contenedores.pop();
 
-  if(true){
-    // Para camión: solo mostrar fecha de llegada por unidad (sin número de contenedor)
+  if(esCamion || !esContenedor){
+    // Para camión o no-contenedor: solo mostrar fecha de llegada por unidad
     const hdrEl = wrap.querySelector('[data-cont-hdr]');
     const hdr = wrap.querySelector('div[style*="font-weight:700"]');
     if(hdr) hdr.textContent = '🚛 Equipos — Fecha de Llegada por Unidad';
@@ -8118,7 +8126,8 @@ function procesarEmbarque(){
       return hasSI ? 'Local' : 'Liquidación';
     })(),
     contenedor: document.getElementById('s1_notas')?.value?.match(/cont[^,\n]*/i)?.[0]||'',
-    lugarRecep: document.getElementById('s1_lugar_recep')?.value || ''
+    lugarRecep: document.getElementById('s1_lugar_recep')?.value || '',
+    gastoComp: parseFloat(document.getElementById('s1_gasto_comp')?.value)||0
   };
   // ── CRÍTICO: si el NRO fue borrado antes y está en lista negra, limpiarlo ──
   // Sin esto, el embarque reprocesado tras un borrado desaparece al sincronizar con la nube.
@@ -8298,6 +8307,7 @@ function reabrirEmbarquePendiente(idx){
   _set('s1_destino',    s.destino|| '');
   // Restaurar lugar de recepción
   if(s.lugarRecep !== undefined){ const lr=document.getElementById('s1_lugar_recep'); if(lr) lr.value=s.lugarRecep||''; }
+  if(s.gastoComp){ const gc=document.getElementById('s1_gasto_comp'); if(gc) gc.value=s.gastoComp||''; }
   // Restaurar selectores de origen país/ciudad
   if(typeof _restaurarOrigenEmb==='function') _restaurarOrigenEmb(s.origen||d.origen||'');
 
@@ -8407,7 +8417,7 @@ function _clearFormSilent(){
   window._itbms_override_cif=false; window._itbms_manual_cif=undefined; window._itbms_auto_cif=0;
   // Clear all form fields without confirmation
   ['s1_cif','s1_fob','s1_flete_fob','s1_seguro','s1_cif_calc',
-   's1_acarreo','s1_dmce','s1_agente','s1_nro_emb','s1_desc_emb','s1_origen_emb','s1_destino','s1_lugar_recep'].forEach(id=>{
+   's1_acarreo','s1_dmce','s1_gasto_comp','s1_agente','s1_nro_emb','s1_desc_emb','s1_origen_emb','s1_destino','s1_lugar_recep'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value='';
   });
   // Reset selectores de origen país/ciudad
@@ -10720,24 +10730,10 @@ function _renderHistProvList(){
 }
 
 function _setDeptVista(modo, btn){
-  // Find container — works inside tab-modal-body OR dash-kpi-block
-  var root = document;
-  if(btn){
-    var r = btn.closest('#tab-modal-body') || btn.closest('[id="dash-kpi-block"]');
-    // If neither, walk up to find whichever has the dept-vista divs
-    if(!r){
-      var el = btn.parentElement;
-      while(el && el !== document.body){
-        if(el.querySelector('#_dept-vista-grafica')){ r = el; break; }
-        el = el.parentElement;
-      }
-    }
-    if(r) root = r;
-  }
-  var vG = root.querySelector('#_dept-vista-grafica');
-  var vL = root.querySelector('#_dept-vista-lista');
-  var bG = root.querySelector('#_btn-vista-grafica');
-  var bL = root.querySelector('#_btn-vista-lista');
+  var vG = document.getElementById('_dept-vista-grafica');
+  var vL = document.getElementById('_dept-vista-lista');
+  var bG = document.getElementById('_btn-vista-grafica');
+  var bL = document.getElementById('_btn-vista-lista');
   if(!vG||!vL) return;
   var esGrafica = modo === 'grafica';
   vG.style.display = esGrafica ? 'block' : 'none';
@@ -16132,7 +16128,8 @@ function calcUnicoFull(){
   const extrasTotal = gastosRows.reduce((s,g)=>s+g.monto,0);
 
   // landed COSTEABLE = excluye itbmsTasa e itbms (ambos fiscales, no costeables)
-  const landed  = R(cif + arancel + hon + tasa + uso + agente + dmce + extrasTotal);
+  const gastoCompVal = parseFloat(document.getElementById('s1_gasto_comp')?.value)||0;
+  const landed  = R(cif + arancel + hon + tasa + uso + agente + dmce + extrasTotal + gastoCompVal);
   const factor  = cif > 0 ? landed/cif : 1;
   const landedG = R(landed + itbms + itbmsTasa);
 
@@ -16528,21 +16525,18 @@ function _guardarFactura(idx, inputId, opts){
           document.body.style.overflow = 'hidden';
           if(typeof renderInvLines === 'function') renderInvLines();
         }
-        // Auto-scroll a la línea guardada
-        setTimeout(function(){
+        // Auto-scroll a la línea guardada — multiple attempts
+        function _tryScroll(attempts){
           var target = document.getElementById('nfact-merc-'+idx) || document.getElementById('nfact-gasto-'+idx);
           if(target){
-            var row = target.closest('[data-inv-row]') || target.closest('.inv-row') || target.parentElement;
-            if(row) row.scrollIntoView({behavior:'smooth', block:'center'});
-            // Highlight briefly
-            var card = target.closest('.inv-card') || target.closest('[style*="border"]') || target.parentElement.parentElement;
-            if(card){
-              card.style.transition='box-shadow .3s';
-              card.style.boxShadow='0 0 0 2px rgba(63,185,80,.6)';
-              setTimeout(function(){ card.style.boxShadow=''; }, 1800);
-            }
+            target.scrollIntoView({behavior:'smooth', block:'center'});
+            var card = target.closest('[style*="border-radius"]') || target.parentElement;
+            if(card){ card.style.transition='box-shadow .3s'; card.style.boxShadow='0 0 0 2px rgba(63,185,80,.6)'; setTimeout(function(){card.style.boxShadow='';},1800); }
+          } else if(attempts > 0){
+            setTimeout(function(){ _tryScroll(attempts-1); }, 200);
           }
-        }, 350);
+        }
+        setTimeout(function(){ _tryScroll(5); }, 400);
       }, 60);
     }, 800); // esperar la animación del botón antes de cerrar
   }
@@ -18550,6 +18544,10 @@ window._plnModuloEmbarques = async function(){
     });
     var items=td.filter(function(d){
       return !q||(d.nro||'').toLowerCase().includes(q)||(d.desc||'').toLowerCase().includes(q);
+    }).sort(function(a,b){
+      var na=parseInt((a.nro||'').replace(/[^0-9]/g,''))||0;
+      var nb=parseInt((b.nro||'').replace(/[^0-9]/g,''))||0;
+      return nb-na;
     }).slice(0,40);
     if(!items.length){ listEl.innerHTML='<div style="padding:20px;text-align:center;color:var(--muted)">Sin resultados</div>'; return; }
     listEl.innerHTML=items.map(function(d){
@@ -18586,21 +18584,25 @@ window._plnModuloEmbarques = async function(){
   function selectEmbarque(nro){
     var d=td.find(function(x){return (x.nro||'').trim()===nro.trim();}); if(!d){alert('No encontrado: '+nro);return;}
 
-    // ── Verificar duplicado en la semana actual ──
+    // ── Verificar duplicado en TODAS las semanas ──
     var DIAS=['Lunes','Martes','Miércoles','Jueves','Viernes'];
-    var wkChk=_plnMkWeek(_PLN_CTX.mon);
-    var dupDay=-1, dupCub=-1;
-    (wkChk[_PLN_CTX.tab]||[]).forEach(function(day,di){
-      (day.cubiculos||[]).forEach(function(cub,ci){
-        if((cub.nroEmb||'').split('+').map(function(s){return s.trim();}).indexOf(nro.trim())>=0){
-          dupDay=di; dupCub=ci;
-        }
+    var dupDay=-1, dupCub=-1, dupMon='', dupWk=null;
+    Object.keys(_PLN_DATA).forEach(function(mon){
+      var wk=_PLN_DATA[mon];
+      (['prog','res']).forEach(function(tab){
+        (wk[tab]||[]).forEach(function(day,di){
+          (day.cubiculos||[]).forEach(function(cub,ci){
+            if((cub.nroEmb||'').split('+').map(function(s){return s.trim();}).indexOf(nro.trim())>=0){
+              dupDay=di; dupCub=ci; dupMon=mon; dupWk=wk;
+            }
+          });
+        });
       });
     });
     if(dupDay>=0){
       footEl.style.display='block';
       footEl.innerHTML='<div style="background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.3);border-radius:8px;padding:12px;margin-bottom:8px">'
-        +'<div style="font-size:12px;font-weight:700;color:#f47067;margin-bottom:8px">⚠️ Emb. '+nro+' ya está en <strong>'+DIAS[dupDay]+'</strong></div>'
+        +'<div style="font-size:12px;font-weight:700;color:#f47067;margin-bottom:8px">⚠️ Emb. '+nro+' ya está asignado en <strong>'+DIAS[dupDay]+(dupMon&&dupMon!==_PLN_CTX.mon?' (semana '+dupMon+')':'')+'</strong> — debe ser eliminado antes de reutilizarlo</div>'
         +'<button id="_plnEmbMover" style="display:block;width:100%;text-align:left;background:rgba(248,209,34,.1);border:1px solid rgba(248,209,34,.3);color:#f8d122;border-radius:8px;padding:9px 12px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:6px">🔀 Mover a '+DIAS[_PLN_CTX.di]+'</button>'
         +'<button id="_plnEmbCancelDup" style="width:100%;background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer">← Volver</button>'
         +'</div>';
