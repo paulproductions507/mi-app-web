@@ -1031,10 +1031,11 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       <!-- ORIGEN ESTRUCTURADO: País → Ciudad -->
       <div class="field" style="margin-bottom:8px">
         <label>País de Origen</label>
-        <select id="s1_pais_emb" onchange="_actualizarCiudades(this.value);_sincronizarOrigenEmb()"
+        <input id="s1_pais_emb" list="_pais_list" placeholder="Escribe o selecciona un país…"
+          oninput="_actualizarCiudades(this.value);_sincronizarOrigenEmb()"
           style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px">
-          <option value="">— Selecciona país —</option>
-          <option value="USA">🇺🇸 Estados Unidos (USA)</option>
+        <datalist id="_pais_list">
+          <option value="USA">🇺🇸 Estados Unidos</option>
           <option value="China">🇨🇳 China</option>
           <option value="Mexico">🇲🇽 México</option>
           <option value="Brasil">🇧🇷 Brasil</option>
@@ -1057,15 +1058,15 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
           <option value="Panama">🇵🇦 Panamá</option>
           <option value="Puerto Rico">🇵🇷 Puerto Rico</option>
           <option value="Otro">🌐 Otro país</option>
-        </select>
+        </datalist>
       </div>
       <div class="r2">
         <div class="field">
           <label>Ciudad / Puerto de Origen</label>
-          <select id="s1_ciudad_emb" onchange="_sincronizarOrigenEmb()"
+          <input id="s1_ciudad_emb" list="_ciudad_list" placeholder="Escribe ciudad o puerto…"
+            oninput="_sincronizarOrigenEmb()"
             style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;width:100%">
-            <option value="">— Selecciona país primero —</option>
-          </select>
+          <datalist id="_ciudad_list"></datalist>
         </div>
         <div class="field" style="display:none"><label>Destino Final</label><input type="text" id="s1_destino" placeholder="Ej: Ciudad de Panamá"></div>
       </div>
@@ -6513,9 +6514,11 @@ function calcSab2(){
           const snap1 = window._lastSnap?.sc1||{};
           const _s1itbms = snap1.itbms||((snap1.base||0)+(snap1.arancel||0))*((window._lastSnap?.itbPct)||0.07);
           const _s1itbmsTasa = snap1.itbmsTasaFinal||((snap1.tasa||0)*((window._lastSnap?.itbPct)||0.07));
+          const _gastoCompReal = parseFloat(document.getElementById('s1_gasto_comp')?.value)||0;
           const sc1desemb = (snap1.base||0)+(snap1.arancel||0)+_s1itbms+(snap1.hon||0)+(snap1.tasa||0)+_s1itbmsTasa+(snap1.form1||0)
                           +(snap1.acarreo||0)+(snap1.dmce||0)+(snap1.agente||0)
-                          +((window._lastSnap?.termino==='FOB'&&window._lastSnap?.tipo==='EXT')?(window._lastSnap?.flete||0):0);
+                          +((window._lastSnap?.termino==='FOB'&&window._lastSnap?.tipo==='EXT')?(window._lastSnap?.flete||0):0)
+                          - _gastoCompReal; // Gasto complementario no es desembolso real
           // sc3desemb = CIF_original + comision (NOT pagFinal which is CIF-trasp)
           const _cifOrig = v('s2_costo_zl') || (window._lastSnap?.CIF || (snap1.base||0));
           const sc3desemb = _cifOrig + comision + fleteStd + agente;
@@ -14853,17 +14856,16 @@ const _ORIGEN_SINONIMOS = {
 };
 
 function _actualizarCiudades(pais){
-  const sel = document.getElementById('s1_ciudad_emb');
-  if(!sel) return;
-  sel.innerHTML = '<option value="">— Todas las ciudades —</option>';
+  const dl = document.getElementById('_ciudad_list');
+  if(!dl) return;
   const ciudades = _CIUDADES_POR_PAIS[pais] || [];
-  ciudades.forEach(c => {
-    const opt = document.createElement('option');
-    opt.value = c; opt.textContent = c;
-    sel.appendChild(opt);
-  });
-  if(ciudades.length === 0) {
-    sel.innerHTML = '<option value="">— Selecciona país primero —</option>';
+  dl.innerHTML = ciudades.map(c=>'<option value="'+c+'">').join('');
+  // Clear ciudad field when country changes
+  const ciudadEl = document.getElementById('s1_ciudad_emb');
+  if(ciudadEl && ciudadEl.getAttribute('data-pais') !== pais){
+    ciudadEl.value = '';
+    ciudadEl.setAttribute('data-pais', pais);
+    ciudadEl.placeholder = ciudades.length ? 'Escribe ciudad o puerto…' : 'Escribe ciudad o puerto…';
   }
 }
 
