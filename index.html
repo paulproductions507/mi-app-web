@@ -1478,7 +1478,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
   <div id="sim-action-bar" style="display:flex;gap:8px;margin-bottom:16px;padding:8px 0 4px;border-top:1px solid var(--border);position:sticky;bottom:0;background:var(--s1);z-index:10">
     <button onclick="if(typeof openSidebar==='function')openSidebar();" style="background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:7px 10px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0" title="Abrir panel de navegación">☰ Panel</button>
     <button onclick="(function(){ var nro=(document.getElementById('s1_nro_emb')||{}).value||''; if(typeof openTabModal==='function') openTabModal('facturas','🧾 Proveedores'); if(nro && typeof _jumpToFac==='function') setTimeout(function(){_jumpToFac(nro);},400); })()" style="background:rgba(88,166,255,.08);border:1px solid rgba(88,166,255,.25);color:var(--blue-l);border-radius:8px;padding:7px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0" title="Ver facturas del embarque">🔍 Facturas</button>
-    <button id="btn-aplicar-cambios" class="btn" style="flex:1;background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.2);color:#f97316;opacity:.45;pointer-events:none;transition:all .25s;padding:7px 10px;font-size:11px;font-weight:600" onclick="calc();if(typeof syncSC3fromSC1==='function')syncSC3fromSC1();setTimeout(function(){if(typeof calcSab2==='function')calcSab2();},80);_showToast('✅ Cambios aplicados','green',1500)">✓ Aplicar</button>
+    <button id="btn-aplicar-cambios" class="btn" style="flex:1;background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.2);color:#f97316;opacity:.45;pointer-events:none;transition:all .25s;padding:7px 10px;font-size:11px;font-weight:600" onclick="_startProgress();calc();if(typeof syncSC3fromSC1==='function')syncSC3fromSC1();setTimeout(function(){if(typeof calcSab2==='function')calcSab2();_endProgress();},200)">✓ Aplicar</button>
     <button id="btn-procesar-sim" class="btn btn-ghost" style="flex:1;background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.25);color:var(--green-l);padding:7px 10px;font-size:11px;font-weight:700" onclick="_startProgress();procesarEmbarque()">✅ Procesar</button>
     <button id="btn-calcular-sim" class="btn btn-green" style="display:none;flex:1;padding:7px 10px;font-size:11px" onclick="_startProgress();calcAndShow()">⚡ Calcular</button>
   </div>
@@ -1878,7 +1878,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
         </div>
       </div>
       <div style="display:flex;gap:8px;margin-top:12px">
-        <button id="btn-aplicar-cif" class="btn" style="flex:1;background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);color:var(--blue-l);opacity:.45;pointer-events:none;transition:all .25s" onclick="calc();if(typeof syncSC3fromSC1==='function')syncSC3fromSC1();setTimeout(function(){if(typeof calcSab2==='function')calcSab2();},80);_showToast('✅ Cambios aplicados','green',1500)">✓ Aplicar</button>
+        <button id="btn-aplicar-cif" class="btn" style="flex:1;background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);color:var(--blue-l);opacity:.45;pointer-events:none;transition:all .25s" onclick="_startProgress();calc();if(typeof syncSC3fromSC1==='function')syncSC3fromSC1();setTimeout(function(){if(typeof calcSab2==='function')calcSab2();_endProgress();},200)">✓ Aplicar</button>
         <button class="btn btn-blue" style="flex:2" onclick="calcAndShow('cifexp')">⚡ Calcular — Ver Dashboard →</button>
       </div>
     </div>
@@ -1997,7 +1997,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       </div>
 
       <div style="display:flex;gap:8px;margin-top:8px">
-        <button id="btn-aplicar-sab" class="btn" style="flex:1;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.25);color:#f97316;opacity:.45;pointer-events:none;transition:all .25s" onclick="calc();if(typeof syncSC3fromSC1==='function')syncSC3fromSC1();calcSab2();_showToast('✅ Cambios aplicados — Sababa + Liquidación','green',1800)">✓ Aplicar</button>
+        <button id="btn-aplicar-sab" class="btn" style="flex:1;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.25);color:#f97316;opacity:.45;pointer-events:none;transition:all .25s" onclick="_startProgress();calc();if(typeof syncSC3fromSC1==='function')syncSC3fromSC1();setTimeout(function(){calcSab2();_endProgress();},200)">✓ Aplicar</button>
         <button class="btn btn-orange" style="flex:2" onclick="_startProgress();calcSab2AndShow()">⚡ Calcular — Ver Dashboard →</button>
       </div>
     </div>
@@ -2245,7 +2245,8 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       <button onclick="_setPeriodoRapido('mes',this)"    style="background:var(--s2);border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer" class="_prBtn">Mes</button>
       <button onclick="_setPeriodoRapido('anio',this)"   style="background:var(--s2);border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer" class="_prBtn">Año</button>
       <button onclick="_setPeriodoRapido('todo',this)"   style="background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.4);color:var(--blue-l);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer" class="_prBtn _prActive">Todo</button>
-      <button onclick="_limpiarFiltrosTend()" style="margin-left:auto;background:none;border:1px solid rgba(218,54,51,.25);color:var(--red-l);border-radius:6px;padding:3px 10px;font-size:10px;font-weight:600;cursor:pointer">✕ Limpiar</button>
+      <button onclick="_limpiarFiltrosTend_Cloud()" class="_tend-limpiar-btn" style="margin-left:auto;background:none;border:1px solid rgba(218,54,51,.25);color:var(--red-l);border-radius:6px;padding:3px 10px;font-size:10px;font-weight:600;cursor:pointer">✕ Limpiar</button>
+      <span class="_tend-filtro-badge" style="display:none;align-items:center;gap:4px;background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.35);border-radius:8px;padding:3px 9px;font-size:10px;font-weight:700;color:var(--blue-l)">🔒 Filtro activo</span>
     </div>
   </div>
 
@@ -2698,7 +2699,7 @@ function abrirTransito(){
 function abrirPlaneacion(){
   // Si ya existe el overlay, solo mostrarlo
   var existing = document.getElementById('_PLN_OV');
-  if(existing){ existing.style.display='flex'; _PLN_RENDER(); return; }
+  if(existing){ existing.style.display='block'; _PLN_RENDER(); return; }
 
   // Crear overlay fullscreen independiente — mismo patrón que comparativo
   var ov = document.createElement('div');
@@ -2743,8 +2744,8 @@ function _plnSumLND(rows){ return (rows||[]).reduce(function(s,r){return s+(pars
 function _plnSumBLT(rows){ return (rows||[]).reduce(function(s,r){return s+(parseInt(r.bultos)||0);},0); }
 
 // ── persistencia ──
-function _PLN_LOAD(){ _PLN_DATA={}; } // Siempre desde Supabase — localStorage ignorado
-function _PLN_SAVE(){ if(_PLN_TIMER) clearTimeout(_PLN_TIMER); _PLN_TIMER=setTimeout(_PLN_SB_SAVE,2000); } // Solo Supabase
+function _PLN_LOAD(){ try{ var d=localStorage.getItem(_PLN_KEY); if(d) _PLN_DATA=JSON.parse(d); else _PLN_DATA={}; }catch(e){ _PLN_DATA={}; } }
+function _PLN_SAVE(){ try{localStorage.setItem(_PLN_KEY,JSON.stringify(_PLN_DATA));}catch(e){} if(_PLN_TIMER) clearTimeout(_PLN_TIMER); _PLN_TIMER=setTimeout(_PLN_SB_SAVE,2000); }
 
 // ── semana ──
 function _plnMkWeek(mon){
@@ -2856,6 +2857,7 @@ function _PLN_BUILD_HTML(){
   +'<div class="pb">'
     +'<div><div class="pb-brand">📋 PLANEACIÓN DE CARGA SEMANAL ®</div><div class="pb-sub" id="_pln_sub">ZLC Panamá</div></div>'
     +'<div class="pb-acts">'
+      +'<button id="_pln_save_btn" onclick="_plnGuardarCambios()" style="display:flex;align-items:center;gap:6px;background:linear-gradient(135deg,rgba(63,185,80,.2),rgba(46,160,67,.15));border:1px solid rgba(63,185,80,.45);color:var(--green-l);border-radius:8px;padding:6px 14px;font-size:11px;font-weight:800;cursor:pointer;transition:all .2s;letter-spacing:.02em;box-shadow:0 2px 8px rgba(63,185,80,.15)"><span id="_pln_save_ico">💾</span><span id="_pln_save_txt">Guardar Cambios</span></button>'
       +'<span id="_pln_cloud" style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:6px;background:rgba(139,148,158,.1);border:1px solid rgba(139,148,158,.25);color:var(--muted)">☁️ ...</span>'
       +'<button class="xbtn yw" onclick="_plnModalSemana()">+ Semana</button>'
       +'<button class="xbtn gn" onclick="_plnCSV()">📊 CSV</button>'
@@ -2881,7 +2883,7 @@ function _PLN_BUILD_HTML(){
     +'<button class="tabt" id="_pln_tbr" onclick="_PLN_SWITCH(\'res\')">✅ Resultado</button>'
   +'</div>'
   +'<div class="gscroll" id="_pln_hdr_scroll">'
-    +'<div class="cal-headers" id="_pln_cal_hdr" style="position:sticky;top:0;z-index:8;background:var(--bg);"></div>'
+    +'<div class="cal-headers" id="_pln_cal_hdr"></div>'
     +'<div class="cal-bodies" id="_pln_cal"></div>'
     +'<div id="_pln_stats" style="min-width:1600px"></div>'
     +'<div id="_pln_depts" style="padding:12px 16px 40px;min-width:1400px"></div>'
@@ -2985,12 +2987,29 @@ function _PLN_BUILD_HTML(){
 
 // ── Inicializar ──
 function _PLN_INIT(){
-  _PLN_LOAD(); // carga localStorage como fallback rápido
+  _PLN_LOAD(); // carga localStorage como fallback rapido
   _PLN_CUR = _plnLunes(_plnISO(new Date()));
   _PLN_TAB = 'prog';
   _PLN_RENDER();
+  // Conectar a Supabase — con retry si aun no esta listo
   if(!_PLN_SB && window._sb){ _PLN_SB=window._sb; _plnBadge('ok'); _PLN_SB_LOAD(); }
-  else if(_PLN_SB){ _PLN_SB_LOAD(); } // ya conectado, recargar desde Supabase
+  else if(_PLN_SB){ _PLN_SB_LOAD(); }
+  else {
+    // Supabase no listo aun — reintentar hasta 10 veces cada 500ms
+    var _retries=0;
+    var _retryInt=setInterval(function(){
+      _retries++;
+      if(window._sb){
+        _PLN_SB=window._sb;
+        clearInterval(_retryInt);
+        _plnBadge('ok');
+        _PLN_SB_LOAD();
+      } else if(_retries>=10){
+        clearInterval(_retryInt);
+        _plnBadge('err');
+      }
+    }, 500);
+  }
   // Sync theme button label
   var tb=document.getElementById('_pln_themeBtn');
   if(tb){ var isL=document.body.classList.contains('theme-light')||document.body.style.colorScheme==='light'; tb.textContent=isL?'🌙 Oscuro':'☀️ Claro'; }
@@ -3693,7 +3712,97 @@ window._plnPickerSelect = function(nro){
 function _plnBadge(st){ var b=document.getElementById('_pln_cloud'); if(!b) return; if(st==='ok'){b.textContent='☁️ ✓';b.style.background='rgba(63,185,80,.12)';b.style.borderColor='rgba(63,185,80,.3)';b.style.color='#56d364';}else if(st==='saving'){b.textContent='☁️ ...';b.style.background='rgba(88,166,255,.12)';b.style.borderColor='rgba(88,166,255,.3)';b.style.color='#79c0ff';}else{b.textContent='☁️ ✗';b.style.background='rgba(248,81,73,.08)';b.style.borderColor='rgba(248,81,73,.25)';b.style.color='#ff7b72';} }
 
 // ── Supabase ──
-async function _PLN_SB_SAVE(){ if(!_PLN_SB||!_PLN_CUR) return; _plnBadge('saving'); try{ var wk=_PLN_DATA[_PLN_CUR]; if(!wk){_plnBadge('ok');return;} var r=await _PLN_SB.from(_PLN_TABLE).upsert({semana:_PLN_CUR,datos:wk,updated_at:new Date().toISOString()},{onConflict:'semana'}); _plnBadge(r.error?'err':'ok'); }catch(e){_plnBadge('err');} }
+
+// ══════════════════════════════════════════════════════════════
+//  _plnGuardarCambios — overlay con spinner identico al de
+//  "Procesar Embarque": gira, confirma, muestra check verde
+// ══════════════════════════════════════════════════════════════
+async function _plnGuardarCambios(){
+  // Bloqueo de doble ejecucion
+  if(window._plnGuardandoEnCurso) return;
+  window._plnGuardandoEnCurso = true;
+  // Asegurar conexion Supabase
+  if(!_PLN_SB && window._sb) _PLN_SB = window._sb;
+
+  // ── Crear overlay oscuro con spinner (identico a _guardarYRecargar) ──
+  var old = document.getElementById('_plnSaveSpinner');
+  if(old) old.remove();
+  var spin = document.createElement('div');
+  spin.id = '_plnSaveSpinner';
+  spin.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:999999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;backdrop-filter:blur(4px)';
+  spin.innerHTML =
+    '<style>@keyframes _plnSpin{to{transform:rotate(360deg)}}</style>'
+    + '<div style="width:60px;height:60px;border:4px solid rgba(255,255,255,.15);border-top-color:#3fb950;border-radius:50%;animation:_plnSpin .8s linear infinite"></div>'
+    + '<div style="color:#fff;font-size:15px;font-weight:700;letter-spacing:.02em">Guardando planeacion...</div>'
+    + '<div style="color:rgba(255,255,255,.5);font-size:12px">Sincronizando con la nube</div>';
+  document.body.appendChild(spin);
+
+  var exito = false;
+  try{
+    if(_PLN_SB){
+      var semanas = Object.keys(_PLN_DATA);
+      if(semanas.length){
+        var rows = semanas.map(function(s){
+          return { semana:s, datos:_PLN_DATA[s], updated_at:new Date().toISOString() };
+        });
+        var r = await _PLN_SB.from(_PLN_TABLE).upsert(rows, {onConflict:'semana'});
+        exito = !r.error;
+      } else {
+        exito = true;
+      }
+    } else {
+      // Sin Supabase — guardar en localStorage
+      try{ localStorage.setItem(_PLN_KEY, JSON.stringify(_PLN_DATA)); exito = true; }catch(e){}
+    }
+  }catch(e){
+    exito = false;
+    console.warn('PLN guardar error:', e.message);
+  }
+
+  // ── Actualizar overlay con resultado ──
+  if(exito){
+    spin.innerHTML =
+      '<div style="width:64px;height:64px;background:rgba(63,185,80,.2);border:3px solid #3fb950;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:32px">✅</div>'
+      + '<div style="color:#3fb950;font-size:16px;font-weight:800;letter-spacing:.02em">\u00a1Guardado!</div>'
+      + '<div style="color:rgba(255,255,255,.5);font-size:12px">' + (_PLN_SB ? 'Sincronizado con la nube' : 'Guardado localmente') + '</div>';
+    _plnBadge('ok');
+    if(typeof _showToast==='function')
+      _showToast('\u2705 Planeaci\u00f3n guardada en la nube', 'green', 3000);
+  } else {
+    spin.innerHTML =
+      '<div style="font-size:40px">\u26a0\ufe0f</div>'
+      + '<div style="color:#f85149;font-size:15px;font-weight:700">Error al guardar</div>'
+      + '<div style="color:rgba(255,255,255,.5);font-size:12px">Revisa tu conexi\u00f3n a internet</div>';
+    _plnBadge('err');
+    if(typeof _showToast==='function')
+      _showToast('\u26a0\ufe0f Error al guardar. Revisa conexi\u00f3n.', 'red', 4000);
+  }
+
+  // ── Cerrar overlay despues de 1.4s ──
+  setTimeout(function(){ 
+    if(spin.parentNode) spin.remove();
+    window._plnGuardandoEnCurso = false; // liberar bloqueo
+  }, 1400);
+}
+
+
+async function _PLN_SB_SAVE(){
+  if(!_PLN_SB) return;
+  // Si no hay _sb, intentar conectar
+  if(!_PLN_SB && window._sb){ _PLN_SB=window._sb; }
+  if(!_PLN_SB) return;
+  _plnBadge('saving');
+  try{
+    // Guardar TODAS las semanas que existen en _PLN_DATA
+    var semanas = Object.keys(_PLN_DATA);
+    if(!semanas.length){ _plnBadge('ok'); return; }
+    var rows = semanas.map(function(s){
+      return { semana:s, datos:_PLN_DATA[s], updated_at:new Date().toISOString() };
+    });
+    var r = await _PLN_SB.from(_PLN_TABLE).upsert(rows, {onConflict:'semana'});
+    _plnBadge(r.error?'err':'ok');
+  }catch(e){ _plnBadge('err'); console.warn('PLN save error:',e.message); }
+}
 async function _PLN_SB_LOAD(){ if(!_PLN_SB) return; try{ var r=await _PLN_SB.from(_PLN_TABLE).select('semana,datos,updated_at').order('updated_at',{ascending:false}); if(r.error) return; _PLN_DATA={}; // limpiar antes de cargar SB
   (r.data||[]).forEach(function(row){if(row.semana&&row.datos)_PLN_DATA[row.semana]=row.datos;}); try{localStorage.setItem(_PLN_KEY,JSON.stringify(_PLN_DATA));}catch(e){} _PLN_RENDER(); _plnBadge('ok'); }catch(e){ _plnBadge('err'); } }
 
@@ -3750,6 +3859,8 @@ function switchTab(id,el){
     setTimeout(async ()=>{
       if(_sb) await _pullTendFromCloud();
       _populateProveedorFilter();
+      // Restaurar filtros desde Supabase
+      if(typeof _loadFiltrosTend==='function') await _loadFiltrosTend();
       renderTend();
       renderTopProvs();
       renderDashboardKPIs();
@@ -7840,6 +7951,8 @@ function _applyTendFilters(){
   if(typeof renderDashboardKPIs==='function') renderDashboardKPIs();
   if(typeof renderTopProvs==='function') renderTopProvs();
   _updateTendSubtitle();
+  // Guardar filtros en Supabase de forma asíncrona
+  if(typeof _saveFiltrosTend==='function') _saveFiltrosTend();
 }
 function _updateTendSubtitle(){
   // Actualizar en el modal si está abierto
@@ -7880,6 +7993,87 @@ function _limpiarFiltrosTend(){
   container.querySelectorAll('._prBtn').forEach(b=>{ b.style.background='var(--s2)'; b.style.borderColor='var(--border)'; b.style.color='var(--muted)'; b.style.fontWeight='600'; });
   _applyTendFilters();
 }
+
+
+// ══════════════════════════════════════════════════════════════
+//  FILTROS PERSISTENTES — Supabase (simulador_sesiones)
+//  Clave: '_TEND_FILTROS' · misma tabla que los embarques
+//  localStorage solo como cache de arranque rapido
+// ══════════════════════════════════════════════════════════════
+var _TEND_FILTROS_KEY = '_TEND_FILTROS';
+
+async function _saveFiltrosTend(){
+  var filtros = {
+    desde:  _tfVal('tf_desde'),  hasta:  _tfVal('tf_hasta'),
+    tipo:   _tfVal('tf_tipo'),   prov:   _tfVal('tf_proveedor'),
+    buscar: _tfVal('tf_buscar'), origen: _tfVal('tf_origen'),
+    ts:     new Date().toISOString()
+  };
+  var hayFiltro = !!(filtros.desde||filtros.hasta||filtros.tipo||filtros.prov||filtros.buscar||filtros.origen);
+  try{ localStorage.setItem(_TEND_FILTROS_KEY, JSON.stringify(filtros)); }catch(e){}
+  _actualizarIndicadorFiltro(hayFiltro);
+  if(!window._sb) return;
+  try{
+    await window._sb.from('simulador_sesiones').upsert(
+      { nombre: _TEND_FILTROS_KEY, datos: JSON.stringify(filtros), updated_at: new Date().toISOString() },
+      { onConflict: 'nombre' }
+    );
+  }catch(e){ console.warn('filtros sync error:', e.message); }
+}
+
+async function _loadFiltrosTend(){
+  var filtros = null;
+  if(window._sb){
+    try{
+      var r = await window._sb.from('simulador_sesiones')
+        .select('datos').eq('nombre', _TEND_FILTROS_KEY).maybeSingle();
+      if(!r.error && r.data && r.data.datos) filtros = JSON.parse(r.data.datos);
+    }catch(e){}
+  }
+  if(!filtros){
+    try{ var raw=localStorage.getItem(_TEND_FILTROS_KEY); if(raw) filtros=JSON.parse(raw); }catch(e){}
+  }
+  if(!filtros) return false;
+  if(filtros.desde)  _tfSet('tf_desde',  filtros.desde);
+  if(filtros.hasta)  _tfSet('tf_hasta',  filtros.hasta);
+  if(filtros.tipo)   _tfSet('tf_tipo',   filtros.tipo);
+  if(filtros.prov)   _tfSet('tf_proveedor', filtros.prov);
+  if(filtros.buscar) _tfSet('tf_buscar', filtros.buscar);
+  if(filtros.origen) _tfSet('tf_origen', filtros.origen);
+  var hayFiltro = !!(filtros.desde||filtros.hasta||filtros.tipo||filtros.prov||filtros.buscar||filtros.origen);
+  _actualizarIndicadorFiltro(hayFiltro);
+  return hayFiltro;
+}
+
+function _actualizarIndicadorFiltro(activo){
+  document.querySelectorAll('._tend-filtro-badge').forEach(function(el){
+    el.style.display = activo ? 'inline-flex' : 'none';
+  });
+}
+
+async function _limpiarFiltrosTend_Cloud(){
+  ['tf_desde','tf_hasta','tf_tipo','tf_proveedor','tf_buscar','tf_origen'].forEach(function(id){ _tfSet(id,''); });
+  document.querySelectorAll('[id="tf_origen_pais"]').forEach(function(sel){ sel.value=''; });
+  var container = document.getElementById('tab-modal-body') || document;
+  container.querySelectorAll('._prBtn').forEach(function(b){
+    b.style.background='var(--s2)'; b.style.borderColor='var(--border)';
+    b.style.color='var(--muted)'; b.style.fontWeight='600';
+  });
+  _actualizarIndicadorFiltro(false);
+  try{ localStorage.removeItem(_TEND_FILTROS_KEY); }catch(e){}
+  if(window._sb){
+    try{
+      await window._sb.from('simulador_sesiones').upsert(
+        { nombre: _TEND_FILTROS_KEY, datos: JSON.stringify({desde:'',hasta:'',tipo:'',prov:'',buscar:'',origen:''}), updated_at: new Date().toISOString() },
+        { onConflict: 'nombre' }
+      );
+    }catch(e){}
+  }
+  _applyTendFilters();
+  if(typeof _showToast==='function') _showToast('\u2705 Filtros restablecidos', 'green', 2000);
+}
+
+
 function autoFillTend(){
   const nroEl=document.getElementById('tend_nro');
   const descEl=document.getElementById('tend_desc');
@@ -8003,7 +8197,7 @@ function _asignSaltar(){
 }
 
 
-function procesarEmbarque(){
+async function procesarEmbarque(){
   if(!window._lastCIF&&!window._sc1_landed1){
     _showToast('⚠️ Calcula primero el Escenario #1 antes de procesar.', 'red', 3000);
     return;
@@ -8051,6 +8245,26 @@ function procesarEmbarque(){
     modoProcess = 'parcial';
   }
   const nro=document.getElementById('s1_nro_emb')?.value?.trim()||'';
+
+  // ══ REGLA 1: Número de embarque — exactamente 5 dígitos ══
+  if(nro){
+    const soloDigitos = nro.replace(/[^0-9]/g,'');
+    if(soloDigitos.length !== 5){
+      const nroEl=document.getElementById('s1_nro_emb');
+      if(nroEl){ 
+        nroEl.style.borderColor='var(--red-l)';
+        nroEl.style.boxShadow='0 0 0 3px rgba(248,81,73,.25)';
+        nroEl.focus();
+        setTimeout(()=>{ nroEl.style.borderColor=''; nroEl.style.boxShadow=''; },3000);
+      }
+      _showToast(
+        '⛔ N\u00b0 de embarque inv\u00e1lido: \"'+ nro +'\". Debe tener exactamente 5 d\u00edgitos (ej: 22057)',
+        'red', 5000
+      );
+      return;
+    }
+  }
+
   if(!nro){
     const nroEl=document.getElementById('s1_nro_emb');
     if(nroEl){ nroEl.style.borderColor='var(--red-l)'; nroEl.focus(); setTimeout(()=>nroEl.style.borderColor='',2000); }
@@ -8065,16 +8279,70 @@ function procesarEmbarque(){
       if(esReabierto){
         window._pendienteUpdateIdx = dupIdx;
       } else {
-        const reemplazar = confirm(
-          `Atencion: El embarque #${nro} ya existe en el historial (${dup.fecha||'fecha desconocida'}).\n\n` +
-          `Deseas REEMPLAZARLO con los datos actuales?\n\n` +
-          `OK = Reemplazar (los datos anteriores se perderan)\n` +
-          `Cancelar = Volver al formulario`
-        );
-        if(!reemplazar){
+        // ── Modal profesional para embarque duplicado ──
+        const _accion = await new Promise(function(resolve){
+          const _fmt2 = function(n){ return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
+          const _dupCIF     = dup.cif||0;
+          const _dupSnap    = dup.snap||{};
+          const _dupEscLow  = (dup.esc||'').toLowerCase();
+          const _dupLanded  = _dupEscLow.includes('sababa') ? (_dupSnap.sc3?.landedG||0) :
+                              _dupEscLow.includes('cif')    ? (_dupSnap.sc2?.landedG||0) :
+                                                              (_dupSnap.sc1?.landedG||0);
+          var ov = document.createElement('div');
+          ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:999999;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(3px)';
+          ov.innerHTML =
+            '<div style="background:var(--s1);border:2px solid rgba(248,81,73,.4);border-radius:16px;max-width:420px;width:100%;padding:24px;box-shadow:0 24px 64px rgba(0,0,0,.6)">'
+            +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">'
+            +'<div style="width:48px;height:48px;border-radius:12px;background:rgba(248,81,73,.12);border:2px solid rgba(248,81,73,.35);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">🚫</div>'
+            +'<div><div style="font-size:14px;font-weight:800;color:var(--red-l)">Embarque Ya Procesado</div>'
+            +'<div style="font-size:11px;color:var(--muted);margin-top:2px">El N° '+nro+' ya existe en el historial</div></div></div>'
+            +'<div style="background:rgba(248,81,73,.06);border:1px solid rgba(248,81,73,.2);border-radius:10px;padding:12px 14px;margin-bottom:16px">'
+            +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
+            +'<span style="font-size:13px;font-weight:800;color:var(--red-l)">Emb. '+(dup.nro||'—')+'</span>'
+            +'<span style="font-size:11px;color:var(--muted)">'+(dup.fecha||'—')+'</span></div>'
+            +'<div style="font-size:11px;color:var(--muted);margin-bottom:8px">Escenario: <strong style="color:var(--text)">'+(dup.esc||'—')+'</strong></div>'
+            +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">'
+            +'<div style="background:rgba(88,166,255,.08);border-radius:8px;padding:7px;text-align:center">'
+            +'<div style="font-size:9px;color:var(--muted);font-weight:700;text-transform:uppercase">FOB</div>'
+            +'<div style="font-family:monospace;font-size:12px;font-weight:800;color:var(--blue-l)">'+_fmt2(_dupCIF)+'</div></div>'
+            +'<div style="background:rgba(240,136,62,.08);border-radius:8px;padding:7px;text-align:center">'
+            +'<div style="font-size:9px;color:var(--muted);font-weight:700;text-transform:uppercase">LANDED</div>'
+            +'<div style="font-family:monospace;font-size:12px;font-weight:800;color:var(--orange-l)">'+_fmt2(_dupLanded)+'</div></div>'
+            +'</div></div>'
+            +'<div style="font-size:11px;color:var(--muted);margin-bottom:16px;line-height:1.6">¿Qué deseas hacer con este embarque?</div>'
+            +'<div style="display:flex;flex-direction:column;gap:8px">'
+            +'<button id="_dupReabrir" style="background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.35);color:var(--blue-l);border-radius:10px;padding:11px;font-size:12px;font-weight:700;cursor:pointer">✏️ Reabrir y editar este embarque</button>'
+            +'<button id="_dupIr"      style="background:rgba(210,153,34,.1);border:1px solid rgba(210,153,34,.3);color:var(--orange-l);border-radius:10px;padding:11px;font-size:12px;font-weight:600;cursor:pointer">📍 Ir al embarque en Tendencias</button>'
+            +'<button id="_dupCancelar" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:10px;padding:11px;font-size:12px;font-weight:600;cursor:pointer">← Cancelar — corregir número</button>'
+            +'</div></div>';
+          document.body.appendChild(ov);
+          document.getElementById('_dupReabrir').onclick = function(){ ov.remove(); resolve('reabrir'); };
+          document.getElementById('_dupIr').onclick      = function(){ ov.remove(); resolve('ir'); };
+          document.getElementById('_dupCancelar').onclick= function(){ ov.remove(); resolve('cancelar'); };
+        });
+
+        if(_accion === 'cancelar'){
           const nroEl=document.getElementById('s1_nro_emb');
-          if(nroEl){ nroEl.style.borderColor='var(--red-l)'; nroEl.style.boxShadow='0 0 0 3px rgba(248,81,73,.25)'; setTimeout(()=>{ nroEl.style.borderColor=''; nroEl.style.boxShadow=''; },3000); }
-          _showToast('Procesamiento cancelado. Cambia el N de embarque o confirma el reemplazo.', 'orange', 4000);
+          if(nroEl){ nroEl.style.borderColor='var(--red-l)'; nroEl.style.boxShadow='0 0 0 3px rgba(248,81,73,.25)'; nroEl.focus(); setTimeout(()=>{ nroEl.style.borderColor=''; nroEl.style.boxShadow=''; },3000); }
+          return;
+        }
+        if(_accion === 'ir'){
+          // Navegar a Tendencias y resaltar ese embarque
+          if(typeof iniciarApp==='function') iniciarApp('tendencias');
+          setTimeout(function(){
+            if(typeof _showToast==='function') _showToast('📍 Embarque '+nro+' — búscalo en el historial','orange',5000);
+            // Poner el número en el buscador de tendencias
+            var tf=document.getElementById('tf_buscar'); if(tf){ tf.value=nro; if(typeof _applyTendFilters==='function') _applyTendFilters(); }
+          }, 500);
+          return;
+        }
+        if(_accion === 'reabrir'){
+          // Reabrir: cargar datos del embarque en el formulario
+          if(typeof reabrirEmbarquePendiente==='function'){
+            reabrirEmbarquePendiente(dupIdx);
+          } else {
+            window._pendienteUpdateIdx = dupIdx;
+          }
           return;
         }
         if(!window._deletedEmbarques) window._deletedEmbarques = new Set();
@@ -8088,6 +8356,76 @@ function procesarEmbarque(){
   } else {
     window._pendienteUpdateIdx = -1;
   }
+  // ══ REGLA 2: Detección de embarque similar por FOB + Landed ══
+  // Solo corre si no es un reemplazo confirmado del mismo número
+  if(window._pendienteUpdateIdx === -1){
+    const _fobActual    = Math.round((window._lastCIF||0)*100)/100;
+    const _snap         = window._lastSnap||{};
+    const _escActual    = compar==='cifexp' ? 'cifexp' : (compar==='sababa'?'sababa':'liq');
+    const _landedActual = Math.round((
+      _escActual==='sababa' ? (_snap.sc3?.landedG||_snap.sc3?.landed1||0) :
+      _escActual==='cifexp' ? (_snap.sc2?.landedG||_snap.sc2?.landed1||0) :
+                               (_snap.sc1?.landedG||_snap.sc1?.landed1||0)
+    )*100)/100;
+    if(_fobActual > 0 && _landedActual > 0){
+      // Buscar silenciosamente por FOB primero
+      const _simFOB = (tendData||[]).filter(function(t){
+        const _tFob = Math.round((t.cif||0)*100)/100;
+        return Math.abs(_tFob - _fobActual) < 0.10 && t.nro !== nro;
+      });
+      if(_simFOB.length > 0){
+        // FOB coincide — verificar Landed silenciosamente
+        const _simAmbos = _simFOB.filter(function(t){
+          const _tSnap    = t.snap||{};
+          const _tEsc     = (t.esc||''). toLowerCase();
+          const _tLanded  = Math.round((
+            _tEsc.includes('sababa') ? (_tSnap.sc3?.landedG||_tSnap.sc3?.landed1||0) :
+            _tEsc.includes('cif')   ? (_tSnap.sc2?.landedG||_tSnap.sc2?.landed1||0) :
+                                       (_tSnap.sc1?.landedG||_tSnap.sc1?.landed1||0)
+          )*100)/100;
+          return Math.abs(_tLanded - _landedActual) < 0.10;
+        });
+        if(_simAmbos.length > 0){
+          // FOB Y Landed coinciden — mostrar modal de advertencia profesional
+          const _dup = _simAmbos[0];
+          const _fmt = function(n){ return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
+          const _continuar = await new Promise(function(resolve){
+            var ov = document.createElement('div');
+            ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:999999;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(3px)';
+            ov.innerHTML =
+              '<div style="background:var(--s1);border:2px solid rgba(210,153,34,.5);border-radius:16px;max-width:400px;width:100%;padding:24px;box-shadow:0 24px 64px rgba(0,0,0,.5)">'
+              +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">'
+              +'<div style="width:48px;height:48px;border-radius:12px;background:rgba(210,153,34,.15);border:2px solid rgba(210,153,34,.4);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">⚠️</div>'
+              +'<div><div style="font-size:14px;font-weight:800;color:var(--orange-l);letter-spacing:.01em">Embarque con Características Similares</div>'
+              +'<div style="font-size:11px;color:var(--muted);margin-top:2px">Verificación de seguridad antes de procesar</div></div></div>'
+              +'<div style="background:rgba(210,153,34,.07);border:1px solid rgba(210,153,34,.2);border-radius:10px;padding:12px 14px;margin-bottom:16px">'
+              +'<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Embarque ya registrado</div>'
+              +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'
+              +'<span style="font-size:12px;font-weight:700;color:var(--orange-l)">Emb. ' + (_dup.nro||'—') + '</span>'
+              +'<span style="font-size:11px;color:var(--muted)">' + (_dup.fecha||'—') + '</span></div>'
+              +'<div style="font-size:11px;color:var(--muted);margin-bottom:2px">Escenario: <strong style="color:var(--text)">' + (_dup.esc||'—') + '</strong></div>'
+              +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">'
+              +'<div style="background:rgba(88,166,255,.08);border-radius:8px;padding:8px;text-align:center">'
+              +'<div style="font-size:9px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.05em">FOB</div>'
+              +'<div style="font-family:monospace;font-size:13px;font-weight:800;color:var(--blue-l)">' + _fmt(_fobActual) + '</div></div>'
+              +'<div style="background:rgba(240,136,62,.08);border-radius:8px;padding:8px;text-align:center">'
+              +'<div style="font-size:9px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.05em">LANDED</div>'
+              +'<div style="font-family:monospace;font-size:13px;font-weight:800;color:var(--orange-l)">' + _fmt(_landedActual) + '</div></div></div></div>'
+              +'<div style="font-size:11px;color:var(--muted);margin-bottom:18px;line-height:1.6">Los montos FOB y Landed de este embarque son <strong style="color:var(--text)">idénticos</strong> a un embarque ya registrado. Confirma solo si se trata de un embarque diferente.</div>'
+              +'<div style="display:flex;gap:10px">'
+              +'<button id="_dupCancel" style="flex:1;background:none;border:1px solid var(--border);color:var(--muted);border-radius:10px;padding:11px;font-size:12px;font-weight:600;cursor:pointer">← Cancelar</button>'
+              +'<button id="_dupConfirm" style="flex:2;background:linear-gradient(135deg,rgba(63,185,80,.2),rgba(46,160,67,.15));border:1px solid rgba(63,185,80,.45);color:var(--green-l);border-radius:10px;padding:11px;font-size:12px;font-weight:700;cursor:pointer">✓ Confirmar y Procesar</button>'
+              +'</div></div>';
+            document.body.appendChild(ov);
+            document.getElementById('_dupConfirm').onclick = function(){ ov.remove(); resolve(true); };
+            document.getElementById('_dupCancel').onclick  = function(){ ov.remove(); resolve(false); };
+          });
+          if(!_continuar) return;
+        }
+      }
+    }
+  }
+
   const desc=document.getElementById('s1_desc_emb')?.value||window._lastDesc||'Embarque';
   // Allow forced date
   // Auto-fill gastos de servicio antes de guardar el snap (para incluir Tesoro, CIF Express, etc.)
@@ -9407,7 +9745,7 @@ ${_dGastoComp>0?`<span style="background:rgba(248,81,73,.08);border:1px solid rg
     const yrId='tend-yr-'+yr;
     histHtml+=`
     <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:8px">
-      <div id="${yrId}-hd" onclick="(function(id){var b=document.getElementById(id+'-body');if(!b)return;var open=b.style.display!=='none';b.style.display=open?'none':'block';document.getElementById(id+'-chev').textContent=open?'▶':'▼';})('${yrId}')" style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--s2);cursor:pointer;user-select:none">
+      <div id="${yrId}-hd" onclick="(function(hd){var cont=hd.parentElement;var b=cont.querySelector('[id$=\'-body\']');var c=hd.querySelector('[id$=\'-chev\']');if(!b)return;var open=b.style.display!=='none';b.style.display=open?'none':'block';if(c)c.textContent=open?'▶':'▼';})(this)" style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--s2);cursor:pointer;user-select:none">
         <div style="display:flex;align-items:center;gap:10px">
           <span id="${yrId}-chev" style="font-size:9px;color:var(--muted)">▼</span>
           <span style="font-size:13px;font-weight:700;color:var(--text)">${yr}</span>
@@ -9426,7 +9764,7 @@ ${_dGastoComp>0?`<span style="background:rgba(248,81,73,.08);border:1px solid rg
       const moId='tend-mo-'+ym.replace('-','_');
       histHtml+=`
         <div style="border-top:1px solid var(--border)">
-          <div id="${moId}-hd" onclick="(function(id){var b=document.getElementById(id+'-body');if(!b)return;var open=b.style.display!=='none';b.style.display=open?'none':'block';document.getElementById(id+'-chev').textContent=open?'▶':'▼';})('${moId}')" style="display:flex;justify-content:space-between;align-items:center;padding:8px 14px 8px 28px;background:rgba(255,255,255,.02);cursor:pointer;user-select:none">
+          <div id="${moId}-hd" onclick="(function(hd){var cont=hd.parentElement;var b=cont.querySelector('[id$=\'-body\']');var c=hd.querySelector('[id$=\'-chev\']');if(!b)return;var open=b.style.display!=='none';b.style.display=open?'none':'block';if(c)c.textContent=open?'▶':'▼';})(this)" style="display:flex;justify-content:space-between;align-items:center;padding:8px 14px 8px 28px;background:rgba(255,255,255,.02);cursor:pointer;user-select:none">
             <div style="display:flex;align-items:center;gap:8px">
               <span id="${moId}-chev" style="font-size:9px;color:var(--muted)">${isCurrentMonth?'▼':'▶'}</span>
               <span style="font-size:12px;font-weight:600;color:var(--text)">${moName}</span>
@@ -10748,10 +11086,11 @@ function _renderHistProvList(){
 }
 
 function _setDeptVista(modo, btn){
-  var vG = document.getElementById('_dept-vista-grafica');
-  var vL = document.getElementById('_dept-vista-lista');
-  var bG = document.getElementById('_btn-vista-grafica');
-  var bL = document.getElementById('_btn-vista-lista');
+  var root = btn ? (btn.closest('#tab-modal-body')||document) : document;
+  var vG = root.querySelector('#_dept-vista-grafica');
+  var vL = root.querySelector('#_dept-vista-lista');
+  var bG = root.querySelector('#_btn-vista-grafica');
+  var bL = root.querySelector('#_btn-vista-lista');
   if(!vG||!vL) return;
   var esGrafica = modo === 'grafica';
   vG.style.display = esGrafica ? 'block' : 'none';
@@ -10759,7 +11098,6 @@ function _setDeptVista(modo, btn){
   if(bG){ bG.style.background=esGrafica?'rgba(88,166,255,.2)':'transparent'; bG.style.borderColor=esGrafica?'rgba(88,166,255,.4)':'var(--border)'; bG.style.color=esGrafica?'var(--blue-l)':'var(--muted)'; bG.style.fontWeight=esGrafica?'700':'600'; }
   if(bL){ bL.style.background=esGrafica?'transparent':'rgba(88,166,255,.2)'; bL.style.borderColor=esGrafica?'var(--border)':'rgba(88,166,255,.4)'; bL.style.color=esGrafica?'var(--muted)':'var(--blue-l)'; bL.style.fontWeight=esGrafica?'600':'700'; }
 }
-
 function renderDashboardKPIs(data){
   const els=Array.from(document.querySelectorAll('[id="dash-kpi-block"]'));
   const el=els.length ? els[els.length-1] : null;
@@ -10871,7 +11209,7 @@ function renderDashboardKPIs(data){
     <!-- Gráfica de departamentos — botón toggle Vista Gráfica / Vista Lista -->
     <div style="margin-bottom:10px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em">📊 Valor Mercancía por Departamento <span style="font-size:9px;font-weight:500;color:var(--muted2);text-transform:none;letter-spacing:0">— toca para ver proveedores</span></div>
+        <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em">📊 Valor Mercancía por Departamento</div>
         <div style="display:flex;gap:4px">
           <button id="_btn-vista-grafica" onclick="_setDeptVista('grafica',this)"
             style="background:rgba(88,166,255,.2);border:1px solid rgba(88,166,255,.4);color:var(--blue-l);border-radius:6px;padding:3px 10px;font-size:10px;font-weight:700;cursor:pointer">
@@ -10887,9 +11225,9 @@ function renderDashboardKPIs(data){
       <div id="_dept-vista-grafica">
         ${_renderDeptChart(all)}
       </div>
-      <!-- Vista Lista — agrupada por mes -->
+      <!-- Vista Lista (proveedores por depto, oculta por defecto) -->
       <div id="_dept-vista-lista" style="display:none">
-        ${_renderGroupByMonth(all)}
+        ${_renderGroupSections(all)}
       </div>
     </div>
 
@@ -11579,7 +11917,10 @@ function _renderDeptChart(all){
 
   let html=`
   <div style="margin-bottom:14px">
-    <div style="margin-bottom:10px">`;
+    <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px;display:flex;align-items:center;gap:6px">
+      📊 Valor Mercancía por Departamento
+      <span style="font-size:9px;font-weight:500;color:var(--muted2);text-transform:none;letter-spacing:0">— toca para ver proveedores</span>
+    </div>`;
 
   entries.forEach(([k,v],i)=>{
     const pctBar=(v.cif/maxCif*100).toFixed(1);
@@ -11589,7 +11930,7 @@ function _renderDeptChart(all){
     const did=uid+'_'+i;
 
     // Build provider rows
-    const sortedProvs=[...v.provs].sort((a,b)=>{ const na=parseInt((a.nro||'0').replace(/[^0-9]/g,''))||0; const nb=parseInt((b.nro||'0').replace(/[^0-9]/g,''))||0; return nb-na; });
+    const sortedProvs=[...v.provs].sort((a,b)=>b.costo-a.costo);
     const totalProv=sortedProvs.reduce((s,p)=>s+p.costo,0);
     const provRows=sortedProvs.map(p=>{
       const tipoBadge=(p.tipo==='EXT'||p.tipo==='IMP')
@@ -11660,7 +12001,6 @@ function _renderDeptChart(all){
   </div>`;
   return html;
 }
-
 // ── AGRUPACIONES COLAPSABLES ─────────────────────────
 // ═══════════════════════════════════════════════════════════
 // Toggle helper for month accordion
@@ -15205,18 +15545,25 @@ async function cargarSesionNubeIdx(idx){
   if(s.sabTipoCmp) sabTipoCmp=s.sabTipoCmp;
 
   // ── 2. Restaurar campos del formulario ──
-  // REGLA: El usuario manda sobre la nube.
-  // Si un campo tiene dataset.userEdited='true' o dataset.autoSet='false', NO sobreescribir.
+  // Al cargar una sesion guardada, se limpian los flags de edicion manual
+  // para que TODOS los campos se restauren correctamente desde la nube.
   if(s.campos) {
+    // Primero limpiar flags que bloquearían la restauración
+    Object.keys(s.campos).forEach(function(id){
+      try{
+        const el=document.getElementById(id);
+        if(el && el.dataset){
+          delete el.dataset.autoSet;
+          delete el.dataset.userEdited;
+        }
+      }catch(e){}
+    });
+    // Luego restaurar todos los valores
     Object.entries(s.campos).forEach(([id,val])=>{
       try{
         const el=document.getElementById(id);
-        if(el && val !== undefined && val !== null) {
-          // Respetar edición manual del usuario: no pisar campos que el usuario haya tocado
-          const userEdited = el.dataset && (el.dataset.userEdited==='true' || el.dataset.autoSet==='false');
-          if(!userEdited){
-            el.value = val;
-          }
+        if(el && val !== undefined && val !== null && val !== '') {
+          el.value = val;
         }
       }catch(e){}
     });
@@ -17950,6 +18297,7 @@ body:not(.sidebar-pinned) #app-wrapper {
         if(tabId==='tendencias' && typeof renderTend==='function'){
           (async function(){
             if(_sb){ await _pullTendFromCloud(); }
+            if(typeof _loadFiltrosTend==="function") await _loadFiltrosTend();
             renderTend();
             if(typeof renderDashboardKPIs==='function') renderDashboardKPIs();
             if(typeof cargarPendientes==='function') cargarPendientes();
@@ -18553,57 +18901,80 @@ window._plnModuloEmbarques = async function(){
     return parseFloat(snap.sc1Base||d.sc1Base||0);
   }
   function renderList(q){
-    q=(q||'').trim().toLowerCase();
-    // Obtener NROs ya asignados en la semana actual
-    var wkChkR=_plnMkWeek(_PLN_CTX.mon);
-    var asignados={};
-    var DIAS=['Lunes','Martes','Miércoles','Jueves','Viernes'];
-    (wkChkR[_PLN_CTX.tab]||[]).forEach(function(day,di){
-      (day.cubiculos||[]).forEach(function(cub){
-        (cub.nroEmb||'').split('+').forEach(function(n){
-          var t=n.trim().replace(/\(parcial\)/gi,'').trim();
-          if(t) asignados[t]=di;
+    q=(q||"").trim().toLowerCase();
+    var DIAS=["Lunes","Martes","Miércoles","Jueves","Viernes"];
+    var asigTodo={};
+    Object.keys(_PLN_DATA).forEach(function(mon){
+      var wkX=_PLN_DATA[mon];
+      (["prog","res"]).forEach(function(tab){
+        (wkX[tab]||[]).forEach(function(day,di){
+          (day.cubiculos||[]).forEach(function(cub){
+            (cub.nroEmb||"").split("+").forEach(function(n){
+              var t=n.trim().replace(/(parcial)/gi,"").trim();
+              if(t&&!asigTodo[t]) asigTodo[t]={di:di,mon:mon};
+            });
+          });
         });
       });
     });
-    var items=td.filter(function(d){
-      return !q||(d.nro||'').toLowerCase().includes(q)||(d.desc||'').toLowerCase().includes(q);
-    }).sort(function(a,b){
-      var na=parseInt((a.nro||'').replace(/[^0-9]/g,''))||0;
-      var nb=parseInt((b.nro||'').replace(/[^0-9]/g,''))||0;
-      return nb-na;
-    }).slice(0,40);
-    if(!items.length){ listEl.innerHTML='<div style="padding:20px;text-align:center;color:var(--muted)">Sin resultados</div>'; return; }
-    listEl.innerHTML=items.map(function(d){
-      var lines=(d.snap&&d.snap.invLines||d.invLines||[]).filter(function(l){return !l.tipoFac||l.tipoFac==='mercancia';});
-      var fob=parseFloat((d.snap&&d.snap.sc1&&(d.snap.sc1.cif||d.snap.sc1.fob))||d.cif||0);
-      var lnd=getLanded(d);
-      var snap=d.snap||{};
-      var tipoEq=(snap.campos&&snap.campos.s1_equipo)||d.tipoEquipo||'';
-      var nEquip=parseInt((snap.campos&&snap.campos.s1_equipos)||1)||1;
-      var deptos=[...new Set(lines.map(function(l){return l.dept||l.deptCat||'';}).filter(Boolean))].slice(0,3).join(', ');
-      var nro=(d.nro||'').trim();
-      var diaAsig=asignados[nro];
-      var yaAsignado=diaAsig!==undefined;
-      var borderColor=yaAsignado?'rgba(248,81,73,.4)':'var(--border)';
-      var badge=yaAsignado?'<span style="font-size:9px;font-weight:700;background:rgba(248,81,73,.15);border:1px solid rgba(248,81,73,.4);color:#f47067;padding:1px 6px;border-radius:4px;margin-left:4px">📍 En '+DIAS[diaAsig]+'</span>':'';
-      return '<div class="_plnEmbItem" data-nro="'+nro+'" style="padding:11px 12px;border:1px solid '+borderColor+';border-radius:9px;margin-bottom:7px;cursor:pointer;background:var(--bg)'+(yaAsignado?';border-left:3px solid #f47067':'')+'">'
-        +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'
-        +'<div style="flex:1;min-width:0">'
-        +'<div style="font-size:13px;font-weight:700;color:'+(yaAsignado?'#f47067':'var(--orange-l)')+'">Emb. '+nro+badge+'</div>'
-        +'<div style="font-size:11px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(d.desc||'')+'</div>'
-        +'<div style="font-size:10px;color:var(--muted)">'+(d.fecha||'')+' &middot; '+(d.esc||'')+(tipoEq?' &middot; '+nEquip+'x '+tipoEq:'')+(lines.length?' &middot; '+lines.length+' prov.':'')+(deptos?' &middot; '+deptos:'')+'</div>'
-        +(yaAsignado?'<div style="font-size:10px;color:#f47067;margin-top:3px">⚡ Toca para mover a '+DIAS[_PLN_CTX.di]+'</div>':'')
-        +'</div>'
-        +'<div style="text-align:right;flex-shrink:0">'
-        +'<div style="font-size:11px;font-weight:700;color:var(--green-l);font-family:monospace">'+fmt(fob)+'</div>'
-        +'<div style="font-size:10px;color:var(--orange-l);font-family:monospace">'+fmt(lnd)+'</div>'
-        +'<div style="font-size:9px;color:var(--muted)">FOB / Landed</div>'
-        +'</div></div></div>';
-    }).join('');
-    listEl.querySelectorAll('._plnEmbItem').forEach(function(el){
-      el.addEventListener('click',function(){ selectEmbarque(el.getAttribute('data-nro')); });
-    });
+    if(q){
+      var nrosAsig=Object.keys(asigTodo).filter(function(nro){ return nro.toLowerCase().includes(q); });
+      var disp=td.filter(function(d){
+        var nro=(d.nro||"").trim();
+        return !asigTodo[nro]&&((d.nro||"").toLowerCase().includes(q)||(d.desc||"").toLowerCase().includes(q));
+      }).sort(function(a,b){
+        return (parseInt((b.nro||"").replace(/[^0-9]/g,""))||0)-(parseInt((a.nro||"").replace(/[^0-9]/g,""))||0);
+      }).slice(0,40);
+      var nota="";
+      if(nrosAsig.length){
+        nota=nrosAsig.map(function(nro){
+          var inf=asigTodo[nro];
+          var donde=DIAS[inf.di]+(inf.mon!==_PLN_CTX.mon?" (semana "+inf.mon+")":"");
+          return '<div style="background:rgba(248,209,34,.08);border:1px solid rgba(248,209,34,.3);border-radius:8px;padding:10px 12px;margin-bottom:8px">'
+            +'<div style="font-size:12px;font-weight:700;color:#f8d122;margin-bottom:3px">📍 Emb. '+nro+' ya está asignado</div>'
+            +'<div style="font-size:11px;color:var(--muted)">Asignado el <strong style="color:var(--text)">'+donde+'</strong>. Para usarlo, primero elíminalo de ese día.</div>'
+            +'</div>';
+        }).join("");
+      }
+      if(!disp.length&&!nota){
+        listEl.innerHTML='<div style="background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.3);border-radius:8px;padding:14px;text-align:center">'
+          +'<div style="font-size:24px;margin-bottom:6px">🔍</div>'
+          +'<div style="font-size:13px;font-weight:700;color:#f47067;margin-bottom:4px">Este embarque no existe</div>'
+          +'<div style="font-size:11px;color:var(--muted)">No se encontró ningún embarque con &ldquo;'+q+'&rdquo; en el historial.</div>'
+          +'</div>';
+        return;
+      }
+      listEl.innerHTML=nota;
+      if(disp.length){
+        listEl.innerHTML+=disp.map(mkRow).join("");
+        listEl.querySelectorAll("._plnEmbItem").forEach(function(el){ el.addEventListener("click",function(){ selectEmbarque(el.getAttribute("data-nro")); }); });
+      }
+      return;
+    }
+    var items=td.filter(function(d){ return !asigTodo[(d.nro||"").trim()]; })
+      .sort(function(a,b){ return (parseInt((b.nro||"").replace(/[^0-9]/g,""))||0)-(parseInt((a.nro||"").replace(/[^0-9]/g,""))||0); })
+      .slice(0,40);
+    if(!items.length){ listEl.innerHTML='<div style="padding:20px;text-align:center;color:var(--muted);font-size:12px">Todos los embarques están asignados.</div>'; return; }
+    listEl.innerHTML=items.map(mkRow).join("");
+    listEl.querySelectorAll("._plnEmbItem").forEach(function(el){ el.addEventListener("click",function(){ selectEmbarque(el.getAttribute("data-nro")); }); });
+  }
+  function mkRow(d){
+    var lines=(d.snap&&d.snap.invLines||d.invLines||[]).filter(function(l){return !l.tipoFac||l.tipoFac==="mercancia";});
+    var fob=parseFloat((d.snap&&d.snap.sc1&&(d.snap.sc1.cif||d.snap.sc1.fob))||d.cif||0);
+    var lnd=getLanded(d);
+    var snap=d.snap||{}, tipoEq=(snap.campos&&snap.campos.s1_equipo)||d.tipoEquipo||"";
+    var nEquip=parseInt((snap.campos&&snap.campos.s1_equipos)||1)||1;
+    var deptos=[...new Set(lines.map(function(l){return l.dept||l.deptCat||"";}).filter(Boolean))].slice(0,3).join(", ");
+    var nro=(d.nro||"").trim();
+    return '<div class="_plnEmbItem" data-nro="'+nro+'" style="padding:11px 12px;border:1px solid var(--border);border-radius:9px;margin-bottom:7px;cursor:pointer;background:var(--bg)">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div style="flex:1;min-width:0">'
+      +'<div style="font-size:13px;font-weight:700;color:var(--orange-l)">Emb. '+nro+'</div>'
+      +'<div style="font-size:11px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+( d.desc||"")+'</div>'
+      +'<div style="font-size:10px;color:var(--muted)">'+( d.fecha||"")+' &middot; '+( d.esc||"")+(tipoEq?" &middot; "+nEquip+"x "+tipoEq:"")+(lines.length?" &middot; "+lines.length+" prov.":"")+(deptos?" &middot; "+deptos:"")+'</div>'
+      +'</div><div style="text-align:right;flex-shrink:0">'
+      +'<div style="font-size:11px;font-weight:700;color:var(--green-l);font-family:monospace">'+fmt(fob)+'</div>'
+      +'<div style="font-size:10px;color:var(--orange-l);font-family:monospace">'+fmt(lnd)+'</div>'
+      +'<div style="font-size:9px;color:var(--muted)">FOB / Landed</div></div></div></div>';
   }
   function selectEmbarque(nro){
     var d=td.find(function(x){return (x.nro||'').trim()===nro.trim();}); if(!d){alert('No encontrado: '+nro);return;}
