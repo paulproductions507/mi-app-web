@@ -8186,15 +8186,34 @@ function _getFilteredTendData(){
     if(desde||hasta){
       let fechaMatch = false;
 
+      // Normalize fecha to YYYY-MM-DD string for comparison
+      const normFecha = f => {
+        if(!f) return '';
+        if(typeof f === 'number') return new Date(f).toISOString().slice(0,10);
+        const s = String(f).trim();
+        // Handle DD/MM/YYYY or DD-MM-YYYY
+        const m = s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+        if(m) return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');
+        return s.slice(0,10); // already YYYY-MM-DD
+      };
+
       // Verificar fecha principal del embarque
-      if(d.fecha){
-        if((!desde||d.fecha>=desde) && (!hasta||d.fecha<=hasta)) fechaMatch=true;
+      const fEmb = normFecha(d.fecha);
+      if(fEmb){
+        if((!desde||fEmb>=desde) && (!hasta||fEmb<=hasta)) fechaMatch=true;
+      }
+
+      // También verificar fecha del snap (puede tener fecha de proceso diferente)
+      if(!fechaMatch && d.snap && d.snap.fecha){
+        const fSnap = normFecha(d.snap.fecha);
+        if(fSnap && (!desde||fSnap>=desde) && (!hasta||fSnap<=hasta)) fechaMatch=true;
       }
 
       // Si es parcial con contenedores, verificar fechas de cada contenedor
       if(!fechaMatch && d.contenedores && d.contenedores.length>0){
         for(const c of d.contenedores){
-          if(c.fecha && (!desde||c.fecha>=desde) && (!hasta||c.fecha<=hasta)){
+          const fC = normFecha(c.fecha);
+          if(fC && (!desde||fC>=desde) && (!hasta||fC<=hasta)){
             fechaMatch=true; break;
           }
         }
@@ -11467,10 +11486,12 @@ function _kpiMostrarAhorro(){
     var alt_imp=isCif?0:(sc3.itbmsHomol||0);
     c1 += Math.max(0, reg_imp - alt_imp);
 
-    // C2: Gastos O/D
-    var reg_gst=(sc1.flete||0)+(sc1.agente||0)+(sc1.acarreo||0)+(sc1.dmce||0);
-    var alt_gst=isCif?((sc2.flete||0)+(sc2.agente||sc1.agente||0)):((sc3.flete||0)+(sc3.gastos||sc1.agente||0));
-    c2 += Math.max(0, reg_gst - alt_gst);
+    // C2: Gastos O/D — ahorro = solo acarreo + DMCE (flete y gastos son iguales)
+    // Flete: mismo en ambos escenarios → diferencia = 0
+    // Gastos O/D: mismos en ambos → diferencia = 0
+    // Acarreo: pagado en Regular, absorbido por comisión en CIF/Sababa → ahorro = acarreo
+    // DMCE: pagado en Regular, absorbido por comisión en CIF/Sababa → ahorro = dmce
+    c2 += (sc1.acarreo||0) + (sc1.dmce||0);
 
     // C3: Honorarios
     var reg_hon=sc1.hon||0;
@@ -11485,6 +11506,10 @@ function _kpiMostrarAhorro(){
 
   var cntSab = all.filter(function(d){var e=(d.esc||'').toLowerCase();return e.includes('sababa')||e.includes('sab');}).length;
   var cntCif = all.filter(function(d){var e=(d.esc||'').toLowerCase();return e.includes('cif')||e.includes('express');}).length;
+  // Show active filter period
+  var _desde = (document.getElementById('tf_desde')||{}).value||'';
+  var _hasta = (document.getElementById('tf_hasta')||{}).value||'';
+  var periodoLabel = (_desde||_hasta) ? (' · ' + (_desde||'inicio') + ' → ' + (_hasta||'hoy')) : ' · Sin filtro de fecha (todos los períodos)';
 
   var ov=document.createElement('div');
   ov.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;padding:16px';
@@ -11492,7 +11517,7 @@ function _kpiMostrarAhorro(){
     '<div style="padding:16px 16px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">'+
       '<div>'+
         '<div style="font-size:13px;font-weight:800;color:var(--green-l)">💰 Desglose de Ahorro</div>'+
-        '<div style="font-size:10px;color:var(--muted);margin-top:2px">'+cntSab+' Sababa · '+cntCif+' CIF Express · '+all.length+' embarques total</div>'+
+        '<div style="font-size:10px;color:var(--muted);margin-top:2px">'+cntSab+' Sababa · '+cntCif+' CIF Express · '+all.length+' embarques'+periodoLabel+'</div>'+
       '</div>'+
       '<button onclick="_kpiAhorroClose(this)" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:0 4px">×</button>'+
     '</div>'+
@@ -11505,8 +11530,8 @@ function _kpiMostrarAhorro(){
         '<span style="font-size:9px;color:var(--muted);padding-bottom:8px">Arancel + ITBMS + Tasa + Uso sistema vs $0 CIF / ITBMS-Homol. Sababa</span>'+
         '<span></span>'+
         '<span style="font-size:11px;color:var(--text)">🚚 Criterio 2 — Gastos Origen/Destino</span>'+
-        '<span style="font-family:monospace;font-size:12px;font-weight:700;color:'+( c2>0?'var(--green-l)':'var(--muted)')+';text-align:right">'+( c2>0?'+':'')+fmt2(c2)+'</span>'+
-        '<span style="font-size:9px;color:var(--muted);padding-bottom:8px">Acarreo + DMCE absorbidos por comisión</span>'+
+        '<span style="font-family:monospace;font-size:12px;font-weight:700;color:'+(c2>0.01?'var(--green-l)':c2<-0.01?'var(--red-l)':'var(--muted)')+';text-align:right">'+(c2>0.01?'+':'')+fmt2(c2)+'</span>'+
+        '<span style="font-size:9px;color:var(--muted);padding-bottom:8px">Flete + Gastos comparados · Acarreo/DMCE absorbidos por comisión (= $0 en escenario elegido)</span>'+
         '<span></span>'+
         '<span style="font-size:11px;color:var(--text)">👔 Criterio 3 — Honorarios / Comisión</span>'+
         '<span style="font-family:monospace;font-size:12px;font-weight:700;color:'+( c3>0?'var(--green-l)':'var(--muted)')+';text-align:right">'+( c3>0?'+':'')+fmt2(c3)+'</span>'+
