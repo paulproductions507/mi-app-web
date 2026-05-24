@@ -2055,12 +2055,10 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
         <button onclick="document.getElementById('inv-file-input').click()" style="flex:1;min-width:100px;background:rgba(210,153,34,.08);border:1px solid rgba(210,153,34,.2);color:var(--orange-l);border-radius:8px;padding:8px;font-size:11px;cursor:pointer">📂 Cargar CSV/Excel</button>
         <input type="file" id="inv-file-input" accept=".csv,.xlsx,.xls" style="display:none" onchange="loadInvFile(this)">
         <button onclick="_guardarTodasFacturas()" style="flex:1;min-width:100px;background:rgba(63,185,80,.15);border:1px solid rgba(63,185,80,.4);color:var(--green-l);border-radius:8px;padding:8px;font-size:11px;font-weight:700;cursor:pointer">💾 Guardar Todas</button>
+        <button onclick="document.getElementById('art-file-input').click()" title="Sube el archivo de artículos de Sababa para auto-rellenar Piezas, OC Homologada y Monto Homologado por OC Original" style="flex:1;min-width:100px;background:rgba(167,113,247,.12);border:1px solid rgba(167,113,247,.4);color:#a371f7;border-radius:8px;padding:8px;font-size:11px;font-weight:600;cursor:pointer">🔗 Mapear Piezas</button>
       </div>
-      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
-        <button onclick="document.getElementById('art-file-input').click()" style="flex:1;min-width:140px;background:rgba(167,113,247,.08);border:1px solid rgba(167,113,247,.3);color:#a371f7;border-radius:8px;padding:8px;font-size:11px;cursor:pointer">🔗 Cargar Plantilla Artículos (auto-rellena Piezas · OC Homol · Monto Homol)</button>
-        <input type="file" id="art-file-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="_loadArticulosPlantilla(this)">
-        <div id="art-status" style="font-size:10px;color:var(--muted);flex:1;min-width:120px"></div>
-      </div>
+      <div id="art-status" style="font-size:10px;color:var(--muted);margin-bottom:4px;min-height:16px"></div>
+      <input type="file" id="art-file-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="_loadArticulosPlantilla(this)">
       <!-- Search -->
       <div style="margin-bottom:8px">
         <input type="text" id="inv-search" placeholder="🔍 Filtrar por proveedor o departamento..."
@@ -5297,76 +5295,181 @@ function calc(){
         ${termino} · ${tipo==='ZL'?'Zona Libre':'Importación/Exterior'} · ${document.getElementById('s1_equipo')?.value||''} · vs ${sc2labelFull}
       </div>
 
-      <!-- DESEMBOLSOS: 2 col + AHORRO ABAJO -->
+      <!-- DESEMBOLSOS — 4 Criterios Confirmados -->
       ${(()=>{
-        const d1 = sc1_base + sc1_arancel + sc1_itbms + sc1_hon + tasa + form1 + itbmsTasaFinal + sc1_flete_nm + acarreo + dmce + agente;
-        const d2 = sc2_base + sc2_itbms + sc2_hon + sc2_itbms_hon + tasa + form2 + itbmsTasaFinal + agente;
-        // SC3 desembolso: always compute inline from available values
-        // = CIF + comision_total (comision includes ITBMS + honorario neto) + flete + gastos
-        // SC3: use live computed variables from this calc() run
-        // sc3_baseAjustada is already correctly set above using pagFinal
-        const d3 = sc3_comision > 0
-          ? sc1_base + sc3_comision + sc3_flete + sc3_gastos
-          : (sc3_baseAjustada > 0
-            ? sc1_base + sc3_baseAjustada * sc3_comPct + sc3_flete + sc3_gastos
-            : 0);
-        const dAlt = compar==='cifexp' ? d2 : d3;
-        const ahorro = d1 - dAlt;
-        const label3 = compar==='cifexp' ? sc2label : 'Escenario Sababa (#3)';
-        return `
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
-          <div style="text-align:center;background:rgba(63,185,80,.07);border:1px solid rgba(63,185,80,.3);border-radius:10px;padding:14px">
-            <div style="font-size:9px;font-weight:700;color:var(--green-l);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Esc.#1 Regular</div>
-            <div style="font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:800;color:var(--green-l)">${fmt(d1)}</div>
-            <div style="font-size:9px;color:var(--muted);margin-top:3px">Desembolso Total</div>
+        const fmt2 = n=>'$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+        const pctOf = (n,d)=>d>0?((n/d)*100).toFixed(1)+'%':'—';
+        const isSab = compar==='sababa';
+        const isCIF = compar==='cifexp';
+        const altLabel = isCIF ? (sc2label||'CIF Express') : 'Sababa Imports';
+        const altColor = isCIF ? 'var(--blue-l)' : 'var(--orange-l)';
+
+        // ── CRITERIO 1: Impuestos ──
+        const c1_reg = sc1_arancel + sc1_itbms + tasa + itbmsTasaFinal + form1;
+        const c1_alt = isCIF ? 0 : 0; // CIF=exonerado, Sababa=solo ITBMS homol (calculado en calcSab2)
+        // For CIF: 0 impuestos. For Sababa: only ITBMS on homologado
+        const c1_sab3 = window._lastSnap?.sc3?.itbmsHomol || 0;
+        const c1_altVal = isCIF ? 0 : c1_sab3;
+
+        // ── CRITERIO 2: Gastos Origen/Destino ──
+        const c2_reg = sc1_flete_nm + agente + acarreo + dmce;
+        const c2_alt = isCIF ? agente : (sc3_flete + sc3_gastos); // CIF: gastos sin acarreo/DMCE
+        // CIF absorbe acarreo/DMCE en su comisión
+        const c2_cifVal = agente; // solo gastos, sin acarreo/DMCE (absorbidos)
+
+        // ── CRITERIO 3: Honorarios ──
+        const c3_reg = sc1_hon;
+        // CIF: 3% s/CIF + ITBMS s/monto gravado
+        const c3_cif = sc2_hon + sc2_itbms_hon;
+        // Sababa: honorario neto (comisión - ITBMS) ya calculado en calcSab2
+        const c3_sab = window._lastSnap?.sc3?.comBruta || (window._lastSnap?.sc3?.comision||0) - c1_sab3;
+        const c3_alt = isCIF ? c3_cif : c3_sab;
+
+        // ── CRITERIO 4: Valor Mercancía ──
+        const c4_reg = sc1_base;
+        const c4_alt = sc1_base; // igual en ambos
+
+        // ── Totales ──
+        const desReg = c1_reg + c2_reg + c3_reg + c4_reg;
+        const desAlt = isCIF
+          ? (c1_altVal + c2_cifVal + c3_cif + c4_alt)
+          : (c1_altVal + sc3_flete + sc3_gastos + c3_sab + c4_alt);
+        const ahorroTotal = desReg - desAlt;
+        const a1 = c1_reg - c1_altVal;
+        const a2 = isCIF ? (c2_reg - c2_cifVal) : (c2_reg - (sc3_flete + sc3_gastos));
+        const a3 = c3_reg - c3_alt;
+        const a4 = 0;
+
+        // Store ahorro
+        window._lastAhorroNeto = Math.max(0, ahorroTotal);
+
+        const rowA = (c,reg,alt,color)=>{
+          const ah = reg-alt;
+          const ahClr = ah>0?'var(--green-l)':ah<0?'var(--red-l)':'var(--muted)';
+          return `<div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 8px;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)">
+            <span style="font-size:11px;color:var(--muted)">${c}</span>
+            <span style="font-size:11px;font-family:monospace;color:var(--green-l);text-align:right;min-width:76px">${fmt2(reg)}</span>
+            <span style="font-size:11px;font-family:monospace;color:${altColor};text-align:right;min-width:76px">${fmt2(alt)}</span>
+            <span style="font-size:11px;font-family:monospace;color:${ahClr};text-align:right;min-width:72px;font-weight:700">${ah>0?'+':''}${fmt2(ah)}</span>
+          </div>`;
+        };
+
+        return `<div style="border:1px solid rgba(63,185,80,.25);border-radius:12px;overflow:hidden;margin-bottom:12px">
+
+          <!-- Header -->
+          <div style="background:rgba(63,185,80,.08);padding:12px 14px;border-bottom:1px solid rgba(63,185,80,.15)">
+            <div style="font-size:12px;font-weight:800;color:var(--green-l);letter-spacing:.03em">💰 COMPARATIVO DE DESEMBOLSO — 4 Criterios</div>
+            <div style="font-size:10px;color:var(--muted);margin-top:2px">Escenario Regular vs ${altLabel}</div>
           </div>
-          <div style="text-align:center;background:rgba(88,166,255,.07);border:2px solid ${sc2pcolor};border-radius:10px;padding:14px;position:relative">
-            <div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:${sc2pcolor};color:#0d1117;font-size:9px;font-weight:800;padding:2px 10px;border-radius:10px;white-space:nowrap">ELEGIDO ✓</div>
-            <div style="font-size:9px;font-weight:700;color:${sc2pcolor};text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">${label3}</div>
-            <div style="font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:800;color:${sc2pcolor}">${fmt(dAlt)}</div>
-            <div style="font-size:9px;color:var(--muted);margin-top:3px">Desembolso Total</div>
+
+          <!-- Column headers -->
+          <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 8px;padding:8px 14px;background:rgba(0,0,0,.15);border-bottom:1px solid var(--border)">
+            <span style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">Criterio</span>
+            <span style="font-size:9px;font-weight:700;color:var(--green-l);text-align:right;min-width:76px">Esc. Regular</span>
+            <span style="font-size:9px;font-weight:700;color:${altColor};text-align:right;min-width:76px">${altLabel}</span>
+            <span style="font-size:9px;font-weight:700;color:var(--blue-l);text-align:right;min-width:72px">Ahorro</span>
           </div>
-        </div>
-        <div style="text-align:center;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.4);border-radius:10px;padding:14px">
-          <div style="font-size:9px;font-weight:700;color:var(--green-l);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">💰 Ahorro Real</div>
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:28px;font-weight:800;color:var(--green-l)">${fmt(ahorro)}</div>
-          <div style="font-size:9px;color:var(--muted);margin-top:4px">Desembolso SC1 − Desembolso ${label3}</div>
+
+          <div style="padding:6px 14px">
+
+            <!-- Criterio 1: Impuestos -->
+            <div style="margin-bottom:4px;padding:4px 0 2px;border-bottom:1px dashed rgba(255,255,255,.08)">
+              <div style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">1 · Impuestos</div>
+            </div>
+            ${rowA('Arancel',sc1_arancel,0)}
+            ${rowA('ITBMS s/Arancel',sc1_itbms,0)}
+            ${tasa>0?rowA('Tasa',tasa,0):''}
+            ${itbmsTasaFinal>0?rowA('ITBMS s/Tasa',itbmsTasaFinal,0):''}
+            ${form1>0?rowA('Uso de Sistema',form1,0):''}
+            ${!isCIF&&c1_sab3>0?rowA('ITBMS s/Homologado (7% Sababa)',0,c1_sab3):''}
+            ${isCIF?`<div style="padding:5px 8px;background:rgba(88,166,255,.06);border-radius:4px;font-size:10px;color:var(--blue-l);margin:3px 0">⚡ CIF Express exonerado — Master Value absorbe el arancel</div>`:''}
+            <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 8px;align-items:center;padding:5px 0;margin-bottom:6px;background:rgba(63,185,80,.05);border-radius:4px">
+              <span style="font-size:11px;font-weight:700;color:var(--text)">  Subtotal Impuestos</span>
+              <span style="font-size:11px;font-family:monospace;color:var(--green-l);text-align:right;min-width:76px;font-weight:700">${fmt2(c1_reg)}</span>
+              <span style="font-size:11px;font-family:monospace;color:${altColor};text-align:right;min-width:76px;font-weight:700">${fmt2(c1_altVal)}</span>
+              <span style="font-size:12px;font-family:monospace;color:var(--green-l);text-align:right;min-width:72px;font-weight:800">+${fmt2(a1)}</span>
+            </div>
+
+            <!-- Criterio 2: Gastos Origen/Destino -->
+            <div style="margin-bottom:4px;padding:4px 0 2px;border-bottom:1px dashed rgba(255,255,255,.08)">
+              <div style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">2 · Gastos Origen / Destino</div>
+            </div>
+            ${sc1_flete_nm>0?rowA('Flete',sc1_flete_nm,isCIF?sc1_flete_nm:sc3_flete):''}
+            ${rowA('Gastos Origen/Destino',agente,agente)}
+            ${acarreo>0?`<div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 8px;align-items:center;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.05)"><span style="font-size:11px;color:var(--muted)">Acarreo (absorbido por comisión)</span><span style="font-family:monospace;color:var(--green-l);text-align:right;min-width:76px;font-size:11px">${fmt2(acarreo)}</span><span style="font-family:monospace;color:var(--muted);text-align:right;min-width:76px;font-size:11px">$0.00</span><span style="font-family:monospace;color:var(--green-l);text-align:right;min-width:72px;font-size:11px;font-weight:700">+${fmt2(acarreo)}</span></div>`:''}
+            ${dmce>0?`<div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 8px;align-items:center;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.05)"><span style="font-size:11px;color:var(--muted)">DMCE (absorbido por comisión)</span><span style="font-family:monospace;color:var(--green-l);text-align:right;min-width:76px;font-size:11px">${fmt2(dmce)}</span><span style="font-family:monospace;color:var(--muted);text-align:right;min-width:76px;font-size:11px">$0.00</span><span style="font-family:monospace;color:var(--green-l);text-align:right;min-width:72px;font-size:11px;font-weight:700">+${fmt2(dmce)}</span></div>`:''}
+            <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 8px;align-items:center;padding:5px 0;margin-bottom:6px;background:rgba(63,185,80,.05);border-radius:4px">
+              <span style="font-size:11px;font-weight:700;color:var(--text)">  Subtotal Gastos</span>
+              <span style="font-size:11px;font-family:monospace;color:var(--green-l);text-align:right;min-width:76px;font-weight:700">${fmt2(c2_reg)}</span>
+              <span style="font-size:11px;font-family:monospace;color:${altColor};text-align:right;min-width:76px;font-weight:700">${fmt2(isCIF?c2_cifVal:(sc3_flete+sc3_gastos))}</span>
+              <span style="font-size:12px;font-family:monospace;color:${a2>=0?'var(--green-l)':'var(--red-l)'};text-align:right;min-width:72px;font-weight:800">${a2>=0?'+':''}${fmt2(a2)}</span>
+            </div>
+
+            <!-- Criterio 3: Honorarios -->
+            <div style="margin-bottom:4px;padding:4px 0 2px;border-bottom:1px dashed rgba(255,255,255,.08)">
+              <div style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">3 · Honorarios / Comisión</div>
+            </div>
+            ${rowA('Honorarios corredor (Esc. Regular)',sc1_hon,0)}
+            ${isCIF?`
+              <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 8px;align-items:center;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.05)">
+                <span style="font-size:11px;color:var(--muted)">Comisión CIF Express (3% s/CIF)</span>
+                <span style="font-family:monospace;color:var(--green-l);text-align:right;min-width:76px;font-size:11px">—</span>
+                <span style="font-family:monospace;color:${altColor};text-align:right;min-width:76px;font-size:11px">${fmt2(sc2_hon)}</span>
+                <span style="font-family:monospace;color:var(--muted);text-align:right;min-width:72px;font-size:11px">—</span>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 8px;align-items:center;padding:4px 0 4px 12px;border-bottom:1px solid rgba(255,255,255,.05);opacity:.85">
+                <span style="font-size:10px;color:var(--muted)">└ ITBMS s/monto gravado</span>
+                <span style="font-family:monospace;color:var(--green-l);text-align:right;min-width:76px;font-size:10px">—</span>
+                <span style="font-family:monospace;color:var(--muted);text-align:right;min-width:76px;font-size:10px">${fmt2(sc2_itbms_hon)}</span>
+                <span style="font-family:monospace;color:var(--muted);text-align:right;min-width:72px;font-size:10px">—</span>
+              </div>`:`
+              <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 8px;align-items:center;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.05)">
+                <span style="font-size:11px;color:var(--orange-l);font-weight:600">Honorario neto Sababa (3.70%)</span>
+                <span style="font-family:monospace;color:var(--green-l);text-align:right;min-width:76px;font-size:11px">—</span>
+                <span style="font-family:monospace;color:var(--orange-l);text-align:right;min-width:76px;font-size:11px;font-weight:700">${fmt2(c3_sab)}</span>
+                <span style="font-family:monospace;color:var(--muted);text-align:right;min-width:72px;font-size:11px">—</span>
+              </div>`}
+            <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 8px;align-items:center;padding:5px 0;margin-bottom:6px;background:rgba(63,185,80,.05);border-radius:4px">
+              <span style="font-size:11px;font-weight:700;color:var(--text)">  Subtotal Honorarios</span>
+              <span style="font-size:11px;font-family:monospace;color:var(--green-l);text-align:right;min-width:76px;font-weight:700">${fmt2(c3_reg)}</span>
+              <span style="font-size:11px;font-family:monospace;color:${altColor};text-align:right;min-width:76px;font-weight:700">${fmt2(c3_alt)}</span>
+              <span style="font-size:12px;font-family:monospace;color:${a3>=0?'var(--green-l)':'var(--red-l)'};text-align:right;min-width:72px;font-weight:800">${a3>=0?'+':''}${fmt2(a3)}</span>
+            </div>
+
+            <!-- Criterio 4: Valor Mercancía -->
+            <div style="margin-bottom:4px;padding:4px 0 2px;border-bottom:1px dashed rgba(255,255,255,.08)">
+              <div style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">4 · Valor Mercancía</div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 8px;align-items:center;padding:5px 0;margin-bottom:6px;background:rgba(63,185,80,.05);border-radius:4px">
+              <span style="font-size:11px;font-weight:700;color:var(--text)">  FOB Original (igual en ambos)</span>
+              <span style="font-size:11px;font-family:monospace;color:var(--green-l);text-align:right;min-width:76px;font-weight:700">${fmt2(sc1_base)}</span>
+              <span style="font-size:11px;font-family:monospace;color:${altColor};text-align:right;min-width:76px;font-weight:700">${fmt2(sc1_base)}</span>
+              <span style="font-size:12px;font-family:monospace;color:var(--muted);text-align:right;min-width:72px;font-weight:800">$0.00</span>
+            </div>
+
+          </div>
+
+          <!-- TOTAL DESEMBOLSO -->
+          <div style="background:rgba(0,0,0,.2);border-top:2px solid rgba(63,185,80,.3);padding:12px 14px">
+            <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 8px;align-items:center;margin-bottom:8px">
+              <span style="font-size:13px;font-weight:800;color:var(--text)">TOTAL DESEMBOLSO</span>
+              <span style="font-size:14px;font-family:monospace;color:var(--green-l);text-align:right;min-width:76px;font-weight:800">${fmt2(desReg)}</span>
+              <span style="font-size:14px;font-family:monospace;color:${altColor};text-align:right;min-width:76px;font-weight:800">${fmt2(desAlt)}</span>
+              <span style="font-size:16px;font-family:monospace;color:${ahorroTotal>=0?'var(--green-l)':'var(--red-l)'};text-align:right;min-width:72px;font-weight:900">${ahorroTotal>=0?'+':''}${fmt2(ahorroTotal)}</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 8px;font-size:9px;color:var(--muted)">
+              <span></span>
+              <span style="text-align:right;min-width:76px">100% base</span>
+              <span style="text-align:right;min-width:76px">${pctOf(desAlt,desReg)} del reg.</span>
+              <span style="text-align:right;min-width:72px;color:${ahorroTotal>=0?'var(--green-l)':'var(--red-l)'};font-weight:700">${pctOf(ahorroTotal,desReg)} ahorro</span>
+            </div>
+          </div>
+
         </div>`;
       })()}
 
-      <!-- BARRA COMPARATIVA DE AHORRO -->
-      <div style="background:var(--s2);border-radius:8px;padding:12px">
-        <div style="font-size:10px;color:var(--muted);margin-bottom:8px;text-align:center">Ahorro vs Costo Total Importación Esc.#1</div>
-        ${(()=>{
-          const tot=sc1_landed1>0?sc1_landed1:1;
-          const ahorroVal=compar==='cifexp'? sc1_arancel+itbms_diff-(sc2_hon+sc2_itbms_hon-sc1_hon) : sc1_arancel;
-          const pctAhorro=((ahorroVal/tot)*100).toFixed(1);
-          return `
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-            <div style="font-size:10px;color:var(--muted);width:60px;text-align:right">Esc.#1</div>
-            <div style="flex:1;background:rgba(255,255,255,.06);border-radius:4px;height:24px;overflow:hidden">
-              <div style="width:100%;background:var(--green-l);height:100%;border-radius:4px;display:flex;align-items:center;padding-left:8px">
-                <span style="font-size:10px;color:#0d1117;font-weight:700">${fmt(sc1_landed1)}</span>
-              </div>
-            </div>
-          </div>
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-            <div style="font-size:10px;color:${sc2pcolor};width:60px;text-align:right">${compar==='cifexp'?'Esc.#2':'Esc.#3'}</div>
-            <div style="flex:1;background:rgba(255,255,255,.06);border-radius:4px;height:24px;overflow:hidden">
-              <div style="width:${((altLanded1/tot)*100).toFixed(1)}%;background:${sc2pcolor};height:100%;border-radius:4px;display:flex;align-items:center;padding-left:8px">
-                <span style="font-size:10px;color:#0d1117;font-weight:700">${fmt(altLanded1)}</span>
-              </div>
-            </div>
-          </div>
-          <div style="text-align:center;margin-top:8px;font-size:12px;color:var(--green-l);font-weight:600">
-            El ahorro representa el <strong style="font-family:'IBM Plex Mono',monospace;font-size:16px">${pctAhorro}%</strong> del costo total de importación
-          </div>`;
-        })()}
-      </div>
-    </div>
-
     <!-- BASE INFO (colapsado por defecto) -->
-    <details style="margin-bottom:12px">
+<details style="margin-bottom:12px">
       <summary style="cursor:pointer;padding:10px 14px;background:var(--s1);border:1px solid var(--border);border-radius:8px;font-size:11px;color:var(--muted);list-style:none;display:flex;justify-content:space-between">
         <span>📋 Base del Embarque — ${termino} · ${tipo==='ZL'?'Zona Libre':'Importación'}</span>
         <span style="color:var(--green-l)">${fmt(sc1_base)}</span>
@@ -6650,48 +6753,199 @@ function calcSab2(){
           <div class="factor-chip">${((factor-1)*100).toFixed(2)}% importación</div>
         </div>
 
-        <!-- AHORRO PANEL -->
+        <!-- AHORRO PANEL — 4 Criterios Confirmados -->
         ${esc1L>0?(()=>{
           const snap1 = window._lastSnap?.sc1||{};
-          const _s1itbms = snap1.itbms||((snap1.base||0)+(snap1.arancel||0))*((window._lastSnap?.itbPct)||0.07);
-          const _s1itbmsTasa = snap1.itbmsTasaFinal||((snap1.tasa||0)*((window._lastSnap?.itbPct)||0.07));
-          const _gastoCompReal = parseFloat(document.getElementById('s1_gasto_comp')?.value)||0;
-          const sc1desemb = (snap1.base||0)+(snap1.arancel||0)+_s1itbms+(snap1.hon||0)+(snap1.tasa||0)+_s1itbmsTasa+(snap1.form1||0)
-                          +(snap1.acarreo||0)+(snap1.dmce||0)+(snap1.agente||0)
-                          +((window._lastSnap?.termino==='FOB'&&window._lastSnap?.tipo==='EXT')?(window._lastSnap?.flete||0):0);
-          // Cuando hay gasto complementario, el ahorro honesto es 0 — ambos landeds son iguales por diseño
-          const _ahorroForzadoCero = _gastoCompReal > 0;
-          // sc3desemb = CIF_original + comision (NOT pagFinal which is CIF-trasp)
-          const _cifOrig = v('s2_costo_zl') || (window._lastSnap?.CIF || (snap1.base||0));
-          const sc3desemb = _cifOrig + comision + fleteStd + agente;
-          const ahorroReal = _ahorroForzadoCero ? 0 : (sc1desemb - sc3desemb);
-          const itbmsEnComision = itbmsHomol;              // ITBMS del valor homologado
-          const honorarioNeto = comision - itbmsEnComision; // Honorario neto real Sababa
-          return `<div style="margin:14px;background:linear-gradient(135deg,rgba(63,185,80,.07),rgba(240,136,62,.05));border:1px solid rgba(63,185,80,.2);border-radius:8px;padding:12px 14px;">
-          <div style="font-size:10px;font-weight:700;color:var(--green-l);letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px">💰 Ahorro Real — Sababa vs Esc.#1</div>
-          <div style="font-size:10px;color:var(--muted);font-weight:600;margin-bottom:5px">Desembolso Esc.#1 (Liquidación Aduanal):</div>
-          <div class="ar-row"><span class="ar-lbl">Mercancía + Aranceles + Honorarios + Tasas</span><span class="ar-val" style="color:var(--green-l);font-weight:700">${fmt(sc1desemb)}</span></div>
-          <div style="border-top:1px dashed var(--border);margin:6px 0 5px;padding-top:6px">
-            <div style="font-size:10px;color:var(--orange-l);font-weight:600;margin-bottom:5px">Desembolso Sababa:</div>
-            <div class="ar-row"><span class="ar-lbl">Mercancía Homologada (÷1.07)</span><span class="ar-val">${fmt(mercHomol)}</span></div>
-            <div class="ar-row"><span class="ar-lbl" style="color:var(--muted)">ITBMS del valor homologado</span><span class="ar-val" style="color:var(--muted)">${fmt(itbmsHomol)}</span></div>
-            ${fleteStd>0?`<div class="ar-row"><span class="ar-lbl">Flete</span><span class="ar-val">${fmt(fleteStd)}</span></div>`:''}
-            ${agente>0?`<div class="ar-row"><span class="ar-lbl">Gastos Orig./Dest.</span><span class="ar-val">${fmt(agente)}</span></div>`:''}
-            <div class="ar-row"><span class="ar-lbl">Comisión Sababa (${(comPct*100).toFixed(0)}% × factura)</span><span class="ar-val" style="color:var(--orange-l);font-weight:600">${fmt(comision)}</span></div>
-            <div class="ar-row" style="margin-left:10px;opacity:.85"><span class="ar-lbl" style="font-size:10px;color:var(--muted)">└ ITBMS del homologado (×7÷107)</span><span class="ar-val" style="font-size:10px;color:var(--muted)">${fmt(itbmsHomol)}</span></div>
-            <div class="ar-row" style="margin-left:10px"><span class="ar-lbl" style="font-size:10px;color:var(--orange-l);font-weight:600">└ Honorario neto Sababa <span style="font-size:9px;font-weight:400;color:var(--muted)">(${mercHomol>0?((comision-itbmsHomol)/mercHomol*100).toFixed(2):"—"}% s/Homologado)</span></span><span class="ar-val" style="font-size:10px;color:var(--orange-l);font-weight:700">${fmt(comision-itbmsHomol)}</span></div>
-            <div style="margin-left:10px;padding:4px 8px;background:rgba(240,136,62,.07);border-radius:5px;margin-bottom:4px">
-              <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted)"><span>└ ITBMS del valor homol. (×7÷107)</span><span style="font-family:'IBM Plex Mono',monospace">${fmt(itbmsEnComision)}</span></div>
-              <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--orange-l);font-weight:600"><span>└ Honorario neto Sababa</span><span style="font-family:'IBM Plex Mono',monospace">${fmt(honorarioNeto)}</span></div>
+          const fmt2  = n=>'$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+          const pctOf = (n,d)=>d>0?((n/d)*100).toFixed(1)+'%':'—';
+          
+          // ── Escenario Regular: extraer cada rubro ──
+          const r1_merc    = snap1.base||0;
+          const r1_aran    = snap1.arancel||0;
+          const r1_itbmsAr = snap1.itbms||0;           // ITBMS s/arancel
+          const r1_tasa    = snap1.tasa||0;
+          const r1_itbmsTa = snap1.itbmsTasaFinal||0;  // ITBMS s/tasa
+          const r1_usoSis  = snap1.form1||0;
+          const r1_flete   = (window._lastSnap?.termino==='FOB'&&window._lastSnap?.tipo==='EXT')?(window._lastSnap?.flete||0):0;
+          const r1_gastos  = (snap1.agente||0);
+          const r1_acarreo = snap1.acarreo||0;
+          const r1_dmce    = snap1.dmce||0;
+          const r1_hon     = snap1.hon||0;
+
+          // CRITERIO 1: Impuestos Esc. Regular
+          const c1_reg = r1_aran + r1_itbmsAr + r1_tasa + r1_itbmsTa + r1_usoSis;
+          // CRITERIO 2: Gastos Origen/Destino Esc. Regular
+          const c2_reg = r1_flete + r1_gastos + r1_acarreo + r1_dmce;
+          // CRITERIO 3: Honorarios Esc. Regular
+          const c3_reg = r1_hon;
+          // CRITERIO 4: Valor Mercancía
+          const c4_reg = r1_merc;
+
+          // ── Sababa: extraer cada rubro ──
+          // CRITERIO 1: Solo ITBMS s/homologado (7%) — único impuesto que paga Sababa
+          const c1_sab = itbmsHomol;
+          // CRITERIO 2: Flete + Gastos (acarreo/DMCE = $0, absorbido por comisión)
+          const c2_sab = fleteStd + agente;
+          // CRITERIO 3: Honorario neto Sababa (3.70% real = comisión − ITBMS)
+          const c3_sab = comision - itbmsHomol;
+          // CRITERIO 4: Valor Mercancía = mismo FOB original
+          const c4_sab = r1_merc; // igual → ahorro = 0
+
+          // ── Ahorros por criterio ──
+          const a1 = c1_reg - c1_sab;   // Ahorro impuestos
+          const a2 = c2_reg - c2_sab;   // Ahorro gastos O/D
+          const a3 = c3_reg - c3_sab;   // Ahorro honorarios
+          const a4 = 0;                  // Mercancía igual
+          const aTotal = a1 + a2 + a3 + a4;
+
+          // ── Desembolso total por escenario ──
+          const desReg = c1_reg + c2_reg + c3_reg + c4_reg;
+          const desSab = c1_sab + c2_sab + c3_sab + c4_sab;
+
+          // ── Diferencia de Inventario (no es ahorro) ──
+          const difInv = r1_merc - mercHomol; // FOB original vs Homologado
+
+          const _ahorroForzadoCero = (parseFloat(document.getElementById('s1_gasto_comp')?.value)||0) > 0;
+
+          // Store ahorro for procesamiento
+          window._lastSnap.sc3.ahorroNeto = _ahorroForzadoCero ? 0 : Math.round(aTotal*100)/100;
+          window._lastSnap.sc3.desembolso  = desSab;
+          if(window._lastSnap.sc3.ahorroNeto > 0) window._lastAhorroNeto = window._lastSnap.sc3.ahorroNeto;
+
+          const rowA = (c,reg,sab,color)=>{
+            const ah = reg-sab;
+            const ahClr = ah>0?'var(--green-l)':ah<0?'var(--red-l)':'var(--muted)';
+            return `<div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 8px;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)">
+              <span style="font-size:11px;color:var(--muted)">${c}</span>
+              <span style="font-size:11px;font-family:monospace;color:var(--green-l);text-align:right;min-width:76px">${fmt2(reg)}</span>
+              <span style="font-size:11px;font-family:monospace;color:var(--orange-l);text-align:right;min-width:76px">${fmt2(sab)}</span>
+              <span style="font-size:11px;font-family:monospace;color:${ahClr};text-align:right;min-width:72px;font-weight:700">${ah>0?'+':''}${fmt2(ah)}</span>
+            </div>`;
+          };
+
+          return `<div style="margin:0 0 12px;border:1px solid rgba(63,185,80,.25);border-radius:12px;overflow:hidden">
+            
+            <!-- Header -->
+            <div style="background:rgba(63,185,80,.08);padding:12px 14px;border-bottom:1px solid rgba(63,185,80,.15)">
+              <div style="font-size:12px;font-weight:800;color:var(--green-l);letter-spacing:.03em">💰 COMPARATIVO DE DESEMBOLSO — 4 Criterios</div>
+              <div style="font-size:10px;color:var(--muted);margin-top:2px">Escenario Regular vs Sababa Imports · ${_ahorroForzadoCero?'<span style="color:var(--orange-l)">⚠ Gasto complementario activo</span>':''}</div>
             </div>
-            <div class="ar-row" style="border-top:1px solid rgba(48,54,61,.4);padding-top:5px"><span class="ar-lbl" style="font-weight:700">Total Desembolso Sababa</span><span class="ar-val" style="color:var(--orange-l);font-weight:700">${fmt(sc3desemb)}</span></div>
-          </div>
-          <div class="ar-row" style="border-top:2px solid rgba(63,185,80,.4);padding-top:8px;margin-top:4px">
-            <span class="ar-lbl" style="color:var(--green-l);font-weight:700;font-size:13px">AHORRO NETO REAL</span>
-            <span class="ar-val" style="color:${ahorroReal>=0?'var(--green-l)':'var(--red-l)'};font-size:16px;font-weight:700">${fmt(ahorroReal)}</span>
-          </div>
-          <div style="font-size:10px;color:var(--muted);margin-top:5px;text-align:right">${_ahorroForzadoCero?'ℹ️ Gasto complementario activo — ambos escenarios equivalentes':'= Esc.#1 ('+fmt(sc1desemb)+') − Sababa ('+fmt(sc3desemb)+')'}</div>
-        </div>`;
+
+            <!-- Column headers -->
+            <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 8px;padding:8px 14px;background:rgba(0,0,0,.15);border-bottom:1px solid var(--border)">
+              <span style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">Criterio</span>
+              <span style="font-size:9px;font-weight:700;color:var(--green-l);text-align:right;min-width:76px">Esc. Regular</span>
+              <span style="font-size:9px;font-weight:700;color:var(--orange-l);text-align:right;min-width:76px">Sababa Import</span>
+              <span style="font-size:9px;font-weight:700;color:var(--blue-l);text-align:right;min-width:72px">Ahorro</span>
+            </div>
+
+            <!-- 4 Criterios -->
+            <div style="padding:6px 14px">
+              
+              <!-- Criterio 1: Impuestos -->
+              <div style="margin-bottom:4px;padding:4px 0 2px;border-bottom:1px dashed rgba(255,255,255,.08)">
+                <div style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">1 · Impuestos</div>
+              </div>
+              ${rowA('Arancel',r1_aran,0)}
+              ${rowA('ITBMS s/Arancel',r1_itbmsAr,0)}
+              ${rowA('Tasa',r1_tasa,0)}
+              ${rowA('ITBMS s/Tasa',r1_itbmsTa,0)}
+              ${r1_usoSis>0?rowA('Uso de Sistema',r1_usoSis,0):''}
+              ${rowA('ITBMS s/Homologado (7%)',0,c1_sab)}
+              <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 8px;align-items:center;padding:5px 0;margin-bottom:6px;background:rgba(63,185,80,.05);border-radius:4px">
+                <span style="font-size:11px;font-weight:700;color:var(--text)">  Subtotal Impuestos</span>
+                <span style="font-size:11px;font-family:monospace;color:var(--green-l);text-align:right;min-width:76px;font-weight:700">${fmt2(c1_reg)}</span>
+                <span style="font-size:11px;font-family:monospace;color:var(--orange-l);text-align:right;min-width:76px;font-weight:700">${fmt2(c1_sab)}</span>
+                <span style="font-size:12px;font-family:monospace;color:var(--green-l);text-align:right;min-width:72px;font-weight:800">+${fmt2(a1)}</span>
+              </div>
+
+              <!-- Criterio 2: Gastos Origen/Destino -->
+              <div style="margin-bottom:4px;padding:4px 0 2px;border-bottom:1px dashed rgba(255,255,255,.08)">
+                <div style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">2 · Gastos Origen / Destino</div>
+              </div>
+              ${r1_flete>0?rowA('Flete',r1_flete,fleteStd):''}
+              ${rowA('Gastos Origen/Destino',r1_gastos,agente)}
+              ${r1_acarreo>0?rowA('Acarreo (absorbido por comisión en Sababa)',r1_acarreo,0):''}
+              ${r1_dmce>0?rowA('DMCE (absorbido por comisión en Sababa)',r1_dmce,0):''}
+              <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 8px;align-items:center;padding:5px 0;margin-bottom:6px;background:rgba(63,185,80,.05);border-radius:4px">
+                <span style="font-size:11px;font-weight:700;color:var(--text)">  Subtotal Gastos</span>
+                <span style="font-size:11px;font-family:monospace;color:var(--green-l);text-align:right;min-width:76px;font-weight:700">${fmt2(c2_reg)}</span>
+                <span style="font-size:11px;font-family:monospace;color:var(--orange-l);text-align:right;min-width:76px;font-weight:700">${fmt2(c2_sab)}</span>
+                <span style="font-size:12px;font-family:monospace;color:${a2>=0?'var(--green-l)':'var(--red-l)'};text-align:right;min-width:72px;font-weight:800">${a2>=0?'+':''}${fmt2(a2)}</span>
+              </div>
+
+              <!-- Criterio 3: Honorarios -->
+              <div style="margin-bottom:4px;padding:4px 0 2px;border-bottom:1px dashed rgba(255,255,255,.08)">
+                <div style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">3 · Honorarios / Comisión</div>
+              </div>
+              ${rowA('Honorarios corredor (Esc. Regular)',r1_hon,0)}
+              <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 8px;align-items:center;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.05)">
+                <span style="font-size:11px;color:var(--muted)">Comisión Sababa 10% (incl. ITBMS)</span>
+                <span style="font-size:11px;font-family:monospace;color:var(--green-l);text-align:right;min-width:76px">—</span>
+                <span style="font-size:11px;font-family:monospace;color:var(--orange-l);text-align:right;min-width:76px">${fmt2(comision)}</span>
+                <span style="font-size:11px;font-family:monospace;color:var(--muted);text-align:right;min-width:72px">—</span>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 8px;align-items:center;padding:4px 0 4px 12px;border-bottom:1px solid rgba(255,255,255,.05);opacity:.8">
+                <span style="font-size:10px;color:var(--muted)">└ ITBMS del homologado (7%)</span>
+                <span style="font-size:10px;font-family:monospace;color:var(--green-l);text-align:right;min-width:76px">—</span>
+                <span style="font-size:10px;font-family:monospace;color:var(--muted);text-align:right;min-width:76px">${fmt2(itbmsHomol)}</span>
+                <span style="font-size:10px;font-family:monospace;color:var(--muted);text-align:right;min-width:72px">—</span>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 8px;align-items:center;padding:4px 0 4px 12px;border-bottom:1px solid rgba(255,255,255,.05)">
+                <span style="font-size:10px;color:var(--orange-l);font-weight:600">└ Honorario neto Sababa (3.70% s/Homol.)</span>
+                <span style="font-size:10px;font-family:monospace;color:var(--green-l);text-align:right;min-width:76px">—</span>
+                <span style="font-size:10px;font-family:monospace;color:var(--orange-l);text-align:right;min-width:76px;font-weight:700">${fmt2(c3_sab)}</span>
+                <span style="font-size:10px;font-family:monospace;color:var(--muted);text-align:right;min-width:72px">—</span>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 8px;align-items:center;padding:5px 0;margin-bottom:6px;background:rgba(63,185,80,.05);border-radius:4px">
+                <span style="font-size:11px;font-weight:700;color:var(--text)">  Subtotal Honorarios</span>
+                <span style="font-size:11px;font-family:monospace;color:var(--green-l);text-align:right;min-width:76px;font-weight:700">${fmt2(c3_reg)}</span>
+                <span style="font-size:11px;font-family:monospace;color:var(--orange-l);text-align:right;min-width:76px;font-weight:700">${fmt2(c3_sab)}</span>
+                <span style="font-size:12px;font-family:monospace;color:${a3>=0?'var(--green-l)':'var(--red-l)'};text-align:right;min-width:72px;font-weight:800">${a3>=0?'+':''}${fmt2(a3)}</span>
+              </div>
+
+              <!-- Criterio 4: Valor Mercancía -->
+              <div style="margin-bottom:4px;padding:4px 0 2px;border-bottom:1px dashed rgba(255,255,255,.08)">
+                <div style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">4 · Valor Mercancía</div>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 8px;align-items:center;padding:5px 0;margin-bottom:6px;background:rgba(63,185,80,.05);border-radius:4px">
+                <span style="font-size:11px;font-weight:700;color:var(--text)">  FOB Original (igual en ambos)</span>
+                <span style="font-size:11px;font-family:monospace;color:var(--green-l);text-align:right;min-width:76px;font-weight:700">${fmt2(r1_merc)}</span>
+                <span style="font-size:11px;font-family:monospace;color:var(--orange-l);text-align:right;min-width:76px;font-weight:700">${fmt2(r1_merc)}</span>
+                <span style="font-size:12px;font-family:monospace;color:var(--muted);text-align:right;min-width:72px;font-weight:800">$0.00</span>
+              </div>
+
+            </div>
+
+            <!-- TOTAL DESEMBOLSO -->
+            <div style="background:rgba(0,0,0,.2);border-top:2px solid rgba(63,185,80,.3);padding:12px 14px">
+              <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 8px;align-items:center;margin-bottom:10px">
+                <span style="font-size:13px;font-weight:800;color:var(--text)">TOTAL DESEMBOLSO</span>
+                <span style="font-size:14px;font-family:monospace;color:var(--green-l);text-align:right;min-width:76px;font-weight:800">${fmt2(desReg)}</span>
+                <span style="font-size:14px;font-family:monospace;color:var(--orange-l);text-align:right;min-width:76px;font-weight:800">${fmt2(desSab)}</span>
+                <span style="font-size:16px;font-family:monospace;color:${_ahorroForzadoCero?'var(--muted)':aTotal>=0?'var(--green-l)':'var(--red-l)'};text-align:right;min-width:72px;font-weight:900">${_ahorroForzadoCero?'—':(aTotal>=0?'+':'')+fmt2(aTotal)}</span>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 8px;font-size:9px;color:var(--muted)">
+                <span></span>
+                <span style="text-align:right;min-width:76px">${pctOf(desReg,desReg)} base</span>
+                <span style="text-align:right;min-width:76px">${pctOf(desSab,desReg)} del reg.</span>
+                <span style="text-align:right;min-width:72px;color:${aTotal>=0?'var(--green-l)':'var(--red-l)'};font-weight:700">${pctOf(aTotal,desReg)} ahorro</span>
+              </div>
+            </div>
+
+            <!-- DIFERENCIA DE INVENTARIO (separada, no es ahorro) -->
+            ${Math.abs(difInv)>0.01?`
+            <div style="padding:10px 14px;border-top:1px solid var(--border);background:rgba(88,166,255,.04)">
+              <div style="font-size:10px;font-weight:700;color:var(--blue-l);margin-bottom:4px">📊 Diferencia de Inventario <span style="font-weight:400;color:var(--muted)">(ajuste contable — no es ahorro de desembolso)</span></div>
+              <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 8px;font-size:11px">
+                <span style="color:var(--muted)">FOB Original → Costo Homologado</span>
+                <span style="font-family:monospace;color:var(--green-l);text-align:right;min-width:76px">${fmt2(r1_merc)}</span>
+                <span style="font-family:monospace;color:var(--orange-l);text-align:right;min-width:76px">${fmt2(mercHomol)}</span>
+                <span style="font-family:monospace;color:var(--blue-l);text-align:right;min-width:72px;font-weight:700">${fmt2(difInv)}</span>
+              </div>
+            </div>`:''}
+
+          </div>`;
         })():'<div style="padding:14px;font-size:11px;color:var(--muted);text-align:center">ℹ️ Calcula el Escenario #1 para ver el comparativo de ahorro.</div>'}
       </div>
     </div>
@@ -11186,6 +11440,95 @@ function _tendMejorImport(btn){
 }
 
 // ── Costo Inventario — desglose al tocar la card ──
+function _kpiAhorroClose(btn){ var ov=btn; while(ov&&ov.style.position!=='fixed')ov=ov.parentElement; if(ov)ov.remove(); }
+
+// ── KPI Ahorro desglose popup — 4 criterios confirmados ──
+function _kpiMostrarAhorro(){
+  var all = _getFilteredTendData();
+  if(!all.length){ _showToast&&_showToast('Sin embarques registrados','orange',2000); return; }
+
+  var fmt2 = function(n){ return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
+  var fmtK2= function(n){ return window._fmtMoney ? window._fmtMoney(n) : fmt2(n); };
+
+  // Acumular 4 criterios
+  var c1=0, c2=0, c3=0, c4=0;
+  var totalAhorro=0;
+  all.forEach(function(d){
+    var sc1=(d.snap&&d.snap.sc1)||{};
+    var sc2=(d.snap&&d.snap.sc2)||{};
+    var sc3=(d.snap&&d.snap.sc3)||{};
+    var esc=(d.esc||'').toLowerCase();
+    var isCif=esc.includes('cif')||esc.includes('express');
+    var isSab=esc.includes('sababa')||esc.includes('sab');
+    if(!isCif && !isSab) return;
+
+    // C1: Impuestos
+    var reg_imp=(sc1.arancel||0)+(sc1.itbms||0)+(sc1.tasa||0)+(sc1.itbmsTasaFinal||0)+(sc1.form1||0);
+    var alt_imp=isCif?0:(sc3.itbmsHomol||0);
+    c1 += Math.max(0, reg_imp - alt_imp);
+
+    // C2: Gastos O/D
+    var reg_gst=(sc1.flete||0)+(sc1.agente||0)+(sc1.acarreo||0)+(sc1.dmce||0);
+    var alt_gst=isCif?((sc2.flete||0)+(sc2.agente||sc1.agente||0)):((sc3.flete||0)+(sc3.gastos||sc1.agente||0));
+    c2 += Math.max(0, reg_gst - alt_gst);
+
+    // C3: Honorarios
+    var reg_hon=sc1.hon||0;
+    var alt_hon=isCif?((sc2.hon||0)+(sc2.itbmsHon||0)):((sc3.comision||0)-(sc3.itbmsHomol||0));
+    c3 += Math.max(0, reg_hon - alt_hon);
+
+    // C4: Mercancía (siempre 0)
+    c4 += 0;
+
+    totalAhorro += d.ahorro||0;
+  });
+
+  var cntSab = all.filter(function(d){var e=(d.esc||'').toLowerCase();return e.includes('sababa')||e.includes('sab');}).length;
+  var cntCif = all.filter(function(d){var e=(d.esc||'').toLowerCase();return e.includes('cif')||e.includes('express');}).length;
+
+  var ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;padding:16px';
+  ov.innerHTML='<div style="background:var(--s1);border:1px solid var(--border);border-radius:16px;width:100%;max-width:420px;max-height:90vh;overflow-y:auto">'+
+    '<div style="padding:16px 16px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">'+
+      '<div>'+
+        '<div style="font-size:13px;font-weight:800;color:var(--green-l)">💰 Desglose de Ahorro</div>'+
+        '<div style="font-size:10px;color:var(--muted);margin-top:2px">'+cntSab+' Sababa · '+cntCif+' CIF Express · '+all.length+' embarques total</div>'+
+      '</div>'+
+      '<button onclick="_kpiAhorroClose(this)" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:0 4px">×</button>'+
+    '</div>'+
+    '<div style="padding:14px">'+
+      '<div style="display:grid;grid-template-columns:1fr auto;gap:4px 12px;margin-bottom:14px">'+
+        '<span style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;padding-bottom:4px;border-bottom:1px solid var(--border)">Criterio (Esc. Regular vs Escenario Elegido)</span>'+
+        '<span style="font-size:9px;font-weight:700;color:var(--blue-l);text-align:right;padding-bottom:4px;border-bottom:1px solid var(--border)">Ahorro</span>'+
+        '<span style="font-size:11px;color:var(--text)">🏛️ Criterio 1 — Impuestos</span>'+
+        '<span style="font-family:monospace;font-size:12px;font-weight:700;color:var(--green-l);text-align:right">+'+fmt2(c1)+'</span>'+
+        '<span style="font-size:9px;color:var(--muted);padding-bottom:8px">Arancel + ITBMS + Tasa + Uso sistema vs $0 CIF / ITBMS-Homol. Sababa</span>'+
+        '<span></span>'+
+        '<span style="font-size:11px;color:var(--text)">🚚 Criterio 2 — Gastos Origen/Destino</span>'+
+        '<span style="font-family:monospace;font-size:12px;font-weight:700;color:'+( c2>0?'var(--green-l)':'var(--muted)')+';text-align:right">'+( c2>0?'+':'')+fmt2(c2)+'</span>'+
+        '<span style="font-size:9px;color:var(--muted);padding-bottom:8px">Acarreo + DMCE absorbidos por comisión</span>'+
+        '<span></span>'+
+        '<span style="font-size:11px;color:var(--text)">👔 Criterio 3 — Honorarios / Comisión</span>'+
+        '<span style="font-family:monospace;font-size:12px;font-weight:700;color:'+( c3>0?'var(--green-l)':'var(--muted)')+';text-align:right">'+( c3>0?'+':'')+fmt2(c3)+'</span>'+
+        '<span style="font-size:9px;color:var(--muted);padding-bottom:8px">Honorarios corredor vs 3.70% Sababa / 3% CIF</span>'+
+        '<span></span>'+
+        '<span style="font-size:11px;color:var(--muted)">📦 Criterio 4 — Valor Mercancía</span>'+
+        '<span style="font-family:monospace;font-size:12px;font-weight:700;color:var(--muted);text-align:right">$0.00</span>'+
+        '<span style="font-size:9px;color:var(--muted);padding-bottom:8px">FOB original idéntico en ambos escenarios</span>'+
+        '<span></span>'+
+      '</div>'+
+      '<div style="background:rgba(63,185,80,.08);border:1px solid rgba(63,185,80,.25);border-radius:10px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center">'+
+        '<span style="font-size:13px;font-weight:800;color:var(--text)">AHORRO TOTAL</span>'+
+        '<span style="font-family:monospace;font-size:18px;font-weight:900;color:var(--green-l)">+'+fmt2(totalAhorro)+'</span>'+
+      '</div>'+
+      '<div style="font-size:9px;color:var(--muted);text-align:center;margin-top:8px">Solo embarques Sababa y CIF Express · Escenario Único no genera ahorro comparativo</div>'+
+    '</div>'+
+  '</div>';
+  ov.addEventListener('click',function(e){if(e.target===ov)ov.remove();});
+  document.body.appendChild(ov);
+}
+
+
 function _kpiMostrarInventario(card){
   var old=document.getElementById('_invDetallePop'); if(old){old.remove();return;}
   const all=_getFilteredTendData();
@@ -11648,7 +11991,7 @@ function renderDashboardKPIs(data){
   el.innerHTML=`
     <div class="kpi-grid">
       <div class="kpi-card g kpi-tap" title="Toca para ver desglose de ahorro"
-           onclick="(function(el){var p=el.parentElement;while(p&&p.id!=='dash-kpi-block'&&p.tagName!=='BODY')p=p.parentElement;var b=(p||document).querySelector('#_kpi-costos-body');if(!b)b=document.getElementById('_kpi-costos-body');if(b&&b.style.display==='none'){b.style.display='block';var hdr=b.previousElementSibling;if(hdr){var c=hdr.querySelector('.kpi-chev');if(c)c.textContent='▼';}b.scrollIntoView({behavior:'smooth',block:'nearest'});}}).call(this,this)"
+           onclick="_kpiMostrarAhorro()"
            onmousedown="this.style.transform='scale(.95)'" onmouseup="this.style.transform=''"
            ontouchstart="this.style.transform='scale(.95)'" ontouchend="this.style.transform=''">
         <span class="kpi-icon">💰</span>
@@ -11799,10 +12142,10 @@ function _renderGastosNoMerc(all){
 
   // ── Acumular ahorro por rubro (comparando SC1 vs SC elegido) ──
   const ahorroRubros = {
-    liquidacion: { label:'Liquidación (Arancel)',     icon:'🏛️', color:'var(--green-l)', ahorro:0 },
-    itbms:       { label:'ITBMS s/Mercancía',         icon:'🧾', color:'var(--green-l)', ahorro:0 },
-    mastervalue: { label:'Master Value aplicado',     icon:'🔑', color:'var(--blue-l)',  ahorro:0 },
-    honorarios:  { label:'Honorarios vs Corredor',    icon:'👔', color:'#a855f7',        ahorro:0 },
+    impuestos:  { label:'Criterio 1 — Impuestos',             icon:'🏛️', color:'var(--green-l)', ahorro:0 },
+    gastos:     { label:'Criterio 2 — Gastos Origen/Destino', icon:'🚚', color:'var(--blue-l)',  ahorro:0 },
+    honorarios: { label:'Criterio 3 — Honorarios / Comisión', icon:'👔', color:'#a855f7',        ahorro:0 },
+    mercancia:  { label:'Criterio 4 — Valor Mercancía',       icon:'📦', color:'var(--muted)',   ahorro:0 },
   };
 
   // totalNoMerc se calcula al final desde rubros (ver abajo)
@@ -12068,15 +12411,22 @@ function _renderGastosNoMerc(all){
       if(u1AranFalt > 0.005){ rubros.tesoro.total += u1AranFalt; rubros.tesoro.subs.liquidacion += u1AranFalt; }
     }
 
-    // ── Ahorro por rubro (SC1 como base de comparación) ──
-    const ahorroLiq  = (sc1.arancel||0) - (isCif?(sc2.arancel||0):(isSab?0:0));
-    const ahorroItbms= (sc1.itbms||0)   - (isCif?(sc2.itbms||0):(isSab?0:0));
-    const ahorroMV   = (sc2.mv||sc3.mv||0); // MV es puro ahorro
-    const ahorroHon  = (sc1.hon||0) - ((isCif?sc2.hon:sc3?.comision)||0);
-    ahorroRubros.liquidacion.ahorro += ahorroLiq > 0 ? ahorroLiq : 0;
-    ahorroRubros.itbms.ahorro       += ahorroItbms > 0 ? ahorroItbms : 0;
-    ahorroRubros.mastervalue.ahorro += isCif ? (sc2.mv||0) : (sc3.mv||0);
-    ahorroRubros.honorarios.ahorro  += ahorroHon > 0 ? ahorroHon : 0;
+    // ── Ahorro por los 4 criterios confirmados ──
+    if(isCif || isSab){
+      // C1: Impuestos
+      const reg_imp = (sc1.arancel||0)+(sc1.itbms||0)+(sc1.tasa||0)+(sc1.itbmsTasaFinal||0)+(sc1.form1||0);
+      const alt_imp = isCif ? 0 : (sc3.itbmsHomol||0);
+      // C2: Gastos O/D
+      const reg_gst = (sc1.flete||0)+(sc1.agente||0)+(sc1.acarreo||0)+(sc1.dmce||0);
+      const alt_gst = isCif ? ((sc2.flete||0)+(sc2.agente||sc1.agente||0)) : ((sc3.flete||0)+(sc3.gastos||sc1.agente||0));
+      // C3: Honorarios
+      const reg_hon = sc1.hon||0;
+      const alt_hon = isCif ? ((sc2.hon||0)+(sc2.itbmsHon||0)) : ((sc3.comision||0)-(sc3.itbmsHomol||0));
+      ahorroRubros.impuestos.ahorro  += Math.max(0, reg_imp - alt_imp);
+      ahorroRubros.gastos.ahorro     += Math.max(0, reg_gst - alt_gst);
+      ahorroRubros.honorarios.ahorro += Math.max(0, reg_hon - alt_hon);
+      ahorroRubros.mercancia.ahorro  += 0;
+    }
     totalAhorroDetalle += d.ahorro||0;
   });
 
@@ -12176,16 +12526,17 @@ function _renderGastosNoMerc(all){
 
   // ── Render desglose del Ahorro ──
   const ahorroRows = Object.values(ahorroRubros)
-    .filter(r=>r.ahorro>0.01)
-    .sort((a,b)=>b.ahorro-a.ahorro)
-    .map(r=>`
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 14px;border-bottom:1px solid rgba(48,54,61,.2)">
+    .map(r=>{
+      const aClr = r.ahorro > 0.01 ? r.color : r.ahorro < -0.01 ? "var(--red-l)" : "var(--muted)";
+      const aVal = r.ahorro > 0.01 ? "+"+window._fmtMoney(r.ahorro) : "/bin/sh.00";
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 14px;border-bottom:1px solid rgba(48,54,61,.2)">
         <div style="display:flex;align-items:center;gap:8px">
           <span style="font-size:12px">${r.icon}</span>
           <span style="font-size:11px;color:var(--text)">${r.label}</span>
         </div>
-        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;color:var(--green-l)">+${fmt2(r.ahorro)}</span>
-      </div>`).join('');
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;color:${aClr}">${aVal}</span>
+      </div>`;
+    }).join("");
 
   return `
   <!-- COSTOS NO MERCANCÍA — siempre visible, número grande -->
@@ -16635,21 +16986,27 @@ window._loadArticulosPlantilla = function(input){
 
     // Mapear columnas
     function col(terms){ return hdr.findIndex(function(h){return terms.some(function(t){return h.includes(t);});}); }
-    var cOC   = col(['OC ORIGINAL','OC_ORIGINAL','ORDEN.*ORIG']);
+    var cOC   = col(['OC ORIGINAL','OC_ORIGINAL','ORDEN.*ORIG','OC ORIG']);
     var cPz   = col(['PIEZAS','PIECES','QTY','CANTIDAD']);
-    var cOCH  = col(['OC HOMOLOGADA','OC_HOMOLOGADA','ORDEN.*HOMOL']);
-    var cMH   = col(['COSTO HOMOLOGADO TOTAL','MONTO_HOMOLOGADO','HOMOLOGADO TOTAL','MONTO HOMOL']);
+    var cOCH  = col(['OC HOMOLOGADA','OC_HOMOLOGADA','ORDEN.*HOMOL','OC HOMOL']);
+    var cMH   = col(['COSTO HOMOLOGADO TOTAL','MONTO_HOMOLOGADO','HOMOLOGADO TOTAL','MONTO HOMOL','COSTO HOMOL']);
     if(cOC===-1){ if(statEl) statEl.textContent='⚠️ No se encontró columna OC Original'; return; }
 
-    // Agrupar por OC Original
-    var byOC = {}; // { ocOriginal: { piezas, ocHomol, montoHomol } }
+    // Agrupar por OC Original — normalizar numeros a string
+    var byOC = {};
     for(var i=hdrIdx+1;i<rows.length;i++){
       var r=rows[i];
-      var oc=(r[cOC]||'').toString().trim(); if(!oc) continue;
-      if(!byOC[oc]) byOC[oc]={piezas:0, ocHomol:'', montoHomol:0};
-      if(cPz>-1)  byOC[oc].piezas  += parseFloat(r[cPz])||0;
-      if(cOCH>-1 && !byOC[oc].ocHomol) byOC[oc].ocHomol = (r[cOCH]||'').toString().trim();
-      if(cMH>-1)  byOC[oc].montoHomol += parseFloat(r[cMH])||0;
+      var ocRaw=(r[cOC]===undefined||r[cOC]===null)?'':(r[cOC]).toString().trim();
+      if(!ocRaw) continue;
+      // Normalize: strip leading zeros, keep as string
+      var ocNorm=ocRaw.replace(/^0+/,'')||ocRaw;
+      // Store under both forms for flexible matching
+      [ocRaw,ocNorm].forEach(function(k){
+        if(!byOC[k]) byOC[k]={piezas:0,ocHomol:'',montoHomol:0};
+        if(cPz>-1)  byOC[k].piezas  += parseFloat((r[cPz]||0).toString().replace(/[^0-9.]/g,''))||0;
+        if(cOCH>-1 && !byOC[k].ocHomol) byOC[k].ocHomol=(r[cOCH]===undefined?'':(r[cOCH]).toString().trim());
+        if(cMH>-1)  byOC[k].montoHomol += parseFloat((r[cMH]||0).toString().replace(/[^0-9.]/g,''))||0;
+      });
     }
 
     var ocKeys = Object.keys(byOC);
@@ -16667,16 +17024,19 @@ window._loadArticulosPlantilla = function(input){
     ocKeys.forEach(function(k){ byOCNorm[normOC(k)] = byOC[k]; });
 
     lines.forEach(function(l){
-      var oc=(l.oc||l.ordenCompra||l.oc_original||l.OC||'').toString().trim();
-      if(!oc) return;
-      var match = byOC[oc] || byOCNorm[normOC(oc)];
+      if((l.tipoFac||'mercancia')!=='mercancia') return; // solo mercancía
+      var ocRaw=(l.oc||l.ordenCompra||l.oc_original||l.OC||'').toString().trim();
+      if(!ocRaw) return;
+      var ocNorm = ocRaw.replace(/^0+/,'') || ocRaw;
+      // Try direct match, then normalized match
+      var match = byOC[ocRaw] || byOC[ocNorm] || byOCNorm[normOC(ocRaw)];
       if(match){
-        if(cPz>-1 && match.piezas)  l.piezas = match.piezas;
-        if(cOCH>-1 && match.ocHomol) l.ocHomologada = match.ocHomol;
-        if(cMH>-1 && match.montoHomol) l.montoHomologado = parseFloat(match.montoHomol.toFixed(2));
+        if(match.piezas > 0) l.piezas = Math.round(match.piezas);
+        if(match.ocHomol)    l.ocHomologada = match.ocHomol;
+        if(match.montoHomol > 0) l.montoHomologado = parseFloat(match.montoHomol.toFixed(2));
         updated++;
       } else {
-        notFound.push(oc);
+        notFound.push(ocRaw);
       }
     });
 
@@ -16684,10 +17044,20 @@ window._loadArticulosPlantilla = function(input){
     if(typeof renderInvLines==='function') renderInvLines();
     if(typeof _unicoRenderLines==='function') _unicoRenderLines();
 
-    var msg = '✅ '+updated+' factura(s) actualizadas';
-    if(notFound.length) msg += ' · ⚠️ '+[...new Set(notFound)].slice(0,3).join(', ')+(notFound.length>3?' y más':'')+ ' sin match';
-    if(statEl) statEl.innerHTML = '<span style="color:'+( notFound.length?'var(--orange-l)':'var(--green-l)')+'">'+msg+'</span>';
-    if(typeof _showToast==='function') _showToast(msg, notFound.length?'orange':'green', 4000);
+    var totalMerc=lines.filter(function(l){return(l.tipoFac||'mercancia')==='mercancia';}).length;
+    var msg;
+    if(updated===0&&totalMerc===0){
+      msg='⚠️ No hay líneas de mercancía en la plantilla. Carga la plantilla principal primero.';
+    } else if(updated===0){
+      var ocMuestra=lines.filter(function(l){return(l.tipoFac||'mercancia')==='mercancia'&&l.oc;}).map(function(l){return l.oc;}).slice(0,3).join(', ');
+      var ocArch=Object.keys(byOC).slice(0,5).join(', ');
+      msg='⚠️ Sin coincidencias. OC en plantilla: ['+ocMuestra+']. OC en archivo: ['+ocArch+']';
+    } else {
+      msg='✅ '+updated+' línea(s) actualizadas (Piezas · OC Homol. · Monto Homol.)';
+      if(notFound.length) msg+=' · ⚠️ Sin match: '+[...new Set(notFound)].slice(0,3).join(', ')+(notFound.length>3?' y más':'');
+    }
+    if(statEl) statEl.innerHTML='<span style="color:'+(updated>0?'var(--green-l)':'var(--orange-l)')+'">'+ msg+'</span>';
+    if(typeof _showToast==='function') _showToast(msg, updated>0?'green':'orange', 5000);
     input.value='';
   }
 
