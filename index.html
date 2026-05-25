@@ -1024,125 +1024,127 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
 <div class="page">
 
   <!-- HEADER CARD: Datos del Embarque (collapsible) -->
-  <div class="card" style="margin-bottom:12px">
-    <div class="card-hd" style="cursor:pointer" onclick="this.nextElementSibling.classList.toggle('hidden-section')">
-      <div class="dot g"></div><h3>📋 Datos del Embarque</h3>
-      <span style="font-size:11px;color:var(--muted);margin-left:auto">▼</span>
+  <div class="card" style="margin-bottom:10px">
+    <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--s1);border-radius:10px;border:1px solid var(--border)">
+      <div class="dot g"></div>
+      <span style="font-size:13px;font-weight:700;color:var(--text);flex:1" id="_emb_summary_lbl">📋 Nuevo Embarque</span>
+      <button onclick="_abrirModalEmbarque()" style="background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.35);color:var(--blue-l);border-radius:7px;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">✏️ Información de Embarque</button>
     </div>
-    <div class="card-bd">
-      <div class="r2">
-        <div class="field"><label>N° Embarque</label><input type="text" id="s1_nro_emb" placeholder="Ej: EMB-2025-001"></div>
-        <div class="field"><label>ID / Factura Fiscal <span style="font-size:9px;color:var(--muted);font-weight:400">Sababa · Pre-Dec. · Liquidación</span></label><input type="text" id="s1_id_fiscal" placeholder="Ej: 0000000002 · PRE-2026-001" style="border-color:rgba(168,85,247,.35)" oninput=""></div>
+  </div>
+
+  <!-- MODAL INFORMACIÓN DE EMBARQUE -->
+  <div id="_modal_emb_overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:99990;overflow-y:auto;padding:16px 8px" onclick="if(event.target===this)_cerrarModalEmbarque()">
+    <div style="background:var(--s1);border-radius:14px;max-width:560px;margin:0 auto;padding:0;box-shadow:0 16px 48px rgba(0,0,0,.5);border:1px solid var(--border)">
+      <!-- Header -->
+      <div style="display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border)">
+        <span style="font-size:16px">📋</span>
+        <span style="font-size:14px;font-weight:800;color:var(--text);flex:1">Información del Embarque</span>
+        <button onclick="_cerrarModalEmbarque()" style="background:rgba(218,54,51,.1);border:1px solid rgba(218,54,51,.25);color:var(--red-l);border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer">✕ Cerrar</button>
       </div>
-      <div class="r2">
-        <div class="field"><label>Término</label>
-          <div class="seg" id="termSeg">
-            <div class="seg-btn" onclick="setTermino('CIF',this)">CIF</div>
-            <div class="seg-btn" id="btn-fob-termino" onclick="if(tipo==='EXT')setTermino('FOB',this)">FOB <span style="font-size:9px;opacity:.6">(Importación)</span></div>
+      <!-- Body -->
+      <div style="padding:16px 18px">
+        <!-- Row 1 -->
+        <div class="r2" style="margin-bottom:10px">
+          <div class="field" style="margin-bottom:0"><label style="font-size:10px">N° Embarque</label><input type="text" id="s1_nro_emb" placeholder="Ej: EMB-2025-001" oninput="_actualizarResumenEmbarque()"></div>
+          <div class="field" style="margin-bottom:0"><label style="font-size:10px">ID / Factura Fiscal <span style="font-size:9px;color:var(--muted)">Sababa · Pre-Dec.</span></label><input type="text" id="s1_id_fiscal" placeholder="Ej: 0000000002" style="border-color:rgba(168,85,247,.35)"></div>
+        </div>
+        <!-- Row 2 -->
+        <div class="r2" style="margin-bottom:10px">
+          <div class="field" style="margin-bottom:0"><label style="font-size:10px">Término</label>
+            <div class="seg" id="termSeg">
+              <div class="seg-btn" onclick="setTermino('CIF',this)">CIF</div>
+              <div class="seg-btn" id="btn-fob-termino" onclick="if(tipo==='EXT')setTermino('FOB',this)">FOB <span style="font-size:9px;opacity:.6">(Imp.)</span></div>
+            </div>
+          </div>
+          <div class="field" style="margin-bottom:0"><label style="font-size:10px">Tipo de Mercancía</label>
+            <input type="text" id="s1_desc_emb" placeholder="Ej: Ropa, Mixto, Calzado" list="desc-options" oninput="_actualizarResumenEmbarque()">
+            <datalist id="desc-options"></datalist>
           </div>
         </div>
-      </div>
-      <div class="r2">
-        <div class="field"><label>Tipo de Proveedor</label>
-          <div class="seg">
-            <div class="seg-btn on g" onclick="setTipo('ZL',this)">Zona Libre</div>
-            <div class="seg-btn" onclick="setTipo('EXT',this)">Importación / Exterior</div>
+        <!-- Row 3 -->
+        <div class="r2" style="margin-bottom:10px">
+          <div class="field" style="margin-bottom:0"><label style="font-size:10px">Tipo de Proveedor</label>
+            <div class="seg">
+              <div class="seg-btn on g" onclick="setTipo('ZL',this)">Zona Libre</div>
+              <div class="seg-btn" onclick="setTipo('EXT',this)">Importación</div>
+            </div>
+          </div>
+          <div class="field" style="margin-bottom:0"><label style="font-size:10px">País de Origen</label>
+            <input id="s1_pais_emb" list="_pais_list" placeholder="País…" oninput="_actualizarCiudades(this.value);_sincronizarOrigenEmb()" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px">
+            <datalist id="_pais_list">
+              <option value="USA">🇺🇸 Estados Unidos</option><option value="China">🇨🇳 China</option><option value="Mexico">🇲🇽 México</option><option value="Brasil">🇧🇷 Brasil</option><option value="Colombia">🇨🇴 Colombia</option><option value="India">🇮🇳 India</option><option value="Vietnam">🇻🇳 Vietnam</option><option value="Korea">🇰🇷 Corea del Sur</option><option value="Japan">🇯🇵 Japón</option><option value="Taiwan">🇹🇼 Taiwán</option><option value="Turkey">🇹🇷 Turquía</option><option value="Bangladesh">🇧🇩 Bangladesh</option><option value="Pakistan">🇵🇰 Pakistán</option><option value="Indonesia">🇮🇩 Indonesia</option><option value="Malasia">🇲🇾 Malasia</option><option value="Tailandia">🇹🇭 Tailandia</option><option value="Italia">🇮🇹 Italia</option><option value="Espana">🇪🇸 España</option><option value="Alemania">🇩🇪 Alemania</option><option value="Portugal">🇵🇹 Portugal</option><option value="Panamá">🇵🇦 Panamá</option><option value="Puerto Rico">🇵🇷 Puerto Rico</option><option value="Otro">🌐 Otro</option>
+            </datalist>
           </div>
         </div>
-        <div class="field"><label>Tipo de Mercancía</label>
-          <input type="text" id="s1_desc_emb" placeholder="Ej: Ropa, Mixto, Calzado" list="desc-options">
-          <datalist id="desc-options"></datalist>
+        <!-- Row 4 -->
+        <div class="r2" style="margin-bottom:10px">
+          <div class="field" style="margin-bottom:0"><label style="font-size:10px">Ciudad / Puerto Origen</label>
+            <input id="s1_ciudad_emb" list="_ciudad_list" placeholder="Ciudad…" oninput="_sincronizarOrigenEmb()" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;width:100%">
+            <datalist id="_ciudad_list"></datalist>
+          </div>
+          <div class="field" style="margin-bottom:0"><label style="font-size:10px">Tipo de Embarque</label>
+            <select id="s1_tipo_emb" onchange="_toggleContenedorField(this.value)" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px;width:100%">
+              <option value="">— Selecciona —</option>
+              <option value="Contenedor directo">Contenedor directo</option>
+              <option value="Consolidado Marítimo">Consolidado Marítimo</option>
+              <option value="Consolidado Terrestre">Consolidado Terrestre</option>
+              <option value="Carga suelta">Carga suelta</option>
+              <option value="Camión">Camión</option>
+              <option value="Furgón">Furgón</option>
+              <option value="Avión">Avión</option>
+            </select>
+          </div>
         </div>
-      </div>
-      <!-- ORIGEN ESTRUCTURADO: País → Ciudad -->
-      <div class="field" style="margin-bottom:8px">
-        <label>País de Origen</label>
-        <input id="s1_pais_emb" list="_pais_list" placeholder="Escribe o selecciona un país…"
-          oninput="_actualizarCiudades(this.value);_sincronizarOrigenEmb()"
-          style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px">
-        <datalist id="_pais_list">
-          <option value="USA">🇺🇸 Estados Unidos</option>
-          <option value="China">🇨🇳 China</option>
-          <option value="Mexico">🇲🇽 México</option>
-          <option value="Brasil">🇧🇷 Brasil</option>
-          <option value="Colombia">🇨🇴 Colombia</option>
-          <option value="India">🇮🇳 India</option>
-          <option value="Vietnam">🇻🇳 Vietnam</option>
-          <option value="Korea">🇰🇷 Corea del Sur</option>
-          <option value="Japan">🇯🇵 Japón</option>
-          <option value="Taiwan">🇹🇼 Taiwán</option>
-          <option value="Turkey">🇹🇷 Turquía</option>
-          <option value="Bangladesh">🇧🇩 Bangladesh</option>
-          <option value="Pakistan">🇵🇰 Pakistán</option>
-          <option value="Indonesia">🇮🇩 Indonesia</option>
-          <option value="Malasia">🇲🇾 Malasia</option>
-          <option value="Tailandia">🇹🇭 Tailandia</option>
-          <option value="Italia">🇮🇹 Italia</option>
-          <option value="Espana">🇪🇸 España</option>
-          <option value="Alemania">🇩🇪 Alemania</option>
-          <option value="Portugal">🇵🇹 Portugal</option>
-          <option value="Panama">🇵🇦 Panamá</option>
-          <option value="Puerto Rico">🇵🇷 Puerto Rico</option>
-          <option value="Otro">🌐 Otro país</option>
-        </datalist>
-      </div>
-      <div class="r2">
-        <div class="field">
-          <label>Ciudad / Puerto de Origen</label>
-          <input id="s1_ciudad_emb" list="_ciudad_list" placeholder="Escribe ciudad o puerto…"
-            oninput="_sincronizarOrigenEmb()"
-            style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;width:100%">
-          <datalist id="_ciudad_list"></datalist>
+        <!-- Row 5: N° Contenedor + Cartones -->
+        <div class="r2" style="margin-bottom:10px">
+          <div id="blk-nro-contenedor" style="flex:1">
+            <div class="field" style="margin-bottom:0">
+              <label style="font-size:10px">N° Contenedor</label>
+              <input type="text" id="s1_nro_cont" placeholder="Ej: MSCU1234567" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;width:100%">
+            </div>
+          </div>
+          <div style="flex:1">
+            <div class="field" style="margin-bottom:0"><label style="font-size:10px">Cartones / Bultos</label>
+              <input type="number" id="s1_cartones" placeholder="0" step="1" min="0" style="width:100%">
+            </div>
+          </div>
         </div>
-        <div class="field" style="display:none"><label>Destino Final</label><input type="text" id="s1_destino" placeholder="Ej: Ciudad de Panamá"></div>
-      </div>
-      <!-- Campo oculto que consolida país+ciudad para compatibilidad con el resto del sistema -->
-      <input type="hidden" id="s1_origen_emb" value="">
-      <div class="r2">
-        <div class="field"><label>Tipo de Embarque</label>
-          <select id="s1_tipo_emb" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px;width:100%" onchange="_toggleContenedorField(this.value)">
-            <option value="">— Selecciona —</option>
-            <option value="Contenedor directo">Contenedor directo</option>
-            <option value="Consolidado Marítimo">Consolidado Marítimo</option>
-            <option value="Consolidado Terrestre">Consolidado Terrestre</option>
-            <option value="Carga suelta">Carga suelta</option>
-            <option value="Camión">Camión</option>
-            <option value="Furgón">Furgón</option>
-            <option value="Avión">Avión</option>
-          </select>
+        <!-- Multi-contenedores -->
+        <div id="multi-contenedores-wrap" style="display:none;margin-bottom:10px">
+          <div id="multi-contenedores-list"></div>
+          <p class="note" style="margin-top:4px;font-size:10px">Asigna las facturas a cada contenedor en la sección de Proveedores.</p>
         </div>
-        <div class="field"><label>Cantidad de Cartones</label>
-          <input type="number" id="s1_cartones" placeholder="0" step="1" min="0">
+        <!-- Lugar de Recepción + Notas -->
+        <div class="r2" style="margin-bottom:10px">
+          <div class="field" style="margin-bottom:0"><label style="font-size:10px">🏭 Lugar de Recepción</label>
+            <select id="s1_lugar_recep" onchange="calc()" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px;width:100%">
+              <option value="">— Selecciona —</option>
+              <option value="CDF">CDF</option>
+              <option value="Westland">Westland</option>
+            </select>
+          </div>
+          <div class="field" style="margin-bottom:0"><label style="font-size:10px">📝 Notas</label>
+            <input type="text" id="s1_notas" placeholder="Observaciones…">
+          </div>
         </div>
-      </div>
-      <!-- LUGAR DE RECEPCIÓN -->
-      <div class="r2" style="margin-top:4px">
-        <div class="field">
-          <label>🏭 Lugar de Recepción</label>
-          <select id="s1_lugar_recep" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px;width:100%" onchange="calc()">
-            <option value="">— Selecciona —</option>
-            <option value="CDF">CDF</option>
-            <option value="Westland">Westland</option>
-          </select>
-        </div>
-        <div class="field"></div>
-      </div>
-      <!-- NOTAS + ESTATUS -->
-      <div class="r2" style="margin-top:4px">
-        <div class="field"><label>📝 Notas <span style="font-size:10px;color:var(--muted2);font-weight:400">N° contenedor, observaciones…</span></label>
-          <input type="text" id="s1_notas" placeholder="Ej: TCKU3456789 — llegada semana 22">
-        </div>
-        <div class="field"><label>📌 Estatus</label>
-          <div id="s1_estatus_badge" style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:600;color:var(--muted)">
+        <!-- Estatus + campo oculto origen -->
+        <input type="hidden" id="s1_origen_emb" value="">
+        <div style="margin-bottom:4px"><label style="font-size:10px;color:var(--muted);font-weight:600">📌 Estatus</label>
+          <div id="s1_estatus_badge" style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:600;color:var(--muted);margin-top:4px">
             <span id="s1_estatus_dot" style="width:8px;height:8px;border-radius:50%;background:var(--muted);flex-shrink:0"></span>
             <span id="s1_estatus_txt">Nuevo</span>
           </div>
         </div>
       </div>
+      <!-- Footer: Guardar -->
+      <div style="padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px">
+        <button onclick="_guardarModalEmbarque()" style="flex:1;background:rgba(63,185,80,.15);border:1px solid rgba(63,185,80,.4);color:var(--green-l);border-radius:8px;padding:10px;font-size:12px;font-weight:800;cursor:pointer">✅ Guardar Información</button>
+        <button onclick="_cerrarModalEmbarque()" style="background:rgba(139,148,158,.1);border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:10px 16px;font-size:12px;cursor:pointer">Cancelar</button>
+      </div>
     </div>
   </div>
 
-  <!-- ESCENARIO REGULAR FIELDS -->
+<!-- ESCENARIO REGULAR FIELDS -->
   <div class="card" style="margin-bottom:12px">
     <div class="card-hd" style="cursor:pointer;user-select:none" onclick="_toggleSection('card-body-1___valor_de_la_merc','card-chev-1___valor_de_la_merc',this)"><div class="dot g"></div><h3>1 · Valor de la Mercancía</h3><span id="card-chev-1___valor_de_la_merc" style="margin-left:auto;font-size:11px;color:var(--muted)">▼</span>
     <div class="card-bd">
@@ -1185,104 +1187,48 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
   </div>
 
   <!-- IMPUESTOS -->
-  <div class="card" style="margin-bottom:12px">
-    <div class="card-hd"><div class="dot g"></div><h3>2 · Impuestos</h3>
-      <span class="info-btn" onclick="document.getElementById('imp-info').classList.toggle('open')" title="Info sobre cálculos">i</span>
-    </div>
-    <div id="imp-info" class="info-box">
-      <strong>Factor Arancelario (DAI):</strong> CIF × Arancel% = Pago Arancelario.<br>
-      <strong>ITBMS:</strong> (CIF + Arancel) × 7% = ITBMS sobre Arancel.<br>
-      <strong>Tasa Aduana:</strong> Tasa fija + ITBMS s/Tasa (Tasa × 7%).<br>
-      <strong>Uso de Sistema:</strong> Formulario Esc.#1 = Uso de Sistema × renglones.<br>
-      Todos los campos de resultado están bloqueados y se calculan automáticamente.
-    </div>
-    <div class="card-bd">
-      <div class="r2">
-        <div class="field"><label>Factor Arancelario % (DAI)</label>
-          <input type="number" id="s1_ar" value="10" step="0.0001" oninput="calc()">
+  <div class="card" style="margin-bottom:10px">
+    <div style="padding:10px 14px">
+      <!-- Mini strip: only editable inputs, results hidden (calculated) -->
+      <div style="display:grid;grid-template-columns:repeat(3,1fr) repeat(2,1fr);gap:6px;align-items:end">
+        <div>
+          <div style="font-size:9px;color:var(--muted);font-weight:600;margin-bottom:3px">AR % (DAI)</div>
+          <input type="number" id="s1_ar" value="10" step="0.0001" oninput="calc()" style="width:100%;background:var(--bg);border:1px solid rgba(240,136,62,.3);border-radius:6px;padding:5px 7px;color:var(--orange-l);font-size:12px;font-weight:700;font-family:'IBM Plex Mono',monospace">
         </div>
-        <div class="field"><label>Pago Arancelario (USD)</label>
-          <input type="number" id="disp_ar_pago" readonly style="background:var(--bg);color:var(--orange-l);font-weight:600" placeholder="0.00">
+        <div>
+          <div style="font-size:9px;color:var(--muted);font-weight:600;margin-bottom:3px">ITBMS %</div>
+          <input type="number" id="s1_itbms" value="7" step="0.01" oninput="calc()" style="width:100%;background:var(--bg);border:1px solid rgba(88,166,255,.3);border-radius:6px;padding:5px 7px;color:var(--blue-l);font-size:12px;font-weight:700;font-family:'IBM Plex Mono',monospace">
         </div>
+        <div>
+          <div style="font-size:9px;color:var(--muted);font-weight:600;margin-bottom:3px">Tasa Aduana</div>
+          <input type="number" id="s1_tasa" value="100" step="0.01" oninput="calc()" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:5px 7px;color:var(--text);font-size:12px;font-weight:700;font-family:'IBM Plex Mono',monospace">
+        </div>
+        <div>
+          <div style="font-size:9px;color:var(--muted);font-weight:600;margin-bottom:3px">Renglones</div>
+          <input type="number" id="s1_reng" value="1" step="1" min="1" oninput="calc()" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:5px 7px;color:var(--text);font-size:12px;font-weight:700;font-family:'IBM Plex Mono',monospace">
+        </div>
+        <div>
+          <div style="font-size:9px;color:var(--muted);font-weight:600;margin-bottom:3px">Gestión ZLC</div>
+          <input type="number" id="s1_gzlc" value="133" step="0.01" oninput="calc()" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:5px 7px;color:var(--text);font-size:12px;font-weight:700;font-family:'IBM Plex Mono',monospace">
+        </div>
+      <!-- Required hidden fields for calc() compatibility -->
+      <input type="number" id="s2_form" value="6" step="0.01" oninput="calc()" style="display:none">
+      <input type="number" id="disp_ar_pago" readonly style="display:none">
+      <input type="number" id="disp_itbms_ar" step="0.01" style="display:none" oninput="_itbmsArManual=true;calc()">
+      <input type="number" id="disp_itbms_tasa" step="0.01" style="display:none" oninput="_itbmsTasaManual=true;calc()">
+      <input type="number" id="disp_form1" readonly style="display:none">
+      <input type="number" id="disp_form1b" readonly style="display:none">
+      <input type="number" id="disp_honMin" readonly style="display:none">
+      <input type="number" id="disp_coord" readonly style="display:none">
+      <input type="number" id="disp_reng" readonly style="display:none">
+      <input type="number" id="disp_hon1" readonly style="display:none">
+      <input type="number" id="disp_hon2" readonly style="display:none">
       </div>
-      <div class="r2">
-        <div class="field"><label>ITBMS % sobre Arancel</label>
-          <input type="number" id="s1_itbms" value="7" step="0.01" oninput="calc()">
-        </div>
-        <div class="field"><label>ITBMS Arancel (USD) <span style="font-size:9px;color:var(--blue-l);font-weight:400">✏️ editable</span></label>
-          <input type="number" id="disp_itbms_ar" step="0.01" placeholder="0.00" oninput="_itbmsArManual=true;calc()" style="border-color:rgba(88,166,255,.4);color:var(--orange-l);font-weight:600" title="Puedes editar manualmente — el sistema recalcula todo con este valor">
-        </div>
-      </div>
-      <div class="r2">
-        <div class="field"><label>Tasa Aduana (USD)</label><input type="number" id="s1_tasa" value="100" step="0.01" oninput="calc()"></div>
-        <div class="field"><label>ITBMS s/Tasa <span style="font-size:9px;color:var(--blue-l);font-weight:400">✏️ editable</span></label>
-          <input type="number" id="disp_itbms_tasa" step="0.01" placeholder="7.00" oninput="_itbmsTasaManual=true;calc()" style="border-color:rgba(88,166,255,.3)" title="Puedes editar manualmente — se refleja en comparativos">
-        </div>
-      </div>
-      <div class="r2">
-        <div class="field"><label>Uso de Sistema (USD)</label>
-          <input type="number" id="s2_form" value="6" step="0.01" oninput="calc()">
-        </div>
-        <div class="field"><label>Formulario Esc.#1 (USD)</label>
-          <input type="number" id="disp_form1" readonly style="background:var(--bg)" placeholder="0.00">
-        </div>
-      </div>
+
     </div>
   </div>
 
-  <!-- HONORARIOS -->
-  <div class="card" style="margin-bottom:12px">
-    <div class="card-hd"><div class="dot g"></div><h3>3 · Honorarios del Corredor</h3>
-      <span class="info-btn" onclick="document.getElementById('hon-info').classList.toggle('open')">i</span>
-    </div>
-    <div id="hon-info" class="info-box">
-      <strong>Honorarios del Corredor — Fórmulas:</strong><br>
-      • <strong>Hon. Mínimo Legal:</strong> Si CIF ≤ $10,000 → $80 fijo. Si CIF &gt; $10,000 → CIF × 0.27% + $80.<br>
-      • <strong>Formulario:</strong> Si renglones ≤ 5 → $3. Más de 5 renglones: 1 + REDONDEAR.ARRIBA((rengl-5)/10, 0) × $3.<br>
-      • <strong>Coord. Logística:</strong> CIF × 0.5%.<br>
-      • <strong>Renglones Extra:</strong> Si rengl ≤ 1 → $0. Si rengl &gt; 1 → (rengl-1) × $5.<br>
-      • <strong>Total SC1:</strong> Hon.Mín + Formulario + GZLC + Coord + Renglones.<br>
-      • <strong>Total CIF Express (SC2):</strong> CIF × 3% (incluye todo).
-    </div>
-    <div class="card-bd">
-      <div class="r2">
-        <div class="field"><label>Renglones (#)</label>
-          <input type="number" id="s1_reng" value="1" step="1" min="1" oninput="calc()">
-        </div>
-        <div class="field"><label>Gestión Ingreso ZLC (USD)</label>
-          <input type="number" id="s1_gzlc" value="133" step="0.01" oninput="calc()">
-        </div>
-      </div>
-      <div style="background:var(--s2);border-radius:8px;padding:12px;margin-top:8px">
-        <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:8px">Honorarios Calculados (Automático)</div>
-        <div class="r2">
-          <div class="field"><label>Hon. Mínimo Legal</label><input type="number" id="disp_honMin" readonly style="background:var(--bg)"></div>
-          <div class="field"><label>Coord. Logística (0.5%)</label><input type="number" id="disp_coord" readonly style="background:var(--bg)"></div>
-        </div>
-        <div class="r2">
-          <div class="field"><label>Renglones Extra</label><input type="number" id="disp_reng" readonly style="background:var(--bg)"></div>
-          <div class="field"><label>Formulario Esc.#1</label><input type="number" id="disp_form1b" readonly style="background:var(--bg)"></div>
-        </div>
-        <div class="r2">
-          <div class="field"><label style="font-weight:700">Total Hon. Esc.#1</label>
-            <input type="number" id="disp_hon1" readonly style="background:var(--bg);border-color:var(--green-l);font-weight:700;color:var(--green-l)">
-          </div>
-          <div class="field"><label style="font-weight:700">Total Hon. Esc.#2 (CIF×3%)</label>
-            <input type="number" id="disp_hon2" readonly style="background:var(--bg);border-color:var(--blue-l);font-weight:700;color:var(--blue-l)">
-          </div>
-        </div>
-      </div>
-      <!-- CHECK: No aplicar Honorarios (cargas consolidadas o sin honorario) -->
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 0 4px;font-size:12px;color:var(--text);margin-top:6px;border-top:1px solid var(--border)">
-        <input type="checkbox" id="chk_no_honorarios" onchange="_toggleNoHonorarios(this.checked);calc()"
-          style="width:16px;height:16px;accent-color:var(--orange-l)">
-        <span>⚠️ No aplicar Honorarios <span style="font-size:10px;color:var(--muted)">(carga consolidada u otro caso especial)</span></span>
-      </label>
-    </div>
-  </div>
-
-  <!-- TRANSPORTE Y GASTOS -->
-  <div class="card" style="margin-bottom:12px">
+<div class="card" style="margin-bottom:12px">
     <div class="card-hd" style="cursor:pointer;user-select:none" onclick="_toggleSection('card-body-4___transporte_y_gas','card-chev-4___transporte_y_gas',this)"><div class="dot g"></div><h3>4 · Transporte y Gastos</h3><span id="card-chev-4___transporte_y_gas" style="margin-left:auto;font-size:11px;color:var(--muted)">▼</span>
     <div class="card-bd">
       <div class="r2">
@@ -1338,16 +1284,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       </label>
 
       <!-- CONTENEDOR ÚNICO — solo para tipo Contenedor directo -->
-      <div id="blk-nro-contenedor" style="display:none;margin-bottom:8px">
-        <div class="r2">
-          <div class="field"><label>N° Contenedor</label>
-            <input type="text" id="s1_nro_cont" placeholder="Ej: MSCU1234567" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px">
-          </div>
-          <div class="field"><label>Fecha de Llegada</label>
-            <input type="date" id="s1_fecha_llegada" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px">
-          </div>
-        </div>
-      </div>
+      
       <!-- CONTENEDORES MÚLTIPLES — solo aparece si equipo=Contenedor y cant>1 -->
       <div id="multi-contenedores-wrap" style="display:none;margin-top:10px">
         <div style="font-size:10px;font-weight:700;color:var(--blue-l);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px">
@@ -1511,7 +1448,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
   <div id="sim-action-bar" style="display:flex;gap:8px;margin-bottom:16px;padding:8px 0 4px;border-top:1px solid var(--border);position:sticky;bottom:0;background:var(--s1);z-index:10">
     <button onclick="if(typeof openSidebar==='function')openSidebar();" style="background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:7px 10px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0" title="Abrir panel de navegación">☰ Panel</button>
     <button onclick="(function(){ var nro=(document.getElementById('s1_nro_emb')||{}).value||''; if(typeof openTabModal==='function') openTabModal('facturas','🧾 Proveedores'); if(nro && typeof _jumpToFac==='function') setTimeout(function(){_jumpToFac(nro);},400); })()" style="background:rgba(88,166,255,.08);border:1px solid rgba(88,166,255,.25);color:var(--blue-l);border-radius:8px;padding:7px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0" title="Ver facturas del embarque">🔍 Facturas</button>
-    <button id="btn-aplicar-cambios" class="btn" style="flex:1;background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.2);color:#f97316;opacity:.45;pointer-events:none;transition:all .25s;padding:7px 10px;font-size:11px;font-weight:600" onclick="_startProgress();calc();if(typeof syncSC3fromSC1==='function')syncSC3fromSC1();setTimeout(function(){if(typeof calcSab2==='function')calcSab2();_endProgress();},200)">✓ Aplicar</button>
+    <button id="btn-aplicar-cambios" class="btn" style="flex:1;background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.2);color:#f97316;opacity:.45;pointer-events:none;transition:all .25s;padding:7px 10px;font-size:11px;font-weight:600" onclick="_startProgress();calc();if(typeof syncSC3fromSC1==='function')syncSC3fromSC1();setTimeout(function(){if(typeof calcSab2==='function')calcSab2();_endProgress();_showToast('✅ Cambios aplicados','green',2200);},200)">✓ Aplicar</button>
     <button id="btn-procesar-sim" class="btn btn-ghost" style="flex:1;background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.25);color:var(--green-l);padding:7px 10px;font-size:11px;font-weight:700" onclick="_startProgress();procesarEmbarque()">✅ Procesar</button>
     <button id="btn-calcular-sim" class="btn btn-green" style="display:none;flex:1;padding:7px 10px;font-size:11px" onclick="_startProgress();calcAndShow()">⚡ Calcular</button>
   </div>
@@ -1911,7 +1848,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
         </div>
       </div>
       <div style="display:flex;gap:8px;margin-top:12px">
-        <button id="btn-aplicar-cif" class="btn" style="flex:1;background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);color:var(--blue-l);opacity:.45;pointer-events:none;transition:all .25s" onclick="_startProgress();calc();if(typeof syncSC3fromSC1==='function')syncSC3fromSC1();setTimeout(function(){if(typeof calcSab2==='function')calcSab2();_endProgress();},200)">✓ Aplicar</button>
+        <button id="btn-aplicar-cif" class="btn" style="flex:1;background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);color:var(--blue-l);opacity:.45;pointer-events:none;transition:all .25s" onclick="_startProgress();calc();if(typeof syncSC3fromSC1==='function')syncSC3fromSC1();setTimeout(function(){if(typeof calcSab2==='function')calcSab2();_endProgress();_showToast('✅ Cambios aplicados','green',2200);},200)">✓ Aplicar</button>
         <button class="btn btn-blue" style="flex:2" onclick="calcAndShow('cifexp')">⚡ Calcular — Ver Dashboard →</button>
       </div>
     </div>
@@ -2030,7 +1967,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       </div>
 
       <div style="display:flex;gap:8px;margin-top:8px">
-        <button id="btn-aplicar-sab" class="btn" style="flex:1;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.25);color:#f97316;opacity:.45;pointer-events:none;transition:all .25s" onclick="_startProgress();calc();if(typeof syncSC3fromSC1==='function')syncSC3fromSC1();setTimeout(function(){calcSab2();_endProgress();},200)">✓ Aplicar</button>
+        <button id="btn-aplicar-sab" class="btn" style="flex:1;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.25);color:#f97316;opacity:.45;pointer-events:none;transition:all .25s" onclick="_startProgress();calc();if(typeof syncSC3fromSC1==='function')syncSC3fromSC1();setTimeout(function(){calcSab2();_endProgress();_showToast('✅ Cambios aplicados','green',2200);},200)">✓ Aplicar</button>
         <button class="btn btn-orange" style="flex:2" onclick="_startProgress();calcSab2AndShow()">⚡ Calcular — Ver Dashboard →</button>
       </div>
     </div>
@@ -2061,11 +1998,12 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
         <button onclick="downloadInvTemplate('xlsx')" style="flex:1;min-width:100px;background:rgba(88,166,255,.08);border:1px solid rgba(88,166,255,.2);color:var(--blue-l);border-radius:8px;padding:8px;font-size:11px;cursor:pointer">📥 Excel (.xlsx)</button>
         <button onclick="document.getElementById('inv-file-input').click()" style="flex:1;min-width:100px;background:rgba(210,153,34,.08);border:1px solid rgba(210,153,34,.2);color:var(--orange-l);border-radius:8px;padding:8px;font-size:11px;cursor:pointer">📂 Cargar CSV/Excel</button>
         <input type="file" id="inv-file-input" accept=".csv,.xlsx,.xls" style="display:none" onchange="loadInvFile(this)">
+        <button onclick="document.getElementById('art-file-input').click()" title="Auto-rellena Piezas · OC Homologada · Monto Homologado" style="flex:1;min-width:100px;background:rgba(167,113,247,.12);border:1px solid rgba(167,113,247,.4);color:#a371f7;border-radius:8px;padding:8px;font-size:11px;font-weight:600;cursor:pointer">🔗 Mapear Piezas</button>
+        <input type="file" id="art-file-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="loadInvFile(this)">
         <button onclick="_guardarTodasFacturas()" style="flex:1;min-width:100px;background:rgba(63,185,80,.15);border:1px solid rgba(63,185,80,.4);color:var(--green-l);border-radius:8px;padding:8px;font-size:11px;font-weight:700;cursor:pointer">💾 Guardar Todas</button>
-        <button onclick="document.getElementById('art-file-input').click()" title="Sube el archivo de artículos de Sababa para auto-rellenar Piezas, OC Homologada y Monto Homologado por OC Original" style="flex:1;min-width:100px;background:rgba(167,113,247,.12);border:1px solid rgba(167,113,247,.4);color:#a371f7;border-radius:8px;padding:8px;font-size:11px;font-weight:600;cursor:pointer">🔗 Mapear Piezas</button>
       </div>
-      <div id="art-status" style="font-size:10px;color:var(--muted);margin-bottom:4px;min-height:16px"></div>
-      <input type="file" id="art-file-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="_loadArticulosPlantilla(this)">
+      <div id="art-status" style="font-size:10px;color:var(--muted);min-height:14px;margin-top:4px"></div>
+
       <!-- Search -->
       <div style="margin-bottom:8px">
         <input type="text" id="inv-search" placeholder="🔍 Filtrar por proveedor o departamento..."
@@ -2107,7 +2045,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
           <div style="font-size:10px;font-weight:700;color:var(--orange-l);text-transform:uppercase;letter-spacing:.07em">💸 Proveedores de Servicios — Auto-mapeados</div>
           <div style="font-size:10px;color:var(--muted);margin-top:2px">Tesoro Nacional · CIF Express Trámite · Sababa Imports · Agente Aduanal</div>
         </div>
-        <button onclick="if(!window._lastSnap){_showToast('⚠️ Primero calcula el embarque en el Simulador para ver los gastos de servicio','orange',4000);}else{_autoFillGastosProveedores();renderInvLines();_showToast('🔄 Gastos de servicio actualizados','green',2000);}" title="Recalcula y sincroniza todos los gastos de servicio desde el costeo activo"
+        <button onclick="if(!sab2Tipo&&typeof tipo!=='undefined'&&tipo){sab2Tipo=tipo;}if(!sab2Tipo){sab2Tipo='ZL';}if(typeof calc==='function')calc();if(typeof syncSC3fromSC1==='function')syncSC3fromSC1();setTimeout(function(){if(typeof calcSab2==='function')calcSab2();},100);setTimeout(function(){_autoFillGastosProveedores();renderInvLines();_showToast('🔄 Gastos de servicio actualizados','green',2000);},350);" title="Recalcula y sincroniza todos los gastos de servicio desde el costeo activo"
           style="background:rgba(240,136,62,.1);border:1px solid rgba(240,136,62,.3);color:var(--orange-l);border-radius:6px;padding:3px 10px;font-size:11px;cursor:pointer;flex-shrink:0">🔄 Refrescar</button>
       </div>
       <div id="inv-gastos-lines" style="margin-bottom:10px">
@@ -14711,8 +14649,10 @@ window._unicoModeActive = false;
 
 function _toggleContenedorField(val){
   var blk = document.getElementById('blk-nro-contenedor');
-  var isContenedor = val && val.toLowerCase().includes('contenedor');
-  if(blk) blk.style.display = isContenedor ? '' : 'none';
+  // Mostrar campo N° Contenedor SOLO para tipos marítimos/contenedor
+  // Consolidado Terrestre, Camión, Furgón, etc. no tienen contenedor
+  var showContenedor = val === 'Contenedor directo' || val === 'Consolidado Marítimo';
+  if(blk) blk.style.display = showContenedor ? '' : 'none';
 }
 
 // ═══════════════════════════════════════════════════════
@@ -14952,7 +14892,7 @@ function _unicoActualizarCiudades(pais){
   const mapa = (typeof _CIUDADES !== 'undefined') ? _CIUDADES : {
     'USA':['Nueva York','Los Ángeles','Miami','Houston','Chicago'],
     'China':['Guangzhou','Shanghai','Shenzhen','Ningbo','Tianjin'],
-    'Panama':['Zona Libre de Colón','Ciudad de Panamá','Balboa'],
+    'Panamá':['Zona Libre de Colón','Ciudad de Panamá','Balboa'],
     'Colombia':['Bogotá','Medellín','Barranquilla','Cali'],
     'Mexico':['Ciudad de México','Monterrey','Guadalajara','Manzanillo'],
     'Brasil':['São Paulo','Rio de Janeiro','Manaus','Santos'],
@@ -16791,7 +16731,13 @@ function applyInvToForm(){
     if(el){ el.value=total.toFixed(2); calcFOB(); }
   } else {
     const el=document.getElementById('s1_cif');
-    if(el){ el.value=total.toFixed(2); syncSC3fromSC1(); calc(); }
+    if(el){ el.value=total.toFixed(2); syncSC3fromSC1(); calc();
+      // Forzar sab2Tipo y calcular gastos de servicio
+      if(!sab2Tipo&&typeof tipo!=='undefined'&&tipo){sab2Tipo=tipo;}
+      if(!sab2Tipo){sab2Tipo='ZL';}
+      setTimeout(function(){if(typeof calcSab2==='function')calcSab2();},100);
+      setTimeout(function(){if(typeof _autoFillGastosProveedores==='function'){_autoFillGastosProveedores();renderInvLines();}},350);
+    }
   }
 
   // PAGO_REALIZADO se mapea automáticamente al cargar el archivo (no al aplicar)
@@ -17177,351 +17123,6 @@ function downloadInvTemplate(fmt){
 
 // ── Plantilla de Artículos — auto-rellena Piezas, OC Homologada, Monto Homologado ──
 // Columnas esperadas: OC Original, Piezas, OC Homologada, Costo Homologado Total
-window._loadArticulosPlantilla = function(input){
-  var file = input.files[0]; if(!file) return;
-  var statEl = document.getElementById('art-status');
-  if(statEl) statEl.textContent = '⏳ Procesando...';
-
-  function processRows(rows){
-    // Encontrar fila de encabezado
-    var hdrIdx = -1, hdr = [];
-    for(var i=0;i<Math.min(rows.length,5);i++){
-      var r = rows[i].map(function(c){return (c||'').toString().toUpperCase().trim();});
-      if(r.some(function(c){return c.includes('OC') || c.includes('PIEZAS') || c.includes('PRODUCTO');})){
-        hdrIdx=i; hdr=r; break;
-      }
-    }
-    if(hdrIdx===-1){ if(statEl) statEl.textContent='⚠️ No se encontró encabezado válido'; return; }
-
-    // Mapear columnas
-    function col(terms){ return hdr.findIndex(function(h){return terms.some(function(t){return h.includes(t);});}); }
-    var cOC   = col(['OC ORIGINAL','OC_ORIGINAL','ORDEN.*ORIG','OC ORIG']);
-    var cPz   = col(['PIEZAS','PIECES','QTY','CANTIDAD']);
-    var cOCH  = col(['OC HOMOLOGADA','OC_HOMOLOGADA','ORDEN.*HOMOL','OC HOMOL']);
-    var cMH   = col(['COSTO HOMOLOGADO TOTAL','MONTO_HOMOLOGADO','HOMOLOGADO TOTAL','MONTO HOMOL','COSTO HOMOL']);
-    if(cOC===-1){ if(statEl) statEl.textContent='⚠️ No se encontró columna OC Original'; return; }
-
-    // Agrupar por OC Original — normalizar numeros a string
-    var byOC = {};
-    for(var i=hdrIdx+1;i<rows.length;i++){
-      var r=rows[i];
-      var ocRaw=(r[cOC]===undefined||r[cOC]===null)?'':(r[cOC]).toString().trim();
-      if(!ocRaw) continue;
-      // Normalize: strip leading zeros, keep as string
-      var ocNorm=ocRaw.replace(/^0+/,'')||ocRaw;
-      // Store under both forms for flexible matching
-      [ocRaw,ocNorm].forEach(function(k){
-        if(!byOC[k]) byOC[k]={piezas:0,ocHomol:'',montoHomol:0};
-        if(cPz>-1)  byOC[k].piezas  += parseFloat((r[cPz]||0).toString().replace(/[^0-9.]/g,''))||0;
-        if(cOCH>-1 && !byOC[k].ocHomol) byOC[k].ocHomol=(r[cOCH]===undefined?'':(r[cOCH]).toString().trim());
-        if(cMH>-1)  byOC[k].montoHomol += parseFloat((r[cMH]||0).toString().replace(/[^0-9.]/g,''))||0;
-      });
-    }
-
-    var ocKeys = Object.keys(byOC);
-    if(!ocKeys.length){ if(statEl) statEl.textContent='⚠️ Sin datos de OC'; return; }
-
-    // Aplicar a las líneas de mercancía actuales
-    var lines = window.invLines || [];
-    // También buscar en los contenedores del DOM
-    var containers = document.querySelectorAll('[id="inv-lines"]');
-    var updated=0, notFound=[];
-
-    // Normalize OC keys for fuzzy match (remove leading zeros, spaces)
-    function normOC(v){ return (v||'').toString().trim().replace(/^0+/,'').toUpperCase(); }
-    var byOCNorm = {};
-    ocKeys.forEach(function(k){ byOCNorm[normOC(k)] = byOC[k]; });
-
-    lines.forEach(function(l){
-      if((l.tipoFac||'mercancia')!=='mercancia') return; // solo mercancía
-      var ocRaw=(l.oc||l.ordenCompra||l.oc_original||l.OC||'').toString().trim();
-      if(!ocRaw) return;
-      var ocNorm = ocRaw.replace(/^0+/,'') || ocRaw;
-      // Try direct match, then normalized match
-      var match = byOC[ocRaw] || byOC[ocNorm] || byOCNorm[normOC(ocRaw)];
-      if(match){
-        if(match.piezas > 0) l.piezas = Math.round(match.piezas);
-        if(match.ocHomol)    l.ocHomologada = match.ocHomol;
-        if(match.montoHomol > 0) l.montoHomologado = parseFloat(match.montoHomol.toFixed(2));
-        updated++;
-      } else {
-        notFound.push(ocRaw);
-      }
-    });
-
-    // Refrescar UI
-    if(typeof renderInvLines==='function') renderInvLines();
-    if(typeof _unicoRenderLines==='function') _unicoRenderLines();
-
-    var totalMerc=lines.filter(function(l){return(l.tipoFac||'mercancia')==='mercancia';}).length;
-    var msg;
-    if(updated===0&&totalMerc===0){
-      msg='⚠️ No hay líneas de mercancía en la plantilla. Carga la plantilla principal primero.';
-    } else if(updated===0){
-      var ocMuestra=lines.filter(function(l){return(l.tipoFac||'mercancia')==='mercancia'&&l.oc;}).map(function(l){return l.oc;}).slice(0,3).join(', ');
-      var ocArch=Object.keys(byOC).slice(0,5).join(', ');
-      msg='⚠️ Sin coincidencias. OC en plantilla: ['+ocMuestra+']. OC en archivo: ['+ocArch+']';
-    } else {
-      msg='✅ '+updated+' línea(s) actualizadas (Piezas · OC Homol. · Monto Homol.)';
-      if(notFound.length) msg+=' · ⚠️ Sin match: '+[...new Set(notFound)].slice(0,3).join(', ')+(notFound.length>3?' y más':'');
-    }
-    if(statEl) statEl.innerHTML='<span style="color:'+(updated>0?'var(--green-l)':'var(--orange-l)')+'">'+ msg+'</span>';
-    if(typeof _showToast==='function') _showToast(msg, updated>0?'green':'orange', 5000);
-    input.value='';
-  }
-
-  var ext=file.name.split('.').pop().toLowerCase();
-  if(ext==='csv'){
-    var reader=new FileReader();
-    reader.onload=function(e){
-      var rows=e.target.result.split('\n').map(function(l){return l.split(',').map(function(c){return c.replace(/^"|"$/g,'').trim();});});
-      processRows(rows);
-    };
-    reader.readAsText(file,'UTF-8');
-  } else {
-    if(typeof XLSX==='undefined'){ _showToast('Cargando librería Excel… reintenta.','orange',3000); return; }
-    var reader=new FileReader();
-    reader.onload=function(e){
-      var wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
-      var ws=wb.Sheets[wb.SheetNames[0]];
-      var rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''}).map(function(r){return r.map(function(c){return String(c===null||c===undefined?'':c).trim();});});
-      processRows(rows);
-    };
-    reader.readAsArrayBuffer(file);
-  }
-};
-
-function drawInvPie(){
-  const canvas=document.getElementById('inv-pie');
-  const legend=document.getElementById('inv-legend');
-  const wrap=document.getElementById('inv-chart-wrap');
-  if(!canvas||!legend||!wrap) return;
-
-  // Group by deptCat (primary). If no deptCat, use prov or dept as fallback
-  const cats={}, counts={};
-  // SOLO líneas de mercancía — gastos/flete/honorarios NO entran en distribución por departamento
-  invLines.forEach(l=>{
-    if((l.tipoFac||'mercancia')!=='mercancia') return;
-    const key=l.deptCat||(l.prov||l.dept||'Sin categoría');
-    if(l.costo>0){
-      cats[key]=(cats[key]||0)+l.costo;
-      counts[key]=(counts[key]||0)+1;
-    }
-  });
-  const keys=Object.keys(cats);
-  if(!keys.length){ wrap.style.display='none'; return; }
-  wrap.style.display='';
-  const total=Object.values(cats).reduce((s,v)=>s+v,0);
-  const dpr=window.devicePixelRatio||1;
-  canvas.width=130*dpr; canvas.height=130*dpr;
-  canvas.style.width='130px'; canvas.style.height='130px';
-  const ctx=canvas.getContext('2d'); ctx.scale(dpr,dpr);
-  let angle=-Math.PI/2;
-  const cx=65,cy=65,r=58,ri=30;
-  keys.forEach((k,i)=>{
-    const slice=(cats[k]/total)*Math.PI*2;
-    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.arc(cx,cy,r,angle,angle+slice); ctx.closePath();
-    ctx.fillStyle=INV_COLORS[i%INV_COLORS.length]; ctx.fill();
-    angle+=slice;
-  });
-  // Donut hole
-  ctx.beginPath(); ctx.arc(cx,cy,ri,0,Math.PI*2);
-  ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--s1')||'#161b22'; ctx.fill();
-  ctx.fillStyle='#e6edf3'; ctx.font='bold 10px Inter'; ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.fillText(keys.length+' dept'+(keys.length!==1?'s':''),cx,cy);
-  const f=n=>'$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-  legend.innerHTML=keys.map((k,i)=>`
-    <div style="display:flex;align-items:center;gap:5px;margin-bottom:5px">
-      <div style="width:9px;height:9px;border-radius:2px;flex-shrink:0;background:${INV_COLORS[i%INV_COLORS.length]}"></div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.01em">${k}</div>
-        <div style="font-size:10px;color:var(--muted)">
-          <span onclick="showDeptDetail('${k.replace(/'/g,"\\'")}');event.stopPropagation()"
-            style="cursor:pointer;text-decoration:underline;color:${INV_COLORS[i%INV_COLORS.length]}">${counts[k]} proveedor${counts[k]!==1?'es':''}</span>
-          · ${((cats[k]/total)*100).toFixed(1)}% · <span style="font-family:'IBM Plex Mono',monospace;color:var(--green-l)">${f(cats[k])}</span>
-        </div>
-      </div>
-    </div>`).join('');
-}
-
-// ═══════════════════════════════════════════════════════
-// ORIGEN ESTRUCTURADO — País → Ciudad cascade
-// ═══════════════════════════════════════════════════════
-const _CIUDADES_POR_PAIS = {
-  'USA':       ['Los Ángeles','New York','Miami','Las Vegas','Houston','Chicago','Dallas','Atlanta','San Francisco','Seattle','Newark','Boston','Philadelphia','Tampa','Puerto Rico'],
-  'China':     ['Ningbo','Shanghái','Guangzhou','Shenzhen','Yiwu','Qingdao','Tianjin','Beijing','Hangzhou','Wenzhou','Dongguan','Foshan','Nanjing','Chengdu','Suzhou'],
-  'Mexico':    ['Monterrey','Guadalajara','Veracruz','Ciudad de México','Tijuana','Puebla','Manzanillo','Lázaro Cárdenas','Altamira'],
-  'Brasil':    ['São Paulo','Río de Janeiro','Santos','Itajaí','Paranaguá','Salvador','Fortaleza'],
-  'Colombia':  ['Bogotá','Medellín','Barranquilla','Cali','Cartagena','Buenaventura'],
-  'India':     ['Mumbai','Nueva Delhi','Chennai','Kolkata','Ahmedabad','Nhava Sheva','Mundra','Bangalore'],
-  'Vietnam':   ['Ho Chi Minh City','Hanói','Da Nang','Hai Phong','Vung Tau'],
-  'Korea':     ['Seúl','Busan','Incheon','Gwangyang'],
-  'Japan':     ['Tokio','Osaka','Yokohama','Kobe','Nagoya'],
-  'Taiwan':    ['Taipei','Taichung','Kaohsiung','Keelung'],
-  'Turkey':    ['Estambul','Izmir','Mersin','Trabzon'],
-  'Bangladesh':['Dhaka','Chittagong'],
-  'Pakistan':  ['Karachi','Lahore','Islamabad'],
-  'Indonesia': ['Yakarta','Surabaya','Semarang','Medan'],
-  'Malasia':   ['Kuala Lumpur','Port Klang','Penang','Johor Bahru'],
-  'Tailandia': ['Bangkok','Laem Chabang','Chiang Mai'],
-  'Italia':    ['Milán','Nápoles','Génova','Livorno','Roma'],
-  'Espana':    ['Barcelona','Valencia','Bilbao','Algeciras','Madrid'],
-  'Alemania':  ['Hamburgo','Bremen','Fráncfort','Munich','Berlín'],
-  'Portugal':  ['Lisboa','Oporto','Setúbal','Leixões'],
-  'Panama':    ['Zona Libre de Colón','Ciudad de Panamá','Balboa','Manzanillo Int.'],
-  'Puerto Rico':['San Juan','Ponce','Mayagüez'],
-  'Otro':      ['Especificar en notas']
-};
-
-// Sinónimos para búsqueda inteligente (alias → valor canónico)
-const _ORIGEN_SINONIMOS = {
-  'eeuu':'USA','united states':'USA','estados unidos':'USA','usa':'USA','us':'USA',
-  'china':'China','cn':'China','republic of china':'China',
-  'mexico':'Mexico','méxico':'Mexico','mex':'Mexico',
-  'brasil':'Brasil','brazil':'Brasil','br':'Brasil',
-  'colombia':'Colombia','col':'Colombia',
-  'india':'India','in':'India',
-  'vietnam':'Vietnam','viet nam':'Vietnam','vn':'Vietnam',
-  'corea':'Korea','korea':'Korea','south korea':'Korea','kr':'Korea',
-  'japon':'Japan','japón':'Japan','japan':'Japan','jp':'Japan',
-  'taiwan':'Taiwan','taiwán':'Taiwan','tw':'Taiwan',
-  'turquia':'Turkey','turquía':'Turkey','turkey':'Turkey','tr':'Turkey',
-  'zona libre':'Panama','zona libre de colon':'Panama','zona libre colón':'Panama','zlc':'Panama',
-  'panama':'Panama','panamá':'Panama',
-  'puerto rico':'Puerto Rico','pr':'Puerto Rico',
-  'espana':'Espana','españa':'Espana','spain':'Espana',
-  'alemania':'Alemania','germany':'Alemania','deutschland':'Alemania',
-  'italia':'Italia','italy':'Italia',
-  'portugal':'Portugal',
-  'bangladesh':'Bangladesh','bd':'Bangladesh',
-  'pakistan':'Pakistan','pakistán':'Pakistan',
-  'indonesia':'Indonesia','id':'Indonesia',
-  'malasia':'Malasia','malaysia':'Malasia',
-  'tailandia':'Tailandia','thailand':'Tailandia',
-  'los angeles':'Los Ángeles','los ángeles':'Los Ángeles','la':'Los Ángeles',
-  'new york':'New York','nueva york':'New York','ny':'New York','nyc':'New York',
-  'miami':'Miami','fl':'Miami',
-  'las vegas':'Las Vegas','lv':'Las Vegas',
-  'ningbo':'Ningbo','shanghai':'Shanghái','shanghái':'Shanghái',
-  'guangzhou':'Guangzhou','canton':'Guangzhou',
-  'shenzhen':'Shenzhen','yiwu':'Yiwu',
-  'sao paulo':'São Paulo','são paulo':'São Paulo','santos':'Santos',
-  'ho chi minh':'Ho Chi Minh City','hcm':'Ho Chi Minh City',
-  'busan':'Busan','busán':'Busan',
-  'monterrey':'Monterrey','guadalajara':'Guadalajara'
-};
-
-async function eliminarSesionNube(nombre, btnEl){
-  if(!confirm(`¿Eliminar la sesión "${nombre}" de la nube?`)) return;
-  if(!_sb){ alert('Supabase no conectado'); return; }
-  try {
-    const { error } = await _sb.from('simulador_sesiones').delete().eq('nombre', nombre);
-    if(error) throw error;
-    // Remove card from modal UI
-    const card = btnEl.closest('[style*="padding:10px"]');
-    if(card) { card.style.transition='opacity .3s'; card.style.opacity='0'; setTimeout(()=>card.remove(),300); }
-    // Update cache
-    if(window._nubeListaCache) window._nubeListaCache = window._nubeListaCache.filter(s=>s.nombre!==nombre);
-    // Show Aplicar button to confirm sync with server
-    setTimeout(()=>{
-      let applyBtn = document.getElementById('_nube-apply-btn');
-      if(!applyBtn){
-        applyBtn = document.createElement('button');
-        applyBtn.id = '_nube-apply-btn';
-        applyBtn.textContent = '✅ Aplicar cambios — Refrescar lista';
-        applyBtn.style.cssText='display:block;width:calc(100% - 0px);margin:12px 0 0;background:linear-gradient(135deg,#22c55e,#16a34a);border:none;border-radius:10px;padding:12px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;text-align:center';
-        applyBtn.onclick = async () => { applyBtn.remove(); await cargarSesionNube(); };
-        const modal = document.getElementById('_nubeModal') || btnEl.closest('.modal-body') || btnEl.parentElement?.parentElement?.parentElement;
-        if(modal) modal.appendChild(applyBtn);
-      }
-    }, 350);
-  } catch(e) {
-    alert('Error al eliminar: ' + e.message);
-  }
-}
-// ── END SUPABASE ──
-
-
-// Auto-save silently to Supabase (called on procesado)
-// ── _guardarYRecargar: guarda en Supabase con spinner, luego recarga ──
-
-function filterInvLines(q){
-  const query=(q||'').toUpperCase().trim();
-  document.querySelectorAll('#inv-lines > div[data-prov]').forEach(el=>{
-    const prov=(el.dataset.prov||'').toUpperCase();
-    const dept=(el.dataset.dept||'').toUpperCase();
-    el.style.display=(!query||prov.includes(query)||dept.includes(query))?'':'none';
-  });
-}
-
-// ── CHART ORIENTATION ──
-
-function goWiz(step){ scrollFormTo(step); }
-
-async function guardarEnSupabase(nombre, datos){
-  if(!_sb){ alert("Supabase no conectado"); return false; }
-  try {
-    const payload = {
-      nombre: nombre || ("sesion_" + new Date().toISOString().slice(0,10)),
-      datos: JSON.stringify(datos),
-      updated_at: new Date().toISOString()
-    };
-    const { error } = await _sb
-      .from("simulador_sesiones")
-      .upsert(payload, { onConflict: "nombre" });
-    if(error) throw error;
-    return true;
-  } catch(e) {
-    console.error("Error guardando:", e);
-    alert("Error al guardar en la nube: " + e.message);
-    return false;
-  }
-}
-
-function guardarSesion(){
-  // Collect all form field values
-  const campos=['s1_cif','s1_fob','s1_flete_fob','s1_seguro','s1_cif_calc',
-    's1_ar','s1_itbms','s1_traspaso','s1_dif_pago',
-    's1_reng','s1_gzlc','s1_tasa','s2_form',
-    's1_equipo','s1_acarreo','s1_equipos','s1_dmce','s1_agente',
-    's1_nro_emb','s1_desc_emb','s1_origen_emb','s1_tipo_emb','s1_destino','s1_cartones',
-    's1_pais_emb','s1_ciudad_emb','s1_via_transporte','s1_nro_cont','s1_fecha_emb',
-    'sc_costo_zl','sc_trasp','sc_fob','sc_flete','sc_com','sc_pago',
-    'sc_flete_sab','sc_origen_sab','sc_comision_display','sc2_hon_ng',
-    's2_costo_zl','s2_trasp','s2_fob','s2_flete','s2_dif_fob','s2_dif_cif','s2_pago','s2_com',
-    's2_flete_sab','s2_agente',
-    'solo_hon_pct','solo_nombre'];
-
-  const sesion={
-    version:'1.0',
-    fecha:new Date().toISOString(),
-    tipo, termino, compar, exon, sabTipo, sab2Tipo, sabTipoCmp,
-    campos:{},
-    invLines: [...invLines],
-    tendData: tendData.slice(-20) // last 20 records
-  };
-
-  campos.forEach(id=>{
-    const el=document.getElementById(id);
-    if(el) sesion.campos[id]=el.value;
-  });
-  // Also save select dropdowns explicitly
-  ['s1_pais_emb','s1_ciudad_emb','s1_via_transporte'].forEach(id=>{
-    const el=document.getElementById(id);
-    if(el && el.value) sesion.campos[id]=el.value;
-  });
-
-  const json=JSON.stringify(sesion,null,2);
-  const blob=new Blob([json],{type:'application/json;charset=utf-8'});
-  const nro=document.getElementById('s1_nro_emb')?.value||'sesion';
-  const fecha=new Date().toISOString().slice(0,10);
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  a.download=`simulador_${nro.replace(/[^a-zA-Z0-9]/g,'-')}_${fecha}.json`;
-  a.click();
-  URL.revokeObjectURL(a.href);
-}
-
 function loadInvFile(input){
   const file=input.files[0]; if(!file) return;
   const isXlsx=/\.(xlsx|xls)$/i.test(file.name);
@@ -17681,9 +17282,6 @@ function loadInvFile(input){
         if(_traspRow) _traspRow.style.display = '';
       }
     }
-    // Show results immediately — don't require Esc1 to be configured first
-    if(typeof calc==='function') calc();
-
     // Contar cuántos proveedores fueron auto-corregidos
     const _autoCorr = invLines.filter(l=>l._match&&(l._match.exact||l._match.score>=0.8)&&l.tipoFac==='mercancia').length;
     const _noMatch  = invLines.filter(l=>l.tipoFac==='mercancia'&&l.prov&&!l._match).length;
@@ -17920,12 +17518,54 @@ function loadInvFile(input){
     } else {
       alert(msg);
     }
-    // Secuencia de disparo: Liquidación → Sync → Sababa
+    // ── Forzar sab2Tipo antes de calcular (sin esto calcSab2 aborta) ──
+    if(!sab2Tipo && typeof tipo !== 'undefined' && tipo){ sab2Tipo = tipo; }
+    if(!sab2Tipo){ sab2Tipo = 'ZL'; }
+
+    // ── SECUENCIA DE DISPARO ROBUSTA ──
+    // Paso 1: Forzar sab2Tipo (sin esto calcSab2 aborta)
+    if(!sab2Tipo){ sab2Tipo = (typeof tipo!=='undefined'&&tipo) ? tipo : 'ZL'; }
+
+    // Paso 2: Primer calc() — popula _lastSnap
     if(typeof calc==='function') calc();
-    // syncSC3fromSC1 propaga liquidación a Sababa (solo si el embarque ya tiene término)
     if(typeof syncSC3fromSC1==='function') syncSC3fromSC1();
-    // calcSab2 recalcula Sababa con todos los valores ya mapeados
-    setTimeout(function(){ if(typeof calcSab2==='function') calcSab2(); }, 120);
+
+    // Paso 3: calcSab2 con reintento
+    setTimeout(function(){
+      if(!sab2Tipo) sab2Tipo='ZL';
+      if(typeof calcSab2==='function') calcSab2();
+    }, 200);
+
+    // Paso 4: Segundo calc() para asegurar _lastSnap con Sababa completo
+    setTimeout(function(){
+      if(typeof calc==='function') calc();
+      if(typeof syncSC3fromSC1==='function') syncSC3fromSC1();
+    }, 350);
+
+    // Paso 5: Gastos de servicio + render final
+    setTimeout(function(){
+      if(!window._lastSnap){ if(typeof calc==='function') calc(); }
+      if(typeof _autoFillGastosProveedores==='function') _autoFillGastosProveedores();
+      if(typeof renderInvLines==='function') renderInvLines();
+
+      // DEBUG: show state after load
+      (function(){
+        var snap = window._lastSnap;
+        var lines = window.invLines || [];
+        var merc = lines.filter(function(l){return (l.tipoFac||'mercancia')==='mercancia';}).length;
+        var gastos = lines.filter(function(l){return l.tipoFac && l.tipoFac!=='mercancia';}).length;
+        var cif = (document.getElementById('s1_cif')||{}).value || 'N/A';
+        var msg = 'DEBUG POST-CARGA\n'
+          + 'CIF field: ' + cif + '\n'
+          + 'invLines: ' + lines.length + ' (merc:' + merc + ' gastos:' + gastos + ')\n'
+          + '_lastSnap: ' + (snap ? 'OK CIF='+snap.CIF : 'NULL') + '\n'
+          + 'sab2Tipo: ' + sab2Tipo + '\n'
+          + 'compar: ' + compar;
+        alert(msg);
+      })();
+    }, 700);
+    // Habilitar botones Aplicar
+    setTimeout(function(){ if(typeof _enableAllApplyBtns==='function') _enableAllApplyBtns(); }, 500);
     // Re-render in modal clone if facturas modal is open
     const modalOverlay = document.getElementById('tab-modal-overlay');
     if(modalOverlay && modalOverlay.classList.contains('open') && modalOverlay.getAttribute('data-tab')==='facturas'){
@@ -17959,7 +17599,6 @@ function loadInvFile(input){
   }
   input.value='';
 }
-
 function onInvProvChange(idx, val){
   invLines[idx].prov=val;
   const m=provMatch(val);
@@ -18377,99 +18016,10 @@ function updateInvLine(idx,field,val){
   calcInvTotals();
 }
 
+// _loadArticulosPlantilla is now unified with loadInvFile
+// Both buttons call loadInvFile which handles everything in one pass
 window._loadArticulosPlantilla = function(input){
-  var file = input.files[0]; if(!file) return;
-  var statEl = document.getElementById('art-status');
-  if(statEl) statEl.textContent = '⏳ Procesando...';
-
-  function processRows(rows){
-    // Encontrar fila de encabezado
-    var hdrIdx = -1, hdr = [];
-    for(var i=0;i<Math.min(rows.length,5);i++){
-      var r = rows[i].map(function(c){return (c||'').toString().toUpperCase().trim();});
-      if(r.some(function(c){return c.includes('OC') || c.includes('PIEZAS') || c.includes('PRODUCTO');})){
-        hdrIdx=i; hdr=r; break;
-      }
-    }
-    if(hdrIdx===-1){ if(statEl) statEl.textContent='⚠️ No se encontró encabezado válido'; return; }
-
-    // Mapear columnas
-    function col(terms){ return hdr.findIndex(function(h){return terms.some(function(t){return h.includes(t);});}); }
-    var cOC   = col(['OC ORIGINAL','OC_ORIGINAL','ORDEN.*ORIG']);
-    var cPz   = col(['PIEZAS','PIECES','QTY','CANTIDAD']);
-    var cOCH  = col(['OC HOMOLOGADA','OC_HOMOLOGADA','ORDEN.*HOMOL']);
-    var cMH   = col(['COSTO HOMOLOGADO TOTAL','MONTO_HOMOLOGADO','HOMOLOGADO TOTAL','MONTO HOMOL']);
-    if(cOC===-1){ if(statEl) statEl.textContent='⚠️ No se encontró columna OC Original'; return; }
-
-    // Agrupar por OC Original
-    var byOC = {}; // { ocOriginal: { piezas, ocHomol, montoHomol } }
-    for(var i=hdrIdx+1;i<rows.length;i++){
-      var r=rows[i];
-      var oc=(r[cOC]||'').toString().trim(); if(!oc) continue;
-      if(!byOC[oc]) byOC[oc]={piezas:0, ocHomol:'', montoHomol:0};
-      if(cPz>-1)  byOC[oc].piezas  += parseFloat(r[cPz])||0;
-      if(cOCH>-1 && !byOC[oc].ocHomol) byOC[oc].ocHomol = (r[cOCH]||'').toString().trim();
-      if(cMH>-1)  byOC[oc].montoHomol += parseFloat(r[cMH])||0;
-    }
-
-    var ocKeys = Object.keys(byOC);
-    if(!ocKeys.length){ if(statEl) statEl.textContent='⚠️ Sin datos de OC'; return; }
-
-    // Aplicar a las líneas de mercancía actuales
-    var lines = window.invLines || [];
-    // También buscar en los contenedores del DOM
-    var containers = document.querySelectorAll('[id="inv-lines"]');
-    var updated=0, notFound=[];
-
-    // Normalize OC keys for fuzzy match (remove leading zeros, spaces)
-    function normOC(v){ return (v||'').toString().trim().replace(/^0+/,'').toUpperCase(); }
-    var byOCNorm = {};
-    ocKeys.forEach(function(k){ byOCNorm[normOC(k)] = byOC[k]; });
-
-    lines.forEach(function(l){
-      var oc=(l.oc||l.ordenCompra||l.oc_original||l.OC||'').toString().trim();
-      if(!oc) return;
-      var match = byOC[oc] || byOCNorm[normOC(oc)];
-      if(match){
-        if(cPz>-1 && match.piezas)  l.piezas = match.piezas;
-        if(cOCH>-1 && match.ocHomol) l.ocHomologada = match.ocHomol;
-        if(cMH>-1 && match.montoHomol) l.montoHomologado = parseFloat(match.montoHomol.toFixed(2));
-        updated++;
-      } else {
-        notFound.push(oc);
-      }
-    });
-
-    // Refrescar UI
-    if(typeof renderInvLines==='function') renderInvLines();
-    if(typeof _unicoRenderLines==='function') _unicoRenderLines();
-
-    var msg = '✅ '+updated+' factura(s) actualizadas';
-    if(notFound.length) msg += ' · ⚠️ '+[...new Set(notFound)].slice(0,3).join(', ')+(notFound.length>3?' y más':'')+ ' sin match';
-    if(statEl) statEl.innerHTML = '<span style="color:'+( notFound.length?'var(--orange-l)':'var(--green-l)')+'">'+msg+'</span>';
-    if(typeof _showToast==='function') _showToast(msg, notFound.length?'orange':'green', 4000);
-    input.value='';
-  }
-
-  var ext=file.name.split('.').pop().toLowerCase();
-  if(ext==='csv'){
-    var reader=new FileReader();
-    reader.onload=function(e){
-      var rows=e.target.result.split('\n').map(function(l){return l.split(',').map(function(c){return c.replace(/^"|"$/g,'').trim();});});
-      processRows(rows);
-    };
-    reader.readAsText(file,'UTF-8');
-  } else {
-    if(typeof XLSX==='undefined'){ _showToast('Cargando librería Excel… reintenta.','orange',3000); return; }
-    var reader=new FileReader();
-    reader.onload=function(e){
-      var wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
-      var ws=wb.Sheets[wb.SheetNames[0]];
-      var rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''}).map(function(r){return r.map(function(c){return String(c===null||c===undefined?'':c).trim();});});
-      processRows(rows);
-    };
-    reader.readAsArrayBuffer(file);
-  }
+  loadInvFile(input);
 };
 
 
