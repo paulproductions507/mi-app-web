@@ -13525,20 +13525,53 @@ function _renderDeptChart(all){
     // Store in window
     window._deptChartProvs[dkey] = { k:k, color:color, provs:sp, totalProv:totalProv };
 
+    var fmt2 = function(n){ return window._fmtMoney ? window._fmtMoney(n) : ('$'+Number(n||0).toFixed(2)); };
+
+    // Build inline provider rows for accordion
+    var provRows = sp.map(function(p){
+      var pct = totalProv>0 ? (p.costo/totalProv*100).toFixed(1)+'%' : '—';
+      var tipoBadge = p.tipo==='IMP'
+        ? '<span style="background:rgba(240,136,62,.15);border:1px solid rgba(240,136,62,.4);color:#f08632;border-radius:3px;padding:0 5px;font-size:9px;font-weight:700">🚢 IMP</span>'
+        : '<span style="background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.4);color:#58a6ff;border-radius:3px;padding:0 5px;font-size:9px;font-weight:700">🚛 ZL</span>';
+      var ocBadge  = p.oc ? '<span style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:#58a6ff;border-radius:3px;padding:0 4px;font-size:9px;font-weight:600">OC: '+p.oc+'</span>' : '';
+      var pzBadge  = p.piezas>0 ? '<span style="color:#8b949e;font-size:9px">🔢 '+Number(p.piezas).toLocaleString()+' pzas</span>' : '';
+      var clickFn  = p.nro ? 'window._abrirPorNro(\''+p.nro+'\')' : (p.dIdx>=0 ? 'abrirFacturasEmbarque('+p.dIdx+')' : '');
+      return '<div onclick="'+(clickFn ? 'event.stopPropagation();'+clickFn : '')+'" style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:8px 14px;border-bottom:1px solid rgba(255,255,255,.04);'+(clickFn?'cursor:pointer;':'')+'transition:background .12s" onmouseover="'+(clickFn?'this.style.background=\'rgba(255,255,255,.05)\'':'')+'" onmouseout="this.style.background=\'transparent\'">'
+        +'<div style="flex:1;min-width:0">'
+        +'<div style="font-size:11px;font-weight:700;color:#e6edf3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+p.prov+'</div>'
+        +'<div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-top:2px">'+tipoBadge
+        +(p.nro?'<span style="color:#8b949e;font-size:9px">Emb. '+p.nro+'</span>':'')+ocBadge+pzBadge+'</div>'
+        +'</div>'
+        +'<div style="text-align:right;flex-shrink:0">'
+        +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:'+color+'">'+fmt2(p.costo)+'</div>'
+        +'<div style="font-size:9px;color:#8b949e">'+pct+' del dpto.</div>'
+        +'</div></div>';
+    }).join('');
+
+    var accBodyId = 'dept_acc_' + dkey;
+
     html += '<div style="margin-bottom:2px;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,.08)">';
-    html += '<div style="padding:10px 12px;cursor:pointer;user-select:none;background:var(--s2)" onclick="_deptChartClick(\''+dkey+'\')">';
+    // ── Header: click expands/collapses inline ──
+    html += '<div onclick="(function(el){var b=document.getElementById(\''+accBodyId+'\');if(!b)return;var open=b.style.display!==\'none\';b.style.display=open?\'none\':\'block\';el.querySelector(\'.dept-chev\').textContent=open?\'▶\':\'▼\';})(this)" style="padding:10px 12px;cursor:pointer;user-select:none;background:var(--s2);transition:background .12s" onmouseover="this.style.background=\'rgba(255,255,255,.07)\'" onmouseout="this.style.background=\'var(--s2)\'">';
     html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
     html += '<span style="font-size:12px;font-weight:700;color:var(--text)">'+ico+' '+k+'</span>';
     html += '<div style="display:flex;gap:8px;align-items:center">';
     html += '<span style="font-size:10px;color:var(--muted)">'+sp.length+' provs · '+pctTotal+'%</span>';
     html += '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:800;color:'+color+'">'+fmtK(v.cif)+'</span>';
-    html += '<span style="font-size:12px">👁</span>';
+    html += '<span class="dept-chev" style="font-size:10px;color:var(--muted);font-weight:700;min-width:12px;text-align:center">▶</span>';
     html += '</div></div>';
     html += '<div style="background:rgba(255,255,255,.06);border-radius:4px;height:16px;overflow:hidden">';
     html += '<div style="width:'+pctBar+'%;background:'+color+';height:100%;border-radius:4px;display:flex;align-items:center;padding-left:6px">';
     html += '<span style="font-size:9px;font-weight:700;color:#0d1117;white-space:nowrap">'+pctBar+'%</span>';
     html += '</div></div>';
     html += '</div>';
+    // ── Accordion body: proveedor list (hidden by default) ──
+    html += '<div id="'+accBodyId+'" style="display:none;background:var(--bg)">';
+    html += provRows;
+    html += '<div style="padding:7px 14px;background:rgba(255,255,255,.03);border-top:1px solid rgba(255,255,255,.08);display:flex;justify-content:space-between;font-size:10px">';
+    html += '<span style="color:var(--muted)">Total '+k+'</span>';
+    html += '<span style="font-family:\'IBM Plex Mono\',monospace;font-weight:700;color:'+color+'">'+fmt2(totalProv)+'</span>';
+    html += '</div></div>';
     html += '</div>';
   });
 
