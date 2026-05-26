@@ -4425,6 +4425,7 @@ function showDeptDetail(deptName){
   var total=lines.reduce(function(s,l){return s+(l.costo||0);},0);
   var totalPzs=lines.reduce(function(s,l){return s+(l.piezas||0);},0);
   var pctDepto=totalAll>0?((total/totalAll)*100).toFixed(1):0;
+  var numFacturas=lines.length;
 
   var old=document.getElementById('_deptPopup');
   if(old) old.remove();
@@ -4433,79 +4434,76 @@ function showDeptDetail(deptName){
   div.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px';
   div.addEventListener('click',function(e){if(e.target===div) div.remove();});
 
-  // Build rows HTML
+  // Adaptive theme detection
+  var isDark = !(document.body.classList.contains('theme-light') || (document.body.style.colorScheme||'').includes('light'));
+  var cardBg  = isDark ? '#161b22' : '#ffffff';
+  var textCol = isDark ? '#e6edf3' : '#1f2328';
+  var mutedCol= isDark ? '#8b949e' : '#636c76';
+  var borderCol= isDark?'#30363d':'#d0d7de';
+  var s2Bg    = isDark ? '#1c2128' : '#f0f2f4';
+  var rowOdd  = isDark ? 'rgba(255,255,255,.025)' : 'rgba(0,0,0,.025)';
+  var homolBg = isDark ? 'rgba(130,80,223,.07)' : 'rgba(130,80,223,.04)';
+
+  // Build rows HTML — columns: Proveedor · OC Original · OC Homologada · Monto Original · Monto Homologado · Piezas · % Depto
   var rowsHTML = lines.map(function(l,i){
     var pctLine = total>0?((l.costo/total)*100).toFixed(1):0;
-    var hasHomol = l.ocHomologada || l.montoHomologado;
-    var bg = i%2===0 ? 'transparent' : 'rgba(255,255,255,.025)';
-    var provCell = '<td style="padding:7px 8px;color:#1f2328;font-weight:700;max-width:140px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(l.prov||l.dept||'—')+'</td>';
-    var ocCell = '<td style="padding:7px 8px;text-align:center;color:#636c76;font-size:10px;font-family:monospace">'+(l.oc||l.numFact||'—')+'</td>';
-    var pzCell = '<td style="padding:7px 8px;text-align:right;color:#8250df;font-family:monospace">'+((l.piezas||0)>0?(l.piezas).toLocaleString():'—')+'</td>';
-    var valCell = '<td style="padding:7px 8px;text-align:right;font-family:monospace;color:#1a7f37;font-weight:700">'+f(l.costo)+'</td>';
-    var pctCell = '<td style="padding:7px 8px;text-align:right;color:#0550ae;font-family:monospace">'+pctLine+'%</td>';
-
-    var mainRow = '<tr style="background:'+bg+'">'+provCell+ocCell+pzCell+valCell+pctCell+'</tr>';
-
-    // Sub-row for homologado if exists
-    var homolRow = '';
-    if(hasHomol){
-      homolRow = '<tr style="background:rgba(130,80,223,.06)">'
-        +'<td colspan="2" style="padding:3px 8px 5px 22px;font-size:10px;color:#8250df;font-style:italic">🔗 OC Homol: '+(l.ocHomologada||'—')+'</td>'
-        +'<td style="padding:3px 8px 5px;font-size:10px;color:#8250df;text-align:right;font-family:monospace">—</td>'
-        +'<td style="padding:3px 8px 5px;text-align:right;font-size:10px;font-family:monospace;color:#8250df;font-weight:700">'+(l.montoHomologado?f(l.montoHomologado):'—')+'</td>'
-        +'<td style="padding:3px 8px 5px;text-align:right;font-size:10px;color:#8250df">Homol.</td>'
-        +'</tr>';
-    }
-    return mainRow + homolRow;
+    var bg = i%2===0 ? 'transparent' : rowOdd;
+    var provCell   = '<td style="padding:7px 8px;color:'+textCol+';font-weight:700;max-width:140px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+(l.prov||l.dept||'—')+'">'+(l.prov||l.dept||'—')+'</td>';
+    var ocOrigCell = '<td style="padding:7px 8px;text-align:center;color:'+mutedCol+';font-size:10px;font-family:monospace">'+(l.oc||l.numFact||'—')+'</td>';
+    var ocHomolCell= '<td style="padding:7px 8px;text-align:center;font-size:10px;font-family:monospace;color:'+(l.ocHomologada?'#8250df':mutedCol)+'">'+(l.ocHomologada||'—')+'</td>';
+    var montoOrigCell = '<td style="padding:7px 8px;text-align:right;font-family:monospace;color:#1a7f37;font-weight:700">'+f(l.costo)+'</td>';
+    var montoHomolCell= '<td style="padding:7px 8px;text-align:right;font-family:monospace;font-weight:700;color:'+(l.montoHomologado?'#8250df':mutedCol)+'">'+(l.montoHomologado?f(l.montoHomologado):'—')+'</td>';
+    var pzCell     = '<td style="padding:7px 8px;text-align:right;color:#8250df;font-family:monospace">'+((l.piezas||0)>0?Number(l.piezas).toLocaleString():'—')+'</td>';
+    var pctCell    = '<td style="padding:7px 8px;text-align:right;color:#0550ae;font-family:monospace">'+pctLine+'%</td>';
+    return '<tr style="background:'+bg+';border-bottom:1px solid '+borderCol+'">'+provCell+ocOrigCell+ocHomolCell+montoOrigCell+montoHomolCell+pzCell+pctCell+'</tr>';
   }).join('');
 
-  var isDark = !document.body.style.colorScheme || document.body.style.colorScheme!=='light';
-  var cardBg = isDark ? '#161b22' : '#ffffff';
-  var textCol = isDark ? '#e6edf3' : '#1f2328';
-  var mutedCol = isDark ? '#8b949e' : '#636c76';
-  var borderCol = isDark ? '#30363d' : '#d0d7de';
-  var s2Bg = isDark ? '#1c2128' : '#f0f2f4';
-
-  div.innerHTML = '<div style="background:'+cardBg+';border:1px solid '+borderCol+';border-radius:14px;padding:20px;max-width:620px;width:100%;max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.5)">'
+  div.innerHTML = '<div style="background:'+cardBg+';border:1px solid '+borderCol+';border-radius:14px;padding:20px;max-width:760px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.5)">'
     // Header
-    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'
     +'<div style="font-size:16px;font-weight:800;color:'+textCol+'">📂 '+deptName+'</div>'
     +'<button id="_deptPopupClose" style="background:rgba(218,54,51,.12);border:1px solid rgba(218,54,51,.25);color:#da3633;cursor:pointer;border-radius:6px;padding:3px 12px;font-size:16px;font-weight:700">×</button>'
     +'</div>'
-    // KPI chips
-    +'<div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">'
-    +'<div style="background:rgba(26,127,55,.12);border:1px solid rgba(26,127,55,.25);border-radius:8px;padding:7px 14px">'
+    // 4 KPI chips
+    +'<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">'
+    +'<div style="background:rgba(26,127,55,.12);border:1px solid rgba(26,127,55,.25);border-radius:8px;padding:7px 14px;flex:1;min-width:110px">'
     +'<div style="font-size:9px;color:'+mutedCol+';font-weight:600;text-transform:uppercase;letter-spacing:.05em">Total Depto</div>'
     +'<div style="font-size:15px;font-weight:800;color:#1a7f37;font-family:monospace">'+f(total)+'</div></div>'
-    +'<div style="background:rgba(5,80,174,.1);border:1px solid rgba(5,80,174,.25);border-radius:8px;padding:7px 14px">'
+    +'<div style="background:rgba(5,80,174,.1);border:1px solid rgba(5,80,174,.25);border-radius:8px;padding:7px 14px;flex:1;min-width:100px">'
     +'<div style="font-size:9px;color:'+mutedCol+';font-weight:600;text-transform:uppercase;letter-spacing:.05em">% Participación</div>'
     +'<div style="font-size:15px;font-weight:800;color:#0550ae;font-family:monospace">'+pctDepto+'%</div></div>'
-    +(totalPzs>0?'<div style="background:rgba(130,80,223,.1);border:1px solid rgba(130,80,223,.25);border-radius:8px;padding:7px 14px">'
-    +'<div style="font-size:9px;color:'+mutedCol+';font-weight:600;text-transform:uppercase;letter-spacing:.05em">Piezas</div>'
-    +'<div style="font-size:15px;font-weight:800;color:#8250df;font-family:monospace">'+totalPzs.toLocaleString()+'</div></div>':'')
+    +'<div style="background:rgba(130,80,223,.1);border:1px solid rgba(130,80,223,.25);border-radius:8px;padding:7px 14px;flex:1;min-width:100px">'
+    +'<div style="font-size:9px;color:'+mutedCol+';font-weight:600;text-transform:uppercase;letter-spacing:.05em">Piezas Totales</div>'
+    +'<div style="font-size:15px;font-weight:800;color:#8250df;font-family:monospace">'+(totalPzs>0?totalPzs.toLocaleString():'—')+'</div></div>'
+    +'<div style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);border-radius:8px;padding:7px 14px;flex:1;min-width:100px">'
+    +'<div style="font-size:9px;color:'+mutedCol+';font-weight:600;text-transform:uppercase;letter-spacing:.05em">Cant. Facturas</div>'
+    +'<div style="font-size:15px;font-weight:800;color:var(--blue-l,#58a6ff);font-family:monospace">'+numFacturas+'</div></div>'
     +'</div>'
     // Table
     +'<div style="overflow-x:auto">'
     +'<table style="width:100%;border-collapse:collapse;font-size:11px">'
     +'<thead><tr style="background:'+s2Bg+'">'
-    +'<th style="text-align:left;color:'+mutedCol+';padding:7px 8px;border-bottom:2px solid '+borderCol+';font-weight:600">Proveedor</th>'
-    +'<th style="text-align:center;color:'+mutedCol+';padding:7px 8px;border-bottom:2px solid '+borderCol+';font-weight:600">OC / Factura</th>'
-    +'<th style="text-align:right;color:'+mutedCol+';padding:7px 8px;border-bottom:2px solid '+borderCol+';font-weight:600">Piezas</th>'
-    +'<th style="text-align:right;color:'+mutedCol+';padding:7px 8px;border-bottom:2px solid '+borderCol+';font-weight:600">Valor Merc.</th>'
-    +'<th style="text-align:right;color:'+mutedCol+';padding:7px 8px;border-bottom:2px solid '+borderCol+';font-weight:600">% Depto</th>'
+    +'<th style="text-align:left;color:'+mutedCol+';padding:7px 8px;border-bottom:2px solid '+borderCol+';font-weight:600;white-space:nowrap">Proveedor</th>'
+    +'<th style="text-align:center;color:'+mutedCol+';padding:7px 8px;border-bottom:2px solid '+borderCol+';font-weight:600;white-space:nowrap">OC Original</th>'
+    +'<th style="text-align:center;color:#8250df;padding:7px 8px;border-bottom:2px solid '+borderCol+';font-weight:600;white-space:nowrap">OC Homologada</th>'
+    +'<th style="text-align:right;color:'+mutedCol+';padding:7px 8px;border-bottom:2px solid '+borderCol+';font-weight:600;white-space:nowrap">Monto Original</th>'
+    +'<th style="text-align:right;color:#8250df;padding:7px 8px;border-bottom:2px solid '+borderCol+';font-weight:600;white-space:nowrap">Monto Homologado</th>'
+    +'<th style="text-align:right;color:'+mutedCol+';padding:7px 8px;border-bottom:2px solid '+borderCol+';font-weight:600;white-space:nowrap">Piezas</th>'
+    +'<th style="text-align:right;color:'+mutedCol+';padding:7px 8px;border-bottom:2px solid '+borderCol+';font-weight:600;white-space:nowrap">% Depto</th>'
     +'</tr></thead>'
     +'<tbody>'+rowsHTML+'</tbody>'
     +'<tfoot><tr style="border-top:2px solid '+borderCol+';background:'+s2Bg+'">'
-    +'<td colspan="3" style="padding:8px;font-weight:700;color:'+textCol+';font-size:12px">TOTAL — '+lines.length+' proveedor'+(lines.length>1?'es':'')+'</td>'
+    +'<td colspan="3" style="padding:8px;font-weight:700;color:'+textCol+';font-size:12px">TOTAL — '+numFacturas+' factura'+(numFacturas!==1?'s':'')+'</td>'
     +'<td style="padding:8px;text-align:right;font-family:monospace;font-weight:800;color:#1a7f37;font-size:13px">'+f(total)+'</td>'
+    +'<td style="padding:8px;text-align:right;font-family:monospace;font-weight:700;color:#8250df">—</td>'
+    +'<td style="padding:8px;text-align:right;font-family:monospace;color:#8250df;font-weight:700">'+(totalPzs>0?totalPzs.toLocaleString():'—')+'</td>'
     +'<td style="padding:8px;text-align:right;font-family:monospace;color:#0550ae;font-weight:700">'+pctDepto+'%</td>'
     +'</tr></tfoot>'
     +'</table></div>'
     +'</div>';
 
   document.body.appendChild(div);
-  var closeBtn = document.getElementById('_deptPopupClose');
-  if(closeBtn) closeBtn.addEventListener('click', function(){ div.remove(); });
+  document.getElementById('_deptPopupClose').addEventListener('click', function(){ div.remove(); });
 }
 // ── SPLASH MONTHLY CHART ──
 function drawSplashChart(){
@@ -7197,17 +7195,20 @@ function calcSab2(){
               <div style="margin-bottom:4px;padding:4px 0 2px;border-bottom:1px dashed rgba(255,255,255,.08)">
                 <div style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">1 · Impuestos</div>
               </div>
+              <!-- Escenario Regular — desglose individual (columna Sababa siempre $0.00) -->
               ${rowA('Arancel',r1_aran,0)}
               ${rowA('ITBMS s/Arancel',r1_itbmsAr,0)}
               ${rowA('Tasa',r1_tasa,0)}
               ${rowA('ITBMS s/Tasa',r1_itbmsTa,0)}
               ${r1_usoSis>0?rowA('Uso de Sistema',r1_usoSis,0):''}
+              <!-- Sababa — único impuesto: ITBMS s/Homologado (columna Regular $0.00) -->
               ${rowA('ITBMS s/Homologado (7%)',0,c1_sab)}
+              <!-- Subtotal: comparativo total impuestos vs total impuesto Sababa -->
               <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 8px;align-items:center;padding:5px 0;margin-bottom:6px;background:rgba(63,185,80,.05);border-radius:4px">
                 <span style="font-size:11px;font-weight:700;color:var(--text)">  Subtotal Impuestos</span>
                 <span style="font-size:11px;font-family:monospace;color:var(--green-l);text-align:right;min-width:76px;font-weight:700">${fmt2(c1_reg)}</span>
                 <span style="font-size:11px;font-family:monospace;color:var(--orange-l);text-align:right;min-width:76px;font-weight:700">${fmt2(c1_sab)}</span>
-                <span style="font-size:12px;font-family:monospace;color:var(--green-l);text-align:right;min-width:72px;font-weight:800">+${fmt2(a1)}</span>
+                <span style="font-size:12px;font-family:monospace;color:${a1>=0?'var(--green-l)':'var(--red-l)'};text-align:right;min-width:72px;font-weight:800">${a1>=0?'+':''}${fmt2(a1)}</span>
               </div>
 
               <!-- Criterio 2: Gastos Origen/Destino -->
@@ -9286,9 +9287,9 @@ function _showProcessingOverlay(nro, desc, cif, ahorro, onDone){
         </div>
       </div>
       <div style="font-size:11px;color:#636c76;margin-bottom:20px">☁️ Guardado en la nube automáticamente</div>
-      <button onclick="window._procOverlayDone&&window._procOverlayDone();document.getElementById('_procOverlay')?.remove()" 
+      <button onclick="window._procOverlayDone&&window._procOverlayDone();document.getElementById('_procOverlay')?.remove();if(typeof iniciarApp==='function')iniciarApp('tendencias');" 
         style="width:100%;background:linear-gradient(135deg,#22c55e,#2563eb);border:none;border-radius:14px;padding:16px;color:#fff;font-size:15px;font-weight:800;cursor:pointer;letter-spacing:.02em;box-shadow:0 4px 20px rgba(34,197,94,.4);margin-bottom:10px">
-        🏠 Inicio
+        📋 Ver Historial
       </button>
       <button onclick="_marcarPendienteYCerrar()" 
         style="width:100%;background:rgba(210,153,34,.12);border:1.5px solid rgba(210,153,34,.5);border-radius:14px;padding:11px;color:#d29922;font-size:12px;font-weight:700;cursor:pointer;letter-spacing:.01em;">
@@ -13312,166 +13313,198 @@ function exportDashboardExcel(){
 
 
 function _renderDeptChart(all){
-  if(!all.length) return '';
-  const fmt=n=>'$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});
-  const fmt2=n=>window._fmtMoney(n);
-  const fmtK=n=>window._fmtMoney(n);
+  if(!all||!all.length) return '';
+  var fmt2 = function(n){ return window._fmtMoney(n); };
+  var fmtK = function(n){ return window._fmtMoney(n); };
 
-  // Acumular CIF + proveedores por departamento
-  const byDept={};
-  all.forEach(d=>{
-    const invL=d.snap?.invLines||d.invLines||[];
-    const _nroFix=['22032','22033','22034','22038','22039'].indexOf((d.nro||'').toString().trim())!==-1;
-    const tipoEmb=_nroFix?'IMP':((d.snap?.tipo)||d.tipo||'ZL');
-    const tipoEmbNorm=(tipoEmb==='EXT'||tipoEmb==='IMP')?'IMP':'ZL';
-    const escLow=(d.esc||'').toLowerCase();
-    const isSabEmb=escLow.includes('sababa')||escLow.includes('sab');
-    // Use nro to find idx in global tendData — more robust than indexOf when 'all' may be filtered copies
-    const dIdx = (()=>{ const i=tendData.indexOf(d); if(i>=0) return i; const nro=d.nro; return tendData.findIndex(x=>x.nro===nro); })();
-    invL.forEach(l=>{
+  // Acumular por departamento
+  var byDept = {};
+  all.forEach(function(d){
+    var invL = (d.snap && d.snap.invLines) || d.invLines || [];
+    var _nroFix = ['22032','22033','22034','22038','22039'].indexOf((d.nro||'').toString().trim()) !== -1;
+    var tipoEmb = _nroFix ? 'IMP' : ((d.snap && d.snap.tipo) || d.tipo || 'ZL');
+    var tipoEmbNorm = (tipoEmb==='EXT'||tipoEmb==='IMP') ? 'IMP' : 'ZL';
+    var escLow = (d.esc||'').toLowerCase();
+    var isSabEmb = escLow.includes('sababa') || escLow.includes('sab');
+    var dIdx = tendData.indexOf(d);
+    if(dIdx < 0){ var nro=d.nro; dIdx=tendData.findIndex(function(x){return x.nro===nro;}); }
+
+    invL.forEach(function(l){
       if((l.tipoFac||'mercancia') !== 'mercancia') return;
-      const k=(l.deptCat||l.dept||d.departamento||d.dept||'Sin Categoría').toUpperCase();
-      if(!byDept[k]) byDept[k]={cif:0,count:0,provs:[]};
+      var k = (l.deptCat||l.dept||d.departamento||d.dept||'Sin Categoria').toUpperCase();
+      if(!byDept[k]) byDept[k] = {cif:0, count:0, provs:[]};
       byDept[k].cif   += l.costo||0;
       byDept[k].count += 1;
-      // ── REGLA S.I. definitiva en render de departamento ──
-      let provName = l.prov||l.dept||'—';
-      // _nroFix: embarques de importación Sababa que deben aplicar regla S.I. siempre
-      if((isSabEmb || _nroFix) && typeof _PROV_SI !== 'undefined'){
-        const tieneHomol=_nroFix || (l.montoHomologado||0)>0||!!(l.ocHomologada&&l.ocHomologada.trim());
-        const yaEsSI=/^S\.I\s*[-–]/i.test(provName);
-        if(tieneHomol && !yaEsSI){
-          const pk=provName.toUpperCase();
-          const sk=Object.keys(_PROV_SI).find(k=>k.toUpperCase()===pk||(_PROV_SI[k]||'').toUpperCase()===pk);
-          if(sk) provName=_PROV_SI[sk];
+      var provName = l.prov||l.dept||'—';
+      if((isSabEmb||_nroFix) && typeof _PROV_SI !== 'undefined'){
+        var tieneHomol = _nroFix || (l.montoHomologado||0)>0 || !!(l.ocHomologada&&l.ocHomologada.trim());
+        var yaEsSI = /^S\.I\s*[-–]/i.test(provName);
+        if(tieneHomol && !yaEsSI && typeof _PROV_SI !== 'undefined'){
+          provName = _PROV_SI + ' — ' + provName;
         } else if(!tieneHomol && yaEsSI && !_nroFix){
-          provName=provName.replace(/^S\.I\s*[-–]\s*/i,'').trim();
+          provName = provName.replace(/^S\.I\s*[-–]\s*/i,'').trim();
         }
       }
       byDept[k].provs.push({
         prov: provName,
-        oc:   l.oc||'—',
+        oc:   l.oc||'',
         ocHomologada: l.ocHomologada||'',
         costo: l.costo||0,
         montoHomologado: l.montoHomologado||0,
         piezas: l.piezas||0,
-        tipo: l.tipoProv||(tipoEmbNorm),
-        nro:  d.nro||'—',
-        idx:  dIdx
+        tipo: tipoEmbNorm,
+        nro:  d.nro||'',
+        dIdx: dIdx
       });
     });
   });
 
-  const entries=Object.entries(byDept).sort((a,b)=>b[1].cif-a[1].cif);
+  var entries = Object.entries(byDept).sort(function(a,b){ return b[1].cif - a[1].cif; });
   if(!entries.length) return '';
-  const maxCif=entries[0][1].cif;
-  const totalCif=entries.reduce((s,[,v])=>s+v.cif,0);
+  var totalCif = entries.reduce(function(s,e){ return s+e[1].cif; }, 0);
 
-  const COLORS=['#58a6ff','#3fb950','#f08632','#a371f7','#f85149','#39d353','#ffa657','#d2a8ff'];
-  const ICONS={'ROPA':'👗','ROPA DAMA':'👗','ROPA CABALLERO':'👔','CALZADO':'👟','JUGUETES':'🧸',
-               'ACCESORIOS':'💍','ELECTRONICA':'📱','ELECTRONICA Y TECH':'📱','COSMETICOS':'💄',
-               'HOGAR':'🏠','NIÑAS':'👧','NIÑOS':'👦','CABALLEROS':'👔','DAMAS-NEW':'👗',
-               'DEPORTES':'⚽','DEPTO. LOTES':'📦','ROPA INTERIOR - DAMAS':'🩱','SUMINISTROS':'🔧',
-               'Sin Categoría':'📦'};
+  // Guardar datos en window para que los onclicks los lean
+  window._deptChartProvs = {};
 
-  // Unique dept ID for toggle
-  const uid='_dc'+Date.now();
+  var COLORS=['#58a6ff','#3fb950','#f08632','#a371f7','#f85149','#39d353','#ffa657','#d2a8ff'];
+  var ICONS={
+    'ROPA':'👗','CALZADO':'👟','JUGUETES':'🧸','JUGUETERIA':'🧸',
+    'ACCESORIOS':'💍','BISUTERIA/JOYERIAS/ACCESORIOS':'💍',
+    'ELECTRONICA':'📱','COSMETICOS':'💄','COSMETICOS Y FRAGANCIAS':'💄',
+    'HOGAR':'🏠','NIÑAS':'👧','NIÑOS':'👦','CABALLEROS':'👔',
+    'DAMAS-NEW':'👗','DEPORTES':'⚽','DEPTO. LOTES':'📦',
+    'ROPA INTERIOR - DAMAS':'🩱','SUMINISTROS':'🔧',
+    'ESCOLAR':'📚','FERRETERIA':'🔩','FIESTA':'🎉',
+    'NAVIDAD':'🎄','REGALOS':'🎁','REGALIAS':'🎁',
+    'BEBES':'👶','TEMPORAL':'⏳','VENTA DE PATIO':'🏷️',
+    'COMESTIBLE':'🍎','Sin Categoria':'📦'
+  };
 
-  let html=`
-  <div style="margin-bottom:14px">`;
+  var html = '<div style="display:flex;flex-direction:column;gap:6px">';
 
-  entries.forEach(([k,v],i)=>{
-    const pctBar=(v.cif/maxCif*100).toFixed(1);
-    const pctTotal=(v.cif/totalCif*100).toFixed(1);
-    const color=COLORS[i%COLORS.length];
-    const ico=ICONS[k]||'📦';
-    const did=uid+'_'+i;
+  entries.forEach(function(entry, ei){
+    var k = entry[0];
+    var v = entry[1];
+    var color = COLORS[ei % COLORS.length];
+    var ico = ICONS[k] || '📦';
+    var pctTotal = totalCif>0 ? (v.cif/totalCif*100).toFixed(1) : '0';
+    var pctBar = Math.max(2, Math.round(parseFloat(pctTotal)));
+    var dkey = 'dept_'+ei+'_'+Date.now();
 
-    // Build provider rows
-    const sortedProvs=[...v.provs].sort((a,b)=>b.costo-a.costo);
-    const totalProv=sortedProvs.reduce((s,p)=>s+p.costo,0);
-    const provRows=sortedProvs.map(p=>{
-      const tipoBadge=(p.tipo==='EXT'||p.tipo==='IMP')
-        ?`<span style="background:rgba(240,136,62,.15);border:1px solid rgba(240,136,62,.3);color:var(--orange-l);border-radius:3px;padding:0 5px;font-size:9px;font-weight:700">🚢 IMP</span>`
-        :`<span style="background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:3px;padding:0 5px;font-size:9px;font-weight:700">🚛 ZL</span>`;
-      const pctPart = totalProv>0 ? (p.costo/totalProv*100).toFixed(1)+'%' : '—';
-      const homolBadge = p.montoHomologado>0
-        ? `<span style="background:rgba(240,136,62,.12);border:1px solid rgba(240,136,62,.25);color:var(--orange-l);border-radius:3px;padding:0 5px;font-size:9px;font-weight:700">🏷️ Homol: ${fmt2(p.montoHomologado)}</span>`
-        : '';
-      return `<div style="padding:8px 12px;border-bottom:1px solid rgba(48,54,61,.3);cursor:pointer;transition:background .12s"
-                   onmouseover="this.style.background='rgba(255,255,255,.04)'" onmouseout="this.style.background=''"
-                   onclick="(function(){ var i=${p.idx}>=0?${p.idx}:tendData.findIndex(function(x){return x.nro==='${p.nro}';}); if(i>=0) abrirFacturasEmbarque(i); })()">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start">
-          <div style="flex:1;min-width:0">
-            <div style="font-size:12px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.prov}</div>
-            <div style="font-size:10px;color:var(--muted);display:flex;gap:5px;align-items:center;margin-top:2px;flex-wrap:wrap">
-              ${tipoBadge}<span>Emb. ${p.nro}</span>
-              ${p.oc&&p.oc!=='—'?`<span style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.2);color:var(--blue-l);border-radius:3px;padding:0 4px;font-size:9px">OC: ${p.oc}</span>`:''}
-              ${p.ocHomologada?`<span style="background:rgba(240,136,62,.1);border:1px solid rgba(240,136,62,.2);color:var(--orange-l);border-radius:3px;padding:0 4px;font-size:9px">OC Homol: ${p.ocHomologada}</span>`:''}
-              ${p.piezas>0?`<span style="color:var(--muted);font-size:9px">🔢 ${p.piezas.toLocaleString()} pzas</span>`:''}
-            </div>
-          </div>
-          <div style="text-align:right;flex-shrink:0;margin-left:10px">
-            <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:${color}">${fmt2(p.costo)}</div>
-            <div style="font-size:9px;color:var(--muted)">${pctPart} del depto.</div>
-          </div>
-        </div>
-        ${homolBadge ? `<div style="margin-top:4px">${homolBadge}</div>` : ''}
-      </div>`;
-    }).join('');
+    // Sort provs
+    var sp = v.provs.slice().sort(function(a,b){ return b.costo-a.costo; });
+    var totalProv = sp.reduce(function(s,p){ return s+(p.costo||0); }, 0);
 
-    html+=`
-    <div style="margin-bottom:8px;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,.06)">
-      <!-- Fila tappable — toda la fila es el botón -->
-      <div style="padding:9px 12px;cursor:pointer;user-select:none;transition:background .15s,transform .1s;-webkit-tap-highlight-color:rgba(0,0,0,0)"
-           onclick="(function(el,chev){
-             var open=el.style.display==='none';
-             el.style.display=open?'block':'none';
-             chev.textContent=open?'▼':'▶';
-             this.style.background=open?'rgba(255,255,255,.06)':'transparent';
-           }).call(this,document.getElementById('${did}'),document.getElementById('${did}_c'))"
-           onmousedown="this.style.transform='scale(.98)';this.style.background='rgba(255,255,255,.08)'"
-           onmouseup="this.style.transform='';this.style.background='rgba(255,255,255,.06)'"
-           ontouchstart="this.style.transform='scale(.98)';this.style.background='rgba(255,255,255,.08)'"
-           ontouchend="this.style.transform='';this.style.background='rgba(255,255,255,.04)'">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
-          <span style="font-size:12px;font-weight:700;color:var(--text)">${ico} ${k}</span>
-          <div style="display:flex;gap:8px;align-items:center">
-            <span style="font-size:10px;color:var(--muted)">${v.count} líneas · ${pctTotal}%</span>
-            <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:800;color:${color}">${fmtK(v.cif)}</span>
-            <span id="${did}_c" style="font-size:11px;color:var(--muted);flex-shrink:0">▶</span>
-          </div>
-        </div>
-        <!-- Barra de progreso -->
-        <div style="background:rgba(255,255,255,.06);border-radius:4px;height:20px;overflow:hidden">
-          <div style="width:${pctBar}%;background:${color};height:100%;border-radius:4px;display:flex;align-items:center;padding-left:8px;transition:width .6s ease">
-            <span style="font-size:9px;font-weight:700;color:#0d1117;white-space:nowrap">${pctBar}%</span>
-          </div>
-        </div>
-      </div>
-      <!-- Proveedores — ocultos por defecto -->
-      <div id="${did}" style="display:none;border-top:1px solid rgba(255,255,255,.08)">
-        <div style="padding:6px 12px;background:var(--s2);display:flex;justify-content:space-between;align-items:center">
-          <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Proveedores — ${k}</span>
-          <span style="font-size:10px;color:var(--muted)">${sortedProvs.length} registros</span>
-        </div>
-        ${provRows}
-        <div style="display:flex;justify-content:space-between;padding:7px 12px;background:rgba(0,0,0,.15);font-size:11px;font-weight:700;border-top:1px solid rgba(255,255,255,.06)">
-          <span style="color:var(--muted)">Total ${k}</span>
-          <span style="font-family:'IBM Plex Mono',monospace;color:${color}">${fmt2(totalProv)}</span>
-        </div>
-      </div>
-    </div>`;
+    // Store in window
+    window._deptChartProvs[dkey] = { k:k, color:color, provs:sp, totalProv:totalProv };
+
+    html += '<div style="margin-bottom:2px;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,.08)">';
+    html += '<div style="padding:10px 12px;cursor:pointer;user-select:none;background:var(--s2)" onclick="_deptChartClick(\''+dkey+'\')">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
+    html += '<span style="font-size:12px;font-weight:700;color:var(--text)">'+ico+' '+k+'</span>';
+    html += '<div style="display:flex;gap:8px;align-items:center">';
+    html += '<span style="font-size:10px;color:var(--muted)">'+sp.length+' provs · '+pctTotal+'%</span>';
+    html += '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:800;color:'+color+'">'+fmtK(v.cif)+'</span>';
+    html += '<span style="font-size:12px">👁</span>';
+    html += '</div></div>';
+    html += '<div style="background:rgba(255,255,255,.06);border-radius:4px;height:16px;overflow:hidden">';
+    html += '<div style="width:'+pctBar+'%;background:'+color+';height:100%;border-radius:4px;display:flex;align-items:center;padding-left:6px">';
+    html += '<span style="font-size:9px;font-weight:700;color:#0d1117;white-space:nowrap">'+pctBar+'%</span>';
+    html += '</div></div>';
+    html += '</div>';
+    html += '</div>';
   });
 
-  html+=`
-    <div style="margin-top:8px;padding-top:10px;border-top:1px solid var(--border);display:flex;justify-content:space-between;font-size:11px">
-      <span style="color:var(--muted)">${entries.length} departamentos</span>
-      <span style="font-family:'IBM Plex Mono',monospace;font-weight:700;color:var(--text)">${fmtK(totalCif)} CIF total</span>
-    </div>
-  </div>`;
+  html += '<div style="margin-top:6px;padding-top:8px;border-top:1px solid var(--border);display:flex;justify-content:space-between;font-size:11px">';
+  html += '<span style="color:var(--muted)">'+entries.length+' departamentos</span>';
+  html += '<span style="font-family:\'IBM Plex Mono\',monospace;font-weight:700;color:var(--text)">'+fmtK(totalCif)+' CIF total</span>';
+  html += '</div></div>';
+
   return html;
 }
+
+// ── Modal de proveedores por departamento ──────────────────
+window._deptChartClick = function(dkey){
+  var data = window._deptChartProvs && window._deptChartProvs[dkey];
+  if(!data){ return; }
+  var sp = data.provs;
+  var k  = data.k;
+  var color = data.color;
+  var totalProv = data.totalProv;
+  var fmt2 = function(n){ return window._fmtMoney ? window._fmtMoney(n) : ('$'+Number(n||0).toFixed(2)); };
+
+  // Resolver idx real para cada proveedor usando nro como fallback
+  sp.forEach(function(p){
+    if(p.dIdx < 0 && p.nro){
+      p.dIdx = tendData.findIndex(function(x){ return (x.nro||'').toString().trim() === p.nro.toString().trim(); });
+    }
+  });
+
+  // Si hay un solo proveedor, abrir drawer directo
+  if(sp.length === 1 && typeof abrirFacturasEmbarque === 'function'){
+    var idx = sp[0].dIdx;
+    if(idx >= 0){ abrirFacturasEmbarque(idx); return; }
+  }
+
+  // Construir modal propio
+  var existing = document.getElementById('_deptModal');
+  if(existing) existing.remove();
+
+  var rows = sp.map(function(p){
+    var pct = totalProv>0 ? (p.costo/totalProv*100).toFixed(1)+'%' : '—';
+    var tipoBadge = p.tipo==='IMP'
+      ? '<span style="background:rgba(240,136,62,.15);border:1px solid rgba(240,136,62,.4);color:#f08632;border-radius:3px;padding:0 5px;font-size:9px;font-weight:700">🚢 IMP</span>'
+      : '<span style="background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.4);color:#58a6ff;border-radius:3px;padding:0 5px;font-size:9px;font-weight:700">🚛 ZL</span>';
+    var ocBadge  = p.oc  ? '<span style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:#58a6ff;border-radius:3px;padding:0 4px;font-size:9px;font-weight:600">OC: '+p.oc+'</span>' : '';
+    var oc2Badge = p.ocHomologada ? '<span style="background:rgba(240,136,62,.1);border:1px solid rgba(240,136,62,.3);color:#f08632;border-radius:3px;padding:0 4px;font-size:9px;font-weight:600">Homol: '+p.ocHomologada+'</span>' : '';
+    var pzBadge  = p.piezas>0 ? '<span style="color:#8b949e;font-size:9px">🔢 '+Number(p.piezas).toLocaleString()+' pzas</span>' : '';
+    var homolAmt = p.montoHomologado>0 ? '<div style="font-size:9px;color:#f08632;margin-top:2px">🏷️ Homol: '+fmt2(p.montoHomologado)+'</div>' : '';
+
+    var clickAttr = p.nro ? ' onclick="window._abrirPorNro(\''+p.nro+'\')" style="cursor:pointer"' : (p.dIdx>=0 ? ' onclick="abrirFacturasEmbarque('+p.dIdx+')" style="cursor:pointer"' : '');
+    var row = '<div'+clickAttr+' style="padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.06);display:flex;justify-content:space-between;align-items:flex-start;gap:10px">';
+    row += '<div style="flex:1;min-width:0">';
+    row += '<div style="font-size:12px;font-weight:600;color:#e6edf3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+p.prov+'</div>';
+    row += '<div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-top:3px">'+tipoBadge;
+    if(p.nro) row += '<span style="color:#8b949e;font-size:9px">Emb. '+p.nro+'</span>';
+    row += ocBadge+oc2Badge+pzBadge+'</div>';
+    row += homolAmt;
+    row += '</div>';
+    row += '<div style="text-align:right;flex-shrink:0">';
+    row += '<div style="font-family:\'IBM Plex Mono\',monospace;font-size:13px;font-weight:700;color:'+color+'">'+fmt2(p.costo)+'</div>';
+    row += '<div style="font-size:9px;color:#8b949e">'+pct+' del dpto.</div>';
+    row += '</div>';
+    row += '</div>';
+    return row;
+  }).join('');
+
+  var modal = document.createElement('div');
+  modal.id = '_deptModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:99999;display:flex;align-items:flex-end;justify-content:center;padding:0;backdrop-filter:blur(4px)';
+  modal.innerHTML =
+    '<div style="background:#161b22;border-radius:16px 16px 0 0;width:100%;max-width:520px;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 -8px 40px rgba(0,0,0,.6)" onclick="event.stopPropagation()">'
+    +'<div style="padding:14px 16px 10px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,.08);flex-shrink:0">'
+    +'<div><div style="font-size:14px;font-weight:800;color:#e6edf3">'+k+'</div>'
+    +'<div style="font-size:10px;color:#8b949e">'+sp.length+' proveedor'+(sp.length!==1?'es':'')+' · '+fmt2(totalProv)+' total</div></div>'
+    +'<button onclick="document.getElementById(\'_deptModal\').remove()" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#e6edf3;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer">✕ Cerrar</button>'
+    +'</div>'
+    +'<div style="overflow-y:auto;flex:1">'+rows+'</div>'
+    +'<div style="padding:10px 14px;border-top:1px solid rgba(255,255,255,.08);display:flex;justify-content:space-between;font-size:11px;flex-shrink:0">'
+    +'<span style="color:#8b949e">Total '+k+'</span>'
+    +'<span style="font-family:\'IBM Plex Mono\',monospace;font-weight:700;color:'+color+'">'+fmt2(totalProv)+'</span>'
+    +'</div>'
+    +'</div>';
+  modal.onclick = function(){ modal.remove(); };
+  document.body.appendChild(modal);
+};
+
+window._abrirPorNro = function(nro){
+  var idx = tendData.findIndex(function(x){ return (x.nro||'').toString().trim() === nro.toString().trim(); });
+  if(idx >= 0 && typeof abrirFacturasEmbarque === 'function'){
+    var m = document.getElementById('_deptModal'); if(m) m.remove();
+    abrirFacturasEmbarque(idx);
+  }
+};
+
 // ── AGRUPACIONES COLAPSABLES ─────────────────────────
 // ═══════════════════════════════════════════════════════════
 // Toggle helper for month accordion
@@ -14207,6 +14240,271 @@ function _renderGroupSections(data){
 // Llamada de inicialización para registrar window.abrirFacturasEmbarque globalmente
 // al cargar la página, antes de que el usuario interactúe con cualquier gráfica
 (function(){ try{ _renderGroupSections([]); } catch(e){} })();
+
+// ── abrirFacturasEmbarque — definición global, disponible desde cualquier vista ──
+window.abrirFacturasEmbarque = function(idx){
+  window._lastFacturaIdx = idx;
+  window._factDrawerOpen = true; // mark drawer as open
+  var d = tendData[idx];
+  if(!d) return;
+  var snap  = d.snap || {};
+  var sc3   = snap.sc3 || {};
+  var sc2   = snap.sc2 || {};
+  var isSab = (d.esc||'').toLowerCase().includes('sababa')||(d.esc||'').toLowerCase().includes('sab');
+  var isCif = (d.esc||'').toLowerCase().includes('cif')||(d.esc||'').toLowerCase().includes('express');
+  // ITBMS display rule:
+  // - Embarques CON homologación activa (sc3.mercHomol > 0 o sc3.comision > 0) → OCULTAR ITBMS
+  //   (incluido dentro de la comisión Sababa, tanto ZL como EXT homologado)
+  // - Liquidación, CIF Express, Único → MOSTRAR ITBMS (desembolso real)
+  var hasHomolActiva = !isUnicoM && isSab && ((sc3.mercHomol||0) > 0 || (sc3.comision||0) > 0 || (sc3.itbmsHomol||0) > 0);
+  var hideItbms = hasHomolActiva; // only hide when Sababa has real homologation data
+  var lines = (d.invLines && d.invLines.length ? d.invLines : (snap.invLines||[]));
+  var mercLines  = lines.filter(function(l){ return (l.tipoFac||'mercancia')==='mercancia'; });
+  var gastoLines = lines.filter(function(l){ return l.tipoFac && l.tipoFac!=='mercancia'; });
+  var totalMerc  = mercLines.reduce(function(s,l){ return s+(l.costo||0); }, 0);
+  var sc1u       = snap.sc1 || {};
+  var isUnicoM   = !!(d.modoUnico || d.tipoEsc==='unico'
+    || (d.esc||'').toLowerCase().includes('único') || (d.esc||'').toLowerCase().includes('unico')
+    || (snap.sc1 && !snap.sc2 && !snap.sc3));
+  // For Único: noMerc is the sum of all non-merchandise costs stored in snap.sc1.noMerc
+  // Fallback: compute from individual fields if noMerc not yet in snap
+  var sc1u_noMerc = isUnicoM
+    ? (sc1u.noMerc != null ? sc1u.noMerc
+        : ((sc1u.arancel||0)+(sc1u.hon||0)+(sc1u.tasa||0)+(sc1u.uso||0)+(sc1u.itbmsTasa||0)+(sc1u.agente||0)+(sc1u.extras||0)))
+    : 0;
+  var totalNoMerc= isUnicoM ? sc1u_noMerc
+                  : isSab   ? (sc3.noMerc||0)
+                            : (sc2.noMerc||0);
+  var totalItbms = isUnicoM ? (sc1u.itbms||0)
+                  : isSab   ? (sc3.itbmsHomol||0)
+                            : ((sc2.itbms||0)+(sc2.itbmsTasaFinal||0)+(sc2.itbmsHon||0));
+  // For Único: use the stored landed value directly from snap (do NOT re-add itbms — that's Global)
+  var landed     = isUnicoM ? (sc1u.landed||0)
+                  : isSab   ? (sc3.landedG||sc3.landed1||0)
+                            : (sc2.landedG||sc2.landed1||0);
+  var landedCosteable = isUnicoM ? (sc1u.landed||0) : (totalMerc + totalNoMerc); // Único: landed already IS costeable
+  var fobHomol   = isSab ? (sc3.mercHomol||0) : 0; // Solo Sababa tiene FOB homologado
+  var fmt2l = function(n){ return window._fmtMoney(n); };
+  // fmtKl respeta el toggle global $k / Completo
+  var fmtKl = function(n){ return window._tendFmtFull ? fmt2l(n) : (n>=1000?'$'+(n/1000).toFixed(1)+'k':fmt2l(n)); };
+
+  // Para embarques Sababa con homologado disponible, la base de prorrateo y el Costo Landed
+  // Costeable por línea deben usar el valor HOMOLOGADO (mercHomol), no el original CIF.
+  // Esto refleja correctamente el valor que entra al inventario.
+  var baseParaProrrateo = (isSab && fobHomol > 0) ? fobHomol : totalMerc;
+
+  // Prorratear costo no mercancía e ITBMS entre facturas de mercancía por peso relativo
+  mercLines.forEach(function(l){
+    l._pct = totalMerc>0 ? (l.costo||0)/totalMerc : 0;
+    // Para Sababa: el valor que entra al inventario de esta línea es su porción del homologado
+    var costoBase = (isSab && fobHomol > 0) ? (fobHomol * l._pct) : (l.costo||0);
+    l._costoHomolPorcion = (isSab && fobHomol > 0) ? costoBase : 0;
+    l._noMercPorcion = totalNoMerc * l._pct;
+    l._itbmsPorcion  = totalItbms  * l._pct;
+    l._landedPorcion = costoBase + l._noMercPorcion;
+  });
+
+  var html = '<div style="padding:0 0 8px 0">'
+    // Header del embarque
+    +'<div style="background:var(--s2);border-radius:10px;padding:12px 14px;margin-bottom:12px">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
+    +'<div>'
+    +'<div style="font-size:14px;font-weight:800;color:var(--text)">📦 '+d.nro+' — '+(d.desc||'')+'</div>'
+    +'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+d.fecha+' · '+(d.esc||'')+'</div>'
+    +'</div>'
+    +'<div style="text-align:right">'
+    +'<div style="font-size:10px;color:var(--muted)">'+(isUnicoM?'Landed Costeable':hideItbms?'Landed Global (comisión incl. ITBMS)':'Landed Global (incl. ITBMS)')+'</div>'
+    +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:14px;font-weight:800;color:var(--orange-l)">'+fmtKl(landed)+'</div>'
+    +'</div>'
+    +'</div>'
+    // Resumen financiero del embarque — para Sababa el ITBMS está incluido en la comisión, no se muestra por separado
+    +'<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px">'
+    +'<div style="background:var(--bg);border-radius:7px;padding:8px;text-align:center">'
+    +'<div style="font-size:9px;color:var(--muted);margin-bottom:3px">CIF/FOB MERC.</div>'
+    +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:var(--text)">'+fmtKl(totalMerc)+'</div>'
+    +'</div>'
+    +(isSab&&sc3.mercHomol>0?'<div style="background:rgba(240,136,62,.08);border:1px solid rgba(240,136,62,.2);border-radius:7px;padding:8px;text-align:center">'
+      +'<div style="font-size:9px;color:var(--orange-l);font-weight:700;margin-bottom:3px">HOMOLOGADO</div>'
+      +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:var(--orange-l)">'+fmtKl(sc3.mercHomol)+'</div>'
+      +'</div>':'')
+    +'<div style="background:var(--bg);border-radius:7px;padding:8px;text-align:center">'
+    +'<div style="font-size:9px;color:var(--muted);margin-bottom:3px">COSTO NO MERC.</div>'
+    +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:var(--orange-l)">'+fmtKl(totalNoMerc)+'</div>'
+    +'</div>'
+    +(!hideItbms?
+      '<div style="background:var(--bg);border-radius:7px;padding:8px;text-align:center">'
+      +'<div style="font-size:9px;color:var(--muted);margin-bottom:3px">ITBMS</div>'
+      +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:var(--blue-l)">'+fmtKl(totalItbms)+'</div>'
+      +'</div>'
+    :'')
+    +'<div style="background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.2);border-radius:7px;padding:8px;text-align:center">'
+    +'<div style="font-size:9px;color:var(--green-l);margin-bottom:3px;font-weight:700">FACTOR IMPORT.</div>'
+    +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:13px;font-weight:800;color:var(--green-l)">'+(isUnicoM&&sc1u.factor!=null?Number(sc1u.factor).toFixed(2)+'%':(baseParaProrrateo>0?(((isSab&&fobHomol>0?(fobHomol+totalNoMerc):landedCosteable)/baseParaProrrateo-1)*100).toFixed(2)+'%':'—'))+'</div>'
+    +'</div>'
+    +'</div>'
+    +'</div>'
+
+    // Facturas de mercancía
+    +'<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">📦 Facturas de Mercancía</div>'
+    + (mercLines.length ? mercLines.map(function(l,i){
+      var pctStr = (l._pct*100).toFixed(1)+'%';
+      var deptBadge = l.deptCat ? '<span style="background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.2);color:var(--green-l);border-radius:3px;padding:1px 5px;font-size:9px">'+l.deptCat+'</span>' : '';
+      return '<div style="background:var(--s1);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:6px">'
+        +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">'
+        +'<div style="flex:1;min-width:0">'
+        +'<div style="font-size:12px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(l.prov||'—')+'</div>'
+        +'<div style="font-size:10px;color:var(--muted);margin-top:3px;display:flex;gap:5px;align-items:center;flex-wrap:wrap">'+deptBadge
+        +(l.oc?'<span style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.2);color:var(--blue-l);border-radius:3px;padding:0 4px;font-size:9px;font-weight:600">OC: '+l.oc+'</span>':'')
+        +(l.ocHomologada?'<span style="background:rgba(240,136,62,.1);border:1px solid rgba(240,136,62,.2);color:var(--orange-l);border-radius:3px;padding:0 4px;font-size:9px;font-weight:600">OC Homol: '+l.ocHomologada+'</span>':'')
+        +(l.piezas>0?'<span style="font-size:9px;color:var(--muted)">🔢 '+Number(l.piezas).toLocaleString()+' pzas</span>':'')
+        +'</div>'
+        +'</div>'
+        +'<div style="text-align:right;flex-shrink:0;margin-left:10px">'
+        +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:var(--text)">'+fmt2l(l.costo)+'</div>'
+        +(l._costoHomolPorcion>0?'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:10px;font-weight:700;color:var(--orange-l)">🏷️ Homol: '+fmt2l(l._costoHomolPorcion)+'</div>':'')
+        +((l.montoHomologado||0)>0&&!l._costoHomolPorcion?'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:10px;font-weight:700;color:var(--orange-l)">🏷️ Homol: '+fmt2l(l.montoHomologado)+'</div>':'')
+        +'<div style="font-size:9px;color:var(--blue-l);font-weight:600">'+pctStr+' del total</div>'
+        +'</div>'
+        +'</div>'
+        // Porción no mercancía + ITBMS proporcional
+        +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;border-top:1px solid rgba(48,54,61,.3);padding-top:6px">'
+        +'<div style="display:flex;justify-content:space-between;align-items:center">'
+        +'<span style="font-size:9px;color:var(--muted)">+ No Merc. ('+pctStr+')</span>'
+        +'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:10px;font-weight:600;color:var(--orange-l)">'+fmt2l(l._noMercPorcion)+'</span>'
+        +'</div>'
+        +'<div style="display:flex;justify-content:space-between;align-items:center">'
+        +'<span style="font-size:9px;color:var(--muted)">Costo Landed Costeable</span>'
+        +'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:10px;font-weight:700;color:var(--green-l)">'+fmt2l(l._landedPorcion)+'</span>'
+        +'</div>'
+        +(totalItbms>0&&!hideItbms
+          ? '<div style="display:flex;justify-content:space-between;align-items:center">'
+            +'<span style="font-size:9px;color:var(--blue-l)">ITBMS ('+pctStr+')</span>'
+            +'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:10px;font-weight:600;color:var(--blue-l)">'+fmt2l(isNaN(l._itbmsPorcion)?0:l._itbmsPorcion)+'</span>'
+            +'</div>'
+          : '')
+        +'</div>'
+        +'</div>';
+    }).join('')
+    : '<div style="padding:12px;color:var(--muted);font-size:11px;text-align:center">Sin facturas de mercancía.</div>')
+
+    // Facturas de gastos — agrupadas por Proveedor → N° factura → líneas
+    +(gastoLines.length ? (function(){
+      var tipoIcons={flete:'🚢',acarreo:'🚛',honorarios:'💼',itbms:'🧾',gastos:'📋',liquidacion:'🏛️',tasa:'💵',uso_sistema:'💻',nota_credito:'🏷️',descuento:'🏷️',gastos_destino:'📦',seguro:'🛡️',almacenaje:'🏪',inspeccion:'🔍',dmce:'📝',formulario:'📝',manejo_liquid_grabada:'🖨️',manejo_liquid_grabava:'🖨️'};
+      var tipoNombres={flete:'Flete Internacional',acarreo:'Acarreo',honorarios:'Honorarios Corredor',itbms:'ITBMS',liquidacion:'Liquidación / DAI',tasa:'Tasa Aduana',uso_sistema:'Uso del Sistema',nota_credito:'Nota de Crédito / Descuento',descuento:'Descuento',gastos_destino:'Gastos Destino',seguro:'Seguro',almacenaje:'Almacenaje',inspeccion:'Inspección',dmce:'DMCE',formulario:'Formulario',manejo_liquid_grabada:'Manejo Liquidación Grabada',manejo_liquid_grabava:'Manejo Liquidación Grabava',gastos:'Otros Gastos'};
+      var totalGastos=gastoLines.reduce(function(s,l){return s+(l.costo||0);},0);
+      // Group by provider first
+      var byProv={};
+      gastoLines.forEach(function(l){
+        var pk=(l.prov||'Sin Proveedor').trim();
+        if(!byProv[pk]) byProv[pk]={prov:pk,lines:[],total:0};
+        byProv[pk].lines.push(l);
+        byProv[pk].total+=(l.costo||0);
+      });
+      var inner=Object.values(byProv).map(function(grp,pi){
+        var pid='_pg_'+pi+'_'+Date.now();
+        var isNeg=grp.total<0;
+        var provColor=isNeg?'var(--green-l)':'var(--orange-l)';
+        // Sub-group lines by N° factura
+        var byNfac={};
+        grp.lines.forEach(function(l){
+          var k=l.nfac||l.numFact||'—';
+          if(!byNfac[k]) byNfac[k]={nfac:k,lines:[],total:0};
+          byNfac[k].lines.push(l);
+          byNfac[k].total+=(l.costo||0);
+        });
+        var nfacBlocks=Object.values(byNfac).map(function(nfgrp,ni){
+          var nid=pid+'_n'+ni;
+          var dlines=nfgrp.lines.map(function(l){
+            var isLineNeg=(l.costo||0)<0;
+            var lColor=isLineNeg?'var(--green-l)':'var(--muted)';
+            var rNombre=tipoNombres[l.tipoFac||'gastos']||l.tipoFac||'Gasto';
+            var honPct = (totalMerc>0&&(l.tipoFac==='honorarios'||l.tipoFac==='manejo_liquidacion'||l.tipoFac==='manejo_liquid_grabada'))
+              ? ' <span style="color:var(--blue-l);font-size:9px">('+((l.costo/totalMerc)*100).toFixed(2)+'% s/merc)</span>' : null;
+            return '<div style="display:flex;justify-content:space-between;padding:4px 12px;font-size:10px;border-top:1px solid rgba(255,255,255,.04)">'
+              +'<span style="color:'+lColor+'">'+(tipoIcons[l.tipoFac||'gastos']||'📋')+' '+rNombre+'</span>'
+              +'<span style="font-family:\'IBM Plex Mono\',monospace;font-weight:700;color:'+(isLineNeg?'var(--green-l)':'var(--orange-l)')+'">'+fmt2l(l.costo)+'</span></div>';
+          }).join('');
+          return '<div style="background:rgba(255,255,255,.02);border-radius:6px;margin:4px 0;overflow:hidden">'
+            +'<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 12px;cursor:pointer;border-top:1px solid rgba(255,255,255,.04)" onclick="var b=document.getElementById(\''+nid+'\');var o=b.style.display!==\'none\';b.style.display=o?\'none\':\'block\';this.querySelector(\'.nc5\').textContent=o?\'▶\':\'▼\'">'
+            +'<div style="font-size:10px;color:var(--muted)">📄 Fact: <strong style="color:var(--text)">'+nfgrp.nfac+'</strong></div>'
+            +'<div style="display:flex;align-items:center;gap:6px">'
+            +'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:11px;font-weight:700;color:'+(nfgrp.total<0?'var(--green-l)':'var(--orange-l)')+'">'+fmt2l(nfgrp.total)+'</span>'
+            +'<span class="nc5" style="font-size:10px;color:var(--muted)">▶</span></div></div>'
+            +'<div id="'+nid+'" style="display:none">'+dlines+'</div></div>';
+        }).join('');
+        return '<div style="background:var(--s1);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;overflow:hidden">'
+          // Header: provider name + invoice number visible together + total + chevron
+          +'<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;cursor:pointer;background:var(--s2)" onclick="var b=document.getElementById(\''+pid+'\');var o=b.style.display!==\'none\';b.style.display=o?\'none\':\'block\';this.querySelector(\'.gc5\').textContent=o?\'▶\':\'▼\'">'
+          +'<div style="min-width:0;flex:1">'
+          +'<div style="font-size:12px;font-weight:700;color:var(--text)">🏢 '+grp.prov+'</div>'
+          // Show all unique invoice numbers right below provider name
+          +(Object.keys(byNfac).filter(function(k){return k!=='—';}).length>0
+            ? '<div style="font-size:9px;color:var(--muted);margin-top:2px">📄 '+Object.keys(byNfac).filter(function(k){return k!=='—';}).join(' · ')+'</div>'
+            : '<div style="font-size:9px;color:var(--muted2);margin-top:2px">'+grp.lines.length+' concepto'+(grp.lines.length!==1?'s':'')+'</div>')
+          +'</div>'
+          +'<div style="display:flex;align-items:center;gap:8px;flex-shrink:0;margin-left:8px">'
++'<span style="font-size:10px;color:var(--muted);font-weight:400">'+((totalMerc>0?'('+((grp.total/totalMerc)*100).toFixed(2)+'% s/merc)':'')+(isSab&&sc3.mercHomol>0&&grp.prov.toLowerCase().includes('sababa')?(function(){var _itbms=grp.lines.filter(function(l){return l.tipoFac==='itbms';}).reduce(function(s,l){return s+(l.costo||0);},0);var _honNeto=grp.total-_itbms;return' <span style="color:var(--orange-l);font-size:9px;font-weight:700">[Com. '+(_honNeto/sc3.mercHomol*100).toFixed(2)+'% s/Homol.]</span>';})():''))+'</span>'+
+          '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:13px;font-weight:800;color:'+provColor+'">'+fmt2l(grp.total)+'</span>'
+          +'<span class="gc5" style="font-size:11px;color:var(--muted)">▼</span></div></div>'
+          // Body: directly show rubros (no sub-accordion per invoice)
+          +'<div id="'+pid+'">'
+          +grp.lines.map(function(l){
+            var isLineNeg=(l.costo||0)<0;
+            var rNombre=tipoNombres[l.tipoFac||'gastos']||l.tipoFac||'Gasto';
+            // For honorarios: show % if available via oc field
+            var rLabel=rNombre;
+            if(l.oc&&l.oc.includes('%')) rLabel=rNombre+' <span style="color:var(--muted);font-size:9px">('+l.oc.match(/[\d.]+%/)?.[0]+')</span>';
+            // For nota_credito: try to compute % discount against nfac total
+            var discPct='';
+            if((l.tipoFac==='nota_credito'||l.tipoFac==='descuento')&&l.costo<0){
+              // Find the positive total of this provider's non-credit lines for %
+              var posTotal=grp.lines.filter(function(x){return (x.costo||0)>0;}).reduce(function(s,x){return s+(x.costo||0);},0);
+              if(posTotal>0){
+                var dp=(Math.abs(l.costo)/posTotal*100).toFixed(1);
+                discPct=' <span style="background:rgba(63,185,80,.15);border:1px solid rgba(63,185,80,.25);color:var(--green-l);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700">-'+dp+'%</span>';
+              }
+            }
+            return '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 14px;font-size:11px;border-top:1px solid rgba(255,255,255,.04)">'
+              +'<span style="color:'+(isLineNeg?'var(--green-l)':'var(--muted)')+'">'+(tipoIcons[l.tipoFac||'gastos']||'📋')+' '+rNombre+discPct+'</span>'
+              +'<div style="text-align:right;flex-shrink:0;margin-left:8px">'
+              +'<span style="font-family:\'IBM Plex Mono\',monospace;font-weight:700;color:'+(isLineNeg?'var(--green-l)':'var(--orange-l)')+'">'+fmt2l(l.costo)+'</span>'
+              +(l.nfac&&l.nfac!=='—'?'<div style="font-size:9px;color:var(--muted)">Fact: '+l.nfac+'</div>':'')
+              +'</div></div>'
+          }).join('')
+          +'</div></div>';
+      }).join('');
+      return '<div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-top:10px">'
+        +'<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;background:var(--s2)">'
+        +'<div style="display:flex;align-items:center;gap:7px"><span style="font-size:12px">💸</span>'
+        +'<span style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">Gastos del Embarque</span>'
+        +'<span style="font-size:9px;color:var(--muted2)">('+gastoLines.length+' líneas)</span></div>'
+        +'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:11px;color:var(--orange-l);font-weight:700">'+fmt2l(totalGastos)+'</span></div>'
+        +'<div style="padding:8px">'+inner+'</div>'
+        +'</div>';
+    })() : '')
+    +'</div>';
+
+  // Show in a modal
+  var old = document.getElementById('_facDetailModal'); if(old) old.remove();
+  var modal = document.createElement('div');
+  modal.id = '_facDetailModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:99999;display:flex;align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto';
+  modal.innerHTML = '<div id="_facDetailInner" style="background:var(--s1);border:1px solid var(--border);border-radius:16px;padding:20px;max-width:500px;width:100%;margin:auto" onclick="event.stopPropagation()">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'
+    +'<div style="font-size:13px;font-weight:800;color:var(--text)">🧾 Detalle Facturas del Embarque</div>'
+    +'<div style="display:flex;align-items:center;gap:8px">'
+    +'<button onclick="(function(){var c=document.getElementById(\'_facDetailInner\');var w=window.open(\'\',\'_blank\',\'width=600,height=800\');w.document.write(\'<!DOCTYPE html><html><head><meta charset=UTF-8><title>Detalle Embarque</title><style>body{font-family:Arial,sans-serif;background:#0d1117;color:#e6edf3;padding:20px}*{box-sizing:border-box}</style></head><body>\'+c.innerHTML+\'</body></html>\');w.document.close();setTimeout(function(){w.print();},400);})()" style="background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:600">🖨 Imprimir</button>'
+    +'<button onclick="_exportDetalleExcel(tendData['+idx+'])" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:600" title="Descargar Excel .xlsx — números con punto decimal">📗 Excel (.xlsx)</button>'
+    +'<button onclick="_exportDetalleXLSX(tendData['+idx+'], \',\''+')" style="background:rgba(240,136,62,.1);border:1px solid rgba(240,136,62,.3);color:var(--orange-l);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:600" title="Descargar CSV — números con coma (20733,00) — para pegar en Excel europeo">📊 CSV (,)</button>'
+    +'<button onclick="document.getElementById(\'_facDetailModal\').remove();window._factDrawerOpen=false;window._lastFacturaIdx=-1;" style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;line-height:1">×</button>'
+    +'</div>'
+    +'</div>'
+    +html
+    +'</div>';
+  modal.onclick = function(){ modal.remove(); window._factDrawerOpen=false; window._lastFacturaIdx=-1; };
+  document.body.appendChild(modal);
+};
+
 
 // ── Helper: find element preferring inside active modal ──
 function _ctxFind(id, el){
@@ -15749,9 +16047,9 @@ function _showUnicoProcessingOverlay(nro, desc, cif, desembolso, factor, onDone)
         Factor de Importación: <strong style="color:#d97706">${Number(factor||0).toFixed(2)}%</strong>
       </div>
       <div style="font-size:11px;color:#636c76;margin-bottom:20px">☁️ Guardado en la nube automáticamente</div>
-      <button onclick="window._procOverlayDone&&window._procOverlayDone();document.getElementById('_procOverlay')?.remove()" 
+      <button onclick="window._procOverlayDone&&window._procOverlayDone();document.getElementById('_procOverlay')?.remove();if(typeof iniciarApp==='function')iniciarApp('tendencias');" 
         style="width:100%;background:linear-gradient(135deg,#22c55e,#2563eb);border:none;border-radius:14px;padding:16px;color:#fff;font-size:15px;font-weight:800;cursor:pointer;letter-spacing:.02em;box-shadow:0 4px 20px rgba(34,197,94,.4);margin-bottom:10px">
-        🏠 Inicio
+        📋 Ver Historial
       </button>
       <button onclick="_marcarPendienteYCerrar()" 
         style="width:100%;background:rgba(210,153,34,.12);border:1.5px solid rgba(210,153,34,.5);border-radius:14px;padding:11px;color:#d29922;font-size:12px;font-weight:700;cursor:pointer;letter-spacing:.01em;">
@@ -20397,7 +20695,28 @@ body:not(.sidebar-pinned) #app-wrapper {
             setTimeout(function(){ if(typeof renderTend==='function') renderTend(); }, 1000);
           })();
         }
-        if(tabId==='facturas'  && typeof renderInvLines==='function')  renderInvLines();
+        if(tabId==='facturas'  && typeof renderInvLines==='function'){
+          renderInvLines();
+          // Re-adjuntar listeners en el clon — cloneNode no copia event listeners
+          setTimeout(function(){
+            var cloneWrap = body.querySelector('#inv-chart-wrap');
+            if(cloneWrap){
+              var cloneRows = cloneWrap.querySelectorAll('._dept-bar-row');
+              var cloneDepts = Array.from(cloneRows).map(function(row){
+                // Extract dept name from the text node inside the bar row
+                var nameEl = row.querySelector('div[style*="font-weight:700"]');
+                return nameEl ? nameEl.textContent.trim() : '';
+              });
+              cloneRows.forEach(function(row, i){
+                var deptName = cloneDepts[i];
+                if(!deptName) return;
+                row.addEventListener('click', function(){ showDeptDetail(deptName); });
+                row.addEventListener('mouseenter', function(){ this.style.background='rgba(255,255,255,.09)'; });
+                row.addEventListener('mouseleave', function(){ this.style.background='rgba(255,255,255,.03)'; });
+              });
+            }
+          }, 200);
+        }
         if(tabId==='cifexp'    && typeof updateCifExpDisplays==='function') updateCifExpDisplays();
         if(tabId==='sababa'    && typeof calcSab2==='function'){
           // Sync tipo buttons — MUST target the CLONE inside modal body, not original DOM
