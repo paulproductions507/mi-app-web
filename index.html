@@ -4470,15 +4470,15 @@ function showDeptDetail(deptName){
     +'<div style="background:rgba(26,127,55,.12);border:1px solid rgba(26,127,55,.25);border-radius:8px;padding:7px 14px;flex:1;min-width:110px">'
     +'<div style="font-size:9px;color:'+mutedCol+';font-weight:600;text-transform:uppercase;letter-spacing:.05em">Total Depto</div>'
     +'<div style="font-size:15px;font-weight:800;color:#1a7f37;font-family:monospace">'+f(total)+'</div></div>'
-    +'<div style="background:rgba(5,80,174,.1);border:1px solid rgba(5,80,174,.25);border-radius:8px;padding:7px 14px;flex:1;min-width:100px">'
+    +'<div style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:7px 14px;flex:1;min-width:100px">'
     +'<div style="font-size:9px;color:'+mutedCol+';font-weight:600;text-transform:uppercase;letter-spacing:.05em">% Participación</div>'
-    +'<div style="font-size:15px;font-weight:800;color:#0550ae;font-family:monospace">'+pctDepto+'%</div></div>'
+    +'<div style="font-size:15px;font-weight:800;color:'+textCol+';font-family:monospace">'+pctDepto+'%</div></div>'
     +'<div style="background:rgba(240,136,62,.1);border:1px solid rgba(240,136,62,.25);border-radius:8px;padding:7px 14px;flex:1;min-width:100px">'
     +'<div style="font-size:9px;color:'+mutedCol+';font-weight:600;text-transform:uppercase;letter-spacing:.05em">Piezas Totales</div>'
     +'<div style="font-size:15px;font-weight:800;color:#f0883e;font-family:monospace">'+(totalPzs>0?totalPzs.toLocaleString():'—')+'</div></div>'
-    +'<div style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);border-radius:8px;padding:7px 14px;flex:1;min-width:100px">'
+    +'<div style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:7px 14px;flex:1;min-width:100px">'
     +'<div style="font-size:9px;color:'+mutedCol+';font-weight:600;text-transform:uppercase;letter-spacing:.05em">Cant. Facturas</div>'
-    +'<div style="font-size:15px;font-weight:800;color:var(--blue-l,#58a6ff);font-family:monospace">'+numFacturas+'</div></div>'
+    +'<div style="font-size:15px;font-weight:800;color:'+textCol+';font-family:monospace">'+numFacturas+'</div></div>'
     +'</div>'
     // Table
     +'<div style="overflow-x:auto">'
@@ -4498,7 +4498,7 @@ function showDeptDetail(deptName){
     +'<td style="padding:8px;text-align:right;font-family:monospace;font-weight:800;color:#1a7f37;font-size:13px">'+f(total)+'</td>'
     +'<td style="padding:8px;text-align:right;font-family:monospace;font-weight:700;color:#f0883e">—</td>'
     +'<td style="padding:8px;text-align:right;font-family:monospace;color:#f0883e;font-weight:700">'+(totalPzs>0?totalPzs.toLocaleString():'—')+'</td>'
-    +'<td style="padding:8px;text-align:right;font-family:monospace;color:#0550ae;font-weight:700">'+pctDepto+'%</td>'
+    +'<td style="padding:8px;text-align:right;font-family:monospace;color:'+textCol+';font-weight:700">'+pctDepto+'%</td>'
     +'</tr></tfoot>'
     +'</table></div>'
     +'</div>';
@@ -5064,26 +5064,9 @@ function iniciarApp(tab){
 
     // Special routing — dashboard opens the results portal directly (single click)
     if(tab==='dashboard'){
-      // calcAndShow() necesita event?.target — lo parcheamos temporalmente
-      var _origEvent = window.event;
-      setTimeout(function(){
-        if(typeof calc==='function') calc();
-        setTimeout(function(){
-          // Parchar calcAndShow para que no dependa de event
-          var _origCalcAndShow = window.calcAndShow;
-          window._dashboardForced = true;
-          if(typeof calcAndShow==='function'){
-            calcAndShow();
-          } else if(typeof _openPortal==='function'){
-            var titleEl=document.getElementById('portal-title');
-            if(titleEl) titleEl.textContent='Dashboard Comparativo';
-            _openPortal();
-            window._portalOpen=true;
-          }
-          window._dashboardForced = false;
-        }, 200);
-      }, 200);
-      return;
+      // "Dashboard" desde el splash → abre el módulo de Tendencias (KPIs, Gráficas, Historial)
+      tab = 'tendencias';
+      // continúa al bloque openTabModal abajo
     }
     if(tab==='resumen')   tab='tendencias';
 
@@ -5449,10 +5432,10 @@ function calc(){
     } else if(al) al.className='alert';
   }
 
-  // ── Actualizar _lastAhorroNeto con valor real de SC3 si aplica ──
+  // ── Actualizar _lastAhorroNeto con valor real de SC3 (fórmula = comparativo 4 Criterios) ──
   if(compar==='sababa' && sc3_comision>0){
-    window._lastAhorroNeto = (sc1_base+sc1_arancel+sc1_itbms+itbmsTasaFinal+sc1_hon+tasa+form1+sc1_flete_nm+acarreo+dmce+agente)
-                           - (sc1_base+sc3_comision+sc3_flete+sc3_gastos);
+    window._lastAhorroNeto = (sc1_arancel+sc1_itbms+sc1_hon+tasa+form1+itbmsTasaFinal+sc1_flete_nm+acarreo+dmce+agente)
+                           - (sc3_itbmsHomol + sc3_flete + sc3_gastos + (sc3_comision - sc3_itbmsHomol));
   }
 
   // ── SNAPSHOT (for Comparativo tab) — stored here after ALL sc3 vars are defined ──
@@ -5476,14 +5459,17 @@ function calc(){
          flete:sc3_flete, gastos:sc3_gastos,
          mv:Math.round((window._mvUserEdited&&window._mvManualValue!==undefined&&!isNaN(window._mvManualValue)?window._mvManualValue:sc3_mv)*100)/100, mvPct:sc3_mvPct,
          noMerc:sc3_noMerc, landed1:sc3_landed1, landedG:sc3_landedG, factor:sc3_factor,
-         // DESEMBOLSO = CIF_original + comision + flete + gastos
-         // AHORRO = desembolso_SC1 - desembolso_SC3
+         // ── AHORRO DESEMBOLSO (fórmula 4 Criterios) ──
+         // SC1 desembolso: impuestos + gastos + honorarios (sin base — se cancela)
+         // SC3 desembolso: itbmsHomol (impuesto Sababa) + flete + gastos + honorario neto (comision-itbmsHomol)
+         //   → simplificado: comision + flete + gastos (itbmsHomol entra y sale)
+         // Para que coincida exactamente con el comparativo, incluir itbmsHomol en SC3:
          desembolso: sc3_comision>0
            ? sc1_base + sc3_comision + sc3_flete + sc3_gastos
            : 0,
          ahorroNeto: sc3_comision>0
-           ? ((sc1_base+sc1_arancel+sc1_itbms+sc1_hon+tasa+form1+itbmsTasaFinal+sc1_flete_nm+acarreo+dmce+agente)
-              - (sc1_base+sc3_comision+sc3_flete+sc3_gastos))
+           ? ((sc1_arancel+sc1_itbms+sc1_hon+tasa+form1+itbmsTasaFinal+sc1_flete_nm+acarreo+dmce+agente)
+              - (sc3_itbmsHomol + sc3_flete + sc3_gastos + (sc3_comision - sc3_itbmsHomol)))
            : 0}
   };
 
@@ -10280,21 +10266,34 @@ function renderTend(){
   if(emptyEl) emptyEl.style.display='none';
   if(canvas) canvas.style.display='block';
 
-  // ── Enriquecer registros sin ahorro — intentar derivar del snap ──
+  // ── Enriquecer/corregir registros — usar fórmula correcta del comparativo 4 Criterios ──
   let _tendFixed=false;
   filteredData.forEach(d=>{
-    if((!d.ahorro || d.ahorro===0) && d.snap){
-      const sn=d.snap;
-      const sc2=sn.sc2||{};
-      const sc3=sn.sc3||{};
-      const isSab=(d.esc||'').toLowerCase().includes('sababa')||(d.esc||'').toLowerCase().includes('sab');
-      if(isSab && sc3.ahorroNeto>0){
-        d.ahorro = sc3.ahorroNeto; _tendFixed=true;
-      } else if(sc2.ahorroNeto>0){
-        d.ahorro = sc2.ahorroNeto; _tendFixed=true;
-      } else if(sc2.landedG>0 && sc3.landedG>0){
-        d.ahorro = Math.max(0, sc2.landedG - sc3.landedG); _tendFixed=true;
+    const sn=d.snap;
+    if(!sn) return;
+    const sc1=sn.sc1||{};
+    const sc2=sn.sc2||{};
+    const sc3=sn.sc3||{};
+    const isSab=(d.esc||'').toLowerCase().includes('sababa')||(d.esc||'').toLowerCase().includes('sab');
+    const isCif=(d.esc||'').toLowerCase().includes('cif')||(d.esc||'').toLowerCase().includes('express');
+    const isUnico=(d.esc||'').toLowerCase().includes('único')||(d.esc||'').toLowerCase().includes('unico');
+
+    if(isUnico) return; // embarques únicos no tienen ahorro comparativo
+
+    if(isSab && sc3.comision>0){
+      // ── Fórmula correcta (4 Criterios): excluir base de ambos lados, incluir itbmsHomol en SC3 ──
+      const _sc1Desemb = (sc1.arancel||0)+(sc1.itbms||0)+(sc1.hon||0)+(sc1.tasa||0)+(sc1.form1||0)+(sc1.itbmsTasaFinal||0)+(sc1.flete||0)+(sc1.acarreo||0)+(sc1.dmce||0)+(sc1.agente||0);
+      const _itbmsH = sc3.itbmsHomol||0;
+      const _sc3Desemb = _itbmsH + (sc3.flete||0) + (sc3.gastos||0) + (sc3.comision - _itbmsH);
+      const _ahorroCorrect = Math.round((_sc1Desemb - _sc3Desemb)*100)/100;
+      // Solo corregir si la diferencia con el valor guardado es material (>$1)
+      if(Math.abs((d.ahorro||0) - _ahorroCorrect) > 1 && _ahorroCorrect !== 0){
+        d.ahorro = _ahorroCorrect; _tendFixed=true;
+      } else if(!d.ahorro && _ahorroCorrect>0){
+        d.ahorro = _ahorroCorrect; _tendFixed=true;
       }
+    } else if(isCif && !d.ahorro && sc2.ahorroNeto>0){
+      d.ahorro = sc2.ahorroNeto; _tendFixed=true;
     }
   });
   if(_tendFixed) saveTendData();
@@ -12653,14 +12652,24 @@ function renderDashboardKPIs(data){
   const fmtK=n=>window._fmtMoney(n);
   // Siempre usar el filtro activo — los KPIs reflejan el período seleccionado
   const all = _getFilteredTendData();
-  // Recover ahorro from snap if 0, and persist
+  // Recover/correct ahorro from snap using fórmula correcta del comparativo 4 Criterios
   let _kpiFixed=false;
   all.forEach(d=>{
-    if((!d.ahorro||d.ahorro===0)&&d.snap){
-      const s2=d.snap.sc2||{},s3=d.snap.sc3||{};
-      const isSab=(d.esc||'').toLowerCase().includes('sababa');
-      if(isSab&&(s3.ahorroNeto||0)>0){d.ahorro=s3.ahorroNeto;_kpiFixed=true;}
-      else if((s2.ahorroNeto||0)>0){d.ahorro=s2.ahorroNeto;_kpiFixed=true;}
+    if(!d.snap) return;
+    const s1=d.snap.sc1||{}, s2=d.snap.sc2||{}, s3=d.snap.sc3||{};
+    const isSab=(d.esc||'').toLowerCase().includes('sababa')||(d.esc||'').toLowerCase().includes('sab');
+    const isCif=(d.esc||'').toLowerCase().includes('cif');
+    const isUnico=(d.esc||'').toLowerCase().includes('único')||(d.esc||'').toLowerCase().includes('unico');
+    if(isUnico) return;
+    if(isSab && s3.comision>0){
+      const _s1d=(s1.arancel||0)+(s1.itbms||0)+(s1.hon||0)+(s1.tasa||0)+(s1.form1||0)+(s1.itbmsTasaFinal||0)+(s1.flete||0)+(s1.acarreo||0)+(s1.dmce||0)+(s1.agente||0);
+      const _ih=s3.itbmsHomol||0;
+      const _s3d=_ih+(s3.flete||0)+(s3.gastos||0)+(s3.comision-_ih);
+      const _ah=Math.round((_s1d-_s3d)*100)/100;
+      if(Math.abs((d.ahorro||0)-_ah)>1){d.ahorro=_ah;_kpiFixed=true;}
+      else if(!d.ahorro&&_ah>0){d.ahorro=_ah;_kpiFixed=true;}
+    } else if(isCif&&(!d.ahorro||d.ahorro===0)&&(s2.ahorroNeto||0)>0){
+      d.ahorro=s2.ahorroNeto;_kpiFixed=true;
     }
   });
   if(_kpiFixed) saveTendData();
