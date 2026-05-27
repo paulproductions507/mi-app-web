@@ -2940,6 +2940,14 @@ var PLN_DAYS   = ['LU','MA','MI','JU','VI'];
 
 // ── helpers ──
 function _plnF(n){ n=parseFloat(n)||0; return n>=1e6?'$'+(n/1e6).toFixed(1)+'M':n>=1000?'$'+(n/1000).toFixed(1)+'k':'$'+n.toFixed(0); }
+function _plnSetEmpalet(val){
+  var inp=document.getElementById('_pln_empalet');
+  if(inp) inp.value=val?'1':'0';
+  var si=document.getElementById('_pln_empalet_si');
+  var no=document.getElementById('_pln_empalet_no');
+  if(si) si.style.cssText=si.style.cssText.replace(/border:[^;]+;/,'')+(val?'border:2px solid #3fb950;background:rgba(63,185,80,.25);color:var(--green-l);':'border:2px solid rgba(63,185,80,.3);background:rgba(63,185,80,.08);color:var(--green-l);');
+  if(no) no.style.cssText=no.style.cssText.replace(/border:[^;]+;/,'')+(val?'border:2px solid rgba(248,81,73,.3);background:rgba(248,81,73,.08);color:var(--red-l);':'border:2px solid #f85149;background:rgba(248,81,73,.25);color:var(--red-l);');
+}
 function _plnToggleProv(accId, count, el){
   var b=document.getElementById(accId);
   var lbl=document.getElementById('_pvlbl_'+accId);
@@ -3146,12 +3154,13 @@ function _PLN_BUILD_HTML(){
         +'</select>'
       +'</div>'
     +'</div>'
-    +'<div style="margin-bottom:10px;background:rgba(248,209,34,.04);border:1px solid rgba(248,209,34,.2);border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px;cursor:pointer" onclick="var cb=document.getElementById(\'_pln_empalet\');cb.checked=!cb.checked">'
-      +'<input type="checkbox" id="_pln_empalet" style="width:16px;height:16px;accent-color:#f8d122;cursor:pointer;flex-shrink:0">'
-      +'<div>'
-        +'<div style="font-size:11px;font-weight:700;color:var(--text)">📦 Mercancía Empaletada</div>'
-        +'<div style="font-size:10px;color:var(--muted);margin-top:1px">Marcar si la carga viene en pallets. Sin esta marca implica carga en piso.</div>'
+    +'<div style="margin-bottom:10px">'
+      +'<label style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:6px">📦 Condición de la Mercancía</label>'
+      +'<div style="display:flex;gap:8px">'
+        +'<button type="button" id="_pln_empalet_si" onclick="_plnSetEmpalet(true)" style="flex:1;padding:8px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;border:2px solid rgba(63,185,80,.3);background:rgba(63,185,80,.08);color:var(--green-l)">✅ Empaletada</button>'
+        +'<button type="button" id="_pln_empalet_no" onclick="_plnSetEmpalet(false)" style="flex:1;padding:8px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;border:2px solid rgba(248,81,73,.3);background:rgba(248,81,73,.08);color:var(--red-l)">⚠️ En Piso</button>'
       +'</div>'
+      +'<input type="hidden" id="_pln_empalet" value="0">'
     +'</div>'
     +'<div style="background:rgba(45,212,191,.05);border:1px solid rgba(45,212,191,.2);border-radius:8px;padding:10px 12px;margin-bottom:10px">'
       +'<div style="font-size:9px;font-weight:700;color:#2dd4bf;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">🔗 Cruce automático de datos</div>'
@@ -3670,15 +3679,16 @@ function _plnImprimirDia(di){
       deptHtml='<div style="font-size:11px;color:#555;margin-top:3px;line-height:1.8">'+deptLines+'</div>';
     }
 
-    rows+='<div style="page-break-inside:avoid;border:1px solid #ccc;border-top:4px solid #333;border-radius:6px;padding:14px 18px;margin-bottom:16px">'
+    rows+='<div style="page-break-inside:avoid;border:1px solid #ddd;border-left:4px solid #333;border-radius:6px;padding:14px 18px;margin-bottom:16px">'
       +'<div style="font-size:15px;font-weight:900;margin-bottom:8px">'+viaIco+' '+(ordinal[idx]||'Carga '+(idx+1))+' carga <span style="font-size:11px;font-weight:500;color:#666;margin-left:8px">('+item.tipo+')</span></div>'
       +'<table style="width:100%;border-collapse:collapse;font-size:12px">'
       +(nEq+tipoLabel?'<tr><td style="color:#888;padding:3px 0;width:120px">Equipo</td><td style="font-weight:700">'+nEq+'x '+(size?size+' ':'')+tipoLabel+(totBlt>0?' - '+totBlt.toLocaleString()+' cartones':'')+'</td></tr>':'')
       +(size?'<tr><td style="color:#888;padding:3px 0">Tamaño</td><td style="font-weight:700">'+size+' ft</td></tr>':'')
       +(cub.nroCont?'<tr><td style="color:#888;padding:3px 0">N° Contenedor</td><td style="font-weight:700;font-family:monospace">'+cub.nroCont+'</td></tr>':'')
+      +(cub.nroEmb?'<tr><td style="color:#888;padding:3px 0">N° Embarque</td><td style="font-weight:700;font-family:monospace">'+cub.nroEmb+'</td></tr>':'')
       +(cub.origen||cub.lugarOrigen?'<tr><td style="color:#888;padding:3px 0">Origen</td><td style="font-weight:700">'+(cub.origen||cub.lugarOrigen)+'</td></tr>':'')
       +(cub.lugarRecep?'<tr><td style="color:#888;padding:3px 0">Destino</td><td style="font-weight:700">'+cub.lugarRecep+'</td></tr>':'')
-      +(cub.empaletado?'<tr><td style="color:#888;padding:3px 0">Empaletado</td><td style="font-weight:700"><span style="background:#d1fae5;color:#065f46;border-radius:4px;padding:2px 8px">SI - Carga empaletada</span></td></tr>':'<tr><td style="color:#888;padding:3px 0">Empaletado</td><td style="font-weight:700;color:#b91c1c">NO - Carga en piso</td></tr>')
+      +(cub.empaletado!==undefined&&cub.empaletado!==null?'<tr><td style="color:#888;padding:3px 0">Empaletado</td><td style="font-weight:700">'+(cub.empaletado?'<span style="background:#d1fae5;color:#065f46;border-radius:4px;padding:2px 8px">SI - Carga empaletada</span>':'<span style="color:#b91c1c">NO - Carga en piso</span>')+'</td></tr>':'')
       +(esc?'<tr><td style="color:#888;padding:3px 0">Corredor</td><td style="font-weight:700">'+esc.toUpperCase()+'</td></tr>':'')
       +'<tr><td style="color:#888;padding:3px 0;vertical-align:top">Proveedores</td><td style="font-weight:700">'+provRows.length+' proveedor'+(provRows.length!==1?'es':'')+deptHtml+'</td></tr>'
       +(totPzs>0?'<tr><td style="color:#888;padding:3px 0">Total piezas</td><td style="font-weight:700">'+totPzs.toLocaleString('en-US')+'</td></tr>':'')
@@ -4030,7 +4040,7 @@ window._plnOpenEq=function(mon,di,ci,tab,via){
       if(ss) ss.value=cub.status||'Programado';
       var lre=document.getElementById('_pln_lugar_recep'); if(lre) lre.value=cub.lugarRecep||'';
       var ori=document.getElementById('_pln_origen'); if(ori) ori.value=cub.origen||'';
-      var emp=document.getElementById('_pln_empalet'); if(emp) emp.checked=!!(cub.empaletado);
+      _plnSetEmpalet(!!(cub.empaletado));
       _plnViaChange();
       if(cub.nroEmb) _plnCruce();
     }
@@ -4225,11 +4235,19 @@ window._plnSaveEq=function(){
   var via=g('_pln_via'), tipoCarga=g('_pln_tipo'), nroCont=g('_pln_nro'), nroEmb=g('_pln_emb');
   var eta=g('_pln_eta'), status=g('_pln_status'), recep=g('_pln_recep'), lugarRecep=g('_pln_lugar_recep');
   var origen=g('_pln_origen');
-  var empaletado=!!(document.getElementById('_pln_empalet')&&document.getElementById('_pln_empalet').checked);
+  var empaletado=document.getElementById('_pln_empalet')&&document.getElementById('_pln_empalet').value==='1';
   var tab=_PLN_CTX.tab, mon=_PLN_CTX.mon, di=_PLN_CTX.di, ci=_PLN_CTX.ci;
 
-  // Construir filas heredadas
+  // Construir filas heredadas — IMPORTANTE: preservar rows existentes si no hay nuevo cruce
   var rows=[];
+  var existingRows=[];
+  // Si estamos editando, recuperar rows actuales antes de sobreescribir
+  if(_PLN_CTX.ci!==null&&_PLN_CTX.ci>=0){
+    try{
+      var _existCub=_PLN_DATA[mon][tab][di].cubiculos[_PLN_CTX.ci];
+      if(_existCub&&_existCub.rows) existingRows=_existCub.rows;
+    }catch(e){}
+  }
   if(tab==='res'&&nroEmb){
     var td=window.tendData||[];
     var found=td.find(function(d){return (d.nro||'').toUpperCase()===nroEmb.toUpperCase();});
@@ -4245,11 +4263,18 @@ window._plnSaveEq=function(){
       if(!tipoCarga&&(snap.tipoEquipo||snap.equipo)) tipoCarga=snap.tipoEquipo||snap.equipo||'';
       if(!eta&&found.fecha) eta=found.fecha;
     }
+    // Si no se encontró en tendData pero tenía rows previos, preservarlos
+    if(rows.length===0&&existingRows.length>0) rows=existingRows;
   } else if(tab==='prog'&&nroCont){
     var tr=[]; try{tr=JSON.parse(localStorage.getItem('_transito_v1')||'[]');}catch(e){}
     tr.filter(function(r){return (r.contenedor||r.nroContenedor||'').toUpperCase()===nroCont.toUpperCase();}).forEach(function(r){
       rows.push({prov:r.proveedor||r.prov||'—',bultos:r.bultos||r.cantBultos||0,piezas:r.piezas||0,fob:r.monto||r.valor||0,landed:r.monto||r.valor||0,dept:r.departamento||r.dept||'',matched:true});
     });
+    // Preservar rows existentes si no hay cruce nuevo
+    if(rows.length===0&&existingRows.length>0) rows=existingRows;
+  } else {
+    // Sin cruce — preservar rows existentes
+    rows=existingRows;
   }
 
   var newCub={via:via,tipoCarga:tipoCarga,nroCont:nroCont,nroEmb:nroEmb,eta:eta,status:status,lugarRecep:lugarRecep,origen:origen,empaletado:empaletado,rows:rows};
@@ -12489,6 +12514,54 @@ function _tendMejorImport(btn){
 }
 
 // ── Costo Inventario — desglose al tocar la card ──
+// ── Confirmar facturas seleccionadas (global bulk lock) ──
+function _plnConfirmarFacturasGlobal(embarqueIdx, tipo){
+  var checkboxes = document.querySelectorAll('input[data-idx="'+embarqueIdx+'"]');
+  var selected = Array.from(checkboxes).filter(function(c){ return c.checked; });
+  if(selected.length===0){
+    if(typeof _showToast==='function') _showToast('⚠️ Selecciona al menos una factura para confirmar','orange',3000);
+    return;
+  }
+  // Confirmation modal
+  var ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:999999;display:flex;align-items:center;justify-content:center;padding:20px';
+  ov.innerHTML='<div style="background:var(--s1);border:1px solid var(--border);border-radius:14px;padding:22px;max-width:340px;width:100%;text-align:center">'
+    +'<div style="font-size:28px;margin-bottom:10px">🔒</div>'
+    +'<div style="font-size:13px;font-weight:800;color:var(--text);margin-bottom:6px">Confirmar '+selected.length+' factura'+(selected.length!==1?'s':'')+'</div>'
+    +'<div style="font-size:11px;color:var(--muted);margin-bottom:16px;line-height:1.6">Las facturas seleccionadas quedarán bloqueadas para edición. Las no seleccionadas conservarán el ✏️ para editar después.</div>'
+    +'<div style="display:flex;gap:10px">'
+    +'<button id="_bulkcancel" style="flex:1;background:none;border:1px solid var(--border);color:var(--muted);border-radius:10px;padding:10px;font-size:12px;font-weight:600;cursor:pointer">Cancelar</button>'
+    +'<button id="_bulkconfirm" style="flex:2;background:linear-gradient(135deg,rgba(63,185,80,.2),rgba(46,160,67,.12));border:1.5px solid rgba(63,185,80,.45);color:var(--green-l);border-radius:10px;padding:10px;font-size:12px;font-weight:800;cursor:pointer">🔒 Confirmar y Bloquear</button>'
+    +'</div></div>';
+  document.body.appendChild(ov);
+  document.getElementById('_bulkcancel').onclick=function(){ ov.remove(); };
+  ov.addEventListener('click',function(e){ if(e.target===ov) ov.remove(); });
+  document.getElementById('_bulkconfirm').onclick=function(){
+    ov.remove();
+    var d=tendData[embarqueIdx]; if(!d) return;
+    var lines=(d.invLines||(d.snap&&d.snap.invLines)||[]);
+    var locked=0;
+    selected.forEach(function(chk){
+      var lineKey=chk.getAttribute('data-linekey');
+      lines.forEach(function(l){
+        var lk=((l.tipoFac||'mercancia')+'_'+(l.prov||'')+'_'+(l.numFact||l.nfac||'')).replace(/['"]/g,'');
+        if(lk===lineKey){ l._nfacLocked=true; locked++; }
+      });
+      // Also update in snap.invLines
+      if(d.snap&&d.snap.invLines){
+        d.snap.invLines.forEach(function(l){
+          var lk=((l.tipoFac||'mercancia')+'_'+(l.prov||'')+'_'+(l.numFact||l.nfac||'')).replace(/['"]/g,'');
+          if(lk===lineKey) l._nfacLocked=true;
+        });
+      }
+    });
+    if(typeof saveTendData==='function') saveTendData();
+    if(typeof _syncTendToCloud==='function') _syncTendToCloud();
+    if(typeof _showToast==='function') _showToast('🔒 '+locked+' factura'+(locked!==1?'s':'')+' confirmadas y bloqueadas','green',3500);
+    if(typeof abrirFacturasEmbarque==='function') abrirFacturasEmbarque(embarqueIdx);
+  };
+}
+
 // ── Editar número de factura en embarque procesado (historial) ──
 // Solo edita el número — NO toca montos ni costos — y solo se puede hacer UNA VEZ
 function _editarNumFactHistorial(embarqueIdx, lineKey, currentNfac){
@@ -14032,8 +14105,13 @@ function _renderDeptChart(all){
     var pctBar = Math.max(2, Math.round(parseFloat(pctTotal)));
     var dkey = 'dept_'+ei+'_'+Date.now();
 
-    // Sort provs
-    var sp = v.provs.slice().sort(function(a,b){ return b.costo-a.costo; });
+    // Sort provs: más reciente primero (mayor nro de embarque), luego por costo
+    var sp = v.provs.slice().sort(function(a,b){
+      var nA=parseInt((a.nro||'0').replace(/\D/g,''))||0;
+      var nB=parseInt((b.nro||'0').replace(/\D/g,''))||0;
+      if(nB!==nA) return nB-nA; // más reciente primero
+      return b.costo-a.costo;   // desempate por costo
+    });
     var totalProv = sp.reduce(function(s,p){ return s+(p.costo||0); }, 0);
 
     // Store in window
@@ -15019,11 +15097,21 @@ window.abrirFacturasEmbarque = function(idx){
     +'</div>'
 
     // Facturas de mercancía
-    +'<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">📦 Facturas de Mercancía</div>'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'
+    +'<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">📦 Facturas de Mercancía</div>'
+    +(mercLines.length>0?'<button onclick="_plnConfirmarFacturasGlobal('+idx+',\'mercancia\')" style="background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:6px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer">🔒 Confirmar seleccionadas</button>':'')
+    +'</div>'
     + (mercLines.length ? mercLines.map(function(l,i){
       var pctStr = (l._pct*100).toFixed(1)+'%';
       var deptBadge = l.deptCat ? '<span style="background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.2);color:var(--green-l);border-radius:3px;padding:1px 5px;font-size:9px">'+l.deptCat+'</span>' : '';
+      var lineKey = ((l.tipoFac||'mercancia')+'_'+(l.prov||'')+'_'+(l.numFact||l.nfac||'')).replace(/['"]/g,'');
+      var chkId = '_hfact_chk_'+idx+'_'+i;
       return '<div style="background:var(--s1);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:6px">'
+        // Checkbox row
+        +(l._nfacLocked?'':'<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;padding-bottom:5px;border-bottom:1px solid rgba(255,255,255,.05)">'
+        +'<input type="checkbox" id="'+chkId+'" data-idx="'+idx+'" data-linekey="'+lineKey+'" style="width:14px;height:14px;accent-color:var(--green-l);cursor:pointer">'
+        +'<label for="'+chkId+'" style="font-size:10px;color:var(--muted);cursor:pointer">Seleccionar para confirmar N° factura</label>'
+        +'</div>')
         +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">'
         +'<div style="flex:1;min-width:0">'
         +'<div style="font-size:12px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(l.prov||'—')+'</div>'
