@@ -12514,6 +12514,40 @@ function _tendMejorImport(btn){
 }
 
 // ── Costo Inventario — desglose al tocar la card ──
+// ── Toggle formato $k / completo en modal de detalle de facturas ──
+function _facModalToggleFmt(idx){
+  var modal = document.getElementById('_facDetailModal');
+  if(!modal) return;
+  // Toggle state
+  modal._fmtCompact = !modal._fmtCompact;
+  var btn = document.getElementById('_facFmtToggle');
+  // Save original global _fmtMoney
+  var _origFmt = window._fmtMoney;
+  if(modal._fmtCompact){
+    // Compact: abbreviate
+    window._fmtMoney = function(n){ n=parseFloat(n)||0; if(Math.abs(n)>=1e6)return'$'+(n/1e6).toFixed(1)+'M'; if(Math.abs(n)>=1e3)return'$'+(n/1e3).toFixed(1)+'k'; return'$'+n.toFixed(2); };
+    if(btn){ btn.textContent='$k'; btn.style.background='rgba(88,166,255,.1)'; btn.style.color='var(--blue-l)'; }
+  } else {
+    // Full amounts
+    window._fmtMoney = function(n){ return '$'+Number(parseFloat(n)||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
+    if(btn){ btn.textContent='$1,234'; btn.style.background='rgba(63,185,80,.1)'; btn.style.color='var(--green-l)'; }
+  }
+  // Re-render modal content only
+  abrirFacturasEmbarque(idx);
+  // Restore global format after re-render
+  window._fmtMoney = _origFmt;
+  // Set toggle state on new modal
+  setTimeout(function(){
+    var m2=document.getElementById('_facDetailModal');
+    if(m2) m2._fmtCompact = modal._fmtCompact;
+    var b2=document.getElementById('_facFmtToggle');
+    if(b2){
+      if(modal._fmtCompact){ b2.textContent='$k'; b2.style.background='rgba(88,166,255,.1)'; b2.style.color='var(--blue-l)'; }
+      else { b2.textContent='$1,234'; b2.style.background='rgba(63,185,80,.1)'; b2.style.color='var(--green-l)'; }
+    }
+  }, 50);
+}
+
 // ── Confirmar facturas seleccionadas (global bulk lock) ──
 function _plnConfirmarFacturasGlobal(embarqueIdx, tipo){
   var checkboxes = document.querySelectorAll('input[data-idx="'+embarqueIdx+'"]');
@@ -14105,12 +14139,16 @@ function _renderDeptChart(all){
     var pctBar = Math.max(2, Math.round(parseFloat(pctTotal)));
     var dkey = 'dept_'+ei+'_'+Date.now();
 
-    // Sort provs: más reciente primero (mayor nro de embarque), luego por costo
+    // Sort provs: más reciente primero por número de embarque (22056 > 22055 > 22054...)
     var sp = v.provs.slice().sort(function(a,b){
-      var nA=parseInt((a.nro||'0').replace(/\D/g,''))||0;
-      var nB=parseInt((b.nro||'0').replace(/\D/g,''))||0;
-      if(nB!==nA) return nB-nA; // más reciente primero
-      return b.costo-a.costo;   // desempate por costo
+      // Extraer solo dígitos y comparar como número
+      var sA=String(a.nro||'0').replace(/\D/g,'');
+      var sB=String(b.nro||'0').replace(/\D/g,'');
+      // Comparar como strings si mismo largo (preserva orden lexicográfico), sino por número
+      if(sA.length===sB.length) return sB>sA?1:sB<sA?-1:b.costo-a.costo;
+      var nA=parseInt(sA)||0, nB=parseInt(sB)||0;
+      if(nB!==nA) return nB-nA;
+      return b.costo-a.costo;
     });
     var totalProv = sp.reduce(function(s,p){ return s+(p.costo||0); }, 0);
 
@@ -15251,10 +15289,13 @@ window.abrirFacturasEmbarque = function(idx){
   var modal = document.createElement('div');
   modal.id = '_facDetailModal';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:99999;display:flex;align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto';
+  // Store format state on modal
+  modal._fmtCompact = window._kMode !== false; // default: same as global $k setting
   modal.innerHTML = '<div id="_facDetailInner" style="background:var(--s1);border:1px solid var(--border);border-radius:16px;padding:20px;max-width:500px;width:100%;margin:auto" onclick="event.stopPropagation()">'
     +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'
     +'<div style="font-size:13px;font-weight:800;color:var(--text)">🧾 Detalle Facturas del Embarque</div>'
     +'<div style="display:flex;align-items:center;gap:8px">'
+    +'<button id="_facFmtToggle" onclick="_facModalToggleFmt('+idx+')" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:700" title="Cambiar entre valores abreviados y completos">$k</button>'
     +'<button onclick="(function(){var c=document.getElementById(\'_facDetailInner\');var w=window.open(\'\',\'_blank\',\'width=600,height=800\');w.document.write(\'<!DOCTYPE html><html><head><meta charset=UTF-8><title>Detalle Embarque</title><style>body{font-family:Arial,sans-serif;background:#0d1117;color:#e6edf3;padding:20px}*{box-sizing:border-box}</style></head><body>\'+c.innerHTML+\'</body></html>\');w.document.close();setTimeout(function(){w.print();},400);})()" style="background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:600">🖨 Imprimir</button>'
     +'<button onclick="_exportDetalleExcel(tendData['+idx+'])" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:600" title="Descargar Excel .xlsx — números con punto decimal">📗 Excel (.xlsx)</button>'
     +'<button onclick="_exportDetalleXLSX(tendData['+idx+'], \',\''+')" style="background:rgba(240,136,62,.1);border:1px solid rgba(240,136,62,.3);color:var(--orange-l);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:600" title="Descargar CSV — números con coma (20733,00) — para pegar en Excel europeo">📊 CSV (,)</button>'
