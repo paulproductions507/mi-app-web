@@ -14065,9 +14065,24 @@ function _renderDeptChart(all){
   var fmt2 = function(n){ return window._fmtMoney(n); };
   var fmtK = function(n){ return window._fmtMoney(n); };
 
+  // ── CRÍTICO: ordenar embarques de mayor a menor nro ANTES de acumular ──
+  // Normalizar nros con dígitos extra (ej: 220057 → 22057, remove char at index 2)
+  var _normNroSort = function(s){
+    var d=String(s||'').replace(/\D/g,'');
+    var n=parseInt(d)||0;
+    if(n>99999 && d.length===6){
+      var n2=parseInt(d[0]+d[1]+d[3]+d[4]+d[5])||0;
+      if(n2>=10000) return n2;
+    }
+    return n;
+  };
+  var allSorted = all.slice().sort(function(a,b){
+    return _normNroSort(b.nro) - _normNroSort(a.nro);
+  });
+
   // Acumular por departamento
   var byDept = {};
-  all.forEach(function(d){
+  allSorted.forEach(function(d){
     var invL = (d.snap && d.snap.invLines) || d.invLines || [];
     var _nroFix = ['22032','22033','22034','22038','22039'].indexOf((d.nro||'').toString().trim()) !== -1;
     var tipoEmb = _nroFix ? 'IMP' : ((d.snap && d.snap.tipo) || d.tipo || 'ZL');
@@ -14139,17 +14154,8 @@ function _renderDeptChart(all){
     var pctBar = Math.max(2, Math.round(parseFloat(pctTotal)));
     var dkey = 'dept_'+ei+'_'+Date.now();
 
-    // Sort provs: más reciente primero por número de embarque (22056 > 22055 > 22054...)
-    var sp = v.provs.slice().sort(function(a,b){
-      // Extraer solo dígitos y comparar como número
-      var sA=String(a.nro||'0').replace(/\D/g,'');
-      var sB=String(b.nro||'0').replace(/\D/g,'');
-      // Comparar como strings si mismo largo (preserva orden lexicográfico), sino por número
-      if(sA.length===sB.length) return sB>sA?1:sB<sA?-1:b.costo-a.costo;
-      var nA=parseInt(sA)||0, nB=parseInt(sB)||0;
-      if(nB!==nA) return nB-nA;
-      return b.costo-a.costo;
-    });
+    // Provs ya en orden correcto (allSorted garantiza nro desc)
+    var sp = v.provs.slice();
     var totalProv = sp.reduce(function(s,p){ return s+(p.costo||0); }, 0);
 
     // Store in window
