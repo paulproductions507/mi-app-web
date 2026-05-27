@@ -3136,12 +3136,23 @@ function _PLN_BUILD_HTML(){
         +'<option>CARGA SUELTA / SABABA</option><option>FURGÓN</option><option>LCL</option>'
       +'</select></div>'
     +'</div>'
-    +'<div class="fl"><label>🏭 Lugar de Recepción</label>'
-      +'<select id="_pln_lugar_recep" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">'
-        +'<option value="">— Sin especificar —</option>'
-        +'<option value="CDF">CDF</option>'
-        +'<option value="Westland">Westland</option>'
-      +'</select></div>'
+    +'<div class="g2">'
+      +'<div class="fl"><label>🌍 País / Ciudad de Origen</label><input type="text" id="_pln_origen" placeholder="Ej: China, Guangzhou" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 9px;color:var(--text);font-size:12px"></div>'
+      +'<div class="fl"><label>🏭 Lugar de Recepción</label>'
+        +'<select id="_pln_lugar_recep" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">'
+          +'<option value="">— Sin especificar —</option>'
+          +'<option value="CDF">CDF</option>'
+          +'<option value="Westland">Westland</option>'
+        +'</select>'
+      +'</div>'
+    +'</div>'
+    +'<div style="margin-bottom:10px;background:rgba(248,209,34,.04);border:1px solid rgba(248,209,34,.2);border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px;cursor:pointer" onclick="var cb=document.getElementById(\'_pln_empalet\');cb.checked=!cb.checked">'
+      +'<input type="checkbox" id="_pln_empalet" style="width:16px;height:16px;accent-color:#f8d122;cursor:pointer;flex-shrink:0">'
+      +'<div>'
+        +'<div style="font-size:11px;font-weight:700;color:var(--text)">📦 Mercancía Empaletada</div>'
+        +'<div style="font-size:10px;color:var(--muted);margin-top:1px">Marcar si la carga viene en pallets. Sin esta marca implica carga en piso.</div>'
+      +'</div>'
+    +'</div>'
     +'<div style="background:rgba(45,212,191,.05);border:1px solid rgba(45,212,191,.2);border-radius:8px;padding:10px 12px;margin-bottom:10px">'
       +'<div style="font-size:9px;font-weight:700;color:#2dd4bf;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">🔗 Cruce automático de datos</div>'
       +'<div class="g2">'
@@ -3659,7 +3670,7 @@ function _plnImprimirDia(di){
       deptHtml='<div style="font-size:11px;color:#555;margin-top:3px;line-height:1.8">'+deptLines+'</div>';
     }
 
-    rows+='<div style="page-break-inside:avoid;border:4px solid #222;border-radius:8px;padding:14px 18px;margin-bottom:18px">'
+    rows+='<div style="page-break-inside:avoid;border:1px solid #ccc;border-top:4px solid #333;border-radius:6px;padding:14px 18px;margin-bottom:16px">'
       +'<div style="font-size:15px;font-weight:900;margin-bottom:8px">'+viaIco+' '+(ordinal[idx]||'Carga '+(idx+1))+' carga <span style="font-size:11px;font-weight:500;color:#666;margin-left:8px">('+item.tipo+')</span></div>'
       +'<table style="width:100%;border-collapse:collapse;font-size:12px">'
       +(nEq+tipoLabel?'<tr><td style="color:#888;padding:3px 0;width:120px">Equipo</td><td style="font-weight:700">'+nEq+'x '+(size?size+' ':'')+tipoLabel+(totBlt>0?' - '+totBlt.toLocaleString()+' cartones':'')+'</td></tr>':'')
@@ -3667,6 +3678,7 @@ function _plnImprimirDia(di){
       +(cub.nroCont?'<tr><td style="color:#888;padding:3px 0">N° Contenedor</td><td style="font-weight:700;font-family:monospace">'+cub.nroCont+'</td></tr>':'')
       +(cub.origen||cub.lugarOrigen?'<tr><td style="color:#888;padding:3px 0">Origen</td><td style="font-weight:700">'+(cub.origen||cub.lugarOrigen)+'</td></tr>':'')
       +(cub.lugarRecep?'<tr><td style="color:#888;padding:3px 0">Destino</td><td style="font-weight:700">'+cub.lugarRecep+'</td></tr>':'')
+      +(cub.empaletado?'<tr><td style="color:#888;padding:3px 0">Empaletado</td><td style="font-weight:700"><span style="background:#d1fae5;color:#065f46;border-radius:4px;padding:2px 8px">SI - Carga empaletada</span></td></tr>':'<tr><td style="color:#888;padding:3px 0">Empaletado</td><td style="font-weight:700;color:#b91c1c">NO - Carga en piso</td></tr>')
       +(esc?'<tr><td style="color:#888;padding:3px 0">Corredor</td><td style="font-weight:700">'+esc.toUpperCase()+'</td></tr>':'')
       +'<tr><td style="color:#888;padding:3px 0;vertical-align:top">Proveedores</td><td style="font-weight:700">'+provRows.length+' proveedor'+(provRows.length!==1?'es':'')+deptHtml+'</td></tr>'
       +(totPzs>0?'<tr><td style="color:#888;padding:3px 0">Total piezas</td><td style="font-weight:700">'+totPzs.toLocaleString('en-US')+'</td></tr>':'')
@@ -4017,6 +4029,8 @@ window._plnOpenEq=function(mon,di,ci,tab,via){
       var etae=document.getElementById('_pln_eta'); if(etae) etae.value=cub.eta||'';
       if(ss) ss.value=cub.status||'Programado';
       var lre=document.getElementById('_pln_lugar_recep'); if(lre) lre.value=cub.lugarRecep||'';
+      var ori=document.getElementById('_pln_origen'); if(ori) ori.value=cub.origen||'';
+      var emp=document.getElementById('_pln_empalet'); if(emp) emp.checked=!!(cub.empaletado);
       _plnViaChange();
       if(cub.nroEmb) _plnCruce();
     }
@@ -4210,6 +4224,8 @@ window._plnSaveEq=function(){
   var g=function(id){var e=document.getElementById(id);return e?e.value.trim():'';};
   var via=g('_pln_via'), tipoCarga=g('_pln_tipo'), nroCont=g('_pln_nro'), nroEmb=g('_pln_emb');
   var eta=g('_pln_eta'), status=g('_pln_status'), recep=g('_pln_recep'), lugarRecep=g('_pln_lugar_recep');
+  var origen=g('_pln_origen');
+  var empaletado=!!(document.getElementById('_pln_empalet')&&document.getElementById('_pln_empalet').checked);
   var tab=_PLN_CTX.tab, mon=_PLN_CTX.mon, di=_PLN_CTX.di, ci=_PLN_CTX.ci;
 
   // Construir filas heredadas
@@ -4236,7 +4252,7 @@ window._plnSaveEq=function(){
     });
   }
 
-  var newCub={via:via,tipoCarga:tipoCarga,nroCont:nroCont,nroEmb:nroEmb,eta:eta,status:status,lugarRecep:lugarRecep,rows:rows};
+  var newCub={via:via,tipoCarga:tipoCarga,nroCont:nroCont,nroEmb:nroEmb,eta:eta,status:status,lugarRecep:lugarRecep,origen:origen,empaletado:empaletado,rows:rows};
   var wk=_plnMkWeek(mon);
 
   if(recep==='parcial'){
