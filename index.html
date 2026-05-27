@@ -12320,7 +12320,7 @@ function _buildHistProvRows(){
         depto:(l.deptCat||l.dept||'Sin categoría').toUpperCase(),
         piezas:l.piezas||0,bultos:l.bultos||0,costo:l.costo||0,
         desc:l._desc||l.oc||'',nro,fecha,esc:escLabel,
-        tipo:tipoP,
+        tipo:tipoP, _nfacLocked:!!(l._nfacLocked),
         homol:isHomol,_dIdx:dIdx};
       if(tf==='mercancia'){
         rows.push(Object.assign({},base,{seccion:'merc',rubro:'mercancia'}));
@@ -12335,6 +12335,30 @@ function _buildHistProvRows(){
   });
   return rows;
 }
+// ── Editar N° factura directamente desde Historial de Proveedores ──
+function _editarFactHistProv(embarqueIdx, provName, factInfo, seccion){
+  var d = tendData[embarqueIdx];
+  if(!d) return;
+  var currentNfac = factInfo[0]||'';
+  var currentOc   = factInfo[1]||'';
+  // Find the line in invLines
+  var lines = (d.invLines||(d.snap&&d.snap.invLines)||[]);
+  var targetLine = null;
+  lines.forEach(function(l){
+    var lProv=(l.prov||'').trim().toLowerCase();
+    var rProv=provName.trim().toLowerCase();
+    // Match by prov + numFact
+    if(lProv===rProv && (l.numFact||l.nfac||'')===currentNfac) targetLine=l;
+    // Fallback: match by oc
+    if(!targetLine && lProv===rProv && (l.oc||'')===currentOc) targetLine=l;
+  });
+  // Build lineKey for _editarNumFactHistorial
+  var lineKey = ((targetLine&&targetLine.tipoFac||seccion==='serv'?'gastos':'mercancia')
+    +'_'+provName+'_'+currentNfac).replace(/['"]/g,'');
+  // Use the existing modal
+  _editarNumFactHistorial(embarqueIdx, lineKey, currentNfac);
+}
+
 function _renderHistProvList(){
   var _mb=document.getElementById('tab-modal-body');
   var root=(_mb&&_mb.querySelector('#histprov-root'))||document.getElementById('histprov-root');
@@ -12425,7 +12449,10 @@ function _renderHistProvList(){
       // Row 3: Embarque + Factura + OC/piezas/bultos (hidden for service providers)
       '<div style="display:flex;gap:8px;font-size:10px;color:var(--muted);flex-wrap:wrap;align-items:center;margin-bottom:'+(hasHomolInfo?'4px':'0')+'">'+
         '<span>📋 <strong style="color:var(--text)">'+r.nro+'</strong></span>'+
-        (r.numFact!=='—'?'<span>🧾 Fact: <strong style="color:var(--text)">'+r.numFact+'</strong></span>':'')+
+        (r.numFact!=='—'?'<span style="display:flex;align-items:center;gap:4px">🧾 Fact: <strong style="color:var(--text)">'+r.numFact+'</strong>'
+          +(r._nfacLocked?'<span title="Factura confirmada y bloqueada" style="color:var(--orange-l);font-size:10px">🔒</span>'
+            :'<button onclick="event.stopPropagation();_editarFactHistProv('+r._dIdx+',\''+r.prov.replace(/'/g,"\\'")+'\',[\''+r.numFact+'\',\''+r.oc+'\'],\''+r.seccion+'\')" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:3px;padding:0 5px;font-size:10px;cursor:pointer" title="Editar N° factura">✏️</button>')
+        +'</span>':'')+
         (r.seccion==='merc'?(
           (r.oc!=='—'?'<span>OC: <strong style="color:var(--text)">'+r.oc+'</strong></span>':'')+
           (r.piezas>0?'<span>🔢 <strong style="color:var(--blue-l)">'+r.piezas.toLocaleString()+' pzas</strong></span>':'<span style="color:var(--muted)">— pzas</span>')+
@@ -12518,34 +12545,21 @@ function _tendMejorImport(btn){
 function _facModalToggleFmt(idx){
   var modal = document.getElementById('_facDetailModal');
   if(!modal) return;
-  // Toggle state
   modal._fmtCompact = !modal._fmtCompact;
-  var btn = document.getElementById('_facFmtToggle');
-  // Save original global _fmtMoney
-  var _origFmt = window._fmtMoney;
-  if(modal._fmtCompact){
-    // Compact: abbreviate
-    window._fmtMoney = function(n){ n=parseFloat(n)||0; if(Math.abs(n)>=1e6)return'$'+(n/1e6).toFixed(1)+'M'; if(Math.abs(n)>=1e3)return'$'+(n/1e3).toFixed(1)+'k'; return'$'+n.toFixed(2); };
-    if(btn){ btn.textContent='$k'; btn.style.background='rgba(88,166,255,.1)'; btn.style.color='var(--blue-l)'; }
-  } else {
-    // Full amounts
-    window._fmtMoney = function(n){ return '$'+Number(parseFloat(n)||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
-    if(btn){ btn.textContent='$1,234'; btn.style.background='rgba(63,185,80,.1)'; btn.style.color='var(--green-l)'; }
-  }
-  // Re-render modal content only
+  // Store format preference globally so abrirFacturasEmbarque picks it up
+  window._facDetailFmtCompact = modal._fmtCompact;
+  // Re-render — abrirFacturasEmbarque will read window._facDetailFmtCompact
   abrirFacturasEmbarque(idx);
-  // Restore global format after re-render
-  window._fmtMoney = _origFmt;
-  // Set toggle state on new modal
+  // Restore button state after re-render
   setTimeout(function(){
-    var m2=document.getElementById('_facDetailModal');
+    var m2 = document.getElementById('_facDetailModal');
     if(m2) m2._fmtCompact = modal._fmtCompact;
-    var b2=document.getElementById('_facFmtToggle');
+    var b2 = document.getElementById('_facFmtToggle');
     if(b2){
       if(modal._fmtCompact){ b2.textContent='$k'; b2.style.background='rgba(88,166,255,.1)'; b2.style.color='var(--blue-l)'; }
       else { b2.textContent='$1,234'; b2.style.background='rgba(63,185,80,.1)'; b2.style.color='var(--green-l)'; }
     }
-  }, 50);
+  }, 30);
 }
 
 // ── Confirmar facturas seleccionadas (global bulk lock) ──
@@ -14661,9 +14675,16 @@ function _renderGroupSections(data){
                               : (sc2.landedG||sc2.landed1||0);
     var landedCosteable = isUnicoM ? (sc1u.landed||0) : (totalMerc + totalNoMerc); // Único: landed already IS costeable
     var fobHomol   = isSab ? (sc3.mercHomol||0) : 0; // Solo Sababa tiene FOB homologado
-    var fmt2l = function(n){ return window._fmtMoney(n); };
-    // fmtKl respeta el toggle global $k / Completo
-    var fmtKl = function(n){ return window._tendFmtFull ? fmt2l(n) : (n>=1000?'$'+(n/1000).toFixed(1)+'k':fmt2l(n)); };
+    // fmt2l and fmtKl both respect the modal format toggle
+    var _facFull = (window._facDetailFmtCompact === false); // true = show full amounts
+    var fmt2l = function(n){
+      if(_facFull) return '$'+Number(parseFloat(n)||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+      return window._fmtMoney(n);
+    };
+    var fmtKl = function(n){
+      if(_facFull) return '$'+Number(parseFloat(n)||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+      return window._tendFmtFull ? fmt2l(n) : (n>=1000?'$'+(n/1000).toFixed(1)+'k':fmt2l(n));
+    };
 
     // Para embarques Sababa con homologado disponible, la base de prorrateo y el Costo Landed
     // Costeable por línea deben usar el valor HOMOLOGADO (mercHomol), no el original CIF.
@@ -14870,6 +14891,7 @@ function _renderGroupSections(data){
       +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'
       +'<div style="font-size:13px;font-weight:800;color:var(--text)">🧾 Detalle Facturas del Embarque</div>'
       +'<div style="display:flex;align-items:center;gap:8px">'
+      +'<button id="_facFmtToggle" onclick="_facModalToggleFmt('+idx+')" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:700" title="Cambiar valores abreviados/completos">$k</button>'
       +'<button onclick="(function(){var c=document.getElementById(\'_facDetailInner\');var w=window.open(\'\',\'_blank\',\'width=600,height=800\');w.document.write(\'<!DOCTYPE html><html><head><meta charset=UTF-8><title>Detalle Embarque</title><style>body{font-family:Arial,sans-serif;background:#0d1117;color:#e6edf3;padding:20px}*{box-sizing:border-box}</style></head><body>\'+c.innerHTML+\'</body></html>\');w.document.close();setTimeout(function(){w.print();},400);})()" style="background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:600">🖨 Imprimir</button>'
       +'<button onclick="_exportDetalleExcel(tendData['+idx+'])" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:600" title="Descargar Excel .xlsx — números con punto decimal">📗 Excel (.xlsx)</button>'
       +'<button onclick="_exportDetalleXLSX(tendData['+idx+'], \',\''+')" style="background:rgba(240,136,62,.1);border:1px solid rgba(240,136,62,.3);color:var(--orange-l);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:600" title="Descargar CSV — números con coma (20733,00) — para pegar en Excel europeo">📊 CSV (,)</button>'
@@ -15080,9 +15102,16 @@ window.abrirFacturasEmbarque = function(idx){
                             : (sc2.landedG||sc2.landed1||0);
   var landedCosteable = isUnicoM ? (sc1u.landed||0) : (totalMerc + totalNoMerc); // Único: landed already IS costeable
   var fobHomol   = isSab ? (sc3.mercHomol||0) : 0; // Solo Sababa tiene FOB homologado
-  var fmt2l = function(n){ return window._fmtMoney(n); };
+  var _facFull2 = (window._facDetailFmtCompact === false);
+  var fmt2l = function(n){
+    if(_facFull2) return '$'+Number(parseFloat(n)||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+    return window._fmtMoney(n);
+  };
   // fmtKl respeta el toggle global $k / Completo
-  var fmtKl = function(n){ return window._tendFmtFull ? fmt2l(n) : (n>=1000?'$'+(n/1000).toFixed(1)+'k':fmt2l(n)); };
+  var fmtKl = function(n){
+    if(_facFull2) return '$'+Number(parseFloat(n)||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+    return window._tendFmtFull ? fmt2l(n) : (n>=1000?'$'+(n/1000).toFixed(1)+'k':fmt2l(n));
+  };
 
   // Para embarques Sababa con homologado disponible, la base de prorrateo y el Costo Landed
   // Costeable por línea deben usar el valor HOMOLOGADO (mercHomol), no el original CIF.
