@@ -442,6 +442,7 @@ body[style*="color-scheme: light"] #portal-content tr td[style*="background:#1c2
 
 /* SPLASH */
 #splash{position:fixed;inset:0;background:linear-gradient(135deg,#0a0f1a 0%,#0d1f35 50%,#0a0f1a 100%);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .5s ease,transform .5s ease;overflow:hidden;min-height:100dvh;width:100%;}
+#splash.black-bg{background:#000000!important;}
 #splash.nature-bg{background:linear-gradient(160deg,#071510 0%,#0b2218 30%,#071c12 60%,#082015 100%)!important;}
 #splash.petrol-bg{background:linear-gradient(160deg,#041018 0%,#071c2e 35%,#051520 70%,#061822 100%)!important;}
 #splash.hide{opacity:0;transform:translateX(-100%);pointer-events:none;}
@@ -2489,10 +2490,10 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       </div>
       <div style="display:flex;align-items:center;gap:8px">
         <span style="font-size:10px;color:var(--muted)">Mercancía</span>
-        <span id="top-prov-chev" style="font-size:11px;color:var(--muted)">▶</span>
+        <span id="top-prov-chev" style="font-size:11px;color:var(--muted)">▼</span>
       </div>
     </div>
-    <div id="top-provs-wrap" style="display:none;background:var(--bg)">
+    <div id="top-provs-wrap" style="display:block;background:var(--bg)">
       <div style="text-align:center;padding:24px;color:var(--muted);font-size:11px">Cargando...</div>
     </div>
   </div>
@@ -5359,7 +5360,7 @@ const THEMES={
   rose:    {bg:'#1c0a10',s1:'#2c0f18',s2:'#3d1424',border:'#9f1239',text:'#ffe4e6',muted:'#fda4af',muted2:'#fb7185',scheme:'dark'},
   gold:    {bg:'#0a0800',s1:'#120f00',s2:'#1c1800',border:'#7a5c00',text:'#ffd700',muted:'#b8960c',muted2:'#8a6f00',scheme:'dark'},
   orange:  {bg:'#0d0500',s1:'#180900',s2:'#221000',border:'#7c2d00',text:'#ffffff',muted:'#f97316',muted2:'#c2410c',scheme:'dark'},
-  black:   {bg:'#000000',s1:'#0a0a0a',s2:'#111111',border:'#222222',text:'#ffffff',muted:'#888888',muted2:'#555555',scheme:'dark'},
+  black:   {bg:'#000000',s1:'#0d0d0d',s2:'#1a1a1a',border:'#2e2e2e',text:'#ffffff',muted:'#999999',muted2:'#666666',scheme:'dark'},
 };
 function applyTheme(name){
   const t=THEMES[name]||THEMES.dark;
@@ -5406,9 +5407,10 @@ function applyTheme(name){
   // Update splash background for nature themes
   const splash=document.getElementById('splash');
   if(splash){
-    splash.classList.remove('nature-bg','petrol-bg');
+    splash.classList.remove('nature-bg','petrol-bg','black-bg');
     if(name==='forest') splash.classList.add('nature-bg');
     else if(name==='petrol') splash.classList.add('petrol-bg');
+    else if(name==='black') splash.classList.add('black-bg');
   }
 }
 function applyCustomColor(hex, target){
@@ -9039,19 +9041,13 @@ function _getFilteredTendData(){
         return s.slice(0,10); // already YYYY-MM-DD
       };
 
-      // Verificar fecha principal del embarque
+      // Verificar fecha principal del embarque (única fuente de verdad para el filtro)
       const fEmb = normFecha(d.fecha);
       if(fEmb){
         if((!desde||fEmb>=desde) && (!hasta||fEmb<=hasta)) fechaMatch=true;
       }
 
-      // También verificar fecha del snap (puede tener fecha de proceso diferente)
-      if(!fechaMatch && d.snap && d.snap.fecha){
-        const fSnap = normFecha(d.snap.fecha);
-        if(fSnap && (!desde||fSnap>=desde) && (!hasta||fSnap<=hasta)) fechaMatch=true;
-      }
-
-      // Si es parcial con contenedores, verificar fechas de cada contenedor
+      // Si no tiene fecha principal, verificar contenedores parciales
       if(!fechaMatch && d.contenedores && d.contenedores.length>0){
         for(const c of d.contenedores){
           const fC = normFecha(c.fecha);
@@ -14414,7 +14410,13 @@ function _renderGroupSections(data){
   // ── Acumular por escenario ──
   var byEsc = {};
   data.forEach(function(d){
-    var k = d.esc||'Sin Escenario';
+    var rawEsc = d.esc||'Sin Escenario';
+    var escLow = rawEsc.toLowerCase();
+    // Normalizar variantes de Único a un solo grupo — revisar todos los indicadores posibles
+    var isUnicoEmb = d.modoUnico || d.tipoEsc==='unico'
+      || escLow.includes('único') || escLow.includes('unico')
+      || (d.snap && d.snap.modoUnico) || (d.snap && d.snap.tipoEsc==='unico');
+    var k = isUnicoEmb ? 'Escenario Único' : rawEsc;
     if(!byEsc[k]) byEsc[k] = {ahorro:0, cif:0, count:0, items:[]};
     byEsc[k].ahorro += d.ahorro||0; byEsc[k].cif += d.cif||0;
     byEsc[k].count++; byEsc[k].items.push(d);
@@ -15010,8 +15012,8 @@ function _renderGroupSections(data){
 
   // ── Por Escenario ──
   html += '<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:16px 0 8px;display:flex;align-items:center;gap:6px">&#x1F500; Por Escenario Utilizado</div>';
-  var escColors = {'Escenario Regular':'rgba(63,185,80,.12)','CIF Express':'rgba(88,166,255,.12)','Sababa Imports (#3)':'rgba(240,136,62,.12)'};
-  var escIcons  = {'Escenario Regular':'📋','CIF Express':'⚡','Sababa Imports (#3)':'🤝'};
+  var escColors = {'Escenario Regular':'rgba(63,185,80,.12)','CIF Express':'rgba(88,166,255,.12)','Sababa Imports (#3)':'rgba(240,136,62,.12)','Escenario Único':'rgba(163,113,247,.12)'};
+  var escIcons  = {'Escenario Regular':'📋','CIF Express':'⚡','Sababa Imports (#3)':'🤝','Escenario Único':'🔒'};
 
   var escEntries = Object.keys(byEsc).map(function(k){ return [k, byEsc[k]]; });
   escEntries.sort(function(a,b){ return b[1].count - a[1].count; });
@@ -15974,15 +15976,28 @@ function renderTopProvs(mode, deptFilter){
 
   // ── Build provider data with ZL/IMP classification ──
   const provData = {}; // { prov: { total, zl, imp, dept:{} } }
+  // Fix list for embarques whose tipo was wrongly saved
+  const _nroFix = new Set(['22032','22033','22034','22038','22039']);
 
   all.forEach(d=>{
     const lines = d.snap?.invLines || d.invLines || [];
     const esc = (d.esc||'').toLowerCase();
-    const campos = d.snap?.campos || {};
-    const origen = (campos.s1_pais_origen||d.pais||'').toLowerCase();
-    const isZL = origen.includes('zona libre')||origen.includes('panama')||origen.includes('zlc')||
-                 esc.includes('zona libre') || (!origen && !esc.includes('imp'));
+    const nroStr = String(d.nro||'').trim();
     const isEmbSab = esc.includes('sababa');
+
+    // ── Detección ZL/IMP: misma lógica que el acordeón de departamentos ──
+    const tipoSnap = _nroFix.has(nroStr) ? 'IMP'
+      : (d.snap?.tipo || d.tipo || '').toUpperCase();
+    let embIsZL;
+    if(tipoSnap==='EXT'||tipoSnap==='IMP') embIsZL = false;
+    else if(tipoSnap==='ZL')              embIsZL = true;
+    else {
+      // Fallback por escenario/origen
+      const campos = d.snap?.campos || {};
+      const origen = (campos.s1_pais_origen||d.pais||'').toLowerCase();
+      embIsZL = origen.includes('zona libre')||origen.includes('panama')||
+                origen.includes('zlc')||esc.includes('zona libre');
+    }
 
     lines.forEach(l=>{
       if((l.tipoFac||'mercancia')!=='mercancia' || !l.costo) return;
@@ -15993,9 +16008,10 @@ function renderTopProvs(mode, deptFilter){
         if(k) prov=_PROV_SI[k];
       }
       const dept = (l.dept||l.deptCat||'Sin Depto').trim();
-      if(!provData[prov]) provData[prov]={total:0,zl:0,imp:0,dept:{},isZL};
+      // Acumular — isZL se determina por embarque, no por proveedor global
+      if(!provData[prov]) provData[prov]={total:0,zl:0,imp:0,dept:{},isZL:embIsZL};
       provData[prov].total += l.costo;
-      if(isZL) provData[prov].zl += l.costo; else provData[prov].imp += l.costo;
+      if(embIsZL) provData[prov].zl += l.costo; else provData[prov].imp += l.costo;
       provData[prov].dept[dept] = (provData[prov].dept[dept]||0) + l.costo;
     });
   });
@@ -16004,6 +16020,9 @@ function renderTopProvs(mode, deptFilter){
   const allDepts = [...new Set(Object.values(provData).flatMap(p=>Object.keys(p.dept)))].sort();
 
   // ── Filter by mode ──
+  // Determinar tipo final por mayoría de valor (proveedor puede aparecer en ZL e IMP)
+  Object.values(provData).forEach(p=>{ p.isZL = p.zl >= p.imp; });
+
   let filtered = Object.entries(provData);
   if(mode==='zl')   filtered = filtered.filter(([,p])=>p.zl>0).map(([n,p])=>[n,{...p,total:p.zl}]);
   if(mode==='imp')  filtered = filtered.filter(([,p])=>p.imp>0).map(([n,p])=>[n,{...p,total:p.imp}]);
@@ -16062,7 +16081,7 @@ function renderTopProvs(mode, deptFilter){
       '<div style="display:flex;gap:4px;margin-bottom:8px">' +
         tab('global','🌐 Global', mode==='global') +
         tab('zl','🏭 Zona Libre', mode==='zl') +
-        tab('imp','✈️ Importación', mode==='imp') +
+        tab('imp','🚢 Importación', mode==='imp') +
         tab('dept','📦 Depto.', mode==='dept') +
       '</div>' +
       deptSel +
