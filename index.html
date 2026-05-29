@@ -9982,14 +9982,16 @@ function _asignSaltar(){
 async function procesarEmbarque(){
   // Si hay CIF en el formulario pero no se ha calculado, calcular ahora
   const _cifEl = document.getElementById('s1_cif');
+  const _fobEl = document.getElementById('s1_fob');
   const _cifVal = parseFloat(_cifEl?.value||0);
-  if(_cifVal > 0 && !window._lastCIF){
+  const _fobVal = parseFloat(_fobEl?.value||0);
+  const _hasValor = _cifVal > 0 || _fobVal > 0;
+  if(_hasValor && !window._lastCIF){
     if(typeof calc==='function') calc();
-    // Pequeña espera para que calc() termine
     await new Promise(r=>setTimeout(r,150));
   }
-  if(!window._lastCIF && _cifVal <= 0){
-    _showToast('⚠️ Ingresa el valor CIF y presiona Calcular antes de procesar.', 'red', 4000);
+  if(!window._lastCIF && !_hasValor){
+    _showToast('⚠️ Ingresa el valor CIF/FOB y presiona Calcular antes de procesar.', 'red', 4000);
     return;
   }
 
