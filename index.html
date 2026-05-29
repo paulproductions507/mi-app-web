@@ -6367,8 +6367,10 @@ function calc(){
   // Use manual ITBMS if user overrode it
   const sc1_itbms   = window._itbmsArManual ? sc1_itbms_display : (CIF+sc1_arancel)*itbPct;
   const sc1_base    = termino==='FOB' ? FOB : CIF;
-  const _gastoComp  = parseFloat(document.getElementById('s1_gasto_comp')?.value)||0;
-  const sc1_landed1 = sc1_base + sc1_noMerc + _gastoComp;
+  // Gasto complementario: NO suma al landed ni afecta ahorro
+  // Solo ajusta internamente el master value negativo (uso contable)
+  // Se guarda en snap para referencia pero NO modifica sc1_landed1
+  const sc1_landed1 = sc1_base + sc1_noMerc;
   const sc1_factor  = sc1_base>0 ? sc1_landed1/sc1_base : 0;
   const sc1_landedG = sc1_landed1 + sc1_itbms + itbmsTasaFinal;
 
@@ -8185,10 +8187,8 @@ function calcSab2(){
           // ── Diferencia de Inventario (no es ahorro) ──
           const difInv = r1_merc - mercHomol; // FOB original vs Homologado
 
-          const _ahorroForzadoCero = (parseFloat(document.getElementById('s1_gasto_comp')?.value)||0) > 0;
-
-          // Store ahorro for procesamiento
-          window._lastSnap.sc3.ahorroNeto = _ahorroForzadoCero ? 0 : Math.round(aTotal*100)/100;
+          // Gasto complementario NO afecta el ahorro — es un ajuste contable interno
+          window._lastSnap.sc3.ahorroNeto = Math.round(aTotal*100)/100;
           window._lastSnap.sc3.desembolso  = desSab;
           if(window._lastSnap.sc3.ahorroNeto > 0) window._lastAhorroNeto = window._lastSnap.sc3.ahorroNeto;
 
@@ -23357,14 +23357,27 @@ function _guardarModalHonorarios(){
 function _actualizarSummaryHonorarios(){
   var noHon=window._noHonorarios===true;
   var honManualVal=(typeof window._honManual==='number'&&window._honManual>0)?window._honManual:null;
-  var cif=parseFloat(document.getElementById('s1_cif')?.value||document.getElementById('s1_cif_calc')?.value||0);
+  // CIF correcto: para FOB/EXT usar FOB+flete+seguro
+  var cif=0;
+  var fobEl=document.getElementById('s1_fob');
+  var fleteEl=document.getElementById('s1_flete_fob');
+  var cifEl=document.getElementById('s1_cif');
+  var cifCalcEl=document.getElementById('s1_cif_calc');
+  var terminoExt=(typeof termino!=='undefined'&&termino==='FOB')||(document.querySelector('#_emb_termino_fob.active')||document.querySelector('button[data-term="FOB"].active'));
+  if(fobEl&&fleteEl&&(parseFloat(fobEl.value)||0)>0){
+    var _fob=parseFloat(fobEl.value)||0;
+    var _fl=parseFloat(fleteEl.value)||0;
+    cif=_fob+_fl+(_fob*0.01);
+  } else {
+    cif=parseFloat(cifEl?.value||0)||parseFloat(cifCalcEl?.value||0)||0;
+  }
   var reng=Math.max(1,parseInt(document.getElementById('s1_reng')?.value||1));
   var gzlc=parseFloat(document.getElementById('s1_gzlc')?.value||133);
   var honMin=noHon?0:(cif<=10000?80:cif*0.0027+80);
   var formShts=noHon?0:(reng<=5?1:1+Math.ceil((reng-5)/10));
   var form1=formShts*3;
   var coord=noHon?0:cif*0.005;
-  var rengExt=noHon?0:(reng<=1?0:(reng-1)*5); // ── Renglones extra (fórmula Excel) ──
+  var rengExt=noHon?0:(reng<=1?0:(reng-1)*5);
   var total=noHon?0:(honManualVal!==null?honManualVal:(honMin+form1+gzlc+coord+rengExt));
   var fmt2=function(v){return '$'+v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});};
   var sv=function(id,t){var el=document.getElementById(id);if(el)el.textContent=noHon?'—':fmt2(t);};
