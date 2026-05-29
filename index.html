@@ -1485,23 +1485,22 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
           </div>
         </div>
         <!-- Ajuste arancelario — diferencia que resta del pago -->
-        <div id="_imp_ajuste_wrap" style="margin-bottom:10px;background:rgba(88,166,255,.04);border:1px solid rgba(88,166,255,.15);border-radius:8px;padding:10px 12px">
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-            <span style="font-size:11px;font-weight:700;color:var(--blue-l)">⚖️ Ajuste / Diferencia Arancelaria</span>
-            <span style="font-size:9px;color:var(--muted);background:rgba(88,166,255,.08);border-radius:4px;padding:1px 6px" title="Diferencia entre el pago arancelario calculado y el real. Se resta del pago y recalcula el % DAI automáticamente.">?</span>
+        <div id="_imp_ajuste_wrap" style="margin-bottom:10px;background:rgba(88,166,255,.04);border:1px solid rgba(88,166,255,.15);border-radius:8px;padding:8px 10px">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:4px">
+            <span style="font-size:10px;font-weight:700;color:var(--blue-l)">⚖️ Ajuste Arancelario</span>
+            <span style="font-size:9px;color:var(--muted);font-weight:400">Positivo = resta · Negativo = suma al pago</span>
           </div>
-          <div style="font-size:9px;color:var(--muted);margin-bottom:8px;line-height:1.5">Si el pago arancelario real difiere del calculado, ingresa la diferencia. <strong>Positivo</strong> = el sistema calculó de más (se resta). <strong>Negativo</strong> = el sistema calculó de menos (se suma).</div>
-          <div class="r2">
-            <div class="field" style="margin-bottom:0">
-              <label style="font-size:10px;color:var(--blue-l)">Diferencia (USD)</label>
-              <input type="number" id="s1_ar_ajuste" value="0" step="0.01" placeholder="0.00" oninput="calc();_actualizarSummaryImpuestos()" style="width:100%;background:var(--bg);border:1px solid rgba(88,166,255,.35);border-radius:6px;padding:7px 10px;color:var(--blue-l);font-size:13px;font-weight:700;font-family:'IBM Plex Mono',monospace">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div>
+              <label style="font-size:9px;color:var(--blue-l);font-weight:600;display:block;margin-bottom:3px">Diferencia (USD)</label>
+              <input type="number" id="s1_ar_ajuste" value="0" step="0.01" placeholder="0.00" oninput="calc();_actualizarSummaryImpuestos()" style="width:100%;background:var(--bg);border:1px solid rgba(88,166,255,.35);border-radius:6px;padding:6px 8px;color:var(--blue-l);font-size:12px;font-weight:700;font-family:'IBM Plex Mono',monospace">
             </div>
-            <div class="field" style="margin-bottom:0">
-              <label style="font-size:10px">Pago Ajustado (auto)</label>
-              <input type="number" id="_imp_ar_ajustado" readonly style="width:100%;background:var(--bg);border:1px solid rgba(63,185,80,.25);border-radius:6px;padding:7px 10px;color:var(--green-l);font-size:13px;font-weight:700;font-family:'IBM Plex Mono',monospace">
+            <div>
+              <label style="font-size:9px;color:var(--green-l);font-weight:600;display:block;margin-bottom:3px">Pago Ajustado</label>
+              <input type="number" id="_imp_ar_ajustado" readonly style="width:100%;background:var(--bg);border:1px solid rgba(63,185,80,.25);border-radius:6px;padding:6px 8px;color:var(--green-l);font-size:12px;font-weight:700;font-family:'IBM Plex Mono',monospace">
             </div>
           </div>
-          <div style="margin-top:6px;font-size:10px;color:var(--muted)">% DAI ajustado: <strong id="_imp_ar_pct_ajustado" style="color:var(--orange-l)">—</strong></div>
+          <div style="margin-top:5px;font-size:9px;color:var(--muted)">% DAI ajustado: <strong id="_imp_ar_pct_ajustado" style="color:var(--orange-l)">—</strong></div>
         </div>
             <input type="number" id="s1_ar" value="10" step="0.0001" oninput="calc();_actualizarSummaryImpuestos()" style="width:100%;background:var(--bg);border:1px solid rgba(240,136,62,.4);border-radius:6px;padding:7px 10px;color:var(--orange-l);font-size:13px;font-weight:700;font-family:'IBM Plex Mono',monospace">
           </div>
@@ -6356,7 +6355,9 @@ function calc(){
   // Cuando se usa honorario manual, form1 ya está incluido en el monto del usuario
   // (el uso del sistema lo cubre el impuesto s1_uso_sistema). No sumar form1 extra.
   const _form1EnHon = (_honManualVal !== null && !_noHon); // true = form1 ya absorbido en manual
-  const sc1_granTot = sc1_arancel + sc1_hon + tasa + (_form1EnHon ? 0 : form1);
+  // sc1_hon ya incluye form1 (honMin + form1 + gzlc + coord + rengExt)
+  // No agregar form1 de nuevo para evitar doble conteo
+  const sc1_granTot = sc1_arancel + sc1_hon + tasa;
   const sc1_usoSistema = parseFloat(document.getElementById('s1_uso_sistema')?.value)||0;
   const sc1_flete_nm= (termino==='FOB'&&tipo==='EXT') ? flete : 0;
   const sc1_noMerc  = sc1_granTot + sc1_usoSistema + sc1_flete_nm + acarreo + dmce + agente;
@@ -23412,8 +23413,8 @@ function _actualizarSummaryEquipo(){
   var fmt2=function(v){return '$'+v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});};
   var acarreoTotal=noDmce?0:(acarreo*equipos);
   var total=acarreoTotal+agente+(noDmce?0:dmce);
-  var eqLabel=equipo+(equipos>1?' ×'+equipos:'');
-  lbl.textContent=eqLabel+' · '+fmt2(total)+(noDmce?' · Sin DMCE':'');
+  var eqLabel = equipos>1 ? ('Equipo ×'+equipos+' y Otros') : 'Equipo y Otros';
+  lbl.textContent = eqLabel + ' · ' + fmt2(total) + (noDmce?' · Sin DMCE':'');
 }
 
 function _actualizarResumenEmbarque(){
