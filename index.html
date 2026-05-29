@@ -1484,10 +1484,25 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
             <div><div style="font-size:9px;color:var(--muted);font-weight:600;margin-bottom:2px">Seguro</div><input type="number" id="_imp_seg_disp" readonly style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:4px 6px;font-size:11px;color:var(--blue-l);font-family:'IBM Plex Mono',monospace"></div>
           </div>
         </div>
-        <!-- Campos editables -->
-        <div class="r2" style="margin-bottom:10px">
-          <div class="field" style="margin-bottom:0">
-            <label style="font-size:10px;color:var(--orange-l)">🏷️ Arancel DAI %</label>
+        <!-- Ajuste arancelario — diferencia que resta del pago -->
+        <div id="_imp_ajuste_wrap" style="margin-bottom:10px;background:rgba(88,166,255,.04);border:1px solid rgba(88,166,255,.15);border-radius:8px;padding:10px 12px">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+            <span style="font-size:11px;font-weight:700;color:var(--blue-l)">⚖️ Ajuste / Diferencia Arancelaria</span>
+            <span style="font-size:9px;color:var(--muted);background:rgba(88,166,255,.08);border-radius:4px;padding:1px 6px" title="Diferencia entre el pago arancelario calculado y el real. Se resta del pago y recalcula el % DAI automáticamente.">?</span>
+          </div>
+          <div style="font-size:9px;color:var(--muted);margin-bottom:8px;line-height:1.5">Si el pago arancelario real difiere del calculado, ingresa la diferencia. <strong>Positivo</strong> = el sistema calculó de más (se resta). <strong>Negativo</strong> = el sistema calculó de menos (se suma).</div>
+          <div class="r2">
+            <div class="field" style="margin-bottom:0">
+              <label style="font-size:10px;color:var(--blue-l)">Diferencia (USD)</label>
+              <input type="number" id="s1_ar_ajuste" value="0" step="0.01" placeholder="0.00" oninput="calc();_actualizarSummaryImpuestos()" style="width:100%;background:var(--bg);border:1px solid rgba(88,166,255,.35);border-radius:6px;padding:7px 10px;color:var(--blue-l);font-size:13px;font-weight:700;font-family:'IBM Plex Mono',monospace">
+            </div>
+            <div class="field" style="margin-bottom:0">
+              <label style="font-size:10px">Pago Ajustado (auto)</label>
+              <input type="number" id="_imp_ar_ajustado" readonly style="width:100%;background:var(--bg);border:1px solid rgba(63,185,80,.25);border-radius:6px;padding:7px 10px;color:var(--green-l);font-size:13px;font-weight:700;font-family:'IBM Plex Mono',monospace">
+            </div>
+          </div>
+          <div style="margin-top:6px;font-size:10px;color:var(--muted)">% DAI ajustado: <strong id="_imp_ar_pct_ajustado" style="color:var(--orange-l)">—</strong></div>
+        </div>
             <input type="number" id="s1_ar" value="10" step="0.0001" oninput="calc();_actualizarSummaryImpuestos()" style="width:100%;background:var(--bg);border:1px solid rgba(240,136,62,.4);border-radius:6px;padding:7px 10px;color:var(--orange-l);font-size:13px;font-weight:700;font-family:'IBM Plex Mono',monospace">
           </div>
           <div class="field" style="margin-bottom:0">
@@ -6254,6 +6269,7 @@ function calc(){
   }
 
   const arPct  = v('s1_ar')/100;
+  const arAjuste = v('s1_ar_ajuste') || 0; // diferencia arancelaria manual
   const itbPct = v('s1_itbms')/100;
   const tasa   = v('s1_tasa');
   const itbmsTasa = tasa * itbPct;
@@ -6312,7 +6328,7 @@ function calc(){
   sd('sc2_itbms_hon_display',sc2_itbms_hon);
 
   // ESCENARIO #1 — calcular PRIMERO, luego mostrar
-  const sc1_arancel = CIF * arPct;
+  const sc1_arancel = Math.max(0, CIF * arPct - arAjuste);
   sd('disp_ar_pago', Math.round(sc1_arancel*100)/100);
 
   // ── Nuevos campos Resumen ──
@@ -9153,6 +9169,110 @@ function saveTendData(){
   if(window._sb) _syncTendToCloud();
 }
 
+// Corrige la FECHA de un embarque por número y guarda en nube
+async function _corregirFechaEmbarque(nro, nuevaFecha){
+  var found = tendData.filter(function(d){
+    return (d.nro||'').toString().trim() === nro.toString().trim();
+  });
+  if(!found.length){ alert('Embarque '+nro+' no encontrado en memoria.'); return false; }
+  found.forEach(function(d){
+    d.fecha = nuevaFecha;
+    if(d.snap) d.snap.fecha = nuevaFecha;
+    d.fechaDoc = nuevaFecha;
+  });
+  saveTendData();
+  if(typeof _showToast==='function') _showToast('✅ Fecha de embarque '+nro+' corregida a '+nuevaFecha,'green',3000);
+  return true;
+}
+
+// UI modal para corregir fecha
+function _corregirFechaUI(idx){
+  var d = tendData[idx];
+  if(!d){ alert('Embarque no encontrado.'); return; }
+  var actual = d.fecha || d.fechaDoc || '—';
+  var ov = document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:999999;display:flex;align-items:center;justify-content:center;padding:20px';
+  ov.innerHTML = '<div style="background:var(--s1);border:1px solid var(--border);border-radius:16px;padding:22px;max-width:360px;width:100%">'
+    +'<div style="font-size:13px;font-weight:800;color:var(--text);margin-bottom:4px">📅 Corregir Fecha del Embarque</div>'
+    +'<div style="font-size:11px;color:var(--muted);margin-bottom:14px">Embarque: <strong style="color:var(--orange-l)">'+d.nro+'</strong> · Fecha actual: <strong>'+actual+'</strong></div>'
+    +'<div style="margin-bottom:6px;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase">Nueva fecha del embarque</div>'
+    +'<input type="date" id="_fix_fecha_inp" value="'+(actual.slice(0,10)||'')+'" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:14px;margin-bottom:16px">'
+    +'<div style="font-size:10px;color:var(--muted);margin-bottom:16px">⚠️ Esta acción cambia el mes donde aparece el embarque en el historial y en todos los filtros.</div>'
+    +'<div style="display:flex;gap:10px">'
+    +'<button id="_fix_fecha_cancel" style="flex:1;background:none;border:1px solid var(--border);color:var(--muted);border-radius:10px;padding:10px;font-size:12px;cursor:pointer">Cancelar</button>'
+    +'<button id="_fix_fecha_ok" style="flex:2;background:linear-gradient(135deg,rgba(248,209,34,.2),rgba(248,209,34,.1));border:1.5px solid rgba(248,209,34,.5);color:#f8d122;border-radius:10px;padding:10px;font-size:12px;font-weight:800;cursor:pointer">📅 Guardar Fecha</button>'
+    +'</div></div>';
+  document.body.appendChild(ov);
+  ov.querySelector('#_fix_fecha_cancel').onclick = function(){ ov.remove(); };
+  ov.addEventListener('click', function(e){ if(e.target===ov) ov.remove(); });
+  ov.querySelector('#_fix_fecha_ok').onclick = async function(){
+    var val = document.getElementById('_fix_fecha_inp').value;
+    if(!val){ alert('Selecciona una fecha válida.'); return; }
+    ov.remove();
+    await _corregirFechaEmbarque(d.nro, val);
+    // Refresh historial
+    if(typeof renderTendencias==='function') renderTendencias();
+    else if(typeof _renderTend==='function') _renderTend();
+  };
+}
+
+// Rescatar embarque perdido directamente desde Supabase
+async function _rescatarEmbarqueCloud(nro){
+  if(!window._sb){ alert('Sin conexión a Supabase.'); return; }
+  try {
+    // Buscar en todas las sesiones guardadas
+    var {data, error} = await _sb.from('simulaciones')
+      .select('nombre,datos')
+      .eq('nombre', String(nro));
+    if(error) throw error;
+    if(data && data.length>0){
+      var d = data[0];
+      var parsed = typeof d.datos==='string' ? JSON.parse(d.datos) : d.datos;
+      // Buscar en tendData si ya existe
+      var exists = tendData.find(function(t){ return String(t.nro)===String(nro); });
+      if(exists){ alert('El embarque '+nro+' ya está en tendData.'); return; }
+      // Intentar reconstruir desde la sesión guardada
+      if(parsed && parsed.snap){
+        var newEntry = {
+          nro: String(nro),
+          fecha: parsed.snap.fecha || parsed.fecha || '',
+          fechaDoc: parsed.snap.fecha || parsed.fecha || '',
+          esc: parsed.snap.esc || parsed.esc || '',
+          desc: parsed.snap.desc || parsed.desc || '',
+          ahorro: parsed.snap.ahorro || 0,
+          cif: parsed.snap.cif || 0,
+          snap: parsed.snap,
+          invLines: parsed.snap.invLines || [],
+          status: 'procesado'
+        };
+        tendData.unshift(newEntry);
+        saveTendData();
+        if(typeof _showToast==='function') _showToast('✅ Embarque '+nro+' rescatado y restaurado','green',4000);
+        if(typeof renderTend==='function') renderTend();
+        return;
+      }
+    }
+    // Si no hay sesión específica, buscar en _TEND_MASTER
+    var {data:master} = await _sb.from('simulaciones').select('datos').eq('nombre','_TEND_MASTER').single();
+    if(master){
+      var mData = typeof master.datos==='string' ? JSON.parse(master.datos) : master.datos;
+      var mTend = mData.tendData || [];
+      var found = mTend.find(function(t){ return String(t.nro)===String(nro); });
+      if(found){
+        tendData.unshift(found);
+        saveTendData();
+        if(typeof _showToast==='function') _showToast('✅ Embarque '+nro+' rescatado del maestro','green',4000);
+        if(typeof renderTend==='function') renderTend();
+        return;
+      }
+    }
+    alert('Embarque '+nro+' no encontrado en Supabase. Puede que haya sido eliminado permanentemente.');
+  } catch(e){
+    alert('Error al rescatar: '+e.message);
+  }
+}
+window._rescatar = _rescatarEmbarqueCloud;
+
 // Push a Supabase — siempre reemplaza el maestro con el estado actual de tendData
 async function _syncTendToCloud(){
   if(!_sb) return;
@@ -10555,6 +10675,7 @@ function reabrirEmbarquePendiente(idx){
   } else {
     _set('s1_cif', s.CIF || (s.sc1 && s.sc1.base) || '');
   }
+  _set('s1_ar_ajuste', s.arAjuste || (s.snap && s.snap.arAjuste) || '0');
   _set('s1_acarreo', s.acarreo || '');
   _set('s1_dmce',    s.dmce    || '');
   _set('s1_agente',  s.agente  || '');
@@ -11474,6 +11595,7 @@ ${_dGastoComp>0?`<span style="background:rgba(248,81,73,.08);border:1px solid rg
         <div style="font-size:11px;color:var(--orange-l);white-space:nowrap">${pct}</div>
         <div style="display:flex;gap:4px;align-items:center">
           <button class="btn-reabrir" onclick="event.stopPropagation();reabrirEmbarquePendiente(${idx})" style="${isPend?'':'background:rgba(88,166,255,.1);border-color:rgba(88,166,255,.3);color:var(--blue-l)'}">✏️ ${isPend?'Reabrir':'Editar'}</button>
+          <button onclick="event.stopPropagation();_corregirFechaUI(${idx})" title="Corregir fecha del embarque" style="background:rgba(248,209,34,.1);border:1px solid rgba(248,209,34,.3);color:#f8d122;border-radius:5px;padding:2px 6px;font-size:10px;cursor:pointer;height:22px">📅</button>
           <button class="del-btn" onclick="event.stopPropagation();deleteTend(${idx})" style="font-size:10px;padding:2px 6px;height:22px;flex-shrink:0">×</button>
         </div>
       </div>`;
@@ -11657,6 +11779,7 @@ ${_dGastoComp>0?`<span style="background:rgba(248,81,73,.08);border:1px solid rg
           <div style="font-size:11px;color:var(--orange-l);white-space:nowrap">${pct}</div>
           <div style="display:flex;gap:4px;align-items:center">
             <button class="btn-reabrir" onclick="event.stopPropagation();reabrirEmbarquePendiente(${idx})" style="${isPend?'':'background:rgba(88,166,255,.1);border-color:rgba(88,166,255,.3);color:var(--blue-l)'}">✏️ ${isPend?'Reabrir':'Editar'}</button>
+            <button onclick="event.stopPropagation();_corregirFechaUI(${idx})" title="Corregir fecha del embarque" style="background:rgba(248,209,34,.1);border:1px solid rgba(248,209,34,.3);color:#f8d122;border-radius:5px;padding:2px 6px;font-size:10px;cursor:pointer;height:22px">📅</button>
             <button class="del-btn" onclick="event.stopPropagation();deleteTend(${idx})" style="font-size:10px;padding:2px 6px;height:22px;flex-shrink:0">×</button>
           </div>
         </div>`;
@@ -21194,6 +21317,7 @@ function abrirModuloComparativo() {
     if (!_snap.arPct) {
       _snap.arPct = (parseFloat(document.getElementById('s1_ar')?.value) || 0) / 100;
     }
+    _snap.arAjuste = parseFloat(document.getElementById('s1_ar_ajuste')?.value||0);
     if (!_snap.sc1) _snap.sc1 = {};
     // sc1.base = FOB for FOB term, CIF for CIF term (valor mercancía)
     if (!_snap.sc1.base) {
@@ -23133,15 +23257,26 @@ function _abrirModalImpuestos(){
   var ov=document.getElementById('_modal_imp_overlay'); if(!ov) return;
   ov.style.display='block'; document.body.style.overflow='hidden';
   _actualizarSummaryImpuestos();
-  var cif=parseFloat(document.getElementById('s1_cif')?.value||document.getElementById('s1_cif_calc')?.value||0);
+  // CIF display: para FOB/EXT calcular CIF real = FOB + flete + seguro
+  var cifDisplay;
+  if(typeof termino!=='undefined' && termino==='FOB'){
+    var fob2=parseFloat(document.getElementById('s1_fob')?.value||0);
+    var flete2=parseFloat(document.getElementById('s1_flete_fob')?.value||0);
+    var seg2=fob2*0.01;
+    cifDisplay=fob2+flete2+seg2;
+    // Also update s1_cif_calc to reflect this
+    var calcEl=document.getElementById('s1_cif_calc'); if(calcEl) calcEl.value=cifDisplay.toFixed(2);
+  } else {
+    cifDisplay=parseFloat(document.getElementById('s1_cif')?.value||document.getElementById('s1_cif_calc')?.value||0);
+  }
   var cifEl=document.getElementById('_imp_cif_ref');
-  if(cifEl) cifEl.textContent=cif>0?'$'+cif.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'—';
+  if(cifEl) cifEl.textContent=cifDisplay>0?'$'+cifDisplay.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'—';
   var fobRow=document.getElementById('_imp_fob_row');
   if(fobRow) fobRow.style.display=(typeof termino!=='undefined'&&termino==='FOB')?'block':'none';
   if(typeof termino!=='undefined'&&termino==='FOB'){
     var fob=parseFloat(document.getElementById('s1_fob')?.value||0);
     var flete=parseFloat(document.getElementById('s1_flete_fob')?.value||0);
-    var seg=parseFloat(document.getElementById('s1_seguro')?.value||0);
+    var seg=fob*0.01;
     var setV=function(id,v){var el=document.getElementById(id);if(el)el.value=v.toFixed(2);};
     setV('_imp_fob_disp',fob); setV('_imp_flete_disp',flete); setV('_imp_seg_disp',seg);
   }
@@ -23159,18 +23294,40 @@ function _actualizarSummaryImpuestos(){
   var itbms=parseFloat(document.getElementById('s1_itbms')?.value||7);
   var tasa=parseFloat(document.getElementById('s1_tasa')?.value||100);
   var uso=parseFloat(document.getElementById('s1_uso_sistema')?.value||0);
-  var cif=parseFloat(document.getElementById('s1_cif')?.value||document.getElementById('s1_cif_calc')?.value||0);
+  var ajuste=parseFloat(document.getElementById('s1_ar_ajuste')?.value||0);
+  // CIF base: para FOB/EXT usar FOB+flete+seguro; para CIF usar el campo s1_cif
+  var cif;
+  if(typeof termino!=='undefined' && termino==='FOB'){
+    var _fob=parseFloat(document.getElementById('s1_fob')?.value||0);
+    var _fl=parseFloat(document.getElementById('s1_flete_fob')?.value||0);
+    cif=_fob+_fl+(_fob*0.01);
+  } else {
+    cif=parseFloat(document.getElementById('s1_cif')?.value||document.getElementById('s1_cif_calc')?.value||0);
+  }
   var fmt2=function(v){return '$'+v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});};
   var lbl=document.getElementById('_imp_summary_lbl');
   if(cif>0){
     var arPago=cif*(ar/100);
-    var itbmsAr=arPago*(itbms/100);
+    // Aplicar ajuste: resta si positivo, suma si negativo
+    var arPagoAjustado=Math.max(0, arPago - ajuste);
+    var arPctAjustado=cif>0?(arPagoAjustado/cif)*100:ar;
+    var itbmsAr=arPagoAjustado*(itbms/100);
     var itbmsTasa=tasa*(itbms/100);
-    var total=arPago+itbmsAr+tasa+itbmsTasa+uso;
+    var total=arPagoAjustado+itbmsAr+tasa+itbmsTasa+uso;
     if(lbl) lbl.textContent='AR '+ar+'% · ITBMS '+itbms+'% · Total '+fmt2(total);
     var sv=function(id,v){var el=document.getElementById(id);if(el)el.value=v.toFixed(2);};
-    sv('_imp_ar_pago_vis',arPago); sv('_imp_itbms_ar_vis',itbmsAr); sv('_imp_itbms_tasa_vis',itbmsTasa);
+    sv('_imp_ar_pago_vis',arPago);
+    sv('_imp_itbms_ar_vis',itbmsAr);
+    sv('_imp_itbms_tasa_vis',itbmsTasa);
+    // Ajustado display
+    var adjEl=document.getElementById('_imp_ar_ajustado');
+    if(adjEl) adjEl.value=arPagoAjustado.toFixed(2);
+    var pctAdjEl=document.getElementById('_imp_ar_pct_ajustado');
+    if(pctAdjEl) pctAdjEl.textContent=ajuste!==0?(arPctAjustado.toFixed(6)+'%'):'—';
     var totEl=document.getElementById('_imp_total_vis'); if(totEl) totEl.textContent=fmt2(total);
+    // Update CIF ref display
+    var cifEl=document.getElementById('_imp_cif_ref');
+    if(cifEl) cifEl.textContent=fmt2(cif);
   } else {
     if(lbl) lbl.textContent='AR '+ar+'% · ITBMS '+itbms+'% · Tasa $'+tasa;
   }
