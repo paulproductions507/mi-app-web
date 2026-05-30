@@ -769,10 +769,10 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
     <circle cx="220" cy="185" r="52" fill="#001833" stroke="#00ccff" stroke-width="1.5" opacity=".9"/>
     <circle cx="220" cy="185" r="44" fill="none" stroke="#00aaff" stroke-width=".8" opacity=".5"/>
     <circle cx="220" cy="185" r="36" fill="rgba(0,170,255,.08)" stroke="#0088ff" stroke-width=".5" opacity=".6"/>
-    <!-- ERP text -->
-    <text x="220" y="179" text-anchor="middle" fill="#00eeff" font-size="22" font-family="Arial,sans-serif" font-weight="900" opacity=".95">ERP</text>
-    <text x="220" y="193" text-anchor="middle" fill="#88ddff" font-size="6" font-family="Arial,sans-serif" letter-spacing="1.5">ENTERPRISE</text>
-    <text x="220" y="204" text-anchor="middle" fill="#88ddff" font-size="6" font-family="Arial,sans-serif" letter-spacing="1">RESOURCE PLANNING</text>
+    <!-- Sistema de Costeo text -->
+    <text x="220" y="182" text-anchor="middle" fill="#00eeff" font-size="6.5" font-family="Arial,sans-serif" font-weight="700" letter-spacing=".8" opacity=".9">COSTEO</text>
+    <text x="220" y="193" text-anchor="middle" fill="#88ddff" font-size="5.5" font-family="Arial,sans-serif" letter-spacing=".5">COMPRAS &amp;</text>
+    <text x="220" y="204" text-anchor="middle" fill="#88ddff" font-size="5.5" font-family="Arial,sans-serif" letter-spacing=".5">IMPORTACIÓN</text>
 
     <!-- ── ORBITAL NODES ── 8 nodes around center at r=90 -->
     <!-- Node positions (cx,cy) at angles 0,45,90,135,180,225,270,315 from center 220,185 -->
@@ -14686,19 +14686,26 @@ function exportDashboardExcel(){
 
   // ── Hoja 1: Resumen por Embarque ──
   var resumenRows = [
-    ['N° Embarque','Descripción','Fecha','Escenario','Tipo','Costo FOB','Ahorro Neto','% Ahorro/FOB','N° Facturas']
+    ['N° Embarque','Participación por Departamento','Fecha','Escenario','Tipo','Costo Original (FOB/CIF)','Costo Inventario','Ahorro Neto','% Ahorro/FOB','N° Facturas']
   ];
   tendData.forEach(function(d){
     var invL = (d.snap && d.snap.invLines) ? d.snap.invLines : (d.invLines||[]);
     var tipo = ((d.snap && d.snap.tipo)||d.tipo||'ZL') === 'EXT' ? 'Importación' : 'Zona Libre';
-    var pct  = d.cif>0 ? (d.ahorro/d.cif*100).toFixed(2)+'%' : '—';
+    // FOB/CIF real: suma de líneas de mercancía
+    var mercLines = invL.filter(function(l){return (l.tipoFac||'mercancia')==='mercancia';});
+    var costoOrig = mercLines.reduce(function(a,l){return a+(l.costo||0);},0) || d.cif || 0;
+    // Costo Inventario usando _calcCostoInventario
+    var ci = typeof _calcCostoInventario==='function' ? _calcCostoInventario(d) : null;
+    var costoInv = ci ? ci.costoInv : costoOrig;
+    var pct = costoOrig>0 ? (d.ahorro/costoOrig*100).toFixed(2)+'%' : '—';
     resumenRows.push([
       d.nro||'—', d.desc||'—', d.fecha||'—', d.esc||'—', tipo,
-      Number(fmt2(d.cif)), Number(fmt2(d.ahorro)), pct, invL.length
+      Number(fmt2(costoOrig)), Number(fmt2(costoInv)),
+      Number(fmt2(d.ahorro)), pct, invL.length
     ]);
   });
   var ws1 = XLSX.utils.aoa_to_sheet(resumenRows);
-  ws1['!cols'] = [12,28,12,20,14,14,14,12,10].map(function(w){ return {wch:w}; });
+  ws1['!cols'] = [12,28,12,20,14,16,16,14,12,10].map(function(w){ return {wch:w}; });
   XLSX.utils.book_append_sheet(wb, ws1, 'Resumen Embarques');
 
   // ── Hoja 2: Detalle Facturas ──
@@ -16381,6 +16388,17 @@ function renderResumenRapido(){
   const loc_sab  = local.filter(d=> classify(d).isSababa);
   const loc_zl   = local.filter(d=> classify(d).isZL);
   const loc_imp  = local.filter(d=>!classify(d).isZL);
+  // Suministros: embarques que tienen al menos una línea de mercancía con deptCat SUMINISTROS
+  const _isSuministro = d => {
+    const lines = (d.snap&&d.snap.invLines)||d.invLines||[];
+    return lines.some(l => (l.tipoFac||'mercancia')==='mercancia' &&
+      (l.deptCat||'').toUpperCase().includes('SUMI'));
+  };
+  const suministros     = all.filter(_isSuministro);
+  const sumi_liq        = liquidacion.filter(_isSuministro);
+  const sumi_local      = local.filter(_isSuministro);
+  const sumi_zl         = suministros.filter(d=> classify(d).isZL);
+  const sumi_imp        = suministros.filter(d=>!classify(d).isZL);
 
   // ── Aggregate financials ──
   const sum = (arr, key) => arr.reduce((s,d)=>s+getFinancials(d)[key],0);
@@ -16485,6 +16503,12 @@ function renderResumenRapido(){
     <span style="font-size:9px;font-weight:700;color:var(--text);text-align:right;min-width:80px">Total</span>
   </div>`;
   const sec = (html) => `<div style="background:var(--s2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px">${html}</div>`;
+  const badgeW = (lbl,n,bg,color,total) =>
+    `<div style="background:${bg};border:1px solid ${color}44;border-radius:10px;padding:8px 10px;text-align:center">
+      <div style="font-size:20px;font-weight:800;color:${color}">${n}</div>
+      <div style="font-size:10px;color:var(--muted);font-weight:600">${lbl}</div>
+      ${total>0?`<div style="font-size:9px;color:${color}99">${Math.round(n/total*100)}%</div>`:''}
+    </div>`;
   const badge = (lbl,n,color,tot) => {
     const pct2 = tot>0 ? Math.round(n/tot*100) : 0;
     return '<div style="background:'+color+';border:1px solid rgba(0,0,0,.1);border-radius:10px;padding:7px 12px;display:flex;flex-direction:column;align-items:center;min-width:70px;gap:1px">'
@@ -16532,11 +16556,18 @@ function renderResumenRapido(){
           <div class="_inv-hint" style="font-size:9px;color:rgba(88,166,255,.5);margin-top:3px">${window._tendFmtFull?"toca para abreviar":"toca para ver completo"}</div>
         </div>
       </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
-        ${badge('Liquidación',liquidacion.length,'rgba(240,136,62,.12)',all.length)}
-        ${badge('Local',local.length,'rgba(88,166,255,.12)',all.length)}
-        ${badge('Zona Libre',all.filter(d=>classify(d).isZL).length,'rgba(63,185,80,.1)',all.length)}
-        ${badge('Importación',all.filter(d=>!classify(d).isZL).length,'rgba(168,85,247,.1)',all.length)}
+      <!-- Pirámide: Total → Liq/Local → ZL/Imp → Merc/Sumi -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+        ${badgeW('Liquidación',liquidacion.length,'rgba(240,136,62,.15)','var(--orange-l)',all.length)}
+        ${badgeW('Local',local.length,'rgba(88,166,255,.15)','var(--blue-l)',all.length)}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+        ${badgeW('Zona Libre 🌿',all.filter(d=>classify(d).isZL).length,'rgba(63,185,80,.1)','var(--green-l)',all.length)}
+        ${badgeW('Importación 📦',all.filter(d=>!classify(d).isZL).length,'rgba(168,85,247,.1)','#a855f7',all.length)}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px">
+        ${badgeW('Mercancía 🏬',all.length-suministros.length,'rgba(63,185,80,.08)','var(--green-l)',all.length)}
+        ${suministros.length>0?badgeW('Suministros 🔧',suministros.length,'rgba(250,204,21,.15)','#eab308',all.length):badgeW('Suministros 🔧',0,'rgba(250,204,21,.08)','#eab308',all.length)}
       </div>
     `)}
 
@@ -16548,6 +16579,7 @@ function renderResumenRapido(){
         ${badge('CIF Express',liq_cif.length,'rgba(88,166,255,.12)',liquidacion.length)}
         ${badge('Zona Libre',liq_zl.length,'rgba(63,185,80,.1)',liquidacion.length)}
         ${badge('Importación',liq_imp.length,'rgba(168,85,247,.1)',liquidacion.length)}
+        ${sumi_liq.length>0?badge('Suministros 🔧',sumi_liq.length,'rgba(250,204,21,.15)',liquidacion.length):''}
       </div>
       ${colHdr()}
       ${row('Valor Mercancía Original', fmtA(A_liq_zl.merc), fmtA(A_liq_imp.merc),false,'',A_liq_zl.merc,A_liq_imp.merc)}
@@ -16555,6 +16587,35 @@ function renderResumenRapido(){
       ${row('ITBMS',                    fmtA(A_liq_zl.itbms), fmtA(A_liq_imp.itbms),false,'',A_liq_zl.itbms,A_liq_imp.itbms)}
       ${row('Landed Total',             fmtA(A_liq_zl.l1),   fmtA(A_liq_imp.l1), true, 'var(--green-l)',A_liq_zl.l1,A_liq_imp.l1)}
     `)}
+
+    <!-- SUMINISTROS — siempre que haya al menos 1 -->
+    ${suministros.length>0?sec(`
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span style="font-size:16px">🔧</span>
+        <div>
+          <div style="font-size:12px;font-weight:700;color:#eab308">Embarques de Suministro</div>
+          <div style="font-size:10px;color:var(--muted)">Consumo interno · No vendible · ${suministros.length} embarque${suministros.length!==1?'s':''}</div>
+        </div>
+        <div style="margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:800;color:#eab308">${fmtA(agg(suministros).inv)}</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+        ${sumi_zl.length>0?badge('Zona Libre',sumi_zl.length,'rgba(63,185,80,.1)',suministros.length):''}
+        ${sumi_imp.length>0?badge('Importación',sumi_imp.length,'rgba(168,85,247,.1)',suministros.length):''}
+        ${sumi_liq.length>0?badge('Liquidación',sumi_liq.length,'rgba(240,136,62,.12)',suministros.length):''}
+        ${sumi_local.length>0?badge('Local',sumi_local.length,'rgba(88,166,255,.12)',suministros.length):''}
+      </div>
+      <div style="background:rgba(250,204,21,.06);border:1px solid rgba(250,204,21,.2);border-radius:8px;padding:8px 12px">
+        ${suministros.map(d=>{
+          const nro=d.nro||'—';
+          const desc=(d.desc||d.descripcion||'').substring(0,40);
+          const r=getFinancials(d);
+          return '<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(250,204,21,.1);font-size:11px">'
+            +'<span style="color:var(--muted)"><strong style="color:#eab308">'+nro+'</strong>'+(desc?' · '+desc:'')+'</span>'
+            +'<span style="font-family:monospace;color:#eab308;font-weight:700">'+fmtA(r.costoInv)+'</span>'
+            +'</div>';
+        }).join('')}
+      </div>
+    `):''}
 
     <!-- EMBARQUES LOCALES -->
     ${sec(`
@@ -16564,6 +16625,7 @@ function renderResumenRapido(){
         ${badge('CIF Express',0,'rgba(88,166,255,.1)',local.length)}
         ${badge('Zona Libre',loc_zl.length,'rgba(63,185,80,.1)',local.length)}
         ${badge('Importación',loc_imp.length,'rgba(168,85,247,.1)',local.length)}
+        ${sumi_local.length>0?badge('Suministros 🔧',sumi_local.length,'rgba(250,204,21,.15)',local.length):''}
       </div>
       ${colHdr()}
       ${row('Valor Mercancía Homologado', fmtA(A_loc_zl.merc), fmtA(A_loc_imp.merc),false,'',A_loc_zl.merc,A_loc_imp.merc)}
