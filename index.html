@@ -1730,7 +1730,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
         </div>
       </div>
       <div class="field" style="margin-bottom:8px">
-        <input type="number" id="disp_valor_merc" readonly
+        <input type="text" id="disp_valor_merc" readonly
           style="background:var(--bg);font-weight:800;color:var(--blue-l);font-size:15px"
           title="Valor de la mercancía — base de cálculo arancelario">
         <p class="note" id="disp_valor_merc_hint" style="margin-top:3px">Global · FOB/CIF según término</p>
@@ -1740,13 +1740,13 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       <div class="r2" style="margin-bottom:8px">
         <div class="field">
           <label style="font-weight:700;color:var(--orange-l)">📦 Costo No Mercancía</label>
-          <input type="number" id="disp_costo_no_merc" readonly
+          <input type="text" id="disp_costo_no_merc" readonly
             style="background:var(--bg);font-weight:700;color:var(--orange-l)"
             title="Arancel + Honorarios + Tasa + Flete + Acarreo + DMCE (costeable, sin ITBMS)">
         </div>
         <div class="field">
           <label style="font-weight:700;color:var(--muted)">🧾 ITBMS</label>
-          <input type="number" id="disp_itbms_total" readonly
+          <input type="text" id="disp_itbms_total" readonly
             style="background:var(--bg);font-weight:700;color:var(--muted)"
             title="ITBMS sobre arancel + ITBMS sobre tasa — va aparte del costo costeable">
         </div>
@@ -1756,7 +1756,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       <div class="r2" style="margin-bottom:8px">
         <div class="field">
           <label style="font-weight:700;color:var(--green-l)">🏁 Costo Landed Costeable</label>
-          <input type="number" id="disp_costo_original" readonly
+          <input type="text" id="disp_costo_original" readonly
             style="background:var(--bg);font-weight:800;color:var(--green-l);font-size:14px"
             title="Valor Mercancía + Costo No Mercancía (sin ITBMS) — base para costear inventario">
           <p class="note" style="margin-top:3px">Merc. + No Merc. sin ITBMS</p>
@@ -1770,13 +1770,22 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
         </div>
       </div>
 
-      <!-- COSTO LANDED GLOBAL (incluye ITBMS) -->
-      <div class="field" style="margin-bottom:8px">
-        <label style="font-weight:700;color:var(--muted)">🏁 Costo Landed Global (incluye ITBMS)</label>
-        <input type="number" id="disp_costo_landed_global" readonly
-          style="background:var(--bg);font-weight:800;color:var(--muted);font-size:14px"
-          title="Valor Mercancía + Costo No Mercancía + ITBMS — desembolso total real">
-        <p class="note" style="margin-top:3px">Merc. + No Merc. + ITBMS</p>
+      <!-- COSTO LANDED GLOBAL (incluye ITBMS) + Factor Importación -->
+      <div class="r2" style="margin-bottom:8px">
+        <div class="field">
+          <label style="font-weight:700;color:var(--muted)">🏁 Costo Landed Global (incluye ITBMS)</label>
+          <input type="text" id="disp_costo_landed_global" readonly
+            style="background:var(--bg);font-weight:800;color:var(--muted);font-size:14px"
+            title="Valor Mercancía + Costo No Mercancía + ITBMS — desembolso total real">
+          <p class="note" style="margin-top:3px">Merc. + No Merc. + ITBMS</p>
+        </div>
+        <div class="field">
+          <label style="font-weight:700;color:var(--orange-l)">📊 Factor Importación</label>
+          <input type="text" id="disp_factor_importacion" readonly
+            style="background:var(--bg);font-weight:800;color:var(--orange-l);font-size:14px;border:1px solid rgba(240,136,62,.25);border-radius:6px;padding:7px 10px"
+            title="Costo No Mercancía ÷ Valor Mercancía — factor de importación">
+          <p class="note" style="margin-top:3px">No Merc. % Merc.</p>
+        </div>
       </div>
 
       <!-- DESGLOSE DETALLADO (colapsable) -->
@@ -6049,16 +6058,33 @@ function showSplashNav(){
   //   + Costo No Mercancía de todos los embarques del mes
   const costoInventario = _mesData.reduce((s,d) => {
     const isSabD = (d.esc||'').toLowerCase().includes('sababa');
+    const sn = d.snap||{};
+    const lines = (sn.invLines || d.invLines || []);
+
+    // Si hay invLines reales, usarlas directamente — cuadran exactamente con el empresarial.
+    // Para Sababa: sustituir mercancía por mercHomol (valor homologado), mantener gastos reales.
+    // Para todos los demás: sum(invLines) = total costeable real.
+    if(lines.length > 0){
+      const mercHomol = isSabD ? (sn.sc3?.mercHomol||0) : 0;
+      return s + lines.reduce((a,l) => {
+        const t = l.tipoFac||'mercancia';
+        const c = l.costo||0;
+        if(t === 'mercancia'){
+          // Sababa: usar homologado en lugar del costo original
+          return a + (mercHomol > 0 ? 0 : c); // se suma mercHomol abajo
+        }
+        return a + c;
+      }, mercHomol > 0 ? mercHomol : 0);
+    }
+
+    // Fallback si no hay invLines (embarques muy antiguos)
+    const mercLines2 = [];
+    const cifOriginal = 0;
+    const mercInv = isSabD && (sn.sc3?.mercHomol||0) > 0 ? (sn.sc3.mercHomol) : cifOriginal;
     const isUnicoD2 = !!(d.modoUnico || d.tipoEsc==='unico'
       || (d.esc||'').toLowerCase().includes('único') || (d.esc||'').toLowerCase().includes('unico')
       || (d.snap && d.snap.sc1 && !d.snap.sc2 && !d.snap.sc3));
-    const sn = d.snap||{};
-    const lines = (sn.invLines || d.invLines || []);
-    const mercLines2 = lines.filter(l => (l.tipoFac||'mercancia')==='mercancia');
-    const cifOriginal = mercLines2.reduce((a,l) => a+(l.costo||0), 0);
-    const mercInv = isSabD && (sn.sc3?.mercHomol||0) > 0 ? (sn.sc3.mercHomol) : cifOriginal;
-    const noMercInv = isUnicoD2 ? (sn.sc1?.noMerc != null ? sn.sc1.noMerc
-        : ((sn.sc1?.arancel||0)+(sn.sc1?.hon||0)+(sn.sc1?.tasa||0)+(sn.sc1?.uso||0)+(sn.sc1?.agente||0)+(sn.sc1?.extras||0)))
+    const noMercInv = isUnicoD2 ? (sn.sc1?.noMerc||0)
       : isSabD ? (sn.sc3?.noMerc||0)
       : (sn.sc2?.noMerc||0);
     return s + mercInv + noMercInv;
@@ -6375,6 +6401,7 @@ function calc(){
   // ── Actualizar campos Resumen ──
   (function(){
     const sdR=(id,v)=>{const el=document.getElementById(id);if(el)el.value=(v||0).toFixed(2);};
+    const sdF=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v!=null?Number(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'';};
     // Valor Mercancía filtrado por tipo proveedor
     var _filtro = window._filtroTipo || 'global';
     var _vmBase = sc1_base; // default: global
@@ -6384,11 +6411,13 @@ function calc(){
         .reduce(function(s,l){ return s+(l.costo||0); }, 0);
       _vmBase = _filteredCosto || sc1_base;
     }
-    sdR('disp_valor_merc',   _vmBase);
-    sdR('disp_costo_no_merc', sc1_noMerc);
-    sdR('disp_itbms_total',  sc1_itbms + itbmsTasaFinal);
-    sdR('disp_costo_original', sc1_landed1);       // Costeable = Merc + No Merc (sin ITBMS)
-    sdR('disp_costo_landed_global', sc1_landedG);  // Global = Costeable + ITBMS
+    sdF('disp_valor_merc',   _vmBase);
+    sdF('disp_costo_no_merc', sc1_noMerc);
+    sdF('disp_itbms_total',  sc1_itbms + itbmsTasaFinal);
+    sdF('disp_costo_original', sc1_landed1);       // Costeable = Merc + No Merc (sin ITBMS)
+    sdF('disp_costo_landed_global', sc1_landedG);  // Global = Costeable + ITBMS
+    const _facEl=document.getElementById('disp_factor_importacion');
+    if(_facEl) _facEl.value=sc1_base>0?(((sc1_noMerc/sc1_base)*100).toFixed(2)+'%'):'—';
     // Costo Inventario = Valor Merc + Arancel + Honorarios (sin ITBMS, sin DMCE, sin acarreo)
     var _costoInv = sc1_base + sc1_arancel + (window._soloMode?(window._soloHonorario||0):sc1_hon);
     sdR('disp_costo_inventario', _costoInv);
@@ -9147,7 +9176,11 @@ function loadTendData(){
   // Primero intentar localStorage (fallback robusto cuando Supabase no conecta)
   try {
     var local = localStorage.getItem('_tendData_v2');
-    if(local){ tendData = JSON.parse(local) || []; return; }
+    if(local){ tendData = JSON.parse(local) || [];
+      tendData.forEach(d => { if(!d._gastosMigrados) _migrarGastosDesdeSnap(d); });
+      tendData.forEach(d => { _corregirItbmsCifExpress(d); });
+      tendData.forEach(d => { _corregirLandedUnico(d); });
+      return; }
   } catch(e){}
   tendData = [];
   // El pull de Supabase en window.onload lo llenará si conecta.
@@ -11583,9 +11616,9 @@ function renderTend(){
     }
     const rows2=[...filteredData].map((d,ri)=>{
       const idx=tendData.indexOf(d);
-      const _dGastoComp = (d.snap?.gastoComp || d.gastoComp || 0);
-      const _ahorroDisplay = _dGastoComp > 0 ? 0 : (d.ahorro||0);
-      const pct=_dGastoComp>0?'—':d.cif>0?(d.ahorro/d.cif*100).toFixed(2)+'%':'—';
+      const _dGastoComp = 0; // gastoComp no afecta ahorro — solo nivelar MasterValue
+      const _ahorroDisplay = (d.ahorro||0);
+      const pct=d.cif>0?(d.ahorro/d.cif*100).toFixed(2)+'%':'—';
       const isPend = d.status === 'pendiente'; const isParcial = d.status === 'parcial';
       const viaIco = d.viaTransporte==='AIR'?'✈️':d.viaTransporte==='LAND'?'🚛':'🚢';
       const viaLabel = d.viaTransporte||'SEA';
@@ -11594,8 +11627,8 @@ function renderTend(){
       return `<div style="display:grid;grid-template-columns:auto 1fr auto auto auto;gap:8px;align-items:center;padding:9px 14px;border-bottom:1px solid rgba(48,54,61,.4);cursor:pointer;transition:background .15s${(isPend||isParcial)?';border-left:3px solid '+(isPend?'var(--orange-l)':'var(--blue-l)'):''}" onclick="if(event.target.classList.contains('del-btn')||event.target.classList.contains('btn-reabrir')){return;}abrirModuloComparativo_idx(${idx})" onmouseover="this.style.background='rgba(255,255,255,.03)'" onmouseout="this.style.background=''">
         <div style="font-size:10px;font-weight:700;color:var(--orange-l);white-space:nowrap">${d.nro||'—'}</div>
         <div><div style="font-size:12px;font-weight:500;color:var(--text)">${d.desc}${isPend?'&nbsp;<span class="badge-pendiente">🟡 PENDIENTE</span>':''}${d.status==='parcial'?'&nbsp;<span style="background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:3px;padding:1px 5px;font-size:9px;font-weight:700">🚢 PARCIAL</span>':''}</div><div style="font-size:10px;color:var(--muted);display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-top:2px">${d.fecha} · ${d.esc||''}&nbsp;<span style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:var(--blue-l)">${viaIco} ${viaLabel}</span>${d.tramiteTipo?`<span style="background:${tramiteBg};border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:${tramiteColor}">${d.tramiteTipo}</span>`:''}${d.lugarRecep?`<span style="background:rgba(45,212,191,.1);border:1px solid rgba(45,212,191,.25);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:#2dd4bf">🏭 ${d.lugarRecep}</span>`:''}
-${_dGastoComp>0?`<span style="background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.25);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:#f47067">⚠️ Gasto Comp.</span>`:''}</div></div>
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--green-l);font-weight:700;white-space:nowrap">${_dGastoComp>0?'$0.00':'$'+(_ahorroDisplay/1000).toFixed(2)+'k'}</div>
+</div></div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--green-l);font-weight:700;white-space:nowrap">$${(_ahorroDisplay/1000).toFixed(2)}k</div>
         <div style="font-size:11px;color:var(--orange-l);white-space:nowrap">${pct}</div>
         <div style="display:flex;gap:4px;align-items:center">
           <button class="btn-reabrir" onclick="event.stopPropagation();reabrirEmbarquePendiente(${idx})" style="${isPend?'':'background:rgba(88,166,255,.1);border-color:rgba(88,166,255,.3);color:var(--blue-l)'}">✏️ ${isPend?'Reabrir':'Editar'}</button>
@@ -13882,32 +13915,38 @@ function _calcCostoInventario(d){
   var esc=(d.esc||'').toLowerCase();
   var isSab=esc.includes('sababa');
   var isCIF=esc.includes('cif');
-  // isLocal: Sababa con homologación real confirmada
   var isLocal=isSab&&(sc3.mercHomol||0)>0&&(sc3.comision||0)>0;
 
-  // FOB original del proveedor (siempre — incluso para Sababa)
-  var lines=((d.snap&&d.snap.invLines)||d.invLines||[])
-    .filter(function(l){return (l.tipoFac||'mercancia')==='mercancia';});
-  var mercOrig=lines.reduce(function(a,l){return a+(l.costo||0);},0)||sc1.base||d.cif||0;
-
-  // Mercancía que entra al inventario
+  var allLines=((d.snap&&d.snap.invLines)||d.invLines||[]);
+  var mercLines=allLines.filter(function(l){return (l.tipoFac||'mercancia')==='mercancia';});
+  var mercOrig=mercLines.reduce(function(a,l){return a+(l.costo||0);},0)||sc1.base||d.cif||0;
   var mercHomol=isLocal?(sc3.mercHomol||0):0;
   var mercInv=isLocal&&mercHomol>0?mercHomol:mercOrig;
 
-  // Costo no mercancía del embarque procesado
-  // isLocal=Sababa homologado → sc3
-  // isCIF=CIF Express → sc2
-  // isSab&&!isLocal=Sababa Liquidacion (esc. unico via Sababa) → sc1 (tiene arancel)
-  // resto=Escenario Unico puro → sc1
+  // ── Usar invLines reales (cuadran con el empresarial al centavo) ──
+  if(allLines.length>0){
+    var gastoReal=allLines.reduce(function(a,l){
+      return (l.tipoFac||'mercancia')==='mercancia' ? a : a+(l.costo||0);
+    },0);
+    var costoInvReal=mercInv+gastoReal;
+    // ITBMS desde invLines
+    var itbmsReal=allLines.filter(function(l){return l.tipoFac==='itbms';})
+      .reduce(function(a,l){return a+(l.costo||0);},0);
+    var landed1=isLocal?(sc3.landed1||0):isCIF?(sc2.landed1||0):(sc1.landed1||0);
+    return {mercOrig:mercOrig, mercHomol:mercHomol, mercInv:mercInv,
+            costoNM:gastoReal, itbms:itbmsReal,
+            costoInv:costoInvReal,
+            landed1:landed1,
+            landedG:isLocal?(sc3.landedG||landed1):isCIF?(sc2.landedG||landed1):(sc1.landedG||landed1)};
+  }
+
+  // Fallback sin invLines (embarques muy antiguos)
   var landed1=isLocal?(sc3.landed1||0):isCIF?(sc2.landed1||0):(sc1.landed1||0);
   var baseNM=isLocal?(mercHomol||mercOrig):isCIF?(sc2.base||sc1.base||d.cif||mercOrig):(sc1.base||d.cif||mercOrig);
   var costoNM=Math.max(0,landed1-baseNM);
-
-  // ITBMS del embarque procesado (no del simulador)
   var itbms=isLocal?(sc3.itbmsHomol||0):isCIF?
     ((sc2.itbms||0)+(sc2.itbmsTasaFinal||0)):
     ((sc1.itbms||0)+(sc1.itbmsTasaFinal||0));
-
   return {mercOrig:mercOrig, mercHomol:mercHomol, mercInv:mercInv,
           costoNM:costoNM, itbms:itbms,
           costoInv:mercInv+costoNM+itbms,
@@ -15140,13 +15179,13 @@ function _renderGroupSections(data){
 
     // ── Facturas de Mercancía ──
     rows.push(['── FACTURAS DE MERCANCÍA ──']);
-    rows.push(['Proveedor'+SEP+'Departamento'+SEP+'OC'+SEP+'CIF/FOB Original'+SEP+(fobHomol>0?'Valor Homologado'+SEP:'')+'%'+SEP+'+ No Merc.'+SEP+'Costo Landed Costeable']);
+    rows.push(['Proveedor'+SEP+'Departamento'+SEP+'OC'+SEP+'N° Factura'+SEP+'CIF/FOB Original'+SEP+(fobHomol>0?'Valor Homologado'+SEP:'')+'%'+SEP+'Costo No Merc.'+SEP+'Costo Landed Costeable']);
     mercL.forEach(function(l){
       var pct = totalMerc>0 ? (l.costo||0)/totalMerc : 0;
       var costoBase = fobHomol>0 ? fobHomol*pct : (l.costo||0);
       var noMercPorcion = totalNoMerc * pct;
       var landedPorcion = costoBase + noMercPorcion;
-      var row = (l.prov||'—')+SEP+(l.deptCat||'—')+SEP+(l.oc||'—')+SEP+fn(l.costo||0)+SEP;
+      var row = (l.prov||'—')+SEP+(l.deptCat||'—')+SEP+(l.oc||'—')+SEP+(l.numFact||l.nfac||'—')+SEP+fn(l.costo||0)+SEP;
       if(fobHomol>0) row += fn(costoBase)+SEP;
       row += fn(pct*100)+'%'+SEP+fn(noMercPorcion)+SEP+fn(landedPorcion);
       rows.push([row]);
@@ -15229,16 +15268,16 @@ function _renderGroupSections(data){
     XLSX.utils.book_append_sheet(wb, wsRes, 'Resumen');
 
     // ── Hoja 2: Facturas Mercancía ──
-    var mercHeaders = ['Proveedor','Departamento','OC','CIF/FOB Original'];
+    var mercHeaders = ['Proveedor','Departamento','OC','N° Factura','CIF/FOB Original'];
     if(fobHomol>0) mercHeaders.push('Valor Homologado');
-    mercHeaders.push('%','+ No Merc.','Costo Landed Costeable');
+    mercHeaders.push('%','Costo No Merc.','Costo Landed Costeable');
     var mercRows = [mercHeaders];
     mercL.forEach(function(l){
       var pct = totalMerc>0 ? (l.costo||0)/totalMerc : 0;
       var costoBase = fobHomol>0 ? fobHomol*pct : (l.costo||0);
       var noMercPorcion = totalNoMerc * pct;
       var landedPorcion = costoBase + noMercPorcion;
-      var row = [l.prov||'—', l.deptCat||'—', l.oc||'—', l.costo||0];
+      var row = [l.prov||'—', l.deptCat||'—', l.oc||'—', l.numFact||l.nfac||'—', l.costo||0];
       if(fobHomol>0) row.push(costoBase);
       row.push(pct*100, noMercPorcion, landedPorcion);
       mercRows.push(row);
@@ -15246,7 +15285,7 @@ function _renderGroupSections(data){
     var wsMerc = XLSX.utils.aoa_to_sheet(mercRows);
     // Formato de moneda para columnas numéricas
     var mercFmt = '"$"#,##0.00';
-    var numCols = fobHomol>0 ? [3,4,6,7] : [3,5,6];
+    var numCols = fobHomol>0 ? [4,5,7,8] : [4,6,7];
     if(wsMerc['!ref']){
       var range = XLSX.utils.decode_range(wsMerc['!ref']);
       for(var R=1;R<=range.e.r;R++){
@@ -17312,6 +17351,7 @@ function calcUnicoFull(){
   const extrasTotal = gastosRows.reduce((s,g)=>s+g.monto,0);
 
   // landed COSTEABLE = excluye itbmsTasa e itbms (ambos fiscales, no costeables)
+  // En Escenario Único el gastoComp es un gasto real del embarque — sí suma al landed
   const gastoCompVal = parseFloat(document.getElementById('s1_gasto_comp')?.value)||0;
   const landed  = R(cif + arancel + hon + tasa + uso + agente + dmce + extrasTotal + gastoCompVal);
   const factor  = cif > 0 ? landed/cif : 1;
@@ -23329,6 +23369,9 @@ function _actualizarSummaryImpuestos(){
     if(adjEl) adjEl.value=arPagoAjustado.toFixed(2);
     var pctAdjEl=document.getElementById('_imp_ar_pct_ajustado');
     if(pctAdjEl) pctAdjEl.textContent=ajuste!==0?(arPctAjustado.toFixed(6)+'%'):'—';
+    // Sincronizar campo s1_ar para trazabilidad del % efectivo pagado
+    var arEl=document.getElementById('s1_ar');
+    if(arEl && ajuste!==0 && cif>0) arEl.value=arPctAjustado.toFixed(4);
     var totEl=document.getElementById('_imp_total_vis'); if(totEl) totEl.textContent=fmt2(total);
     // Update CIF ref display
     var cifEl=document.getElementById('_imp_cif_ref');
