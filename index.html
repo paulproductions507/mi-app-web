@@ -13776,70 +13776,309 @@ function _informeExportPDF(){
 // HTML — descarga el informe como archivo .html standalone
 function _informeExportHTML(){
   const {all,liquidacion,local,liq_zl,liq_imp,loc_zl,loc_imp,liq_sab,liq_cif,loc_sab,A,factPct,fecha}=_informeGetData();
-  const f=n=>'$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-  const badge=(lbl,n,clr)=>`<span style="background:${clr};border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700;margin:2px">${lbl}: ${n}</span>`;
-  const tblRow=(lbl,zl,imp,bold)=>`<tr${bold?' style="font-weight:800;background:rgba(26,26,46,.04)"':''}>
-    <td style="padding:6px 10px">${lbl}</td>
-    <td style="text-align:right;padding:6px 10px;font-family:monospace">${zl}</td>
-    <td style="text-align:right;padding:6px 10px;font-family:monospace">${imp}</td>
-  </tr>`;
-  const tbl=(title,rows)=>`<div style="margin-bottom:20px">
-    <h3 style="background:#1a1a2e;color:#fff;padding:8px 14px;border-radius:8px 8px 0 0;margin:0;font-size:13px">${title}</h3>
-    <table style="width:100%;border-collapse:collapse;border:1px solid #ddd;border-top:none;border-radius:0 0 8px 8px;overflow:hidden">
-      <thead><tr style="background:#f0f4ff;font-size:11px;font-weight:700">
-        <th style="text-align:left;padding:6px 10px">Concepto</th>
-        <th style="text-align:right;padding:6px 10px">Zona Libre</th>
-        <th style="text-align:right;padding:6px 10px">Importación</th>
-      </tr></thead><tbody>${rows}</tbody>
-    </table></div>`;
-  const html=`<!DOCTYPE html><html><head><meta charset="utf-8">
-    <title>Informe Financiero ${fecha}</title>
-    <style>*{box-sizing:border-box;}body{font-family:Arial,sans-serif;margin:0;padding:20px;background:#f5f7fa;color:#1a1a2e;}
-    h1{color:#1a1a2e;} table tr:nth-child(even){background:#f8f9fc;}</style>
-  </head><body>
-    <div style="max-width:860px;margin:0 auto">
-    <div style="text-align:center;background:#1a1a2e;color:#fff;padding:20px;border-radius:12px;margin-bottom:20px">
-      <h1 style="margin:0;font-size:22px">📊 Informe Financiero Mensual</h1>
-      <p style="margin:6px 0 0;opacity:.7">Gestión Integral de Compras y Costeo — ZLC Panamá · ${fecha}</p>
-    </div>
-    <div style="background:#fff;border-radius:12px;padding:16px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,.08)">
-      <h3 style="margin:0 0 10px;font-size:13px">Resumen Global</h3>
-      <div>${badge('Total Embarques',all.length,'#e8f5e9')}
-      ${badge('Liquidación',liquidacion.length,'#fff3e0')}
-      ${badge('Local',local.length,'#e3f2fd')}
-      ${badge('Sababa Import (Liq.)',liq_sab.length,'#fce4ec')}
-      ${badge('CIF Express',liq_cif.length,'#e8eaf6')}
-      ${badge('Zona Libre',all.filter(d=>{const e=(d.esc||'').toLowerCase();return e.includes('zona libre')||!e.includes('imp');}).length,'#e0f7fa')}
+  const f  = n=>'$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const fK = n=>window._fmtMoney(n);
+  const p2 = (n,d)=>d>0?parseFloat((n/d*100).toFixed(2)):0;
+
+  // Detectar tema del sistema
+  const isDark = document.documentElement.getAttribute('data-theme')==='dark' ||
+                 document.body.classList.contains('dark') ||
+                 (window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches) ||
+                 getComputedStyle(document.body).backgroundColor === 'rgb(13, 17, 23)';
+  const T = isDark ? {
+    bg:'#0d1117', s1:'#161b22', s2:'#1c2128', border:'#2d333b',
+    text:'#cdd9e5', muted:'#8b949e', muted2:'#4d5566',
+    green:'#3fb950', blue:'#58a6ff', orange:'#f0883e', yellow:'#eab308'
+  } : {
+    bg:'#f6f8fa', s1:'#ffffff', s2:'#f0f4f8', border:'#d0d7de',
+    text:'#1f2328', muted:'#57606a', muted2:'#8c959f',
+    green:'#1a7f37', blue:'#0969da', orange:'#bc4c00', yellow:'#9a6700'
+  };
+
+  // Lógica correcta de suministros — igual que renderResumenRapido
+  const _isSumi = d => {
+    const lines=(d.snap&&d.snap.invLines)||d.invLines||[];
+    return lines.some(l=>(l.tipoFac||'mercancia')==='mercancia'&&(l.deptCat||'').toUpperCase().includes('SUMI'));
+  };
+  const suministros   = all.filter(_isSumi);
+  const mercancia_embs= all.filter(d=>!_isSumi(d));
+  const _cl = d => {const t=((d.snap&&d.snap.tipo)||d.tipo||'ZL').toUpperCase();return t==='ZL'?true:t==='IMP'||t==='EXT'?false:true;};
+  const sumi_zl   = suministros.filter(d=> _cl(d));
+  const sumi_imp  = suministros.filter(d=>!_cl(d));
+  const sumi_local= suministros.filter(d=>{const esc=(d.esc||'').toLowerCase();const sc3=(d.snap&&d.snap.sc3)||{};return esc.includes('sababa')&&(sc3.mercHomol||0)>0;});
+
+  // Totales globales — TODOS usan costoInv para que sumen correctamente
+  var _invMerc=0,_invNM=0,_invItbms=0,_invTotal=0;
+  all.forEach(function(d){var r=_calcCostoInventario(d);_invMerc+=r.mercInv;_invNM+=r.costoNM;_invItbms+=r.itbms;_invTotal+=r.costoInv;});
+
+  // costoInv por segmento (no solo mercInv) — para que sumen al total
+  var _mercEmbsTotal=0; mercancia_embs.forEach(function(d){_mercEmbsTotal+=_calcCostoInventario(d).costoInv;});
+  var _sumiInv=0;       suministros.forEach(function(d){_sumiInv+=_calcCostoInventario(d).costoInv;});
+
+  // ZL vs IMP — costoInv completo por zona
+  var _invZL=0,_invIMP=0;
+  all.forEach(function(d){
+    var r=_calcCostoInventario(d);
+    var isZL=_cl(d);
+    if(isZL) _invZL+=r.costoInv; else _invIMP+=r.costoInv;
+  });
+  const _liqZLInv=A.liq_zl.inv||0, _liqIMPInv=A.liq_imp.inv||0;
+  const _locZLInv=A.loc_zl.inv||0, _locIMPInv=A.loc_imp.inv||0;
+
+  // Gráfica de barras estilo planeación
+  const barChart=(titulo,rows,total)=>{
+    const filas=rows.map(r=>{
+      const pct=p2(r.val,total);
+      const bw=Math.max(2,pct);
+      return `<tr style="border-bottom:1px solid #2d333b">
+        <td style="padding:7px 10px;font-size:11px;font-weight:700;color:${T.text}">${r.lbl}</td>
+        <td style="padding:7px 10px;font-size:11px;font-family:'Courier New',monospace;font-weight:700;color:${r.color};text-align:right;white-space:nowrap">${f(r.val)}</td>
+        <td style="padding:5px 10px;min-width:100px">
+          <div style="background:#2d333b;border-radius:3px;height:8px;overflow:hidden">
+            <div style="width:${bw}%;height:100%;border-radius:3px;background:linear-gradient(90deg,#f8d122,#f97316)"></div>
+          </div>
+        </td>
+        <td style="padding:7px 10px;font-size:11px;font-weight:700;color:#8b949e;text-align:right;white-space:nowrap">${pct.toFixed(2)}%</td>
+      </tr>`;
+    }).join('');
+    return `<div style="margin-bottom:16px">
+      <div style="font-size:10px;font-weight:700;color:#8b949e;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">${titulo}</div>
+      <div style="border:1px solid #2d333b;border-radius:8px;overflow:hidden">
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr style="background:#2d333b">
+            <th style="padding:6px 10px;font-size:9px;color:#8b949e;text-align:left;font-weight:600;text-transform:uppercase">Concepto</th>
+            <th style="padding:6px 10px;font-size:9px;color:#8b949e;text-align:right;font-weight:600;text-transform:uppercase">Monto</th>
+            <th style="padding:6px 10px;font-size:9px;color:#8b949e;min-width:100px"></th>
+            <th style="padding:6px 10px;font-size:9px;color:#8b949e;text-align:right;font-weight:600;text-transform:uppercase">% Total</th>
+          </tr></thead>
+          <tbody>${filas}
+            <tr style="background:#2d3748;font-weight:800">
+              <td style="padding:8px 10px;font-size:11px;font-weight:800;color:#ffffff">TOTAL</td>
+              <td style="padding:8px 10px;font-size:11px;font-family:'Courier New',monospace;font-weight:800;color:#ffffff;text-align:right">${f(total)}</td>
+              <td></td>
+              <td style="padding:8px 10px;font-size:11px;font-weight:800;text-align:right;color:#ffffff">100%</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+  };
+
+  // Cubículo
+  const cubCard=(title,n,inv,borderColor,bgColor,rows)=>`
+    <div style="border:2px solid ${borderColor};border-radius:10px;overflow:hidden;margin-bottom:12px">
+      <div style="background:${bgColor};padding:8px 12px;text-align:center;border-bottom:1px solid ${borderColor}">
+        <div style="font-size:11px;font-weight:800;color:#cdd9e5;text-transform:uppercase">${title}</div>
+        <div style="font-size:16px;font-weight:900;color:#cdd9e5">${n} emb</div>
+        <div style="font-size:11px;font-family:'Courier New',monospace;font-weight:700;color:#f0883e">${f(inv)}</div>
+      </div>
+      <div style="padding:10px 12px">${rows}</div>
+    </div>`;
+
+  const tblSection=(title,rows)=>`
+    <div style="margin-bottom:16px">
+      <div style="background:#2d333b;color:#cdd9e5;padding:8px 12px;border-radius:8px 8px 0 0;font-size:12px;font-weight:700">${title}</div>
+      <table style="width:100%;border-collapse:collapse;border:1px solid #2d333b;border-top:none">
+        <thead><tr style="background:rgba(255,255,255,.04);font-size:10px;font-weight:700;color:#8b949e">
+          <th style="text-align:left;padding:6px 10px">Concepto</th>
+          <th style="text-align:right;padding:6px 10px">Zona Libre</th>
+          <th style="text-align:right;padding:6px 10px">Importación</th>
+          <th style="text-align:right;padding:6px 10px">Total</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+  const tRow=(lbl,zl,imp,tot,bold,color)=>`
+    <tr style="border-bottom:1px solid #2d333b${bold?';font-weight:800;background:rgba(255,255,255,.03)':''}">
+      <td style="padding:6px 10px;font-size:11px;font-weight:700;color:${T.text}">${lbl}</td>
+      <td style="padding:6px 10px;font-size:11px;font-family:'Courier New',monospace;color:#58a6ff;text-align:right">${zl}</td>
+      <td style="padding:6px 10px;font-size:11px;font-family:'Courier New',monospace;color:#f0883e;text-align:right">${imp}</td>
+      <td style="padding:6px 10px;font-size:11px;font-family:'Courier New',monospace;color:${color||'#3fb950'};text-align:right;font-weight:${bold?'800':'600'}">${tot}</td>
+    </tr>`;
+
+  const html=`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Informe Financiero ${fecha}</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;background:${T.bg};color:${T.text};padding:20px}
+    .wrap{max-width:900px;margin:0 auto}
+    .sec{background:${T.s1};border:1px solid ${T.border};border-radius:12px;padding:16px;margin-bottom:14px}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .kpi{background:${T.bg};border:1px solid ${T.border};border-radius:10px;padding:12px;text-align:center}
+    .kpi-n{font-size:28px;font-weight:900;line-height:1.1}
+    .kpi-l{font-size:10px;color:${T.muted};text-transform:uppercase;letter-spacing:.06em;margin-top:4px}
+    .kpi-v{font-size:16px;font-family:'Courier New',monospace;font-weight:700;margin-top:4px}
+    .divider{display:flex;align-items:center;gap:8px;margin:10px 0}
+    .divider::before,.divider::after{content:'';flex:1;height:1px;background:${T.border}}
+    .divider span{font-size:9px;font-weight:700;color:${T.muted};text-transform:uppercase;letter-spacing:.08em}
+    .badge{display:inline-flex;flex-direction:column;align-items:center;background:${T.s2};border:1px solid ${T.border};border-radius:8px;padding:6px 10px;margin:3px;min-width:65px}
+    .badge-lbl{font-size:9px;color:${T.muted};text-transform:uppercase;letter-spacing:.05em}
+    .badge-n{font-size:14px;font-weight:800;color:${T.text}}
+    .badge-p{font-size:10px;font-weight:700;color:${T.muted}}
+    table tr:nth-child(even){background:${isDark?'rgba(255,255,255,.02)':'rgba(0,0,0,.02)'}}
+  </style>
+  </head><body><div class="wrap">
+
+  <!-- HEADER -->
+  <div style="text-align:center;background:linear-gradient(135deg,${T.s1},${T.s2});border:1px solid ${T.border};border-radius:14px;padding:22px;margin-bottom:16px">
+    <div style="font-size:22px;font-weight:800;color:${T.text}">📊 Informe Financiero Mensual</div>
+    <div style="font-size:12px;color:${T.muted};margin-top:6px">Gestión Integral de Compras y Costeo — ZLC Panamá · ${fecha}</div>
+  </div>
+
+  <!-- TOTALES + GRÁFICAS -->
+  <div class="sec">
+    <div style="font-size:10px;font-weight:700;color:${T.muted};text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px">Total Embarques del Período</div>
+    <div class="grid2" style="margin-bottom:14px">
+      <div class="kpi" style="border-color:rgba(63,185,80,.25)">
+        <div class="kpi-n" style="color:${T.green}">${all.length}</div>
+        <div class="kpi-l">Total Embarques</div>
+      </div>
+      <div class="kpi" style="border-color:rgba(88,166,255,.25)">
+        <div class="kpi-l" style="margin-bottom:4px">Costo Inventario Total</div>
+        <div class="kpi-v" style="color:${T.blue};font-size:18px">${f(_invTotal)}</div>
       </div>
     </div>
-    ${tbl('Embarques de Liquidación',
-      tblRow('Trámites Sababa Import',liq_sab.length,'—')+
-      tblRow('Trámites CIF Express',liq_cif.length,'—')+
-      tblRow('Embarques Zona Libre / Importación',liq_zl.length,liq_imp.length)+
-      tblRow('Valor Mercancía Original',f(A.liq_zl.mercOrig),f(A.liq_imp.mercOrig))+
-      tblRow('Costo No Mercancía',f(A.liq_zl.costoNM),f(A.liq_imp.costoNM))+
-      tblRow('ITBMS',f(A.liq_zl.itbms),f(A.liq_imp.itbms))+
-      tblRow('Landed Total',f(A.liq_zl.l1),f(A.liq_imp.l1),true)
-    )}
-    ${tbl('Embarques Locales',
-      tblRow('Trámites Sababa Import',loc_sab.length,0)+
-      tblRow('Trámites CIF Express',0,0)+
-      tblRow('Embarques Zona Libre / Importación',loc_zl.length,loc_imp.length)+
-      tblRow('Valor Mercancía Homologado',f(A.loc_zl.mercInv),f(A.loc_imp.mercInv))+
-      tblRow('Costo No Mercancía',f(A.loc_zl.costoNM),f(A.loc_imp.costoNM))+
-      tblRow('ITBMS',f(A.loc_zl.itbms),f(A.loc_imp.itbms))+
-      tblRow('Landed Total',f(A.loc_zl.l1),f(A.loc_imp.l1),true)
-    )}
-    ${tbl('Desglose Valor Mercancía',
-      tblRow('Original Zona Libre / Importación',f(A.liq_zl.mercOrig+A.loc_zl.mercOrig),f(A.liq_imp.mercOrig+A.loc_imp.mercOrig))+
-      tblRow('Homologado Zona Libre / Importación',f(A.liq_zl.mercHomol+A.loc_zl.mercHomol),f(A.liq_imp.mercHomol+A.loc_imp.mercHomol))+
-      tblRow('Factor % s/Original — Liquidación',factPct(A.liq_zl.l1,A.liq_zl.mercInv),factPct(A.liq_imp.l1,A.liq_imp.mercInv))+
-      tblRow('Factor % s/Original — Local',factPct(A.loc_zl.l1,A.loc_zl.mercInv),factPct(A.loc_imp.l1,A.loc_imp.mercInv))+
-      tblRow('Factor % s/Costo Inventario',factPct(A.liq_zl.l1+A.loc_zl.l1,A.liq_zl.inv+A.loc_zl.inv),factPct(A.liq_imp.l1+A.loc_imp.l1,A.liq_imp.inv+A.loc_imp.inv),true)
-    )}
-    <p style="text-align:center;color:#999;font-size:11px;margin-top:20px">Generado por Gestión Integral de Compras y Costeo · ZLC Panamá · ${fecha}</p>
+
+    <!-- Desglose Merc/Sumi -->
+    <div class="divider"><span>Desglose</span></div>
+    <div class="grid2" style="margin-bottom:10px">
+      <div style="background:rgba(63,185,80,.08);border:2px solid rgba(63,185,80,.3);border-radius:10px;padding:10px;text-align:center">
+        <div style="font-size:9px;color:${T.green};font-weight:700;text-transform:uppercase;margin-bottom:4px">🏬 Mercancía</div>
+        <div style="font-size:24px;font-weight:900;color:${T.green}">${all.length-suministros.length}</div>
+        <div style="font-size:10px;color:${T.muted};margin-bottom:4px">embarques</div>
+        <div style="font-size:12px;font-family:'Courier New',monospace;font-weight:700;color:${T.green}">${fK(A.merc_all?A.merc_all.inv:_invMerc)}</div>
+      </div>
+      <div style="background:rgba(250,204,21,.08);border:2px solid rgba(250,204,21,.3);border-radius:10px;padding:10px;text-align:center">
+        <div style="font-size:9px;color:${T.yellow};font-weight:700;text-transform:uppercase;margin-bottom:4px">🔧 Suministros</div>
+        <div style="font-size:24px;font-weight:900;color:${T.yellow}">${suministros.length}</div>
+        <div style="font-size:10px;color:${T.muted};margin-bottom:4px">embarques</div>
+        <div style="font-size:12px;font-family:'Courier New',monospace;font-weight:700;color:${T.yellow}">${fK(_sumiInv)}</div>
+      </div>
     </div>
-  </body></html>`;
+    <div class="grid2">
+      <div style="background:rgba(240,136,62,.06);border:2px solid rgba(240,136,62,.25);border-radius:10px;padding:10px;text-align:center">
+        <div style="font-size:9px;color:${T.muted};text-transform:uppercase;margin-bottom:4px">📋 Liquidación</div>
+        <div style="font-size:22px;font-weight:900;color:${T.orange}">${liquidacion.length} emb</div>
+        <div style="font-size:11px;font-family:'Courier New',monospace;color:${T.orange}">${f(_liqZLInv+_liqIMPInv)}</div>
+      </div>
+      <div style="background:rgba(88,166,255,.06);border:2px solid rgba(88,166,255,.25);border-radius:10px;padding:10px;text-align:center">
+        <div style="font-size:9px;color:${T.muted};text-transform:uppercase;margin-bottom:4px">🏪 Local</div>
+        <div style="font-size:22px;font-weight:900;color:${T.blue}">${local.length} emb</div>
+        <div style="font-size:11px;font-family:'Courier New',monospace;color:${T.blue}">${f(_locZLInv+_locIMPInv)}</div>
+      </div>
+    </div>
+
+    <!-- Gráficas -->
+    <div style="margin-top:16px">
+      ${barChart('📊 Composición del Inventario',[
+        {lbl:'🏬 Mercancía',   val:_mercEmbsTotal, color:'${T.blue}'},
+        {lbl:'🔧 Suministros', val:_sumiInv,        color:'${T.orange}'},
+      ],_invTotal)}
+      ${barChart('📊 Zona Libre vs Importación',[
+        {lbl:'🚛 Zona Libre',  val:_invZL,  color:'${T.green}'},
+        {lbl:'🚢 Importación', val:_invIMP, color:'${T.blue}'},
+      ],_invTotal)}
+      ${barChart('📊 Estructura del Costo',[
+        {lbl:'🏬 Mercancía',  val:_invMerc,   color:'${T.blue}'},
+        {lbl:'⚙️ No Merc.',   val:_invNM,     color:'${T.orange}'},
+        {lbl:'🏛️ ITBMS',      val:_invItbms,  color:'${T.green}'},
+      ],_invTotal)}
+    </div>
+  </div>
+
+  <!-- EMBARQUES LOCALES -->
+  <div class="sec">
+    ${tblSection('🏪 Embarques Locales',
+      tRow('Trámites Sababa Import',loc_sab.length,0,loc_sab.length)+
+      tRow('Embarques ZL / Importación',loc_zl.length,loc_imp.length,loc_zl.length+loc_imp.length)+
+      tRow('Valor Mercancía Homologado',f(A.loc_zl.mercInv),f(A.loc_imp.mercInv),f(A.loc_zl.mercInv+A.loc_imp.mercInv))+
+      tRow('Costo No Mercancía',f(A.loc_zl.costoNM),f(A.loc_imp.costoNM),f(A.loc_zl.costoNM+A.loc_imp.costoNM))+
+      tRow('ITBMS',f(A.loc_zl.itbms),f(A.loc_imp.itbms),f(A.loc_zl.itbms+A.loc_imp.itbms))+
+      tRow('Landed Total',f(A.loc_zl.l1),f(A.loc_imp.l1),f(A.loc_zl.l1+A.loc_imp.l1),true,'${T.green}')
+    )}
+  </div>
+
+  <!-- EMBARQUES LIQUIDACIÓN -->
+  <div class="sec">
+    ${tblSection('📋 Embarques de Liquidación',
+      tRow('Trámites Sababa Import',liq_sab.length,'—',liq_sab.length)+
+      tRow('Trámites CIF Express',liq_cif.length,'—',liq_cif.length)+
+      tRow('Embarques ZL / Importación',liq_zl.length,liq_imp.length,liq_zl.length+liq_imp.length)+
+      tRow('Valor Mercancía Original',f(A.liq_zl.mercOrig),f(A.liq_imp.mercOrig),f(A.liq_zl.mercOrig+A.liq_imp.mercOrig))+
+      tRow('Costo No Mercancía',f(A.liq_zl.costoNM),f(A.liq_imp.costoNM),f(A.liq_zl.costoNM+A.liq_imp.costoNM))+
+      tRow('ITBMS',f(A.liq_zl.itbms),f(A.liq_imp.itbms),f(A.liq_zl.itbms+A.liq_imp.itbms))+
+      tRow('Landed Total',f(A.liq_zl.l1),f(A.liq_imp.l1),f(A.liq_zl.l1+A.liq_imp.l1),true,'${T.green}')
+    )}
+  </div>
+
+  <!-- TOTAL GLOBAL -->
+  <div class="sec" style="border:2px solid ${T.green};border-radius:12px">
+    <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:6px 12px;align-items:center">
+      <span style="font-size:14px;font-weight:900;color:${T.text}">🏁 TOTAL GLOBAL — Costo Inventario</span>
+      <span style="font-size:13px;font-family:'Courier New',monospace;color:${T.blue};font-weight:700">${f(_invZL)}</span>
+      <span style="font-size:13px;font-family:'Courier New',monospace;color:${T.orange};font-weight:700">${f(_invIMP)}</span>
+      <span style="font-size:20px;font-family:'Courier New',monospace;color:${T.green};font-weight:900">${f(_invTotal)}</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 12px;margin-top:6px;padding-top:6px;border-top:1px solid ${T.border}">
+      <span style="font-size:9px;color:${T.muted}">Zona Libre + Importación = Costo Inventario Total</span>
+      <span style="font-size:10px;color:${T.blue};text-align:right;font-weight:700">${p2(_invZL,_invTotal).toFixed(2)}%</span>
+      <span style="font-size:10px;color:${T.orange};text-align:right;font-weight:700">${p2(_invIMP,_invTotal).toFixed(2)}%</span>
+      <span style="font-size:10px;color:${T.green};text-align:right;font-weight:800">100%</span>
+    </div>
+  </div>
+
+  <!-- EMBARQUES SUMINISTROS — detalle al final -->
+  ${suministros.length>0?`<div class="sec" style="border:1px dashed rgba(250,204,21,.4)">
+    <div style="font-size:9px;font-weight:700;color:${T.muted};text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">📎 Detalle — Embarques de Suministro (consumo interno · no vendible)</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div style="font-size:12px;font-weight:700;color:${T.yellow}">🔧 ${suministros.length} embarques · Zona Libre ${sumi_zl.length} · Importación ${sumi_imp.length}</div>
+      <div style="font-family:'Courier New',monospace;font-size:13px;font-weight:800;color:${T.yellow}">${f(_sumiInv)}</div>
+    </div>
+    <div style="border:1px solid rgba(250,204,21,.2);border-radius:8px;overflow:hidden">
+      ${suministros.map(function(d){
+        var nro=d.nro||'—';
+        var desc=(d.desc||d.descripcion||'').substring(0,50);
+        var r=_calcCostoInventario(d);
+        var tip=((d.snap&&d.snap.tipo)||d.tipo||'ZL').toUpperCase();
+        var isZL=tip==='ZL';
+        return '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;border-bottom:1px solid rgba(250,204,21,.1);font-size:11px;gap:8px">'
+          +'<span style="color:${T.muted};flex:1"><strong style="color:${T.yellow}">'+nro+'</strong>'+(desc?' · '+desc:'')+'</span>'
+          +'<span style="font-size:9px;font-weight:700;color:'+(isZL?'${T.green}':'${T.blue}')+';white-space:nowrap">'+(isZL?'🚛 Zona Libre':'🚢 Importación')+'</span>'
+          +'<span style="font-family:\'Courier New\',monospace;color:${T.yellow};font-weight:700;white-space:nowrap">'+f(r.costoInv)+'</span>'
+          +'</div>';
+      }).join('')}
+    </div>
+  </div>`:''}
+
+  <!-- DESGLOSE COSTO INVENTARIO -->
+  <div class="sec">
+    <div style="font-size:10px;font-weight:700;color:${T.muted};text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px">📦 Desglose Costo Inventario</div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:rgba(88,166,255,.08);border:1px solid rgba(88,166,255,.2);border-radius:8px">
+        <span style="font-size:12px;font-weight:600;color:${T.text}">Valor Mercancía<br><span style="font-size:10px">(Original + Homologado Sababa)</span></span>
+        <span style="font-size:15px;font-weight:800;color:${T.blue};font-family:'Courier New',monospace">${f(_invMerc)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:rgba(240,136,62,.08);border:1px solid rgba(240,136,62,.2);border-radius:8px">
+        <span style="font-size:12px;font-weight:600;color:${T.text}">Costo No Mercancía<br><span style="font-size:10px">(Flete + Honorarios + Gastos)</span></span>
+        <span style="font-size:15px;font-weight:800;color:${T.orange};font-family:'Courier New',monospace">${f(_invNM)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:rgba(139,148,158,.08);border:1px solid rgba(139,148,158,.2);border-radius:8px">
+        <span style="font-size:12px;font-weight:600;color:${T.text}">ITBMS<br><span style="font-size:10px">(Impuesto total)</span></span>
+        <span style="font-size:15px;font-weight:800;color:${T.text};font-family:'Courier New',monospace">${f(_invItbms)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:rgba(240,136,62,.12);border:1px solid rgba(240,136,62,.3);border-radius:10px">
+        <span style="font-size:13px;font-weight:700;color:${T.text}">Costo Inventario Total</span>
+        <span style="font-size:20px;font-weight:900;color:${T.orange};font-family:'Courier New',monospace">${f(_invTotal)}</span>
+      </div>
+    </div>
+  </div>
+
+  <p style="text-align:center;color:${T.muted2};font-size:11px;margin-top:16px">
+    Generado por Gestión Integral de Compras y Costeo · ZLC Panamá · ${fecha}
+  </p>
+  </div></body></html>`;
+
   const blob=new Blob([html],{type:'text/html;charset=utf-8'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
@@ -16726,6 +16965,24 @@ function renderResumenRapido(){
       })()}
     `)}
 
+
+    <!-- EMBARQUES LOCALES -->
+    ${sec(`
+      ${hdr('🏪','Embarques Locales',local.length,A_loc.inv)}
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
+        ${badge('Sababa Import',loc_sab.length,'rgba(240,136,62,.12)',local.length)}
+        ${badge('CIF Express',0,'rgba(88,166,255,.1)',local.length)}
+        ${badge('Zona Libre',loc_zl.length,'rgba(63,185,80,.1)',local.length)}
+        ${badge('Importación',loc_imp.length,'rgba(168,85,247,.1)',local.length)}
+        ${sumi_local.length>0?badge('Suministros 🔧',sumi_local.length,'rgba(250,204,21,.15)',local.length):''}
+      </div>
+      ${colHdr()}
+      ${row('Valor Mercancía Homologado', fmtA(A_loc_zl.merc), fmtA(A_loc_imp.merc),false,'',A_loc_zl.merc,A_loc_imp.merc)}
+      ${row('Costo No Mercancía',          fmtA(A_loc_zl.nm),   fmtA(A_loc_imp.nm),false,'',A_loc_zl.nm,A_loc_imp.nm)}
+      ${row('ITBMS',                       fmtA(A_loc_zl.itbms), fmtA(A_loc_imp.itbms),false,'',A_loc_zl.itbms,A_loc_imp.itbms)}
+      ${row('Landed Total',                fmtA(A_loc_zl.l1),   fmtA(A_loc_imp.l1), true, 'var(--green-l)',A_loc_zl.l1,A_loc_imp.l1)}
+    `)}
+
     <!-- EMBARQUES DE LIQUIDACIÓN -->
     ${sec(`
       ${hdr('📋','Embarques de Liquidación',liquidacion.length,A_liq.inv)}
@@ -16742,6 +16999,22 @@ function renderResumenRapido(){
       ${row('ITBMS',                    fmtA(A_liq_zl.itbms), fmtA(A_liq_imp.itbms),false,'',A_liq_zl.itbms,A_liq_imp.itbms)}
       ${row('Landed Total',             fmtA(A_liq_zl.l1),   fmtA(A_liq_imp.l1), true, 'var(--green-l)',A_liq_zl.l1,A_liq_imp.l1)}
     `)}
+
+    <!-- GRAN TOTAL -->
+    <div style="background:rgba(63,185,80,.06);border:1px solid rgba(63,185,80,.2);border-radius:12px;padding:12px 14px;margin-bottom:10px">
+      <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 10px;align-items:center">
+        <span style="font-size:12px;font-weight:800;color:var(--text)">🏁 TOTAL GLOBAL (Inv.)</span>
+        <span style="font-size:12px;font-family:monospace;color:var(--blue-l);text-align:right;min-width:72px;font-weight:700">${fmtA(_invZL)}</span>
+        <span style="font-size:12px;font-family:monospace;color:var(--orange-l);text-align:right;min-width:72px;font-weight:700">${fmtA(_invIMP)}</span>
+        <span style="font-size:13px;font-family:monospace;color:var(--green-l);text-align:right;min-width:80px;font-weight:900">${fmtA(totalInv)}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 10px;margin-top:4px">
+        <span style="font-size:9px;color:var(--muted)">Suma ZL + Importación = Costo Inventario Total</span>
+        <span style="font-size:9px;color:var(--muted);text-align:right;min-width:72px">${pct(_invZL,totalInv)}</span>
+        <span style="font-size:9px;color:var(--muted);text-align:right;min-width:72px">${pct(_invIMP,totalInv)}</span>
+        <span style="font-size:9px;color:var(--green-l);text-align:right;min-width:80px;font-weight:700">100%</span>
+      </div>
+    </div>
 
     <!-- SUMINISTROS — siempre que haya al menos 1 -->
     ${suministros.length>0?sec(`
@@ -16792,39 +17065,6 @@ function renderResumenRapido(){
         }).join('')}
       </div>
     `):''}
-
-    <!-- EMBARQUES LOCALES -->
-    ${sec(`
-      ${hdr('🏪','Embarques Locales',local.length,A_loc.inv)}
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
-        ${badge('Sababa Import',loc_sab.length,'rgba(240,136,62,.12)',local.length)}
-        ${badge('CIF Express',0,'rgba(88,166,255,.1)',local.length)}
-        ${badge('Zona Libre',loc_zl.length,'rgba(63,185,80,.1)',local.length)}
-        ${badge('Importación',loc_imp.length,'rgba(168,85,247,.1)',local.length)}
-        ${sumi_local.length>0?badge('Suministros 🔧',sumi_local.length,'rgba(250,204,21,.15)',local.length):''}
-      </div>
-      ${colHdr()}
-      ${row('Valor Mercancía Homologado', fmtA(A_loc_zl.merc), fmtA(A_loc_imp.merc),false,'',A_loc_zl.merc,A_loc_imp.merc)}
-      ${row('Costo No Mercancía',          fmtA(A_loc_zl.nm),   fmtA(A_loc_imp.nm),false,'',A_loc_zl.nm,A_loc_imp.nm)}
-      ${row('ITBMS',                       fmtA(A_loc_zl.itbms), fmtA(A_loc_imp.itbms),false,'',A_loc_zl.itbms,A_loc_imp.itbms)}
-      ${row('Landed Total',                fmtA(A_loc_zl.l1),   fmtA(A_loc_imp.l1), true, 'var(--green-l)',A_loc_zl.l1,A_loc_imp.l1)}
-    `)}
-
-    <!-- GRAN TOTAL -->
-    <div style="background:rgba(63,185,80,.06);border:1px solid rgba(63,185,80,.2);border-radius:12px;padding:12px 14px;margin-bottom:10px">
-      <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 10px;align-items:center">
-        <span style="font-size:12px;font-weight:800;color:var(--text)">🏁 TOTAL GLOBAL (Inv.)</span>
-        <span style="font-size:12px;font-family:monospace;color:var(--blue-l);text-align:right;min-width:72px;font-weight:700">${fmtA(_invZL)}</span>
-        <span style="font-size:12px;font-family:monospace;color:var(--orange-l);text-align:right;min-width:72px;font-weight:700">${fmtA(_invIMP)}</span>
-        <span style="font-size:13px;font-family:monospace;color:var(--green-l);text-align:right;min-width:80px;font-weight:900">${fmtA(totalInv)}</span>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 10px;margin-top:4px">
-        <span style="font-size:9px;color:var(--muted)">Suma ZL + Importación = Costo Inventario Total</span>
-        <span style="font-size:9px;color:var(--muted);text-align:right;min-width:72px">${pct(_invZL,totalInv)}</span>
-        <span style="font-size:9px;color:var(--muted);text-align:right;min-width:72px">${pct(_invIMP,totalInv)}</span>
-        <span style="font-size:9px;color:var(--green-l);text-align:right;min-width:80px;font-weight:700">100%</span>
-      </div>
-    </div>
 
     <!-- DESGLOSE VALOR MERCANCÍA - COLAPSABLE -->
     <div style="background:var(--s2);border:1px solid var(--border);border-radius:12px;margin-bottom:10px;overflow:hidden">
