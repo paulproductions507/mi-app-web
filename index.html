@@ -9169,19 +9169,14 @@ const _DELETED_LIST_KEY = '_TEND_DELETED'; // NROs/TS eliminados — lista negra
 // Lista de embarques eliminados (en memoria, se sincroniza con nube)
 if(!window._deletedEmbarques) window._deletedEmbarques = new Set();
 
-// Corrige invLines de Sababa: itbmsHomol fue guardado con tipoFac='itbms' — debe ser 'honorarios'
-// porque no es un impuesto del sistema sino parte del costo de la comisión Sababa.
 function _corregirItbmsHomolSababa(d){
-  var lines = (d.snap && d.snap.invLines) || d.invLines;
-  if(!lines || !lines.length) return;
-  var esc = (d.esc||'').toLowerCase();
+  var lines=(d.snap&&d.snap.invLines)||d.invLines;
+  if(!lines||!lines.length) return;
+  var esc=(d.esc||'').toLowerCase();
   if(!esc.includes('sababa')) return;
-  var changed = false;
   lines.forEach(function(l){
-    if(l.tipoFac === 'itbms' &&
-       (l._desc === 'ITBMS Homologado' || (l.prov||'').toUpperCase().includes('SABABA'))){
-      l.tipoFac = 'honorarios';
-      changed = true;
+    if(l.tipoFac==='itbms'&&(l._desc==='ITBMS Homologado'||(l.prov||'').toUpperCase().includes('SABABA'))){
+      l.tipoFac='honorarios';
     }
   });
 }
@@ -9632,7 +9627,7 @@ function _migrarGastosDesdeSnap(d){
     if((sc3.flete||0)>0.01)   gastos.push({tipoFac:'flete',      deptCat:'GASTOS', prov:'Flete Sababa',          costo:Math.round((sc3.flete||0)*100)/100,   oc:'auto-migrado'});
     if((sc3.gastos||0)>0.01)  gastos.push({tipoFac:'acarreo',    deptCat:'GASTOS', prov:'Gastos Origen/Destino', costo:Math.round((sc3.gastos||0)*100)/100,  oc:'auto-migrado'});
     if(comBrutaSab>0.01)      gastos.push({tipoFac:'honorarios', deptCat:'GASTOS', prov:'SABABA IMPORTS, S.A.',  costo:Math.round(comBrutaSab*100)/100,       oc:'auto-migrado', _desc:'Comisión Bruta'});
-    if(itbmsHomolSab>0.01)    gastos.push({tipoFac:'honorarios',  deptCat:'GASTOS', prov:'SABABA IMPORTS, S.A.',  costo:Math.round(itbmsHomolSab*100)/100,     oc:'auto-migrado', _desc:'ITBMS Homologado'});
+    if(itbmsHomolSab>0.01)    gastos.push({tipoFac:'itbms',      deptCat:'GASTOS', prov:'SABABA IMPORTS, S.A.',  costo:Math.round(itbmsHomolSab*100)/100,     oc:'auto-migrado', _desc:'ITBMS Homologado'});
     if(mv3>0.01)              gastos.push({tipoFac:'gastos',      deptCat:'GASTOS', prov:'MASTER VALUE, S.A.',          costo:Math.round(mv3*100)/100,               oc:'auto-migrado', _desc:'Diferencia Liq. vs Sababa'});
   }
 
@@ -9799,7 +9794,6 @@ function _updateTendSubtitle(){
   targets.forEach(el=>el.textContent=txt);
 }
 function _setPeriodoRapido(p, btn){
-  // Siempre usar hora de Panamá (UTC-5, sin horario de verano)
   const fmt=d=>{ const s=new Date(d.getTime()-5*60*60*1000); return s.toISOString().slice(0,10); };
   const hoy=fmt(new Date());
   let desde='', hasta=hoy;
@@ -9864,10 +9858,8 @@ async function _loadFiltrosTend(){
     try{ var raw=localStorage.getItem(_TEND_FILTROS_KEY); if(raw) filtros=JSON.parse(raw); }catch(e){}
   }
   if(!filtros) return false;
-  // Hora Panamá UTC-5
-  const _hoyPA = new Date(new Date().getTime()-5*60*60*1000).toISOString().slice(0,10);
   if(filtros.desde)  _tfSet('tf_desde',  filtros.desde);
-  // Si 'hasta' guardado es anterior a hoy en Panamá, actualizarlo a hoy
+  const _hoyPA = new Date(new Date().getTime()-5*60*60*1000).toISOString().slice(0,10);
   if(filtros.hasta)  _tfSet('tf_hasta',  filtros.hasta < _hoyPA ? _hoyPA : filtros.hasta);
   if(filtros.tipo)   _tfSet('tf_tipo',   filtros.tipo);
   if(filtros.prov)   _tfSet('tf_proveedor', filtros.prov);
@@ -13780,120 +13772,78 @@ function _informeExportHTML(){
   const fK = n=>window._fmtMoney(n);
   const p2 = (n,d)=>d>0?parseFloat((n/d*100).toFixed(2)):0;
 
-  // Detectar tema del sistema
-  const isDark = document.documentElement.getAttribute('data-theme')==='dark' ||
-                 document.body.classList.contains('dark') ||
-                 (window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches) ||
-                 getComputedStyle(document.body).backgroundColor === 'rgb(13, 17, 23)';
-  const T = isDark ? {
-    bg:'#0d1117', s1:'#161b22', s2:'#1c2128', border:'#2d333b',
-    text:'#cdd9e5', muted:'#8b949e', muted2:'#4d5566',
-    green:'#3fb950', blue:'#58a6ff', orange:'#f0883e', yellow:'#eab308'
-  } : {
-    bg:'#f6f8fa', s1:'#ffffff', s2:'#f0f4f8', border:'#d0d7de',
-    text:'#1f2328', muted:'#57606a', muted2:'#8c959f',
-    green:'#1a7f37', blue:'#0969da', orange:'#bc4c00', yellow:'#9a6700'
-  };
-
-  // Lógica correcta de suministros — igual que renderResumenRapido
-  const _isSumi = d => {
-    const lines=(d.snap&&d.snap.invLines)||d.invLines||[];
-    return lines.some(l=>(l.tipoFac||'mercancia')==='mercancia'&&(l.deptCat||'').toUpperCase().includes('SUMI'));
-  };
+  // Suministros — misma lógica que renderResumenRapido
+  const _isSumi = d => { const lines=(d.snap&&d.snap.invLines)||d.invLines||[]; return lines.some(l=>(l.tipoFac||'mercancia')==='mercancia'&&(l.deptCat||'').toUpperCase().includes('SUMI')); };
   const suministros   = all.filter(_isSumi);
   const mercancia_embs= all.filter(d=>!_isSumi(d));
-  const _cl = d => {const t=((d.snap&&d.snap.tipo)||d.tipo||'ZL').toUpperCase();return t==='ZL'?true:t==='IMP'||t==='EXT'?false:true;};
-  const sumi_zl   = suministros.filter(d=> _cl(d));
-  const sumi_imp  = suministros.filter(d=>!_cl(d));
-  const sumi_local= suministros.filter(d=>{const esc=(d.esc||'').toLowerCase();const sc3=(d.snap&&d.snap.sc3)||{};return esc.includes('sababa')&&(sc3.mercHomol||0)>0;});
+  const _cl = d => { const t=((d.snap&&d.snap.tipo)||d.tipo||'ZL').toUpperCase(); return t==='ZL'?true:t==='IMP'||t==='EXT'?false:true; };
+  const sumi_zl  = suministros.filter(d=> _cl(d));
+  const sumi_imp = suministros.filter(d=>!_cl(d));
 
-  // Totales globales — TODOS usan costoInv para que sumen correctamente
+  // Totales globales — todos usan costoInv
   var _invMerc=0,_invNM=0,_invItbms=0,_invTotal=0;
   all.forEach(function(d){var r=_calcCostoInventario(d);_invMerc+=r.mercInv;_invNM+=r.costoNM;_invItbms+=r.itbms;_invTotal+=r.costoInv;});
-
-  // costoInv por segmento (no solo mercInv) — para que sumen al total
   var _mercEmbsTotal=0; mercancia_embs.forEach(function(d){_mercEmbsTotal+=_calcCostoInventario(d).costoInv;});
-  var _sumiInv=0;       suministros.forEach(function(d){_sumiInv+=_calcCostoInventario(d).costoInv;});
-
-  // ZL vs IMP — costoInv completo por zona
+  var _sumiInv=0; suministros.forEach(function(d){_sumiInv+=_calcCostoInventario(d).costoInv;});
   var _invZL=0,_invIMP=0;
-  all.forEach(function(d){
-    var r=_calcCostoInventario(d);
-    var isZL=_cl(d);
-    if(isZL) _invZL+=r.costoInv; else _invIMP+=r.costoInv;
-  });
-  const _liqZLInv=A.liq_zl.inv||0, _liqIMPInv=A.liq_imp.inv||0;
-  const _locZLInv=A.loc_zl.inv||0, _locIMPInv=A.loc_imp.inv||0;
+  all.forEach(function(d){var r=_calcCostoInventario(d);if(_cl(d))_invZL+=r.costoInv;else _invIMP+=r.costoInv;});
 
-  // Gráfica de barras estilo planeación
+  // Agregados por subgrupo usando _calcCostoInventario (fuente única de verdad)
+  const _agg = arr => {
+    var o={mercOrig:0,mercInv:0,nm:0,itbms:0,l1:0,inv:0};
+    arr.forEach(function(d){var r=_calcCostoInventario(d);o.mercOrig+=r.mercOrig;o.mercInv+=r.mercInv;o.nm+=r.costoNM;o.itbms+=r.itbms;o.l1+=r.landed1;o.inv+=r.costoInv;});
+    return o;
+  };
+  const B={
+    liq_zl: _agg(liq_zl), liq_imp: _agg(liq_imp),
+    loc_zl: _agg(loc_zl), loc_imp: _agg(loc_imp),
+  };
+
+  // Detectar tema
+  const isDark=getComputedStyle(document.body).backgroundColor==='rgb(13, 17, 23)'||document.body.classList.contains('dark');
+  const T=isDark?{bg:'#0d1117',s1:'#161b22',s2:'#1c2128',border:'#2d333b',text:'#cdd9e5',muted:'#8b949e',muted2:'#4d5566',green:'#3fb950',blue:'#58a6ff',orange:'#f0883e',yellow:'#eab308'}
+                :{bg:'#f6f8fa',s1:'#ffffff',s2:'#f0f4f8',border:'#d0d7de',text:'#1f2328',muted:'#57606a',muted2:'#8c959f',green:'#1a7f37',blue:'#0969da',orange:'#bc4c00',yellow:'#9a6700'};
+
+  // Barra de progreso estilo planeación
   const barChart=(titulo,rows,total)=>{
     const filas=rows.map(r=>{
-      const pct=p2(r.val,total);
-      const bw=Math.max(2,pct);
-      return `<tr style="border-bottom:1px solid #2d333b">
+      const pct=p2(r.val,total); const bw=Math.max(2,pct);
+      return `<tr style="border-bottom:1px solid ${T.border}">
         <td style="padding:7px 10px;font-size:11px;font-weight:700;color:${T.text}">${r.lbl}</td>
         <td style="padding:7px 10px;font-size:11px;font-family:'Courier New',monospace;font-weight:700;color:${r.color};text-align:right;white-space:nowrap">${f(r.val)}</td>
-        <td style="padding:5px 10px;min-width:100px">
-          <div style="background:#2d333b;border-radius:3px;height:8px;overflow:hidden">
-            <div style="width:${bw}%;height:100%;border-radius:3px;background:linear-gradient(90deg,#f8d122,#f97316)"></div>
-          </div>
-        </td>
-        <td style="padding:7px 10px;font-size:11px;font-weight:700;color:#8b949e;text-align:right;white-space:nowrap">${pct.toFixed(2)}%</td>
+        <td style="padding:5px 10px;min-width:100px"><div style="background:${T.border};border-radius:3px;height:8px;overflow:hidden"><div style="width:${bw}%;height:100%;border-radius:3px;background:linear-gradient(90deg,#f8d122,#f97316)"></div></div></td>
+        <td style="padding:7px 10px;font-size:11px;font-weight:700;color:${T.muted};text-align:right;white-space:nowrap">${pct.toFixed(2)}%</td>
       </tr>`;
     }).join('');
     return `<div style="margin-bottom:16px">
-      <div style="font-size:10px;font-weight:700;color:#8b949e;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">${titulo}</div>
-      <div style="border:1px solid #2d333b;border-radius:8px;overflow:hidden">
+      <div style="font-size:9px;font-weight:700;color:${T.muted};text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">${titulo}</div>
+      <div style="border:1px solid ${T.border};border-radius:8px;overflow:hidden">
         <table style="width:100%;border-collapse:collapse">
-          <thead><tr style="background:#2d333b">
-            <th style="padding:6px 10px;font-size:9px;color:#8b949e;text-align:left;font-weight:600;text-transform:uppercase">Concepto</th>
-            <th style="padding:6px 10px;font-size:9px;color:#8b949e;text-align:right;font-weight:600;text-transform:uppercase">Monto</th>
-            <th style="padding:6px 10px;font-size:9px;color:#8b949e;min-width:100px"></th>
-            <th style="padding:6px 10px;font-size:9px;color:#8b949e;text-align:right;font-weight:600;text-transform:uppercase">% Total</th>
-          </tr></thead>
-          <tbody>${filas}
-            <tr style="background:#2d3748;font-weight:800">
-              <td style="padding:8px 10px;font-size:11px;font-weight:800;color:#ffffff">TOTAL</td>
-              <td style="padding:8px 10px;font-size:11px;font-family:'Courier New',monospace;font-weight:800;color:#ffffff;text-align:right">${f(total)}</td>
-              <td></td>
-              <td style="padding:8px 10px;font-size:11px;font-weight:800;text-align:right;color:#ffffff">100%</td>
-            </tr>
-          </tbody>
+          <thead><tr style="background:${T.s2}"><th style="padding:6px 10px;font-size:9px;color:${T.muted};text-align:left;font-weight:600;text-transform:uppercase">Concepto</th><th style="padding:6px 10px;font-size:9px;color:${T.muted};text-align:right;font-weight:600;text-transform:uppercase">Monto</th><th style="padding:6px 10px;font-size:9px;color:${T.muted};min-width:100px"></th><th style="padding:6px 10px;font-size:9px;color:${T.muted};text-align:right;font-weight:600;text-transform:uppercase">% Total</th></tr></thead>
+          <tbody>${filas}<tr style="background:#2d3748;font-weight:800"><td style="padding:8px 10px;font-size:11px;font-weight:800;color:#ffffff">TOTAL</td><td style="padding:8px 10px;font-size:11px;font-family:'Courier New',monospace;font-weight:800;color:#ffffff;text-align:right">${f(total)}</td><td></td><td style="padding:8px 10px;font-size:11px;font-weight:800;text-align:right;color:#ffffff">100%</td></tr></tbody>
         </table>
       </div>
     </div>`;
   };
 
-  // Cubículo
-  const cubCard=(title,n,inv,borderColor,bgColor,rows)=>`
-    <div style="border:2px solid ${borderColor};border-radius:10px;overflow:hidden;margin-bottom:12px">
-      <div style="background:${bgColor};padding:8px 12px;text-align:center;border-bottom:1px solid ${borderColor}">
-        <div style="font-size:11px;font-weight:800;color:#cdd9e5;text-transform:uppercase">${title}</div>
-        <div style="font-size:16px;font-weight:900;color:#cdd9e5">${n} emb</div>
-        <div style="font-size:11px;font-family:'Courier New',monospace;font-weight:700;color:#f0883e">${f(inv)}</div>
-      </div>
-      <div style="padding:10px 12px">${rows}</div>
-    </div>`;
-
   const tblSection=(title,rows)=>`
     <div style="margin-bottom:16px">
       <div style="background:#2d333b;color:#cdd9e5;padding:8px 12px;border-radius:8px 8px 0 0;font-size:12px;font-weight:700">${title}</div>
-      <table style="width:100%;border-collapse:collapse;border:1px solid #2d333b;border-top:none">
-        <thead><tr style="background:rgba(255,255,255,.04);font-size:10px;font-weight:700;color:#8b949e">
+      <table style="width:100%;border-collapse:collapse;border:1px solid ${T.border};border-top:none">
+        <thead><tr style="background:${T.s2};font-size:10px;font-weight:700;color:${T.muted}">
           <th style="text-align:left;padding:6px 10px">Concepto</th>
           <th style="text-align:right;padding:6px 10px">Zona Libre</th>
           <th style="text-align:right;padding:6px 10px">Importación</th>
           <th style="text-align:right;padding:6px 10px">Total</th>
-        </tr></thead>
-        <tbody>${rows}</tbody>
+        </tr></thead><tbody>${rows}</tbody>
       </table>
     </div>`;
   const tRow=(lbl,zl,imp,tot,bold,color)=>`
-    <tr style="border-bottom:1px solid #2d333b${bold?';font-weight:800;background:rgba(255,255,255,.03)':''}">
+    <tr style="border-bottom:1px solid ${T.border}${bold?';background:'+T.s2:''}">
       <td style="padding:6px 10px;font-size:11px;font-weight:700;color:${T.text}">${lbl}</td>
-      <td style="padding:6px 10px;font-size:11px;font-family:'Courier New',monospace;color:#58a6ff;text-align:right">${zl}</td>
-      <td style="padding:6px 10px;font-size:11px;font-family:'Courier New',monospace;color:#f0883e;text-align:right">${imp}</td>
-      <td style="padding:6px 10px;font-size:11px;font-family:'Courier New',monospace;color:${color||'#3fb950'};text-align:right;font-weight:${bold?'800':'600'}">${tot}</td>
+      <td style="padding:6px 10px;font-size:11px;font-family:'Courier New',monospace;color:${T.blue};text-align:right">${zl}</td>
+      <td style="padding:6px 10px;font-size:11px;font-family:'Courier New',monospace;color:${T.orange};text-align:right">${imp}</td>
+      <td style="padding:6px 10px;font-size:11px;font-family:'Courier New',monospace;color:${color||T.green};text-align:right;font-weight:${bold?'800':'600'}">${tot}</td>
     </tr>`;
 
   const html=`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
@@ -13906,50 +13856,40 @@ function _informeExportHTML(){
     .sec{background:${T.s1};border:1px solid ${T.border};border-radius:12px;padding:16px;margin-bottom:14px}
     .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
     .kpi{background:${T.bg};border:1px solid ${T.border};border-radius:10px;padding:12px;text-align:center}
-    .kpi-n{font-size:28px;font-weight:900;line-height:1.1}
-    .kpi-l{font-size:10px;color:${T.muted};text-transform:uppercase;letter-spacing:.06em;margin-top:4px}
-    .kpi-v{font-size:16px;font-family:'Courier New',monospace;font-weight:700;margin-top:4px}
-    .divider{display:flex;align-items:center;gap:8px;margin:10px 0}
-    .divider::before,.divider::after{content:'';flex:1;height:1px;background:${T.border}}
-    .divider span{font-size:9px;font-weight:700;color:${T.muted};text-transform:uppercase;letter-spacing:.08em}
     .badge{display:inline-flex;flex-direction:column;align-items:center;background:${T.s2};border:1px solid ${T.border};border-radius:8px;padding:6px 10px;margin:3px;min-width:65px}
     .badge-lbl{font-size:9px;color:${T.muted};text-transform:uppercase;letter-spacing:.05em}
     .badge-n{font-size:14px;font-weight:800;color:${T.text}}
     .badge-p{font-size:10px;font-weight:700;color:${T.muted}}
     table tr:nth-child(even){background:${isDark?'rgba(255,255,255,.02)':'rgba(0,0,0,.02)'}}
-  </style>
-  </head><body><div class="wrap">
+  </style></head><body><div class="wrap">
 
-  <!-- HEADER -->
-  <div style="text-align:center;background:linear-gradient(135deg,${T.s1},${T.s2});border:1px solid ${T.border};border-radius:14px;padding:22px;margin-bottom:16px">
-    <div style="font-size:22px;font-weight:800;color:${T.text}">📊 Informe Financiero Mensual</div>
-    <div style="font-size:12px;color:${T.muted};margin-top:6px">Gestión Integral de Compras y Costeo — ZLC Panamá · ${fecha}</div>
+  <div style="text-align:center;background:${isDark?'#161b22':'#1f2328'};border-radius:14px;padding:22px;margin-bottom:16px">
+    <div style="font-size:22px;font-weight:800;color:#ffffff">📊 Informe Financiero Mensual</div>
+    <div style="font-size:12px;color:rgba(255,255,255,.6);margin-top:6px">Gestión Integral de Compras y Costeo · ${fecha}</div>
   </div>
 
-  <!-- TOTALES + GRÁFICAS -->
+  <!-- TOTALES -->
   <div class="sec">
     <div style="font-size:10px;font-weight:700;color:${T.muted};text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px">Total Embarques del Período</div>
     <div class="grid2" style="margin-bottom:14px">
-      <div class="kpi" style="border-color:rgba(63,185,80,.25)">
-        <div class="kpi-n" style="color:${T.green}">${all.length}</div>
-        <div class="kpi-l">Total Embarques</div>
+      <div class="kpi" style="border-color:${T.green}44">
+        <div style="font-size:28px;font-weight:900;line-height:1.1;color:${T.green}">${all.length}</div>
+        <div style="font-size:10px;color:${T.muted};text-transform:uppercase;letter-spacing:.06em;margin-top:4px">Total Embarques</div>
       </div>
-      <div class="kpi" style="border-color:rgba(88,166,255,.25)">
-        <div class="kpi-l" style="margin-bottom:4px">Costo Inventario Total</div>
-        <div class="kpi-v" style="color:${T.blue};font-size:18px">${f(_invTotal)}</div>
+      <div class="kpi" style="border-color:${T.blue}44">
+        <div style="font-size:10px;color:${T.muted};text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Costo Inventario Total</div>
+        <div style="font-size:18px;font-weight:900;color:${T.blue};font-family:'Courier New',monospace">${f(_invTotal)}</div>
       </div>
     </div>
-
-    <!-- Desglose Merc/Sumi -->
-    <div class="divider"><span>Desglose</span></div>
+    <div style="display:flex;align-items:center;gap:8px;margin:10px 0"><div style="flex:1;height:1px;background:${T.border}"></div><span style="font-size:9px;font-weight:700;color:${T.muted};text-transform:uppercase;letter-spacing:.08em">Desglose</span><div style="flex:1;height:1px;background:${T.border}"></div></div>
     <div class="grid2" style="margin-bottom:10px">
-      <div style="background:rgba(63,185,80,.08);border:2px solid rgba(63,185,80,.3);border-radius:10px;padding:10px;text-align:center">
+      <div style="background:${T.green}14;border:2px solid ${T.green}44;border-radius:10px;padding:10px;text-align:center">
         <div style="font-size:9px;color:${T.green};font-weight:700;text-transform:uppercase;margin-bottom:4px">🏬 Mercancía</div>
-        <div style="font-size:24px;font-weight:900;color:${T.green}">${all.length-suministros.length}</div>
+        <div style="font-size:24px;font-weight:900;color:${T.green}">${mercancia_embs.length}</div>
         <div style="font-size:10px;color:${T.muted};margin-bottom:4px">embarques</div>
-        <div style="font-size:12px;font-family:'Courier New',monospace;font-weight:700;color:${T.green}">${fK(A.merc_all?A.merc_all.inv:_invMerc)}</div>
+        <div style="font-size:12px;font-family:'Courier New',monospace;font-weight:700;color:${T.green}">${fK(_mercEmbsTotal)}</div>
       </div>
-      <div style="background:rgba(250,204,21,.08);border:2px solid rgba(250,204,21,.3);border-radius:10px;padding:10px;text-align:center">
+      <div style="background:${T.yellow}14;border:2px solid ${T.yellow}44;border-radius:10px;padding:10px;text-align:center">
         <div style="font-size:9px;color:${T.yellow};font-weight:700;text-transform:uppercase;margin-bottom:4px">🔧 Suministros</div>
         <div style="font-size:24px;font-weight:900;color:${T.yellow}">${suministros.length}</div>
         <div style="font-size:10px;color:${T.muted};margin-bottom:4px">embarques</div>
@@ -13957,33 +13897,21 @@ function _informeExportHTML(){
       </div>
     </div>
     <div class="grid2">
-      <div style="background:rgba(240,136,62,.06);border:2px solid rgba(240,136,62,.25);border-radius:10px;padding:10px;text-align:center">
+      <div style="background:${T.orange}10;border:2px solid ${T.orange}44;border-radius:10px;padding:10px;text-align:center">
         <div style="font-size:9px;color:${T.muted};text-transform:uppercase;margin-bottom:4px">📋 Liquidación</div>
         <div style="font-size:22px;font-weight:900;color:${T.orange}">${liquidacion.length} emb</div>
-        <div style="font-size:11px;font-family:'Courier New',monospace;color:${T.orange}">${f(_liqZLInv+_liqIMPInv)}</div>
+        <div style="font-size:11px;font-family:'Courier New',monospace;color:${T.orange}">${f(A.liq_zl.inv+A.liq_imp.inv)}</div>
       </div>
-      <div style="background:rgba(88,166,255,.06);border:2px solid rgba(88,166,255,.25);border-radius:10px;padding:10px;text-align:center">
+      <div style="background:${T.blue}10;border:2px solid ${T.blue}44;border-radius:10px;padding:10px;text-align:center">
         <div style="font-size:9px;color:${T.muted};text-transform:uppercase;margin-bottom:4px">🏪 Local</div>
         <div style="font-size:22px;font-weight:900;color:${T.blue}">${local.length} emb</div>
-        <div style="font-size:11px;font-family:'Courier New',monospace;color:${T.blue}">${f(_locZLInv+_locIMPInv)}</div>
+        <div style="font-size:11px;font-family:'Courier New',monospace;color:${T.blue}">${f(A.loc_zl.inv+A.loc_imp.inv)}</div>
       </div>
     </div>
-
-    <!-- Gráficas -->
     <div style="margin-top:16px">
-      ${barChart('📊 Composición del Inventario',[
-        {lbl:'🏬 Mercancía',   val:_mercEmbsTotal, color:'${T.blue}'},
-        {lbl:'🔧 Suministros', val:_sumiInv,        color:'${T.orange}'},
-      ],_invTotal)}
-      ${barChart('📊 Zona Libre vs Importación',[
-        {lbl:'🚛 Zona Libre',  val:_invZL,  color:'${T.green}'},
-        {lbl:'🚢 Importación', val:_invIMP, color:'${T.blue}'},
-      ],_invTotal)}
-      ${barChart('📊 Estructura del Costo',[
-        {lbl:'🏬 Mercancía',  val:_invMerc,   color:'${T.blue}'},
-        {lbl:'⚙️ No Merc.',   val:_invNM,     color:'${T.orange}'},
-        {lbl:'🏛️ ITBMS',      val:_invItbms,  color:'${T.green}'},
-      ],_invTotal)}
+      ${barChart('📊 Composición del Inventario',[{lbl:'🏬 Mercancía',val:_mercEmbsTotal,color:T.blue},{lbl:'🔧 Suministros',val:_sumiInv,color:T.orange}],_invTotal)}
+      ${barChart('📊 Zona Libre vs Importación',[{lbl:'🚛 Zona Libre',val:_invZL,color:T.green},{lbl:'🚢 Importación',val:_invIMP,color:T.blue}],_invTotal)}
+      ${barChart('📊 Estructura del Costo',[{lbl:'🏬 Mercancía',val:_invMerc,color:T.blue},{lbl:'⚙️ No Merc.',val:_invNM,color:T.orange},{lbl:'🏛️ ITBMS',val:_invItbms,color:T.green}],_invTotal)}
     </div>
   </div>
 
@@ -13992,10 +13920,10 @@ function _informeExportHTML(){
     ${tblSection('🏪 Embarques Locales',
       tRow('Trámites Sababa Import',loc_sab.length,0,loc_sab.length)+
       tRow('Embarques ZL / Importación',loc_zl.length,loc_imp.length,loc_zl.length+loc_imp.length)+
-      tRow('Valor Mercancía Homologado',f(A.loc_zl.mercInv),f(A.loc_imp.mercInv),f(A.loc_zl.mercInv+A.loc_imp.mercInv))+
-      tRow('Costo No Mercancía',f(A.loc_zl.costoNM),f(A.loc_imp.costoNM),f(A.loc_zl.costoNM+A.loc_imp.costoNM))+
-      tRow('ITBMS',f(A.loc_zl.itbms),f(A.loc_imp.itbms),f(A.loc_zl.itbms+A.loc_imp.itbms))+
-      tRow('Landed Total',f(A.loc_zl.l1),f(A.loc_imp.l1),f(A.loc_zl.l1+A.loc_imp.l1),true,'${T.green}')
+      tRow('Valor Mercancía Homologado',f(B.loc_zl.mercInv),f(B.loc_imp.mercInv),f(B.loc_zl.mercInv+B.loc_imp.mercInv))+
+      tRow('Costo No Mercancía',f(B.loc_zl.nm),f(B.loc_imp.nm),f(B.loc_zl.nm+B.loc_imp.nm))+
+      tRow('ITBMS',f(B.loc_zl.itbms),f(B.loc_imp.itbms),f(B.loc_zl.itbms+B.loc_imp.itbms))+
+      tRow('Landed Total',f(B.loc_zl.l1),f(B.loc_imp.l1),f(B.loc_zl.l1+B.loc_imp.l1),true,T.green)
     )}
   </div>
 
@@ -14005,15 +13933,15 @@ function _informeExportHTML(){
       tRow('Trámites Sababa Import',liq_sab.length,'—',liq_sab.length)+
       tRow('Trámites CIF Express',liq_cif.length,'—',liq_cif.length)+
       tRow('Embarques ZL / Importación',liq_zl.length,liq_imp.length,liq_zl.length+liq_imp.length)+
-      tRow('Valor Mercancía Original',f(A.liq_zl.mercOrig),f(A.liq_imp.mercOrig),f(A.liq_zl.mercOrig+A.liq_imp.mercOrig))+
-      tRow('Costo No Mercancía',f(A.liq_zl.costoNM),f(A.liq_imp.costoNM),f(A.liq_zl.costoNM+A.liq_imp.costoNM))+
-      tRow('ITBMS',f(A.liq_zl.itbms),f(A.liq_imp.itbms),f(A.liq_zl.itbms+A.liq_imp.itbms))+
-      tRow('Landed Total',f(A.liq_zl.l1),f(A.liq_imp.l1),f(A.liq_zl.l1+A.liq_imp.l1),true,'${T.green}')
+      tRow('Valor Mercancía Original',f(B.liq_zl.mercOrig),f(B.liq_imp.mercOrig),f(B.liq_zl.mercOrig+B.liq_imp.mercOrig))+
+      tRow('Costo No Mercancía',f(B.liq_zl.nm),f(B.liq_imp.nm),f(B.liq_zl.nm+B.liq_imp.nm))+
+      tRow('ITBMS',f(B.liq_zl.itbms),f(B.liq_imp.itbms),f(B.liq_zl.itbms+B.liq_imp.itbms))+
+      tRow('Landed Total',f(B.liq_zl.l1),f(B.liq_imp.l1),f(B.liq_zl.l1+B.liq_imp.l1),true,T.green)
     )}
   </div>
 
   <!-- TOTAL GLOBAL -->
-  <div class="sec" style="border:2px solid ${T.green};border-radius:12px">
+  <div class="sec" style="border:2px solid ${T.green}66">
     <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:6px 12px;align-items:center">
       <span style="font-size:14px;font-weight:900;color:${T.text}">🏁 TOTAL GLOBAL — Costo Inventario</span>
       <span style="font-size:13px;font-family:'Courier New',monospace;color:${T.blue};font-weight:700">${f(_invZL)}</span>
@@ -14028,24 +13956,23 @@ function _informeExportHTML(){
     </div>
   </div>
 
-  <!-- EMBARQUES SUMINISTROS — detalle al final -->
-  ${suministros.length>0?`<div class="sec" style="border:1px dashed rgba(250,204,21,.4)">
+  <!-- SUMINISTROS — detalle al final -->
+  ${suministros.length>0?`<div class="sec" style="border:1px dashed ${T.yellow}66">
     <div style="font-size:9px;font-weight:700;color:${T.muted};text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">📎 Detalle — Embarques de Suministro (consumo interno · no vendible)</div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
       <div style="font-size:12px;font-weight:700;color:${T.yellow}">🔧 ${suministros.length} embarques · Zona Libre ${sumi_zl.length} · Importación ${sumi_imp.length}</div>
       <div style="font-family:'Courier New',monospace;font-size:13px;font-weight:800;color:${T.yellow}">${f(_sumiInv)}</div>
     </div>
-    <div style="border:1px solid rgba(250,204,21,.2);border-radius:8px;overflow:hidden">
+    <div style="border:1px solid ${T.yellow}33;border-radius:8px;overflow:hidden">
       ${suministros.map(function(d){
         var nro=d.nro||'—';
         var desc=(d.desc||d.descripcion||'').substring(0,50);
         var r=_calcCostoInventario(d);
-        var tip=((d.snap&&d.snap.tipo)||d.tipo||'ZL').toUpperCase();
-        var isZL=tip==='ZL';
-        return '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;border-bottom:1px solid rgba(250,204,21,.1);font-size:11px;gap:8px">'
-          +'<span style="color:${T.muted};flex:1"><strong style="color:${T.yellow}">'+nro+'</strong>'+(desc?' · '+desc:'')+'</span>'
-          +'<span style="font-size:9px;font-weight:700;color:'+(isZL?'${T.green}':'${T.blue}')+';white-space:nowrap">'+(isZL?'🚛 Zona Libre':'🚢 Importación')+'</span>'
-          +'<span style="font-family:\'Courier New\',monospace;color:${T.yellow};font-weight:700;white-space:nowrap">'+f(r.costoInv)+'</span>'
+        var isZL=_cl(d);
+        return '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;border-bottom:1px solid '+T.yellow+'22;font-size:11px;gap:8px">'
+          +'<span style="color:'+T.muted+';flex:1"><strong style="color:'+T.yellow+'">'+nro+'</strong>'+(desc?' · '+desc:'')+'</span>'
+          +'<span style="font-size:9px;font-weight:700;color:'+(isZL?T.green:T.blue)+';white-space:nowrap">'+(isZL?'🚛 Zona Libre':'🚢 Importación')+'</span>'
+          +'<span style="font-family:\'Courier New\',monospace;color:'+T.yellow+';font-weight:700;white-space:nowrap">'+f(r.costoInv)+'</span>'
           +'</div>';
       }).join('')}
     </div>
@@ -14055,28 +13982,26 @@ function _informeExportHTML(){
   <div class="sec">
     <div style="font-size:10px;font-weight:700;color:${T.muted};text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px">📦 Desglose Costo Inventario</div>
     <div style="display:flex;flex-direction:column;gap:8px">
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:rgba(88,166,255,.08);border:1px solid rgba(88,166,255,.2);border-radius:8px">
-        <span style="font-size:12px;font-weight:600;color:${T.text}">Valor Mercancía<br><span style="font-size:10px">(Original + Homologado Sababa)</span></span>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:${T.blue}12;border:1px solid ${T.blue}33;border-radius:8px">
+        <span style="font-size:12px;font-weight:600;color:${T.text}">Valor Mercancía<br><span style="font-size:10px;font-weight:400">(Original + Homologado Sababa)</span></span>
         <span style="font-size:15px;font-weight:800;color:${T.blue};font-family:'Courier New',monospace">${f(_invMerc)}</span>
       </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:rgba(240,136,62,.08);border:1px solid rgba(240,136,62,.2);border-radius:8px">
-        <span style="font-size:12px;font-weight:600;color:${T.text}">Costo No Mercancía<br><span style="font-size:10px">(Flete + Honorarios + Gastos)</span></span>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:${T.orange}12;border:1px solid ${T.orange}33;border-radius:8px">
+        <span style="font-size:12px;font-weight:600;color:${T.text}">Costo No Mercancía<br><span style="font-size:10px;font-weight:400">(Flete + Honorarios + Gastos)</span></span>
         <span style="font-size:15px;font-weight:800;color:${T.orange};font-family:'Courier New',monospace">${f(_invNM)}</span>
       </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:rgba(139,148,158,.08);border:1px solid rgba(139,148,158,.2);border-radius:8px">
-        <span style="font-size:12px;font-weight:600;color:${T.text}">ITBMS<br><span style="font-size:10px">(Impuesto total)</span></span>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:${T.border}44;border:1px solid ${T.border};border-radius:8px">
+        <span style="font-size:12px;font-weight:600;color:${T.text}">ITBMS<br><span style="font-size:10px;font-weight:400">(Impuesto total)</span></span>
         <span style="font-size:15px;font-weight:800;color:${T.text};font-family:'Courier New',monospace">${f(_invItbms)}</span>
       </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:rgba(240,136,62,.12);border:1px solid rgba(240,136,62,.3);border-radius:10px">
-        <span style="font-size:13px;font-weight:700;color:${T.text}">Costo Inventario Total</span>
-        <span style="font-size:20px;font-weight:900;color:${T.orange};font-family:'Courier New',monospace">${f(_invTotal)}</span>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:#2d3748;border-radius:10px">
+        <span style="font-size:13px;font-weight:700;color:#ffffff">Costo Inventario Total</span>
+        <span style="font-size:20px;font-weight:900;color:#ffffff;font-family:'Courier New',monospace">${f(_invTotal)}</span>
       </div>
     </div>
   </div>
 
-  <p style="text-align:center;color:${T.muted2};font-size:11px;margin-top:16px">
-    Generado por Gestión Integral de Compras y Costeo · ZLC Panamá · ${fecha}
-  </p>
+  <p style="text-align:center;color:${T.muted2};font-size:11px;margin-top:16px">Generado por Gestión Integral de Compras y Costeo · ${fecha}</p>
   </div></body></html>`;
 
   const blob=new Blob([html],{type:'text/html;charset=utf-8'});
@@ -14086,7 +14011,6 @@ function _informeExportHTML(){
   URL.revokeObjectURL(url);
   if(typeof _showToast==='function') _showToast('🌐 HTML exportado','green',2500);
 }
-
 
 function _setDeptVista(modo, btn){
   var root = btn ? (btn.closest('#tab-modal-body')||document) : document;
@@ -14136,8 +14060,14 @@ function _calcCostoInventario(d){
       var t=l.tipoFac||'mercancia';
       return (t==='mercancia'||t==='itbms') ? a : a+(l.costo||0);
     },0);
-    var costoInvReal=mercInv+gastoReal+itbmsReal; // merc + noMerc + ITBMS = total correcto
-    var landed1=isLocal?(sc3.landed1||0):isCIF?(sc2.landed1||0):(sc1.landed1||0);
+    var costoInvReal=mercInv+gastoReal+itbmsReal;
+    // Para Sababa no-Local (liquidación ZL): sc3 puede tener el noMerc si sc1 está vacío
+    if(gastoReal===0 && isSab && !isLocal && (sc3.noMerc||0)>0){
+      gastoReal=sc3.noMerc; costoInvReal=mercInv+gastoReal+itbmsReal;
+    }
+    // landed1: Sababa no-Local puede guardar en sc3 en lugar de sc1
+    var landed1=isLocal?(sc3.landed1||0):isCIF?(sc2.landed1||0):(sc1.landed1||sc3.landed1||0);
+    if(!landed1) landed1=costoInvReal;
     return {mercOrig:mercOrig, mercHomol:mercHomol, mercInv:mercInv,
             costoNM:gastoReal, itbms:itbmsReal,
             costoInv:costoInvReal,
@@ -14146,12 +14076,10 @@ function _calcCostoInventario(d){
   }
 
   // Fallback sin invLines (embarques muy antiguos)
-  var landed1=isLocal?(sc3.landed1||0):isCIF?(sc2.landed1||0):(sc1.landed1||0);
+  var landed1=isLocal?(sc3.landed1||0):isCIF?(sc2.landed1||0):(sc1.landed1||sc3.landed1||0);
   var baseNM=isLocal?(mercHomol||mercOrig):isCIF?(sc2.base||sc1.base||d.cif||mercOrig):(sc1.base||d.cif||mercOrig);
   var costoNM=Math.max(0,landed1-baseNM);
-  // Sababa Local: ITBMS = 0 en fallback (Sababa no maneja ITBMS salvo casos con invLines explícitas)
-  // CIF/Liquidación: usar sc2.itbms o sc1.itbms según escenario
-  var itbms=isLocal?0:isCIF?
+  var itbms=isLocal?(sc3.itbmsHomol||0):isCIF?
     ((sc2.itbms||0)+(sc2.itbmsTasaFinal||0)):
     ((sc1.itbms||0)+(sc1.itbmsTasaFinal||0));
   return {mercOrig:mercOrig, mercHomol:mercHomol, mercInv:mercInv,
@@ -16736,12 +16664,16 @@ function renderResumenRapido(){
       <div style="font-size:10px;color:var(--muted);font-weight:600">${lbl}</div>
       ${total>0?`<div style="font-size:9px;color:${color}99">${Math.round(n/total*100)}%</div>`:''}
     </div>`;
-  const badge = (lbl,n,color,tot) => {
-    const pct2 = tot>0 ? parseFloat((n/tot*100).toFixed(2)) : 0;
+  // badge(lbl, n, color, totalEmb, monto, totalMonto)
+  // porcentaje siempre por MONTO cuando se provee, si no por cantidad
+  const badge = (lbl,n,color,tot,monto,totalMonto) => {
+    const useMonto = totalMonto>0 && monto>=0;
+    const pct2 = useMonto ? parseFloat((monto/totalMonto*100).toFixed(2)) : (tot>0?Math.round(n/tot*100):0);
     return '<div style="background:'+color+';border:1px solid rgba(0,0,0,.1);border-radius:10px;padding:7px 12px;display:flex;flex-direction:column;align-items:center;min-width:70px;gap:1px">'
       +'<span style="font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">'+lbl+'</span>'
       +'<span style="font-size:15px;font-weight:800;color:var(--text);line-height:1.2">'+n+'</span>'
-      +(tot>0?'<span style="font-size:10px;font-weight:700;color:var(--muted);opacity:.8">'+pct2.toFixed(2)+'%</span>':'')
+      +(useMonto||tot>0?'<span style="font-size:10px;font-weight:700;color:var(--muted);opacity:.8">'+pct2+(useMonto?'.00':'')+'%</span>':'')
+      +(useMonto?'<span style="font-size:8px;color:var(--muted2);opacity:.7">s/ monto</span>':'')
       +'</div>';
   };
 
@@ -16783,8 +16715,7 @@ function renderResumenRapido(){
           <div class="_inv-hint" style="font-size:9px;color:rgba(88,166,255,.5);margin-top:3px">${window._tendFmtFull?"toca para abreviar":"toca para ver completo"}</div>
         </div>
       </div>
-
-      <!-- ─── DESGLOSE ─── -->
+      <!-- ─── MAPA CONCEPTUAL ─── -->
       <div style="margin:10px 0 8px;display:flex;align-items:center;gap:6px">
         <div style="flex:1;height:1px;background:var(--border)"></div>
         <div style="font-size:9px;font-weight:700;color:var(--muted);letter-spacing:.08em;text-transform:uppercase">Desglose</div>
@@ -16895,86 +16826,17 @@ function renderResumenRapido(){
         </div>
 
       </div>
-
-      <!-- ── GRÁFICAS ESTILO PLANEACIÓN — van después del desglose ── -->
-      ${(function(){
-        const fK2 = n => window._fmtMoney(n);
-        const p2d = (n,d) => d>0 ? parseFloat((n/d*100).toFixed(2)) : 0;
-        const _gMercBase = A_all.merc || A_all.mercOrig || A_merc_all.inv || 0;
-        const _gNM       = A_all.nm || 0;
-        const _gItbms    = A_all.itbms || 0;
-        const _gInvZL    = A_liq_zl.inv + A_loc_zl.inv;
-        const _gInvIMP   = A_liq_imp.inv + A_loc_imp.inv;
-        const _gMerc     = A_merc_all.inv || 0;
-        const _gSumi     = A_sumi_all.inv || 0;
-        const _totalInv2 = totalInv || 1;
-        const _totalCosto= _gMercBase + _gNM + _gItbms || 1;
-        const _totalMix  = _gInvZL + _gInvIMP || 1;
-        const tbl = (titulo, rows, total) => {
-          const filas = rows.map(r => {
-            const pct = p2d(r.val, total);
-            const bw  = Math.max(2, pct);
-            return `<tr style="border-bottom:1px solid var(--border)">
-              <td style="padding:6px 8px;font-size:10px;font-weight:600;color:var(--text);white-space:nowrap">${r.lbl}</td>
-              <td style="padding:6px 8px;font-size:10px;font-family:'IBM Plex Mono',monospace;font-weight:700;color:${r.color};text-align:right;white-space:nowrap">${fK2(r.val)}</td>
-              <td style="padding:4px 8px;min-width:80px">
-                <div style="background:var(--bg);border-radius:4px;height:7px;overflow:hidden">
-                  <div style="width:${bw}%;height:100%;border-radius:4px;background:linear-gradient(90deg,#f8d122,#f97316)"></div>
-                </div>
-              </td>
-              <td style="padding:6px 8px;font-size:10px;font-weight:700;color:var(--muted);text-align:right;white-space:nowrap">${pct.toFixed(2)}%</td>
-            </tr>`;
-          }).join('');
-          return `<div style="margin-bottom:10px">
-            <div style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">${titulo}</div>
-            <div style="border-radius:8px;overflow:hidden;border:1px solid var(--border)">
-              <table style="border-collapse:collapse;width:100%">
-                <thead><tr style="background:var(--s2)">
-                  <th style="padding:5px 8px;font-size:9px;color:var(--muted);text-align:left;font-weight:600;text-transform:uppercase">Concepto</th>
-                  <th style="padding:5px 8px;font-size:9px;color:var(--muted);text-align:right;font-weight:600;text-transform:uppercase">Monto</th>
-                  <th style="padding:5px 8px;font-size:9px;color:var(--muted);min-width:80px"></th>
-                  <th style="padding:5px 8px;font-size:9px;color:var(--muted);text-align:right;font-weight:600;text-transform:uppercase">% Total</th>
-                </tr></thead>
-                <tbody>${filas}
-                  <tr style="background:rgba(88,166,255,.06);font-weight:800">
-                    <td style="padding:5px 8px;font-size:10px;color:var(--text)">TOTAL</td>
-                    <td style="padding:5px 8px;font-size:10px;font-family:'IBM Plex Mono',monospace;color:var(--text);text-align:right">${fK2(total)}</td>
-                    <td></td>
-                    <td style="padding:5px 8px;font-size:10px;text-align:right;color:var(--text)">100%</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>`;
-        };
-        return '<div style="margin-top:12px">'
-          + tbl('📊 Composición del Inventario', [
-              {lbl:'🏬 Mercancía',   val:_gMerc,     color:'var(--blue-l)'},
-              {lbl:'🔧 Suministros', val:_gSumi,     color:'var(--orange-l)'},
-            ], _totalInv2)
-          + tbl('📊 Zona Libre vs Importación', [
-              {lbl:'🚛 Zona Libre',  val:_gInvZL,    color:'var(--green-l)'},
-              {lbl:'🚢 Importación', val:_gInvIMP,   color:'var(--blue-l)'},
-            ], _totalMix)
-          + tbl('📊 Estructura del Costo', [
-              {lbl:'🏬 Mercancía',   val:_gMercBase, color:'var(--blue-l)'},
-              {lbl:'⚙️ No Merc.',    val:_gNM,       color:'var(--orange-l)'},
-              {lbl:'🏛️ ITBMS',       val:_gItbms,    color:'var(--green-l)'},
-            ], _totalCosto)
-          + '</div>';
-      })()}
     `)}
-
 
     <!-- EMBARQUES LOCALES -->
     ${sec(`
       ${hdr('🏪','Embarques Locales',local.length,A_loc.inv)}
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
-        ${badge('Sababa Import',loc_sab.length,'rgba(240,136,62,.12)',local.length)}
-        ${badge('CIF Express',0,'rgba(88,166,255,.1)',local.length)}
-        ${badge('Zona Libre',loc_zl.length,'rgba(63,185,80,.1)',local.length)}
-        ${badge('Importación',loc_imp.length,'rgba(168,85,247,.1)',local.length)}
-        ${sumi_local.length>0?badge('Suministros 🔧',sumi_local.length,'rgba(250,204,21,.15)',local.length):''}
+        ${badge('Sababa Import',loc_sab.length,'rgba(240,136,62,.12)',local.length,A_sumi_loc.inv+A_merc_loc.inv,A_loc.inv)}
+        ${badge('CIF Express',0,'rgba(88,166,255,.1)',local.length,0,A_loc.inv)}
+        ${badge('Zona Libre',loc_zl.length,'rgba(63,185,80,.1)',local.length,A_loc_zl.inv,A_loc.inv)}
+        ${badge('Importación',loc_imp.length,'rgba(168,85,247,.1)',local.length,A_loc_imp.inv,A_loc.inv)}
+        ${sumi_local.length>0?badge('Suministros 🔧',sumi_local.length,'rgba(250,204,21,.15)',local.length,A_sumi_loc.inv,A_loc.inv):''}
       </div>
       ${colHdr()}
       ${row('Valor Mercancía Homologado', fmtA(A_loc_zl.merc), fmtA(A_loc_imp.merc),false,'',A_loc_zl.merc,A_loc_imp.merc)}
@@ -16983,15 +16845,16 @@ function renderResumenRapido(){
       ${row('Landed Total',                fmtA(A_loc_zl.l1),   fmtA(A_loc_imp.l1), true, 'var(--green-l)',A_loc_zl.l1,A_loc_imp.l1)}
     `)}
 
+
     <!-- EMBARQUES DE LIQUIDACIÓN -->
     ${sec(`
       ${hdr('📋','Embarques de Liquidación',liquidacion.length,A_liq.inv)}
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
-        ${badge('Sababa Import',liq_sab.length,'rgba(240,136,62,.12)',liquidacion.length)}
-        ${badge('CIF Express',liq_cif.length,'rgba(88,166,255,.12)',liquidacion.length)}
-        ${badge('Zona Libre',liq_zl.length,'rgba(63,185,80,.1)',liquidacion.length)}
-        ${badge('Importación',liq_imp.length,'rgba(168,85,247,.1)',liquidacion.length)}
-        ${sumi_liq.length>0?badge('Suministros 🔧',sumi_liq.length,'rgba(250,204,21,.15)',liquidacion.length):''}
+        ${badge('Sababa Import',liq_sab.length,'rgba(240,136,62,.12)',liquidacion.length,A_sumi_liq.inv+A_merc_liq.inv,A_liq.inv)}
+        ${badge('CIF Express',liq_cif.length,'rgba(88,166,255,.12)',liquidacion.length,agg(liq_cif).inv,A_liq.inv)}
+        ${badge('Zona Libre',liq_zl.length,'rgba(63,185,80,.1)',liquidacion.length,A_liq_zl.inv,A_liq.inv)}
+        ${badge('Importación',liq_imp.length,'rgba(168,85,247,.1)',liquidacion.length,A_liq_imp.inv,A_liq.inv)}
+        ${sumi_liq.length>0?badge('Suministros 🔧',sumi_liq.length,'rgba(250,204,21,.15)',liquidacion.length,A_sumi_liq.inv,A_liq.inv):''}
       </div>
       ${colHdr()}
       ${row('Valor Mercancía Original', fmtA(A_liq_zl.merc), fmtA(A_liq_imp.merc),false,'',A_liq_zl.merc,A_liq_imp.merc)}
@@ -16999,6 +16862,7 @@ function renderResumenRapido(){
       ${row('ITBMS',                    fmtA(A_liq_zl.itbms), fmtA(A_liq_imp.itbms),false,'',A_liq_zl.itbms,A_liq_imp.itbms)}
       ${row('Landed Total',             fmtA(A_liq_zl.l1),   fmtA(A_liq_imp.l1), true, 'var(--green-l)',A_liq_zl.l1,A_liq_imp.l1)}
     `)}
+
 
     <!-- GRAN TOTAL -->
     <div style="background:rgba(63,185,80,.06);border:1px solid rgba(63,185,80,.2);border-radius:12px;padding:12px 14px;margin-bottom:10px">
@@ -17027,44 +16891,24 @@ function renderResumenRapido(){
         <div style="margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:800;color:#eab308">${fmtA(agg(suministros).inv)}</div>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
-        ${(function(){
-          const _totalSumiInv = agg(suministros).inv || 1;
-          const _zlInv  = agg(sumi_zl).inv  || 0;
-          const _impInv = agg(sumi_imp).inv  || 0;
-          const _liqInv = agg(sumi_liq).inv  || 0;
-          const _locInv = agg(sumi_local).inv || 0;
-          const badgeM = (lbl, n, inv, color) => {
-            const pctMonto = parseFloat((inv/_totalSumiInv*100).toFixed(2));
-            return '<div style="background:'+color+';border:1px solid rgba(0,0,0,.1);border-radius:10px;padding:7px 12px;display:flex;flex-direction:column;align-items:center;min-width:70px;gap:1px">'
-              +'<span style="font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">'+lbl+'</span>'
-              +'<span style="font-size:15px;font-weight:800;color:var(--text);line-height:1.2">'+n+'</span>'
-              +'<span style="font-size:10px;font-weight:700;color:var(--muted);opacity:.8">'+pctMonto.toFixed(2)+'%</span>'
-              +'<span style="font-size:8px;color:var(--muted2);opacity:.7">s/ monto</span>'
-              +'</div>';
-          };
-          return (sumi_zl.length>0  ? badgeM('Zona Libre', sumi_zl.length,  _zlInv,  'rgba(63,185,80,.1)')  : '')
-               + (sumi_imp.length>0 ? badgeM('Importación',sumi_imp.length, _impInv, 'rgba(88,166,255,.1)') : '')
-               + (sumi_liq.length>0 ? badgeM('Liquidación',sumi_liq.length, _liqInv, 'rgba(240,136,62,.12)'): '')
-               + (sumi_local.length>0? badgeM('Local',     sumi_local.length,_locInv, 'rgba(88,166,255,.12)'): '');
-        })()}
+        ${sumi_zl.length>0?badge('Zona Libre',sumi_zl.length,'rgba(63,185,80,.1)',suministros.length):''}
+        ${sumi_imp.length>0?badge('Importación',sumi_imp.length,'rgba(168,85,247,.1)',suministros.length):''}
+        ${sumi_liq.length>0?badge('Liquidación',sumi_liq.length,'rgba(240,136,62,.12)',suministros.length):''}
+        ${sumi_local.length>0?badge('Local',sumi_local.length,'rgba(88,166,255,.12)',suministros.length):''}
       </div>
       <div style="background:rgba(250,204,21,.06);border:1px solid rgba(250,204,21,.2);border-radius:8px;padding:8px 12px">
         ${suministros.map(d=>{
           const nro=d.nro||'—';
           const desc=(d.desc||d.descripcion||'').substring(0,40);
           const r=getFinancials(d);
-          const tip=((d.snap&&d.snap.tipo)||d.tipo||'ZL').toUpperCase();
-          const isZL=tip==='ZL';
-          const tipLbl=isZL?'🚛 Zona Libre':'🚢 Importación';
-          const tipColor=isZL?'var(--green-l)':'var(--blue-l)';
-          return '<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(250,204,21,.1);font-size:11px;gap:6px">'
-            +'<span style="color:var(--muted);flex:1"><strong style="color:#eab308">'+nro+'</strong>'+(desc?' · '+desc:'')+'</span>'
-            +'<span style="font-size:9px;font-weight:700;color:'+tipColor+';white-space:nowrap">'+tipLbl+'</span>'
-            +'<span style="font-family:\'IBM Plex Mono\',monospace;color:#eab308;font-weight:700;white-space:nowrap">'+fmtA(r.costoInv)+'</span>'
+          return '<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(250,204,21,.1);font-size:11px">'
+            +'<span style="color:var(--muted)"><strong style="color:#eab308">'+nro+'</strong>'+(desc?' · '+desc:'')+'</span>'
+            +'<span style="font-family:monospace;color:#eab308;font-weight:700">'+fmtA(r.costoInv)+'</span>'
             +'</div>';
         }).join('')}
       </div>
     `):''}
+
 
     <!-- DESGLOSE VALOR MERCANCÍA - COLAPSABLE -->
     <div style="background:var(--s2);border:1px solid var(--border);border-radius:12px;margin-bottom:10px;overflow:hidden">
