@@ -16477,11 +16477,11 @@ function renderResumenRapido(){
       ${total>0?`<div style="font-size:9px;color:${color}99">${Math.round(n/total*100)}%</div>`:''}
     </div>`;
   const badge = (lbl,n,color,tot) => {
-    const pct2 = tot>0 ? Math.round(n/tot*100) : 0;
+    const pct2 = tot>0 ? parseFloat((n/tot*100).toFixed(2)) : 0;
     return '<div style="background:'+color+';border:1px solid rgba(0,0,0,.1);border-radius:10px;padding:7px 12px;display:flex;flex-direction:column;align-items:center;min-width:70px;gap:1px">'
       +'<span style="font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">'+lbl+'</span>'
       +'<span style="font-size:15px;font-weight:800;color:var(--text);line-height:1.2">'+n+'</span>'
-      +(tot>0?'<span style="font-size:10px;font-weight:700;color:var(--muted);opacity:.8">'+pct2+'%</span>':'')
+      +(tot>0?'<span style="font-size:10px;font-weight:700;color:var(--muted);opacity:.8">'+pct2.toFixed(2)+'%</span>':'')
       +'</div>';
   };
 
@@ -16733,19 +16733,40 @@ function renderResumenRapido(){
         <div style="margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:800;color:#eab308">${fmtA(agg(suministros).inv)}</div>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
-        ${sumi_zl.length>0?badge('Zona Libre',sumi_zl.length,'rgba(63,185,80,.1)',suministros.length):''}
-        ${sumi_imp.length>0?badge('Importación',sumi_imp.length,'rgba(168,85,247,.1)',suministros.length):''}
-        ${sumi_liq.length>0?badge('Liquidación',sumi_liq.length,'rgba(240,136,62,.12)',suministros.length):''}
-        ${sumi_local.length>0?badge('Local',sumi_local.length,'rgba(88,166,255,.12)',suministros.length):''}
+        ${(function(){
+          const _totalSumiInv = agg(suministros).inv || 1;
+          const _zlInv  = agg(sumi_zl).inv  || 0;
+          const _impInv = agg(sumi_imp).inv  || 0;
+          const _liqInv = agg(sumi_liq).inv  || 0;
+          const _locInv = agg(sumi_local).inv || 0;
+          const badgeM = (lbl, n, inv, color) => {
+            const pctMonto = parseFloat((inv/_totalSumiInv*100).toFixed(2));
+            return '<div style="background:'+color+';border:1px solid rgba(0,0,0,.1);border-radius:10px;padding:7px 12px;display:flex;flex-direction:column;align-items:center;min-width:70px;gap:1px">'
+              +'<span style="font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">'+lbl+'</span>'
+              +'<span style="font-size:15px;font-weight:800;color:var(--text);line-height:1.2">'+n+'</span>'
+              +'<span style="font-size:10px;font-weight:700;color:var(--muted);opacity:.8">'+pctMonto.toFixed(2)+'%</span>'
+              +'<span style="font-size:8px;color:var(--muted2);opacity:.7">s/ monto</span>'
+              +'</div>';
+          };
+          return (sumi_zl.length>0  ? badgeM('Zona Libre', sumi_zl.length,  _zlInv,  'rgba(63,185,80,.1)')  : '')
+               + (sumi_imp.length>0 ? badgeM('Importación',sumi_imp.length, _impInv, 'rgba(88,166,255,.1)') : '')
+               + (sumi_liq.length>0 ? badgeM('Liquidación',sumi_liq.length, _liqInv, 'rgba(240,136,62,.12)'): '')
+               + (sumi_local.length>0? badgeM('Local',     sumi_local.length,_locInv, 'rgba(88,166,255,.12)'): '');
+        })()}
       </div>
       <div style="background:rgba(250,204,21,.06);border:1px solid rgba(250,204,21,.2);border-radius:8px;padding:8px 12px">
         ${suministros.map(d=>{
           const nro=d.nro||'—';
           const desc=(d.desc||d.descripcion||'').substring(0,40);
           const r=getFinancials(d);
-          return '<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(250,204,21,.1);font-size:11px">'
-            +'<span style="color:var(--muted)"><strong style="color:#eab308">'+nro+'</strong>'+(desc?' · '+desc:'')+'</span>'
-            +'<span style="font-family:monospace;color:#eab308;font-weight:700">'+fmtA(r.costoInv)+'</span>'
+          const tip=((d.snap&&d.snap.tipo)||d.tipo||'ZL').toUpperCase();
+          const isZL=tip==='ZL';
+          const tipLbl=isZL?'🚛 Zona Libre':'🚢 Importación';
+          const tipColor=isZL?'var(--green-l)':'var(--blue-l)';
+          return '<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(250,204,21,.1);font-size:11px;gap:6px">'
+            +'<span style="color:var(--muted);flex:1"><strong style="color:#eab308">'+nro+'</strong>'+(desc?' · '+desc:'')+'</span>'
+            +'<span style="font-size:9px;font-weight:700;color:'+tipColor+';white-space:nowrap">'+tipLbl+'</span>'
+            +'<span style="font-family:\'IBM Plex Mono\',monospace;color:#eab308;font-weight:700;white-space:nowrap">'+fmtA(r.costoInv)+'</span>'
             +'</div>';
         }).join('')}
       </div>
