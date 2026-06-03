@@ -16346,7 +16346,7 @@ function _renderGroupSections(data){
     var sc2     = snap.sc2||{};
     var totalMerc = mercL.reduce(function(s,l){return s+(l.costo||0);},0);
     var totalNoMerc = isUnicoM
-      ? (sc1u.noMerc!=null?sc1u.noMerc:((sc1u.arancel||0)+(sc1u.hon||0)+(sc1u.tasa||0)+(sc1u.uso||0)+(sc1u.itbmsTasa||0)+(sc1u.agente||0)+(sc1u.extras||0)))
+      ? (sc1u.noMerc!=null?sc1u.noMerc:((sc1u.arancel||0)+(sc1u.hon||0)+(sc1u.tasa||0)+(sc1u.uso||0)+(sc1u.agente||0)+(sc1u.extras||0)))
       : isSab ? (sc3.noMerc||0) : (sc2.noMerc||0);
 
     // Number formatter — uses chosen decimal separator
@@ -16440,7 +16440,7 @@ function _renderGroupSections(data){
     var sc2     = snap.sc2||{};
     var totalMerc   = mercL.reduce(function(s,l){return s+(l.costo||0);},0);
     var totalNoMerc = isUnicoM
-      ? (sc1u.noMerc!=null?sc1u.noMerc:((sc1u.arancel||0)+(sc1u.hon||0)+(sc1u.tasa||0)+(sc1u.uso||0)+(sc1u.itbmsTasa||0)+(sc1u.agente||0)+(sc1u.extras||0)))
+      ? (sc1u.noMerc!=null?sc1u.noMerc:((sc1u.arancel||0)+(sc1u.hon||0)+(sc1u.tasa||0)+(sc1u.uso||0)+(sc1u.agente||0)+(sc1u.extras||0)))
       : isSab ? (sc3.noMerc||0) : (sc2.noMerc||0);
 
     var wb = XLSX.utils.book_new();
@@ -16512,7 +16512,19 @@ function _renderGroupSections(data){
     XLSX.writeFile(wb, 'embarque-'+nro+'.xlsx');
   };
 
-  window.abrirFacturasEmbarque = function(idx){
+  window._hfToggleMes = function(headerId, bodyId){
+  var body = document.getElementById(bodyId);
+  if(!body) return;
+  var isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : 'block';
+  var header = document.getElementById(headerId);
+  if(header){
+    var chev = header.querySelector('.hf-mes-chev');
+    if(chev) chev.textContent = isOpen ? '▶' : '▼';
+  }
+};
+
+window.abrirFacturasEmbarque = function(idx){
     window._lastFacturaIdx = idx;
     window._factDrawerOpen = true; // mark drawer as open
     var d = tendData[idx];
@@ -16540,7 +16552,7 @@ function _renderGroupSections(data){
     // Fallback: compute from individual fields if noMerc not yet in snap
     var sc1u_noMerc = isUnicoM
       ? (sc1u.noMerc != null ? sc1u.noMerc
-          : ((sc1u.arancel||0)+(sc1u.hon||0)+(sc1u.tasa||0)+(sc1u.uso||0)+(sc1u.itbmsTasa||0)+(sc1u.agente||0)+(sc1u.extras||0)))
+          : ((sc1u.arancel||0)+(sc1u.hon||0)+(sc1u.tasa||0)+(sc1u.uso||0)+(sc1u.agente||0)+(sc1u.extras||0)))
       : 0;
     var totalNoMerc= isUnicoM ? sc1u_noMerc
                     : isSab   ? (sc3.noMerc||0)
@@ -17377,7 +17389,7 @@ function renderHistFact(){
 
     html += '<div style="margin-bottom:10px;border:1px solid var(--border);border-radius:12px;overflow:hidden">';
     // Header del año
-    html += '<div id="'+anioId+'" onclick="(function(id,bid){var b=document.getElementById(bid);if(!b)return;var o=b.style.display===\'none\';b.style.display=o?\'block\':\'none\';document.getElementById(id).querySelector(\'.hf-anio-chev\').textContent=o?\'▼\':\'▶\';})(\''+anioId+'\',\''+anioBodyId+'\')" '
+    html += '<div id="'+anioId+'" onclick="_hfToggleMes(\''+anioId+'\',\''+anioBodyId+'\')" '
       +'style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:var(--s2);cursor:pointer;user-select:none">'
       +'<div style="display:flex;align-items:center;gap:10px">'
       +'<span style="font-size:18px">📅</span>'
@@ -17407,7 +17419,7 @@ function renderHistFact(){
 
       // Header del mes
       html += '<div style="border-top:1px solid var(--border)">';
-      html += '<div id="'+mesId+'" onclick="(function(id,bid){var b=document.getElementById(bid);if(!b)return;var o=b.style.display===\'none\';b.style.display=o?\'block\':\'none\';document.getElementById(id).querySelector(\'.hf-mes-chev\').textContent=o?\'▼\':\'▶\';})(\''+mesId+'\',\''+mesBodyId+'\')" '
+      html += '<div id="'+mesId+'" onclick="_hfToggleMes(\''+mesId+'\',\''+mesBodyId+'\')" '
         +'style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:rgba(255,255,255,.02);cursor:pointer;user-select:none">'
         +'<div style="display:flex;align-items:center;gap:8px">'
         +'<span style="font-size:14px">📦</span>'
