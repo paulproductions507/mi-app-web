@@ -316,10 +316,10 @@ datalist option{background:var(--s2);color:var(--text)}
     </div>
     <div class="r2">
       <div class="field"><label>Uso del Sistema (USD)</label><input type="number" id="uso" value="3" step="0.01"><p class="note">$3, $6 o $9</p></div>
-      <div class="field"><label>Gastos Origen/Destino (USD)</label><input type="number" id="agente" value="0" step="0.01"></div>
+      <div class="field"><label>Gastos Origen/Destino (USD)</label><input type="number" id="agente" placeholder="0.00" step="0.01"></div>
     </div>
     <!-- DMCE oculto — no aplica en Escenario Único -->
-    <input type="hidden" id="dmce" value="0">
+    <input type="hidden" id="dmce" value="">
   </div>
 </div>
 
@@ -363,14 +363,16 @@ datalist option{background:var(--s2);color:var(--text)}
 
 <!-- ══ RESUMEN EN VIVO ══ -->
 <div id="live-summary">
-  <div style="font-size:10px;font-weight:700;color:var(--purple);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px">Resumen en Vivo</div>
+  <div style="font-size:10px;font-weight:700;color:var(--purple);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px">Resumen en Vivo <span style="background:var(--purple,#a371f7);color:#fff;border-radius:4px;padding:1px 5px;font-size:9px">v2.2</span></div>
   <div class="sum-row"><span class="sum-label">CIF Mercancía</span><span class="sum-val" id="s-cif" style="color:var(--text)">$0.00</span></div>
   <div class="sum-row"><span class="sum-label">Arancel</span><span class="sum-val" id="s-ar" style="color:var(--red)">$0.00</span></div>
   <div class="sum-row"><span class="sum-label">Honorarios Corredor</span><span class="sum-val" id="s-hon" style="color:var(--purple)">$0.00</span></div>
   <div class="sum-row"><span class="sum-label">Tasa + Uso Sistema</span><span class="sum-val" id="s-tasa" style="color:var(--orange)">$0.00</span></div>
-  <div class="sum-row"><span class="sum-label">ITBMS s/Tasa (Tesoro Nac.)</span><span class="sum-val" id="s-itbms-tasa" style="color:var(--blue)">$0.00</span></div>
+  <div class="sum-row"><span class="sum-label" style="font-weight:700">Costo No Mercancía</span><span class="sum-val" id="s-no-merc" style="color:var(--orange,#f97316)">$0.00</span></div>
   <div class="sum-row"><span class="sum-label">Gastos Adicionales</span><span class="sum-val" id="s-extras" style="color:var(--muted)">$0.00</span></div>
   <div class="sum-row total"><span>Costo Landed</span><span id="s-landed">$0.00</span></div>
+  <div class="sum-row"><span class="sum-label">Otros Gastos (ITBMS)</span><span class="sum-val" id="s-otros-gtos" style="color:var(--blue)">$0.00</span></div>
+  <div class="sum-row" style="background:rgba(88,166,255,.06);border-radius:6px;padding:4px 6px"><span class="sum-label" style="font-weight:700;color:var(--blue,#58a6ff)">Costo Total Global (incl. ITBMS)</span><span class="sum-val" id="s-total-global" style="color:var(--blue,#58a6ff);font-weight:800">$0.00</span></div>
   <div class="sum-row"><span class="sum-label">ITBMS (desembolso)</span><span class="sum-val" id="s-itbms" style="color:var(--blue)">$0.00</span></div>
   <div class="sum-row"><span class="sum-label">Factor Importación</span><span class="sum-val" id="s-factor" style="color:var(--green)">0.00%</span></div>
 </div>
@@ -637,7 +639,7 @@ function calcLive(){
   document.querySelectorAll('.gasto-monto').forEach(function(inp){
     extras+=parseFloat(inp.value)||0;
   });
-  var landed=R(cif+arancel+hon+tasa+uso+agente+dmce+itbmsTasa+extras);
+  var landed=R(cif+arancel+hon+tasa+uso+agente+dmce+extras); // itbmsTasa excluido del landed — va a Otros Gastos
   var factor=cif>0?((landed/cif)-1)*100:0;
 
   // Update live summary
@@ -648,11 +650,19 @@ function calcLive(){
     document.getElementById('s-ar').textContent=fmt(arancel);
     document.getElementById('s-hon').textContent=fmt(hon);
     document.getElementById('s-tasa').textContent=fmt(tasa+uso);
-    document.getElementById('s-itbms-tasa').textContent=fmt(itbmsTasa);
+    var noMercVal = landed - cif;
+    var el_nm = document.getElementById('s-no-merc');
+    if(el_nm) el_nm.textContent=fmt(noMercVal);
     document.getElementById('s-extras').textContent=fmt(extras);
     document.getElementById('s-landed').textContent=fmt(landed);
     document.getElementById('s-itbms').textContent=fmt(itbms);
     document.getElementById('s-factor').textContent=factor.toFixed(2)+'%';
+    // Costo Total Global
+    var el_tg = document.getElementById('s-total-global');
+    if(el_tg) el_tg.textContent=fmt(landed+itbms+itbmsTasa);
+    // Otros Gastos ITBMS
+    var el_og = document.getElementById('s-otros-gtos');
+    if(el_og) el_og.textContent=fmt(itbms+itbmsTasa);
   } else {
     sumDiv.style.display='none';
   }
@@ -736,7 +746,7 @@ function calcular(){
     extras+=monto;
   });
   var itbmsTasa = parseFloat(document.getElementById('itbms-tasa')?.value)||0;
-  var landed=R(cif+arancel+hon+tasa+uso+agente+itbmsTasa+extras);
+  var landed=R(cif+arancel+hon+tasa+uso+agente+extras); // itbmsTasa excluido del landed
   var factor=cif>0?((landed/cif)-1)*100:0;
   var landed_g=R(landed+itbms);
 
@@ -1140,7 +1150,7 @@ function parseRows(rows){
     // provMatch
     if(provRaw){
       var m=provMatch(provRaw);
-      if(m&&(m.exact||m.score>=0.8)){
+      if(m&&(m.exact||m.score>=0.65)){
         line._matched=true;
         line._corregido=(provRaw.toUpperCase()!==m.name.toUpperCase());
         line.prov=m.name;
@@ -1225,7 +1235,7 @@ function _reCalcTotal(){
 
 function _fixProvInline(inp,idx){
   var m=provMatch(inp.value);
-  if(m&&(m.exact||m.score>=0.8)){
+  if(m&&(m.exact||m.score>=0.65)){
     invLines[idx].prov=m.name;
     inp.value=m.name;
     inp.className=inp.className.replace('warn-field','').replace('ok-field','')+' ok-field';
@@ -1254,7 +1264,7 @@ function _addInvLineManual(){
 
 function fixProv(inp,idx){
   var m=provMatch(inp.value);
-  if(m&&(m.exact||m.score>=0.8)){
+  if(m&&(m.exact||m.score>=0.65)){
     invLines[idx].prov=m.name;
     inp.value=m.name;
     inp.style.borderColor='rgba(63,185,80,.4)';
