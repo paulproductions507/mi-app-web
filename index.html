@@ -2071,8 +2071,8 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
         <div class="field"><label>Uso del Sistema (USD)</label><input type="number" id="unico_uso_sistema" value="3" step="0.01" oninput="calcUnico()" style="border-color:rgba(63,185,80,.3)"><p class="note">Varía: $3, $6 o $9</p></div>
       </div>
       <div class="r2">
-        <div class="field"><label>Gastos Origen/Destino (USD)</label><input type="number" id="unico_agente" value="0" step="0.01" oninput="calcUnico()"></div>
-        <div class="field"><label>DMCE (USD)</label><input type="number" id="unico_dmce" value="0" step="0.01" oninput="calcUnico()"></div>
+        <div class="field"><label>Gastos Origen/Destino (USD)</label><input type="number" id="unico_agente" placeholder="0.00" step="0.01" oninput="calcUnico()"></div>
+        <div class="field"><label>DMCE (USD)</label><input type="number" id="unico_dmce" placeholder="0.00" step="0.01" oninput="calcUnico()"></div>
       </div>
 
       <!-- SECCIÓN 6: HONORARIOS -->
@@ -18796,7 +18796,6 @@ function calcUnicoFull(){
   if(arancel>0.001) gastosDesglose.push({lbl:'🏛️ Liquidación / Arancel ('+((arPct)*100).toFixed(2)+'%)', val:arancel, color:'var(--red-l)'});
   if(hon>0.001)     gastosDesglose.push({lbl:'💼 Honorarios '+corName+' ('+(honPct*100).toFixed(2)+'%)', val:hon, color:corColor});
   if(tasa>0.001)    gastosDesglose.push({lbl:'💵 Tasa Aduana', val:tasa, color:'var(--orange-l)'});
-  if(itbmsTasa>0.001) gastosDesglose.push({lbl:'🏛️ ITBMS s/Tasa (7%)', val:itbmsTasa, color:'var(--blue-l)'});
   if(uso>0.001)     gastosDesglose.push({lbl:'💻 Uso del Sistema', val:uso, color:'var(--green-l)'});
   if(agente>0.001)  gastosDesglose.push({lbl:'🚛 Gastos Origen/Destino', val:agente, color:'var(--text)'});
   if(dmce>0.001)    gastosDesglose.push({lbl:'📝 DMCE', val:dmce, color:'var(--text)'});
@@ -18843,8 +18842,9 @@ function calcUnicoFull(){
             <span style="font-size:13px;font-weight:700;color:var(--text)">Costo Landed Total</span>
             <span style="font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:800;color:var(--green-l)">${fmt(landed)}</span>
           </div>
-          <div style="display:flex;justify-content:space-between;padding:5px 0;border-top:1px solid rgba(48,54,61,.3);margin-top:4px"><span style="font-size:11px;color:var(--blue-l)">ITBMS — Desembolso (${(itbPct*100).toFixed(0)}%)</span><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--blue-l);font-weight:700">${fmt(itbms)}</span></div>
-          <div style="display:flex;justify-content:space-between;padding:5px 0"><span style="font-size:11px;color:var(--muted)">Costo Landed Global (inc. ITBMS)</span><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted)">${fmt(landedG)}</span></div>
+          <div style="display:flex;justify-content:space-between;padding:5px 8px"><span style="font-size:11px;color:var(--orange-l);font-weight:600">Costo No Mercancía</span><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--orange-l);font-weight:700">${fmt(landed-cif)}</span></div>
+          <div style="display:flex;justify-content:space-between;padding:5px 0;border-top:1px solid rgba(48,54,61,.3);margin-top:4px"><span style="font-size:11px;color:var(--blue-l)">Otros Gastos — ITBMS (${(itbPct*100).toFixed(0)}%)</span><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--blue-l);font-weight:700">${fmt(itbms+itbmsTasa)}</span></div>
+          <div style="display:flex;justify-content:space-between;padding:6px 8px;background:rgba(88,166,255,.08);border-radius:8px;margin-top:4px"><span style="font-size:12px;font-weight:700;color:#58a6ff">Costo Total Global (incl. ITBMS)</span><span style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:800;color:#58a6ff">${fmt(landed+itbms+itbmsTasa)}</span></div>
         </div>
       </div>
 
@@ -20401,10 +20401,10 @@ function _unicoLoadPlantilla(input){
       // ── Auto-corrección de proveedor contra lista oficial ──
       if(provRaw && typeof provMatch==='function'){
         line._match = provMatch(provRaw);
-        if(line._match && (line._match.exact || line._match.score >= 0.8)){
+        if(line._match && (line._match.exact || line._match.score >= 0.65)){
           line.prov = line._match.name; // reemplazar con nombre oficial
           line._corregido = (provRaw !== line._match.name);
-        } else if(!line._match || line._match.score < 0.25){
+        } else if(!line._match || line._match.score < 0.20){
           line._noMatch = true; // no encontrado — mostrar en rojo
         }
       }
@@ -20452,7 +20452,7 @@ function _unicoLoadPlantilla(input){
                 placeholder="Escribe o elige el proveedor correcto…"
                 oninput="window._unicoInvLines[${realIdx}].prov=this.value;this.style.borderColor='rgba(240,136,62,.5)'"
                 onchange="(function(inp,i){var m=typeof provMatch==='function'?provMatch(inp.value):null;if(m&&(m.exact||m.score>=0.8)){window._unicoInvLines[i].prov=m.name;inp.value=m.name;inp.style.borderColor='rgba(63,185,80,.5)';window._unicoInvLines[i]._noMatch=false;window._unicoInvLines[i]._corregido=false;}else{inp.style.borderColor='rgba(218,54,51,.5)';};})(this,${realIdx})"
-                style="flex:1;background:rgba(218,54,51,.07);border:1px solid rgba(218,54,51,.4);border-radius:6px;padding:5px 8px;color:var(--red-l);font-size:11px;font-weight:600">
+                style="flex:1;background:var(--input-bg,rgba(218,54,51,.07));border:1px solid rgba(218,54,51,.4);border-radius:6px;padding:5px 8px;color:var(--red-l);font-size:11px;font-weight:600">
             </div>
           </div>`;
         } else {
@@ -21106,7 +21106,7 @@ function loadInvFile(input){
         line._match = provMatch(provRaw);
         // ── AUTO-CORRECCIÓN: si el match es exacto o muy alto (≥0.8), reemplazar nombre ──
         // Esto garantiza que el proveedor queda con el nombre oficial de la lista
-        if(line._match && (line._match.exact || line._match.score >= 0.8)){
+        if(line._match && (line._match.exact || line._match.score >= 0.65)){
           const finalName = (compar==='sababa' && line._match.si) ? line._match.si : line._match.name;
           line.prov = finalName; // reemplazar con nombre oficial
         }
