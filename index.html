@@ -2650,8 +2650,8 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       <span style="font-size:10px;color:var(--muted);font-weight:600;white-space:nowrap">Período rápido:</span>
       <button onclick="_setPeriodoRapido('hoy',this)"    style="background:var(--s2);border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer" class="_prBtn">Hoy</button>
       <button onclick="_setPeriodoRapido('semana',this)" style="background:var(--s2);border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer" class="_prBtn">Semana</button>
-      <button onclick="_setPeriodoRapido('mes',this)"    style="background:var(--s2);border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer" class="_prBtn">Mes</button>
-      <button onclick="_setPeriodoRapido('anio',this)"   style="background:var(--s2);border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer" class="_prBtn">Año</button>
+      <button onclick="_showMesPicker(this)"             style="background:var(--s2);border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer" class="_prBtn">Mes ▾</button>
+      <button onclick="_showAnioPicker(this)"            style="background:var(--s2);border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer" class="_prBtn">Año ▾</button>
       <button onclick="_setPeriodoRapido('todo',this)"   style="background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.4);color:var(--blue-l);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer" class="_prBtn _prActive">Todo</button>
       <button onclick="_limpiarFiltrosTend_Cloud()" class="_tend-limpiar-btn" style="margin-left:auto;background:none;border:1px solid rgba(218,54,51,.25);color:var(--red-l);border-radius:6px;padding:3px 10px;font-size:10px;font-weight:600;cursor:pointer">✕ Limpiar</button>
       <span class="_tend-filtro-badge" style="display:none;align-items:center;gap:4px;background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.35);border-radius:8px;padding:3px 9px;font-size:10px;font-weight:700;color:var(--blue-l)">🔒 Filtro activo</span>
@@ -10067,6 +10067,78 @@ ${'<'}/script>
 // =====================================================
 let tendPeriod='mes';
 let tendData=[];
+// ── Selector de Mes ──
+window._showMesPicker = function(btn){
+  var old=document.getElementById('_mesPicker'); if(old){old.remove();return;}
+  var meses=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  var hoy=new Date(new Date().getTime()-5*60*60*1000);
+  var anioActual=hoy.getFullYear();
+  var div=document.createElement('div');
+  div.id='_mesPicker';
+  div.style.cssText='position:fixed;z-index:99999;background:var(--s1,#161b22);border:1px solid var(--border,#30363d);border-radius:12px;padding:12px;box-shadow:0 8px 32px rgba(0,0,0,.5);min-width:220px';
+  var rect=btn.getBoundingClientRect();
+  div.style.top=(rect.bottom+6)+'px'; div.style.left=rect.left+'px';
+  var yearHtml='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
+    +'<button onclick="this.parentElement.parentElement.querySelector(\'._mpAnio\').textContent=parseInt(this.parentElement.parentElement.querySelector(\'._mpAnio\').textContent)-1" style="background:none;border:none;color:var(--muted,#8b949e);font-size:16px;cursor:pointer;padding:2px 6px">‹</button>'
+    +'<span class="_mpAnio" style="font-size:13px;font-weight:700;color:var(--text,#e6edf3)">'+anioActual+'</span>'
+    +'<button onclick="this.parentElement.parentElement.querySelector(\'._mpAnio\').textContent=parseInt(this.parentElement.parentElement.querySelector(\'._mpAnio\').textContent)+1" style="background:none;border:none;color:var(--muted,#8b949e);font-size:16px;cursor:pointer;padding:2px 6px">›</button>'
+    +'</div>';
+  var grid='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px">';
+  meses.forEach(function(m,i){
+    var isActual=(i===hoy.getMonth()&&anioActual===hoy.getFullYear());
+    grid+='<button onclick="_selMes('+i+')" style="background:'+(isActual?'rgba(88,166,255,.2)':'var(--s2,#0d1117)')+';border:1px solid '+(isActual?'rgba(88,166,255,.4)':'var(--border,#30363d)')+';color:'+(isActual?'var(--blue-l,#58a6ff)':'var(--text,#e6edf3)')+';border-radius:6px;padding:6px 4px;font-size:11px;font-weight:600;cursor:pointer">'+m+'</button>';
+  });
+  grid+='</div>';
+  div.innerHTML=yearHtml+grid;
+  document.body.appendChild(div);
+  setTimeout(function(){ document.addEventListener('click',function h(e){ if(!div.contains(e.target)&&e.target!==btn){ div.remove(); document.removeEventListener('click',h); } }); },300);
+};
+window._selMes = function(mesIdx){
+  var picker=document.getElementById('_mesPicker');
+  if(!picker) return;
+  var anioEl=picker.querySelector('._mpAnio');
+  var anio=anioEl?parseInt(anioEl.textContent):new Date().getFullYear();
+  var fmt=function(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
+  var desde=new Date(anio,mesIdx,1);
+  var hasta=new Date(anio,mesIdx+1,0);
+  var allD=document.querySelectorAll('#tf_desde'), allH=document.querySelectorAll('#tf_hasta');
+  var tfD=Array.from(allD).find(function(e){return e.offsetParent!==null;})||allD[allD.length-1];
+  var tfH=Array.from(allH).find(function(e){return e.offsetParent!==null;})||allH[allH.length-1];
+  if(tfD) tfD.value=fmt(desde);
+  if(tfH) tfH.value=fmt(hasta);
+  picker.remove();
+  if(typeof _applyTendFilters==='function') _applyTendFilters();
+};
+
+// ── Selector de Año ──
+window._showAnioPicker = function(btn){
+  var old=document.getElementById('_anioPicker'); if(old){old.remove();return;}
+  var hoy=new Date(new Date().getTime()-5*60*60*1000);
+  var anioActual=hoy.getFullYear();
+  var div=document.createElement('div');
+  div.id='_anioPicker';
+  div.style.cssText='position:fixed;z-index:99999;background:var(--s1,#161b22);border:1px solid var(--border,#30363d);border-radius:12px;padding:12px;box-shadow:0 8px 32px rgba(0,0,0,.5);min-width:160px';
+  var rect=btn.getBoundingClientRect();
+  div.style.top=(rect.bottom+6)+'px'; div.style.left=rect.left+'px';
+  var grid='<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:4px">';
+  for(var y=anioActual;y>=anioActual-4;y--){
+    var isActual=(y===anioActual);
+    grid+='<button onclick="_selAnio('+y+')" style="background:'+(isActual?'rgba(88,166,255,.2)':'var(--s2,#0d1117)')+';border:1px solid '+(isActual?'rgba(88,166,255,.4)':'var(--border,#30363d)')+';color:'+(isActual?'var(--blue-l,#58a6ff)':'var(--text,#e6edf3)')+';border-radius:6px;padding:8px 4px;font-size:12px;font-weight:700;cursor:pointer">'+y+'</button>';
+  }
+  grid+='</div>';
+  div.innerHTML=grid;
+  document.body.appendChild(div);
+  setTimeout(function(){ document.addEventListener('click',function h(e){ if(!div.contains(e.target)&&e.target!==btn){ div.remove(); document.removeEventListener('click',h); } }); },300);
+};
+window._selAnio = function(anio){
+  var fmt=function(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
+  var tfD=document.getElementById('tf_desde'), tfH=document.getElementById('tf_hasta');
+  if(tfD) tfD.value=fmt(new Date(anio,0,1));
+  if(tfH) tfH.value=fmt(new Date(anio,11,31));
+  var p=document.getElementById('_anioPicker'); if(p) p.remove();
+  if(typeof _applyTendFilters==='function') _applyTendFilters();
+};
+
 // Toggle accordion meses/años historial — debe ser global para que los onclick inline lo encuentren
 // Debug: ver qué embarques pasan el filtro activo
 window._debugFiltro = function(){
@@ -10776,7 +10848,7 @@ function _setPeriodoRapido(p, btn){
   const hoy=fmt(new Date());
   let desde='', hasta=hoy;
   if(p==='hoy'){ desde=hoy; hasta=hoy; }
-  else if(p==='semana'){ const d=new Date(new Date().getTime()-5*60*60*1000); d.setDate(d.getDate()-d.getDay()); desde=fmt(d); }
+  else if(p==='semana'){ const d=new Date(new Date().getTime()-5*60*60*1000); var dow=d.getDay(); var diff=dow===0?-6:1-dow; d.setDate(d.getDate()+diff); desde=fmt(d); }
   else if(p==='mes'){ const d=new Date(new Date().getTime()-5*60*60*1000); desde=fmt(new Date(d.getFullYear(),d.getMonth(),1)); }
   else if(p==='anio'){ const d=new Date(new Date().getTime()-5*60*60*1000); desde=fmt(new Date(d.getFullYear(),0,1)); }
   else { desde=''; hasta=''; }
@@ -12621,8 +12693,12 @@ function renderTend(){
       const viaLabel = d.viaTransporte||'SEA';
       const tramiteColor = d.tramiteTipo==='Local'?'var(--green-l)':'var(--orange-l)';
       const tramiteBg = d.tramiteTipo==='Local'?'rgba(63,185,80,.12)':'rgba(240,136,62,.12)';
+      // Detectar Escenario Único
+      const isUnicoRow = !!(d.modoUnico||d.tipoEsc==='unico'||(d.esc||'').toLowerCase().includes('único')||(d.esc||'').toLowerCase().includes('unico'));
+      const nroColor = isUnicoRow ? '#f97316' : 'var(--orange-l)';
+      const unicoBadge = isUnicoRow ? '<span style="background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.4);border-radius:3px;padding:0 4px;font-size:8px;font-weight:800;color:#f97316">🔒 ÚNICO</span>' : '';
       return `<div style="display:grid;grid-template-columns:auto 1fr auto auto auto;gap:8px;align-items:center;padding:9px 14px;border-bottom:1px solid rgba(48,54,61,.4);cursor:pointer;transition:background .15s${(isPend||isParcial)?';border-left:3px solid '+(isPend?'var(--orange-l)':'var(--blue-l)'):''}" onclick="if(event.target.classList.contains('del-btn')||event.target.classList.contains('btn-reabrir')){return;}abrirModuloComparativo_idx(${idx})" onmouseover="this.style.background='rgba(255,255,255,.03)'" onmouseout="this.style.background=''">
-        <div style="font-size:10px;font-weight:700;color:var(--orange-l);white-space:nowrap">${d.nro||'—'}</div>
+        <div style="font-size:10px;font-weight:700;color:${nroColor};white-space:nowrap">${d.nro||'—'} ${unicoBadge}</div>
         <div><div style="font-size:12px;font-weight:500;color:var(--text)">${d.desc}${isPend?'&nbsp;<span class="badge-pendiente">🟡 PENDIENTE</span>':''}${d.status==='parcial'?'&nbsp;<span style="background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:3px;padding:1px 5px;font-size:9px;font-weight:700">🚢 PARCIAL</span>':''}</div><div style="font-size:10px;color:var(--muted);display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-top:2px">${d.fecha} · ${d.esc||''}&nbsp;<span style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:var(--blue-l)">${viaIco} ${viaLabel}</span>${d.tramiteTipo?`<span style="background:${tramiteBg};border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:${tramiteColor}">${d.tramiteTipo}</span>`:''}${d.lugarRecep?`<span style="background:rgba(45,212,191,.1);border:1px solid rgba(45,212,191,.25);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:#2dd4bf">🏭 ${d.lugarRecep}</span>`:''}
 </div></div>
         <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--green-l);font-weight:700;white-space:nowrap">$${(_ahorroDisplay/1000).toFixed(2)}k</div>
@@ -16222,9 +16298,15 @@ function exportDashboardExcel(){
     function _corredor(d){
       var snap=d.snap||{};
       var cor=snap.corName||snap.cor||d.esc||'';
-      // Limpiar nombres compuestos — quitar prefijos "Único", "Escenario", etc.
-      cor=cor.replace(/^(Único\s*[·\-]\s*|Escenario\s*Único\s*[·\-]\s*)/i,'').trim();
+      cor=cor.replace(/[Uu]nico\s*[·\-]\s*/g,'').replace(/[Éé]scenario\s*[Uu]nico\s*/g,'').trim();
       return cor||'—';
+    }
+    function _isUnicoLiq(d){
+      // Detectar embarques Escenario Único (liquidación especial)
+      return !!(d.modoUnico||d.tipoEsc==='unico'
+        ||(d.esc||'').toLowerCase().includes('único')
+        ||(d.esc||'').toLowerCase().includes('unico')
+        ||((d.snap&&d.snap.sc1u)&&!(d.snap&&d.snap.sc3&&(d.snap.sc3.mercHomol||0)>0)));
     }
 
     // ══════════════════════════════════════
@@ -16280,8 +16362,15 @@ function exportDashboardExcel(){
       var isLocal=escL.includes('sababa')&&(sc3.mercHomol||0)>0;
       var isCIF=escL.includes('cif')&&!isLocal;
       var mercInv=costoInv>0?costoInv:costoOrig;
+      // Usar _calcCostoInventario — la misma lógica que el sistema
+      var _ci2 = typeof _calcCostoInventario==='function' ? _calcCostoInventario(d) : null;
       var noMerc, itbms, totalGlobal, landedCost;
-      if(isUnico){
+      if(_ci2){
+        landedCost = _ci2.costoInv;     // Merc + No Merc (sin ITBMS)
+        noMerc = _ci2.noMerc || 0;
+        itbms = _ci2.itbms || 0;
+        totalGlobal = _ci2.costoInvTotal || (landedCost + itbms);
+      } else if(isUnico){
         noMerc=sc1u.noMerc||0;
         itbms=(sc1u.itbms||0)+(sc1u.itbmsTasa||0);
         landedCost=sc1u.landed||0;
@@ -16290,7 +16379,7 @@ function exportDashboardExcel(){
         var l1s3=sc3.landed1||0, baseS3=sc3.base||sc3.mercHomol||costoOrig;
         noMerc=Math.max(0,l1s3-baseS3);
         itbms=sc3.itbmsHomol||0;
-        landedCost=l1s3; // landed costeable = base + no merc
+        landedCost=l1s3;
         totalGlobal=landedCost+itbms;
       } else if(isCIF){
         var l1s2=sc2.landed1||0;
@@ -16314,7 +16403,9 @@ function exportDashboardExcel(){
 
       var tipoEmb=_tipoEmbarque(d);
       var tipoEmbColor=tipoEmb==='Suministro'?'E67E22':'1A5276';
-      centerCell(ws1.getCell(row,1),d.nro||'—',alt,true,C_MONEY);
+      var isUnicoLiq=_isUnicoLiq(d);
+      var nroColor=isUnicoLiq?'FF6B00':C_MONEY; // Naranja para Único Liquidación
+      centerCell(ws1.getCell(row,1),d.nro||'—',alt,true,nroColor);
       txtCell(ws1.getCell(row,2),d.desc||'—',alt);
       centerCell(ws1.getCell(row,3),(d.fecha||'—').slice(0,10),alt);
       centerCell(ws1.getCell(row,4),tipoEmb,alt,true,tipoEmbColor);
