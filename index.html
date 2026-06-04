@@ -2,8 +2,27 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Gestión Integral de Compras y Costeo — ZLC Panamá</title>
+<script>
+// Verificación automática de versión — fuerza recarga si el servidor tiene versión nueva
+(function(){
+  var VER_KEY = '_app_build_zlc';
+  var VER_BUILD = '20260604-003';
+  try {
+    var saved = sessionStorage.getItem(VER_KEY);
+    if(saved && saved !== VER_BUILD){
+      sessionStorage.setItem(VER_KEY, VER_BUILD);
+      location.reload(true);
+    } else {
+      sessionStorage.setItem(VER_KEY, VER_BUILD);
+    }
+  } catch(e){}
+})();
+</script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 
@@ -11341,9 +11360,10 @@ async function procesarEmbarque(){
       _showAsignacionFacturas(snap, _conts, function(){
         window._procOverlayNro = nro;
         var _sn3 = window._lastSnap||snap||{};
-        var _lb3 = _sn3.compar==='sababa' ? (_sn3.sc3&&(_sn3.sc3.landedG||_sn3.sc3.landed1||_sn3.sc3.base)||0) : (_sn3.sc1&&(_sn3.sc1.landedG||_sn3.sc1.landed1||_sn3.sc1.base)||0);
+        var _isSab3 = (_sn3.compar==='sababa') || ((_sn3.sc3&&(_sn3.sc3.landed1||0))>0 && !_sn3.sc2);
+        var _lb3 = _isSab3 ? (_sn3.sc3&&(_sn3.sc3.landed1||_sn3.sc3.base)||0) : (_sn3.sc1&&(_sn3.sc1.landed1||_sn3.sc1.base)||0);
         var _cb3 = window._sc1_base||window._lastCIF||0;
-        var _fv3 = (_cb3>0&&_lb3>0) ? (_lb3/_cb3).toFixed(4) : '—';
+        var _fv3 = (_cb3>0&&_lb3>0) ? (((_lb3/_cb3)-1)*100).toFixed(2)+'%' : '—';
         _showProcessingOverlay(nro, desc, _cb3, _ahorroDisplay, _lb3, _fv3, function(){
           _guardarYRecargar(_nroGuardar);
         });
@@ -11355,12 +11375,13 @@ async function procesarEmbarque(){
   window._procOverlayNro = nro;
   // Extraer landed y factor del snap recién guardado
   var _snapProc = window._lastSnap || snap || {};
-  var _landedVal = (_snapProc.compar === 'sababa')
-    ? (_snapProc.sc3 && (_snapProc.sc3.landedG||_snapProc.sc3.landed1||_snapProc.sc3.base)||0)
-    : (_snapProc.sc1 && (_snapProc.sc1.landedG||_snapProc.sc1.landed1||_snapProc.sc1.base)||0);
+  var _isSab = (_snapProc.compar === 'sababa') || ((_snapProc.sc3&&(_snapProc.sc3.landed1||0))>0 && !_snapProc.sc2);
+  var _landedVal = _isSab
+    ? (_snapProc.sc3 && (_snapProc.sc3.landed1||_snapProc.sc3.base)||0)
+    : (_snapProc.sc1 && (_snapProc.sc1.landed1||_snapProc.sc1.base)||0);
   var _cifBase2 = window._sc1_base||window._lastCIF||0;
   var _factorVal = (_cifBase2 > 0 && _landedVal > 0)
-    ? (_landedVal / _cifBase2).toFixed(4)
+    ? (((_landedVal / _cifBase2) - 1) * 100).toFixed(2) + '%'
     : '—';
   _showProcessingOverlay(nro, desc, _cifBase2, _ahorroDisplay, _landedVal, _factorVal, function(){
     _guardarYRecargar(_nroGuardar);
