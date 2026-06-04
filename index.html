@@ -16298,7 +16298,8 @@ function exportDashboardExcel(){
     function _corredor(d){
       var snap=d.snap||{};
       var cor=snap.corName||snap.cor||d.esc||'';
-      cor=cor.replace(/[Uu]nico\s*[·\-]\s*/g,'').replace(/[Éé]scenario\s*[Uu]nico\s*/g,'').trim();
+      // Quitar "Único — ", "Único - ", "Único · " del inicio
+      cor=cor.replace(/^[Uu]nico\s*[·—\-]+\s*/,'').trim();
       return cor||'—';
     }
     function _isUnicoLiq(d){
@@ -16316,7 +16317,7 @@ function exportDashboardExcel(){
     ws1.properties.defaultRowHeight=18;
 
     // Título
-    ws1.mergeCells('A1:N1');
+    ws1.mergeCells('A1:O1');
     var titleCell=ws1.getCell('A1');
     titleCell.value='GESTIÓN INTEGRAL DE COMPRAS Y COSTEO — Resumen por Embarque';
     titleCell.font={name:'Calibri',bold:true,size:13,color:{argb:'FF'+C_HDR_FG}};
@@ -16333,8 +16334,8 @@ function exportDashboardExcel(){
     ws1.getRow(2).height=16;
 
     // Headers
-    var hdrs1=['N° Embarque','Descripción / Departamento','Fecha','Tipo Embarque','Tipo de Trámite','Corredor','Tipo Mercancía','CIF/FOB Mercancía','Costo Inventario\n(Homologado)','Costo No\nMercancía','ITBMS','Total Global\n(incl. ITBMS)','Ahorro Neto','% Ahorro','N° Facturas'];
-    var cols1=[13,34,12,13,14,22,14,18,18,16,14,20,14,11,12];
+    var hdrs1=['N° Embarque','Descripción / Departamento','Fecha','Tipo Embarque','Tipo de Trámite','Corredor','Tipo Mercancía','Valor Mercancía\n(FOB/Homologado)','Costo No\nMercancía','ITBMS','Costo Landed\n(sin ITBMS)','Total Global\n(incl. ITBMS)','Ahorro Neto','% Ahorro','N° Facturas'];
+    var cols1=[13,34,12,13,14,22,14,18,16,14,18,20,14,11,12];
     hdrs1.forEach(function(h,i){
       var cell=ws1.getCell(3,i+1);
       hdrCell(cell,h,C_HDR_BG,C_HDR_FG);
@@ -16362,44 +16363,43 @@ function exportDashboardExcel(){
       var isLocal=escL.includes('sababa')&&(sc3.mercHomol||0)>0;
       var isCIF=escL.includes('cif')&&!isLocal;
       var mercInv=costoInv>0?costoInv:costoOrig;
-      // Usar _calcCostoInventario — la misma lógica que el sistema
+      // Calcular según escenario
       var _ci2 = typeof _calcCostoInventario==='function' ? _calcCostoInventario(d) : null;
-      var noMerc, itbms, totalGlobal, landedCost;
-      if(_ci2){
-        landedCost = _ci2.costoInv;     // Merc + No Merc (sin ITBMS)
-        noMerc = _ci2.noMerc || 0;
-        itbms = _ci2.itbms || 0;
-        totalGlobal = _ci2.costoInvTotal || (landedCost + itbms);
-      } else if(isUnico){
+      var noMerc, itbms, landedCost, totalGlobal;
+      // Valor Mercancía: homologado si Local (Sababa con homol), original si Liquidación
+      var valorMerc = isLocal ? (sc3.mercHomol||costoOrig) : costoOrig;
+      if(isUnico){
         noMerc=sc1u.noMerc||0;
         itbms=(sc1u.itbms||0)+(sc1u.itbmsTasa||0);
-        landedCost=sc1u.landed||0;
-        totalGlobal=landedCost+itbms;
+        landedCost=(sc1u.landed||0);
+        valorMerc=costoOrig; // Único usa CIF original
       } else if(isLocal){
-        var l1s3=sc3.landed1||0, baseS3=sc3.base||sc3.mercHomol||costoOrig;
+        var baseS3=sc3.base||sc3.mercHomol||costoOrig;
+        var l1s3=sc3.landed1||0;
         noMerc=Math.max(0,l1s3-baseS3);
         itbms=sc3.itbmsHomol||0;
-        landedCost=l1s3;
-        totalGlobal=landedCost+itbms;
+        landedCost=l1s3; // Landed local = base homol + no merc
+        valorMerc=sc3.mercHomol||costoOrig; // Homologado
       } else if(isCIF){
         var l1s2=sc2.landed1||0;
         noMerc=Math.max(0,l1s2-costoOrig);
         itbms=(sc2.itbms||0)+(sc2.itbmsTasaFinal||0);
         landedCost=l1s2;
-        totalGlobal=landedCost+itbms;
+        valorMerc=costoOrig;
       } else {
         var l1s1=sc1.landed1||0;
         noMerc=Math.max(0,l1s1-costoOrig);
         itbms=(sc1.itbms||0)+(sc1.itbmsTasaFinal||0);
         landedCost=l1s1;
-        totalGlobal=landedCost+itbms;
+        valorMerc=costoOrig;
       }
+      totalGlobal=landedCost+itbms;
       var pct=costoOrig>0?(d.ahorro/costoOrig*100):0;
       var tramite=_tipoTramite(d);
       var corredor=_corredor(d);
 
-      totals.cif+=costoOrig; totals.inv+=landedCost; totals.noMerc+=noMerc;
-      totals.itbms+=itbms; totals.global+=totalGlobal; totals.ahorro+=(d.ahorro||0);
+      totals.merc=(totals.merc||0)+(valorMerc||costoOrig); totals.noMerc+=noMerc;
+      totals.itbms+=itbms; totals.landed=(totals.landed||0)+landedCost; totals.global+=totalGlobal; totals.ahorro+=(d.ahorro||0);
 
       var tipoEmb=_tipoEmbarque(d);
       var tipoEmbColor=tipoEmb==='Suministro'?'E67E22':'1A5276';
@@ -16414,10 +16414,10 @@ function exportDashboardExcel(){
       txtCell(ws1.getCell(row,6),corredor,alt);
       var mercColor=tipoMerc==='Zona Libre'?C_GREEN:C_ORANGE;
       centerCell(ws1.getCell(row,7),tipoMerc,alt,false,mercColor);
-      moneyCell(ws1.getCell(row,8),costoOrig,alt);
-      moneyCell(ws1.getCell(row,9),landedCost||0,alt);
-      moneyCell(ws1.getCell(row,10),noMerc,alt);
-      moneyCell(ws1.getCell(row,11),itbms,alt);
+      moneyCell(ws1.getCell(row,8),valorMerc||costoOrig,alt);
+      moneyCell(ws1.getCell(row,9),noMerc,alt);
+      moneyCell(ws1.getCell(row,10),itbms,alt);
+      moneyCell(ws1.getCell(row,11),landedCost||0,alt); // Costo Landed sin ITBMS
       moneyCell(ws1.getCell(row,12),totalGlobal,alt);
       moneyCell(ws1.getCell(row,13),d.ahorro||0,alt);
       var pctCell=ws1.getCell(row,14);
@@ -16436,7 +16436,7 @@ function exportDashboardExcel(){
     totLabel.font={name:'Calibri',bold:true,size:10,color:{argb:'FF'+C_HDR_FG}};
     totLabel.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+C_TOTAL_BG}};
     totLabel.alignment={horizontal:'center',vertical:'middle'};
-    [totals.cif,totals.inv,totals.noMerc,totals.itbms,totals.global,totals.ahorro].forEach(function(v,i){
+    [totals.merc,totals.noMerc,totals.itbms,totals.landed,totals.global,totals.ahorro].forEach(function(v,i){
       var c=ws1.getCell(totRow,8+i);
       c.value=v; c.numFmt='"$"#,##0.00';
       c.font={name:'Calibri',bold:true,size:10,color:{argb:'FF'+C_HDR_FG}};
