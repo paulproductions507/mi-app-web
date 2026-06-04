@@ -5682,8 +5682,9 @@ function switchTab(id,el){
       _populateProveedorFilter();
       if(typeof _loadFiltrosTend==='function') await _loadFiltrosTend();
       // Establecer filtro de mes actual si no hay filtro activo
-      var desdeVal = (document.getElementById('tf_desde')||{}).value||'';
-      var hastaVal = (document.getElementById('tf_hasta')||{}).value||'';
+      var tfD=document.getElementById('tf_desde'), tfH=document.getElementById('tf_hasta');
+      var desdeVal = (tfD||{}).value||'';
+      var hastaVal = (tfH||{}).value||'';
       if(!desdeVal && !hastaVal){
         var hoy = new Date(new Date().getTime()-5*60*60*1000);
         var fmt = d => d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
@@ -16201,14 +16202,29 @@ function exportDashboardExcel(){
     }
 
     function _tipoTramite(d){
-      var esc=(d.esc||'').toLowerCase();
-      var cor=((d.snap&&d.snap.cor)||'').toLowerCase();
-      if(esc.includes('sababa')||cor.includes('sababa')) return 'Local';
-      return 'Liquidación';
+      var snap=d.snap||{};
+      var sc3=snap.sc3||{};
+      // Local = Sababa CON homologación real (sc3 con mercHomol y comision)
+      var isLocal = (d.esc||'').toLowerCase().includes('sababa')
+        && (sc3.mercHomol||0)>0 && (sc3.comision||0)>0
+        && !d.modoUnico && d.tipoEsc!=='unico';
+      return isLocal ? 'Local' : 'Liquidación';
+    }
+    function _tipoEmbarque(d){
+      // Mercancía vs Suministro
+      var invL=(d.snap&&d.snap.invLines)?d.snap.invLines:(d.invLines||[]);
+      var desc=(d.desc||d.descripcion||'').toLowerCase();
+      if(desc.includes('suministro')||desc.includes('supply')) return 'Suministro';
+      var mercLines=invL.filter(function(l){return (l.tipoFac||'mercancia')==='mercancia';});
+      if(mercLines.length===0 && invL.length>0) return 'Suministro';
+      return 'Mercancía';
     }
     function _corredor(d){
       var snap=d.snap||{};
-      return snap.corName||snap.cor||d.esc||'—';
+      var cor=snap.corName||snap.cor||d.esc||'';
+      // Limpiar nombres compuestos — quitar prefijos "Único", "Escenario", etc.
+      cor=cor.replace(/^(Único\s*[·\-]\s*|Escenario\s*Único\s*[·\-]\s*)/i,'').trim();
+      return cor||'—';
     }
 
     // ══════════════════════════════════════
@@ -16235,8 +16251,8 @@ function exportDashboardExcel(){
     ws1.getRow(2).height=16;
 
     // Headers
-    var hdrs1=['N° Embarque','Descripción / Departamento','Fecha','Tipo de Trámite','Corredor','Tipo Mercancía','CIF/FOB Mercancía','Costo Inventario\n(Homologado)','Costo No\nMercancía','ITBMS','Total Global\n(incl. ITBMS)','Ahorro Neto','% Ahorro','N° Facturas'];
-    var cols1=[13,34,12,14,22,14,18,18,16,14,20,14,11,12];
+    var hdrs1=['N° Embarque','Descripción / Departamento','Fecha','Tipo Embarque','Tipo de Trámite','Corredor','Tipo Mercancía','CIF/FOB Mercancía','Costo Inventario\n(Homologado)','Costo No\nMercancía','ITBMS','Total Global\n(incl. ITBMS)','Ahorro Neto','% Ahorro','N° Facturas'];
+    var cols1=[13,34,12,13,14,22,14,18,18,16,14,20,14,11,12];
     hdrs1.forEach(function(h,i){
       var cell=ws1.getCell(3,i+1);
       hdrCell(cell,h,C_HDR_BG,C_HDR_FG);
@@ -16296,38 +16312,41 @@ function exportDashboardExcel(){
       totals.cif+=costoOrig; totals.inv+=landedCost; totals.noMerc+=noMerc;
       totals.itbms+=itbms; totals.global+=totalGlobal; totals.ahorro+=(d.ahorro||0);
 
+      var tipoEmb=_tipoEmbarque(d);
+      var tipoEmbColor=tipoEmb==='Suministro'?'E67E22':'1A5276';
       centerCell(ws1.getCell(row,1),d.nro||'—',alt,true,C_MONEY);
       txtCell(ws1.getCell(row,2),d.desc||'—',alt);
       centerCell(ws1.getCell(row,3),(d.fecha||'—').slice(0,10),alt);
+      centerCell(ws1.getCell(row,4),tipoEmb,alt,true,tipoEmbColor);
       var tramiteColor=tramite==='Local'?C_GREEN:C_ORANGE;
-      centerCell(ws1.getCell(row,4),tramite,alt,true,tramiteColor);
-      txtCell(ws1.getCell(row,5),corredor,alt);
+      centerCell(ws1.getCell(row,5),tramite,alt,true,tramiteColor);
+      txtCell(ws1.getCell(row,6),corredor,alt);
       var mercColor=tipoMerc==='Zona Libre'?C_GREEN:C_ORANGE;
-      centerCell(ws1.getCell(row,6),tipoMerc,alt,false,mercColor);
-      moneyCell(ws1.getCell(row,7),costoOrig,alt);
-      moneyCell(ws1.getCell(row,8),landedCost||0,alt);
-      moneyCell(ws1.getCell(row,9),noMerc,alt);
-      moneyCell(ws1.getCell(row,10),itbms,alt);
-      moneyCell(ws1.getCell(row,11),totalGlobal,alt);
-      moneyCell(ws1.getCell(row,12),d.ahorro||0,alt);
-      var pctCell=ws1.getCell(row,13);
+      centerCell(ws1.getCell(row,7),tipoMerc,alt,false,mercColor);
+      moneyCell(ws1.getCell(row,8),costoOrig,alt);
+      moneyCell(ws1.getCell(row,9),landedCost||0,alt);
+      moneyCell(ws1.getCell(row,10),noMerc,alt);
+      moneyCell(ws1.getCell(row,11),itbms,alt);
+      moneyCell(ws1.getCell(row,12),totalGlobal,alt);
+      moneyCell(ws1.getCell(row,13),d.ahorro||0,alt);
+      var pctCell=ws1.getCell(row,14);
       pctCell.value=pct/100; pctCell.numFmt='0.00%';
       pctCell.font={name:'Calibri',size:9}; pctCell.alignment={horizontal:'center'};
       if(alt) pctCell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+C_ALT}};
-      centerCell(ws1.getCell(row,14),invL.length,alt);
+      centerCell(ws1.getCell(row,15),invL.length,alt);
       ws1.getRow(row).height=18;
     });
 
     // Fila totales
     var totRow=tendFiltered.length+4;
-    ws1.mergeCells('A'+totRow+':F'+totRow);
+    ws1.mergeCells('A'+totRow+':G'+totRow);
     var totLabel=ws1.getCell('A'+totRow);
     totLabel.value='TOTAL — '+tendFiltered.length+' embarques';
     totLabel.font={name:'Calibri',bold:true,size:10,color:{argb:'FF'+C_HDR_FG}};
     totLabel.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+C_TOTAL_BG}};
     totLabel.alignment={horizontal:'center',vertical:'middle'};
     [totals.cif,totals.inv,totals.noMerc,totals.itbms,totals.global,totals.ahorro].forEach(function(v,i){
-      var c=ws1.getCell(totRow,7+i);
+      var c=ws1.getCell(totRow,8+i);
       c.value=v; c.numFmt='"$"#,##0.00';
       c.font={name:'Calibri',bold:true,size:10,color:{argb:'FF'+C_HDR_FG}};
       c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+C_TOTAL_BG}};
