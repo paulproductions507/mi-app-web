@@ -5681,6 +5681,19 @@ function switchTab(id,el){
       if(_sb) await _pullTendFromCloud();
       _populateProveedorFilter();
       if(typeof _loadFiltrosTend==='function') await _loadFiltrosTend();
+      // Establecer filtro de mes actual si no hay filtro activo
+      var desdeVal = (document.getElementById('tf_desde')||{}).value||'';
+      var hastaVal = (document.getElementById('tf_hasta')||{}).value||'';
+      if(!desdeVal && !hastaVal){
+        var hoy = new Date(new Date().getTime()-5*60*60*1000);
+        var fmt = d => d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+        var primerDia = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+        var ultimoDia = new Date(hoy.getFullYear(), hoy.getMonth()+1, 0);
+        var tfDesde = document.getElementById('tf_desde');
+        var tfHasta = document.getElementById('tf_hasta');
+        if(tfDesde) tfDesde.value = fmt(primerDia);
+        if(tfHasta) tfHasta.value = fmt(ultimoDia);
+      }
       // Restaurar estado toggle $k/$Completo
       window._tendFmtFull=(typeof localStorage!=='undefined'&&localStorage.getItem('_tendFmtFull')==='1');
       if(typeof _syncFmtBtns==='function') _syncFmtBtns();
@@ -10054,6 +10067,24 @@ ${'<'}/script>
 let tendPeriod='mes';
 let tendData=[];
 // Toggle accordion meses/años historial — debe ser global para que los onclick inline lo encuentren
+// Debug: ver qué embarques pasan el filtro activo
+window._debugFiltro = function(){
+  var filtered = _getFilteredTendData();
+  var todos = tendData||[];
+  console.log('tendData total:', todos.length);
+  console.log('Filtrados:', filtered.length);
+  // Mostrar embarques fuera del filtro
+  var filtradosNros = new Set(filtered.map(d=>d.nro));
+  var noFiltrados = todos.filter(d=>!filtradosNros.has(d.nro));
+  console.log('No incluidos en filtro:', noFiltrados.map(d=>d.nro+' | '+d.fecha+' | '+d.esc));
+  // Duplicados
+  var nroCount = {};
+  todos.forEach(d=>{ var n=d.nro||'SIN_NRO'; nroCount[n]=(nroCount[n]||0)+1; });
+  var dups = Object.entries(nroCount).filter(([k,v])=>v>1);
+  if(dups.length) console.log('DUPLICADOS:', dups);
+  else console.log('Sin duplicados');
+};
+
 window._hfToggleMes = function(hId, bId){
   var b = document.getElementById(bId); if(!b) return;
   var open = b.style.display === 'none';
@@ -10609,7 +10640,17 @@ function _getFilteredTendData(){
 
   // Deduplicar tendData por nro antes de filtrar — evita conteos inflados
   const _dedupMap=new Map();
-  (tendData||[]).forEach(d=>{ const k=(d.nro||'').trim().toUpperCase()||('_ts_'+(d.ts||Math.random())); const ex=_dedupMap.get(k); if(!ex||(d.ts||0)>(ex.ts||0)) _dedupMap.set(k,d); });
+  (tendData||[]).forEach(d=>{
+    const nro = (d.nro||'').trim().toUpperCase();
+    // Solo deduplicar si tiene número de embarque real
+    if(nro && nro.length > 0 && !nro.startsWith('_')) {
+      const ex=_dedupMap.get(nro);
+      if(!ex||(d.ts||0)>(ex.ts||0)) _dedupMap.set(nro,d);
+    } else {
+      // Sin número — usar timestamp único para no perder el embarque
+      _dedupMap.set('_ts_'+(d.ts||d.id||Math.random()), d);
+    }
+  });
   const _dedupData=Array.from(_dedupMap.values());
 
   return _dedupData.filter(d=>{
@@ -12831,9 +12872,12 @@ function renderHistProv(){
   var totalPiezas = rows.reduce((s,r)=>s+r.piezas, 0);
 
   root.innerHTML = `
-  <div style="padding:12px 0 10px">
-    <div style="font-size:14px;font-weight:800;color:var(--text);margin-bottom:2px">🏭 Historial de Proveedores</div>
-    <div style="font-size:11px;color:var(--muted)">Todos los proveedores de mercancía de embarques procesados</div>
+  <div style="padding:12px 0 10px;display:flex;align-items:center;justify-content:space-between">
+    <div>
+      <div style="font-size:14px;font-weight:800;color:var(--text);margin-bottom:2px">🏭 Historial de Proveedores</div>
+      <div style="font-size:11px;color:var(--muted)">Todos los proveedores de mercancía de embarques procesados</div>
+    </div>
+    <button onclick="_exportHistProvXLSX()" style="background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:8px;padding:7px 14px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">📊 Excel</button>
   </div>
 
   <div style="background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px">
@@ -12903,6 +12947,75 @@ function renderHistProv(){
 }
 
 var _histProvTimer = null;
+
+// ── Export Excel Historial de Proveedores ──
+function _exportHistProvXLSX(){
+  _exjsLoad(function(){
+    var rows = _buildHistProvRows();
+    var seccion = (document.getElementById('hp-seccion')||{}).value||'merc';
+    var secLabel = seccion==='serv' ? 'Proveedores Servicio' : 'Proveedores Mercancía';
+    var fecha2 = new Date().toISOString().slice(0,10);
+    var wb = new ExcelJS.Workbook(); wb.creator='Gestión Integral ZLC Panamá';
+    var ws = wb.addWorksheet(secLabel);
+    var nCols = seccion==='serv' ? 7 : 9;
+    _exjsTitle(ws, 'HISTORIAL DE '+secLabel.toUpperCase()+'  ·  '+fecha2, nCols);
+    ws.mergeCells('A2:'+String.fromCharCode(64+nCols)+'2');
+    var s2=ws.getCell('A2'); s2.value='Total registros: '+rows.length+'   ·   ZLC Panamá — Saks';
+    s2.font={name:'Calibri',size:9,italic:true,color:{argb:'FF555555'}}; s2.alignment={horizontal:'center'}; ws.getRow(2).height=14;
+
+    var hdrs, cols;
+    if(seccion==='serv'){
+      hdrs=['N° Embarque','Proveedor Servicio','Rubro','N° Factura','Tipo','Corredor','Monto'];
+      cols=[13,30,18,16,12,20,16];
+    } else {
+      hdrs=['N° Embarque','Fecha','Proveedor','Departamento','OC','N° Factura','Tipo','Corredor','CIF/FOB'];
+      cols=[13,12,30,20,14,16,12,20,16];
+    }
+    hdrs.forEach(function(h,i){ _exjsHdr(ws.getCell(3,i+1),h); ws.getColumn(i+1).width=cols[i]; });
+    ws.getRow(3).height=28;
+
+    rows.forEach(function(r,ri){
+      var row=ri+4; var alt=(ri%2===1);
+      var tipoColor=(r.tipo==='ZL'||r.tipo==='Zona Libre')?'1E8449':'E67E22';
+      var isSab=(r.esc||'').toLowerCase().includes('sababa');
+      var tramite=isSab?'Local':'Liquidación';
+      if(seccion==='serv'){
+        _exjsCenter(ws.getCell(row,1),r.nro||'—',alt,true,'1A5276');
+        _exjsTxt(ws.getCell(row,2),r.prov||'—',alt);
+        _exjsTxt(ws.getCell(row,3),r.rubro||r.tipoFac||'—',alt);
+        _exjsCenter(ws.getCell(row,4),r.nfac||r.numFact||'—',alt);
+        _exjsCenter(ws.getCell(row,5),tramite,alt,true,isSab?'1E8449':'E67E22');
+        _exjsTxt(ws.getCell(row,6),r.esc||'—',alt);
+        _exjsMoney(ws.getCell(row,7),r.costo||0,alt);
+      } else {
+        _exjsCenter(ws.getCell(row,1),r.nro||'—',alt,true,'1A5276');
+        _exjsCenter(ws.getCell(row,2),(r.fecha||'').slice(0,10),alt);
+        _exjsTxt(ws.getCell(row,3),r.prov||'—',alt);
+        _exjsTxt(ws.getCell(row,4),r.depto||r.dept||'—',alt);
+        _exjsCenter(ws.getCell(row,5),r.oc||'—',alt);
+        _exjsCenter(ws.getCell(row,6),r.nfac||r.numFact||'—',alt);
+        _exjsCenter(ws.getCell(row,7),r.tipo||'ZL',alt,true,tipoColor);
+        _exjsTxt(ws.getCell(row,8),r.esc||'—',alt);
+        _exjsMoney(ws.getCell(row,9),r.costo||0,alt);
+      }
+      ws.getRow(row).height=17;
+    });
+
+    // Fila de total
+    var totRow=rows.length+4;
+    var lastCol=seccion==='serv'?7:9;
+    ws.mergeCells(totRow,1,totRow,lastCol-1);
+    var tc=ws.getCell(totRow,1); tc.value='TOTAL — '+rows.length+' registros';
+    tc.font={name:'Calibri',bold:true,size:10,color:{argb:'FFFFFFFF'}};
+    tc.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF1B3A6B'}}; tc.alignment={horizontal:'center'};
+    var totalVal=rows.reduce(function(s,r){return s+(r.costo||0);},0);
+    _exjsMoney(ws.getCell(totRow,lastCol),totalVal);
+    ws.getCell(totRow,lastCol).font={name:'Calibri',bold:true,size:10,color:{argb:'FFFFFFFF'}};
+    ws.getCell(totRow,lastCol).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF1B3A6B'}};
+    ws.views=[{state:'frozen',ySplit:3}];
+    _exjsDownload(wb,'HistorialProveedores_'+secLabel.replace(/ /g,'_')+'_'+fecha2+'.xlsx');
+  });
+}
 // ── Autocomplete N° Factura desde Facturas Disponibles ──
 var _fdAcCache  = null;  // cached list for this session
 var _fdAcActive = -1;    // keyboard nav index
@@ -14646,6 +14759,62 @@ function _informeGetData(){
   return {all,liquidacion,local,liq_zl,liq_imp,loc_zl,loc_imp,liq_sab,liq_cif,loc_sab,A,factPct,fecha,fmtN};
 }
 
+
+// ── Helper ExcelJS estilos — compartido entre exports ──
+function _exjsLoad(cb){
+  if(typeof ExcelJS!=='undefined'){ cb(); return; }
+  _showToast('⏳ Cargando librería...','orange',2000);
+  var s=document.createElement('script');
+  s.src='https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';
+  s.onload=cb; s.onerror=function(){ alert('Sin conexión.'); };
+  document.head.appendChild(s);
+}
+function _exjsHdr(cell,text,bg,fg,size){
+  bg=bg||'1B3A6B'; fg=fg||'FFFFFF'; size=size||10;
+  cell.value=text;
+  cell.font={name:'Calibri',bold:true,color:{argb:'FF'+fg},size:size};
+  cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+bg}};
+  cell.alignment={horizontal:'center',vertical:'middle',wrapText:true};
+  cell.border={top:{style:'thin',color:{argb:'FFCCCCCC'}},bottom:{style:'thin',color:{argb:'FFCCCCCC'}},left:{style:'thin',color:{argb:'FFCCCCCC'}},right:{style:'thin',color:{argb:'FFCCCCCC'}}};
+}
+function _exjsMoney(cell,val,alt){
+  cell.value=Number(val||0);
+  cell.numFmt='"$"#,##0.00';
+  cell.font={name:'Calibri',size:9,color:{argb:'FF1A5276'}};
+  cell.alignment={horizontal:'right',vertical:'middle'};
+  if(alt) cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFEEF4FB'}};
+}
+function _exjsTxt(cell,val,alt,bold,color){
+  cell.value=val;
+  cell.font={name:'Calibri',size:9,bold:!!bold,color:{argb:'FF'+(color||'000000')}};
+  cell.alignment={horizontal:'left',vertical:'middle'};
+  if(alt) cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFEEF4FB'}};
+}
+function _exjsCenter(cell,val,alt,bold,color){
+  cell.value=val;
+  cell.font={name:'Calibri',size:9,bold:!!bold,color:{argb:'FF'+(color||'000000')}};
+  cell.alignment={horizontal:'center',vertical:'middle'};
+  if(alt) cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFEEF4FB'}};
+}
+function _exjsTitle(ws,text,cols){
+  ws.mergeCells('A1:'+String.fromCharCode(64+cols)+'1');
+  var c=ws.getCell('A1');
+  c.value=text; c.font={name:'Calibri',bold:true,size:13,color:{argb:'FFFFFFFF'}};
+  c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF0D1B2A'}};
+  c.alignment={horizontal:'center',vertical:'middle'};
+  ws.getRow(1).height=28;
+}
+function _exjsDownload(wb,nombre){
+  return wb.xlsx.writeBuffer().then(function(buf){
+    var blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a'); a.href=url; a.download=nombre;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+    _showToast('📊 Excel descargado','green',2500);
+  });
+}
+
 // CSV — formato europeo (punto y coma, coma decimal)
 function _informeExportCSV(){
   const {all,liquidacion,local,liq_zl,liq_imp,loc_zl,loc_imp,liq_sab,liq_cif,loc_sab,A,factPct,fecha,fmtN}=_informeGetData();
@@ -14693,50 +14862,111 @@ function _informeExportCSV(){
   if(typeof _showToast==='function') _showToast('📄 CSV exportado (formato europeo)','green',2500);
 }
 
-// Excel — formato punto (standard)
-async function _informeExportXLSX(){
-  if(typeof XLSX==='undefined'){ _showToast('⚠️ Librería Excel no disponible','red',3000); return; }
-  const {all,liquidacion,local,liq_zl,liq_imp,loc_zl,loc_imp,liq_sab,liq_cif,loc_sab,A,factPct,fecha}=_informeGetData();
-  const f=n=>Number(n||0);
-  const wb=XLSX.utils.book_new();
+// Excel — ExcelJS profesional
+function _informeExportXLSX(){
+  _exjsLoad(function(){
+    var {all,liquidacion,local,liq_zl,liq_imp,loc_zl,loc_imp,liq_sab,liq_cif,loc_sab,A,factPct,fecha}=_informeGetData();
+    var wb=new ExcelJS.Workbook();
+    wb.creator='Gestión Integral ZLC Panamá';
+    var fecha2=new Date().toISOString().slice(0,10);
 
-  // Sheet 1: Informe Financiero
-  const rows=[
-    ['INFORME FINANCIERO','','',''],
-    ['Fecha:',fecha,'Período:','Activo'],
-    ['Total Embarques:',all.length,'',''],
-    [],
-    ['','ZONA LIBRE','IMPORTACIÓN','TOTAL'],
-    ['EMBARQUES DE LIQUIDACIÓN','','',''],
-    ['  Trámites Sababa Import',liq_sab.length,'—',liq_sab.length],
-    ['  Trámites CIF Express',liq_cif.length,'—',liq_cif.length],
-    ['  Por Origen',liq_zl.length,liq_imp.length,liquidacion.length],
-    ['  Valor Mercancía Original',f(A.liq_zl.mercOrig),f(A.liq_imp.mercOrig),f(A.liq_zl.mercOrig+A.liq_imp.mercOrig)],
-    ['  Costo No Mercancía',f(A.liq_zl.costoNM),f(A.liq_imp.costoNM),f(A.liq_zl.costoNM+A.liq_imp.costoNM)],
-    ['  ITBMS',f(A.liq_zl.itbms),f(A.liq_imp.itbms),f(A.liq_zl.itbms+A.liq_imp.itbms)],
-    ['  Landed Total',f(A.liq_zl.l1),f(A.liq_imp.l1),f(A.liq_zl.l1+A.liq_imp.l1)],
-    [],
-    ['EMBARQUES LOCALES','','',''],
-    ['  Trámites Sababa Import',loc_sab.length,0,loc_sab.length],
-    ['  Trámites CIF Express',0,0,0],
-    ['  Por Origen',loc_zl.length,loc_imp.length,local.length],
-    ['  Valor Mercancía Homologado',f(A.loc_zl.mercInv),f(A.loc_imp.mercInv),f(A.loc_zl.mercInv+A.loc_imp.mercInv)],
-    ['  Costo No Mercancía',f(A.loc_zl.costoNM),f(A.loc_imp.costoNM),f(A.loc_zl.costoNM+A.loc_imp.costoNM)],
-    ['  ITBMS',f(A.loc_zl.itbms),f(A.loc_imp.itbms),f(A.loc_zl.itbms+A.loc_imp.itbms)],
-    ['  Landed Total',f(A.loc_zl.l1),f(A.loc_imp.l1),f(A.loc_zl.l1+A.loc_imp.l1)],
-    [],
-    ['DESGLOSE VALOR MERCANCÍA','','',''],
-    ['  Original',f(A.liq_zl.mercOrig+A.loc_zl.mercOrig),f(A.liq_imp.mercOrig+A.loc_imp.mercOrig),''],
-    ['  Homologado',f(A.liq_zl.mercHomol+A.loc_zl.mercHomol),f(A.liq_imp.mercHomol+A.loc_imp.mercHomol),''],
-    ['  Factor % s/Original (Liq.)',factPct(A.liq_zl.l1,A.liq_zl.mercInv),factPct(A.liq_imp.l1,A.liq_imp.mercInv),''],
-    ['  Factor % s/Original (Local)',factPct(A.loc_zl.l1,A.loc_zl.mercInv),factPct(A.loc_imp.l1,A.loc_imp.mercInv),''],
-    ['  Factor % s/Costo Inventario',factPct(A.liq_zl.l1+A.loc_zl.l1,A.liq_zl.inv+A.loc_zl.inv),factPct(A.liq_imp.l1+A.loc_imp.l1,A.liq_imp.inv+A.loc_imp.inv),''],
-  ];
-  const ws=XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols']=[{wch:40},{wch:18},{wch:18},{wch:18}];
-  XLSX.utils.book_append_sheet(wb,ws,'Informe Financiero');
-  XLSX.writeFile(wb,'Informe_Financiero_'+new Date().toISOString().slice(0,10)+'.xlsx');
-  if(typeof _showToast==='function') _showToast('📊 Excel exportado','green',2500);
+    // ── Hoja 1: Resumen Financiero ──
+    var ws1=wb.addWorksheet('Resumen Financiero');
+    _exjsTitle(ws1,'INFORME FINANCIERO — Gestión Integral de Compras y Costeo — '+fecha,4);
+    ws1.mergeCells('A2:D2');
+    var sub=ws1.getCell('A2'); sub.value='Generado: '+fecha2+'  ·  Total embarques: '+all.length+'  ·  ZLC Panamá';
+    sub.font={name:'Calibri',size:9,italic:true,color:{argb:'FF555555'}}; sub.alignment={horizontal:'center'}; ws1.getRow(2).height=16;
+
+    // Headers tabla
+    var hdrs=['Concepto','Zona Libre','Importación','Total'];
+    var cols=[32,18,18,18];
+    hdrs.forEach(function(h,i){ _exjsHdr(ws1.getCell(3,i+1),h); ws1.getColumn(i+1).width=cols[i]; });
+    ws1.getRow(3).height=28;
+
+    var rows=[
+      ['EMBARQUES DE LIQUIDACIÓN','','',''],
+      ['  Trámites Sababa Import',liq_sab.length,'—',liq_sab.length],
+      ['  Trámites CIF Express',liq_cif.length,'—',liq_cif.length],
+      ['  Por Origen',liq_zl.length,liq_imp.length,liquidacion.length],
+      ['  Valor Mercancía Original',A.liq_zl.mercOrig,A.liq_imp.mercOrig,A.liq_zl.mercOrig+A.liq_imp.mercOrig],
+      ['  Costo No Mercancía',A.liq_zl.costoNM,A.liq_imp.costoNM,A.liq_zl.costoNM+A.liq_imp.costoNM],
+      ['  ITBMS',A.liq_zl.itbms,A.liq_imp.itbms,A.liq_zl.itbms+A.liq_imp.itbms],
+      ['  Landed Total',A.liq_zl.l1,A.liq_imp.l1,A.liq_zl.l1+A.liq_imp.l1],
+      [null],
+      ['EMBARQUES LOCALES','','',''],
+      ['  Trámites Sababa Import',loc_sab.length,0,loc_sab.length],
+      ['  Por Origen',loc_zl.length,loc_imp.length,local.length],
+      ['  Valor Mercancía Homologado',A.loc_zl.mercInv,A.loc_imp.mercInv,A.loc_zl.mercInv+A.loc_imp.mercInv],
+      ['  Costo No Mercancía',A.loc_zl.costoNM,A.loc_imp.costoNM,A.loc_zl.costoNM+A.loc_imp.costoNM],
+      ['  ITBMS',A.loc_zl.itbms,A.loc_imp.itbms,A.loc_zl.itbms+A.loc_imp.itbms],
+      ['  Landed Total',A.loc_zl.l1,A.loc_imp.l1,A.loc_zl.l1+A.loc_imp.l1],
+      [null],
+      ['DESGLOSE MERCANCÍA','','',''],
+      ['  Original',A.liq_zl.mercOrig+A.loc_zl.mercOrig,A.liq_imp.mercOrig+A.loc_imp.mercOrig,''],
+      ['  Homologado',A.liq_zl.mercHomol+A.loc_zl.mercHomol,A.liq_imp.mercHomol+A.loc_imp.mercHomol,''],
+      ['  Factor % (Liquidación)',factPct(A.liq_zl.l1,A.liq_zl.mercInv),factPct(A.liq_imp.l1,A.liq_imp.mercInv),''],
+      ['  Factor % (Local)',factPct(A.loc_zl.l1,A.loc_zl.mercInv),factPct(A.loc_imp.l1,A.loc_imp.mercInv),''],
+    ];
+
+    var moneyRows=['Valor Mercancía Original','Costo No Mercancía','ITBMS','Landed Total','Valor Mercancía Homologado','Original','Homologado'];
+    rows.forEach(function(r,ri){
+      var row=ri+4; var alt=(ri%2===1);
+      if(!r||r[0]===null){ ws1.getRow(row).height=8; return; }
+      var isSection=r[0]&&!r[0].startsWith('  ');
+      var isMoney=moneyRows.some(function(m){ return (r[0]||'').includes(m); });
+      var c0=ws1.getCell(row,1);
+      if(isSection){
+        c0.value=r[0]; c0.font={name:'Calibri',bold:true,size:10,color:{argb:'FFFFFFFF'}};
+        c0.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF2E6DA4'}};
+        ws1.mergeCells(row,1,row,4);
+        ws1.getRow(row).height=20;
+      } else {
+        _exjsTxt(c0, r[0], alt);
+        [1,2,3].forEach(function(ci){
+          var cell=ws1.getCell(row,ci+1);
+          if(isMoney && typeof r[ci]==='number') _exjsMoney(cell, r[ci], alt);
+          else _exjsCenter(cell, r[ci]||'', alt);
+        });
+        ws1.getRow(row).height=17;
+      }
+    });
+    ws1.views=[{state:'frozen',ySplit:3}];
+
+    // ── Hoja 2: Detalle por Embarque ──
+    var ws2=wb.addWorksheet('Detalle Embarques');
+    _exjsTitle(ws2,'DETALLE POR EMBARQUE',10);
+    var hdrs2=['N° Embarque','Fecha','Tipo','Corredor','Tipo Merc.','Costo Original','Landed','No Mercancía','ITBMS','Total Global','Ahorro'];
+    var cols2=[13,12,12,22,12,16,16,16,14,18,14];
+    hdrs2.forEach(function(h,i){ _exjsHdr(ws2.getCell(3,i+1),h); ws2.getColumn(i+1).width=cols2[i]; });
+    ws2.getRow(3).height=30;
+    all.forEach(function(d,ri){
+      var row=ri+4; var alt=(ri%2===1);
+      var snap=d.snap||{}, sc1=snap.sc1||{}, sc3=snap.sc3||{};
+      var isSab=(d.esc||'').toLowerCase().includes('sababa');
+      var cif=d.cif||0;
+      var landed=isSab?(sc3.landed1||0):(sc1.landed1||sc1.landedG||0);
+      var noMerc=isSab?(sc3.costoNM||Math.max(0,(sc3.landed1||0)-cif)):(sc1.noMerc||Math.max(0,(sc1.landed1||0)-cif));
+      var itbms=(isSab?sc3.itbmsHomol:((sc1.itbms||0)+(sc1.itbmsTasa||0)))||0;
+      var total=landed+itbms;
+      var tramite=isSab?'Local':'Liquidación';
+      var tmColor=isSab?'1E8449':'E67E22';
+      _exjsCenter(ws2.getCell(row,1),d.nro||'—',alt,true,'1A5276');
+      _exjsCenter(ws2.getCell(row,2),(d.fecha||'').slice(0,10),alt);
+      _exjsCenter(ws2.getCell(row,3),tramite,alt,true,tmColor);
+      _exjsTxt(ws2.getCell(row,4),d.esc||'—',alt);
+      _exjsCenter(ws2.getCell(row,5),((snap.tipo||d.tipo||'ZL')==='EXT'?'Importación':'Zona Libre'),alt);
+      _exjsMoney(ws2.getCell(row,6),cif,alt);
+      _exjsMoney(ws2.getCell(row,7),landed,alt);
+      _exjsMoney(ws2.getCell(row,8),noMerc,alt);
+      _exjsMoney(ws2.getCell(row,9),itbms,alt);
+      _exjsMoney(ws2.getCell(row,10),total,alt);
+      _exjsMoney(ws2.getCell(row,11),d.ahorro||0,alt);
+      ws2.getRow(row).height=17;
+    });
+    ws2.views=[{state:'frozen',ySplit:3}];
+
+    _exjsDownload(wb,'Informe_Financiero_'+fecha2+'.xlsx');
+  });
 }
 
 // PDF — usa window.print() con estilos de impresión
@@ -16034,32 +16264,36 @@ function exportDashboardExcel(){
       var isLocal=escL.includes('sababa')&&(sc3.mercHomol||0)>0;
       var isCIF=escL.includes('cif')&&!isLocal;
       var mercInv=costoInv>0?costoInv:costoOrig;
-      var noMerc, itbms, totalGlobal;
+      var noMerc, itbms, totalGlobal, landedCost;
       if(isUnico){
         noMerc=sc1u.noMerc||0;
         itbms=(sc1u.itbms||0)+(sc1u.itbmsTasa||0);
-        totalGlobal=(sc1u.landed||0)+itbms;
+        landedCost=sc1u.landed||0;
+        totalGlobal=landedCost+itbms;
       } else if(isLocal){
         var l1s3=sc3.landed1||0, baseS3=sc3.base||sc3.mercHomol||costoOrig;
         noMerc=Math.max(0,l1s3-baseS3);
         itbms=sc3.itbmsHomol||0;
-        totalGlobal=mercInv+noMerc+itbms;
+        landedCost=l1s3; // landed costeable = base + no merc
+        totalGlobal=landedCost+itbms;
       } else if(isCIF){
         var l1s2=sc2.landed1||0;
         noMerc=Math.max(0,l1s2-costoOrig);
         itbms=(sc2.itbms||0)+(sc2.itbmsTasaFinal||0);
-        totalGlobal=mercInv+noMerc+itbms;
+        landedCost=l1s2;
+        totalGlobal=landedCost+itbms;
       } else {
         var l1s1=sc1.landed1||0;
         noMerc=Math.max(0,l1s1-costoOrig);
         itbms=(sc1.itbms||0)+(sc1.itbmsTasaFinal||0);
-        totalGlobal=mercInv+noMerc+itbms;
+        landedCost=l1s1;
+        totalGlobal=landedCost+itbms;
       }
       var pct=costoOrig>0?(d.ahorro/costoOrig*100):0;
       var tramite=_tipoTramite(d);
       var corredor=_corredor(d);
 
-      totals.cif+=costoOrig; totals.inv+=costoInv; totals.noMerc+=noMerc;
+      totals.cif+=costoOrig; totals.inv+=landedCost; totals.noMerc+=noMerc;
       totals.itbms+=itbms; totals.global+=totalGlobal; totals.ahorro+=(d.ahorro||0);
 
       centerCell(ws1.getCell(row,1),d.nro||'—',alt,true,C_MONEY);
@@ -16071,7 +16305,7 @@ function exportDashboardExcel(){
       var mercColor=tipoMerc==='Zona Libre'?C_GREEN:C_ORANGE;
       centerCell(ws1.getCell(row,6),tipoMerc,alt,false,mercColor);
       moneyCell(ws1.getCell(row,7),costoOrig,alt);
-      moneyCell(ws1.getCell(row,8),costoInv||0,alt);
+      moneyCell(ws1.getCell(row,8),landedCost||0,alt);
       moneyCell(ws1.getCell(row,9),noMerc,alt);
       moneyCell(ws1.getCell(row,10),itbms,alt);
       moneyCell(ws1.getCell(row,11),totalGlobal,alt);
@@ -16730,73 +16964,102 @@ function _renderGroupSections(data){
       ? (sc1u.noMerc!=null?sc1u.noMerc:((sc1u.arancel||0)+(sc1u.hon||0)+(sc1u.tasa||0)+(sc1u.uso||0)+(sc1u.agente||0)+(sc1u.extras||0)))
       : isSab ? (sc3.noMerc||0) : (sc2.noMerc||0);
 
-    var wb = XLSX.utils.book_new();
+    // ── ExcelJS profesional ──
+    _exjsLoad(function(){
+      var wb2=new ExcelJS.Workbook(); wb2.creator='Gestión Integral ZLC Panamá';
+      var nro=(d.nro||'embarque').replace(/[^a-zA-Z0-9]/g,'-');
+      var fecha2=new Date().toISOString().slice(0,10);
+      var baseInv=fobHomol>0?fobHomol:totalMerc;
+      var isSab=(d.esc||'').toLowerCase().includes('sababa');
+      var tramite=isSab?'Local':'Liquidación';
+      var tmColor=isSab?'1E8449':'E67E22';
 
-    // ── Hoja 1: Resumen ──
-    var resumenRows = [
-      ['DETALLE FACTURAS DEL EMBARQUE'],
-      ['Embarque', d.nro||''],
-      ['Descripción', d.desc||''],
-      ['Fecha', d.fecha||''],
-      ['Escenario', d.esc||''],
-      [],
-      ['RESUMEN'],
-      ['CIF/FOB Mercancía', totalMerc]
-    ];
-    if(fobHomol>0) resumenRows.push(['Valor Homologado (Inventario)', fobHomol]);
-    resumenRows.push(['Costo No Mercancía', totalNoMerc]);
-    var baseInv = fobHomol>0 ? fobHomol : totalMerc;
-    resumenRows.push(['Costo Inventario Total', baseInv+totalNoMerc]);
-    if(baseInv>0) resumenRows.push(['Factor Importación %', ((baseInv+totalNoMerc)/baseInv-1)*100]);
-    var wsRes = XLSX.utils.aoa_to_sheet(resumenRows);
-    XLSX.utils.book_append_sheet(wb, wsRes, 'Resumen');
-
-    // ── Hoja 2: Facturas Mercancía ──
-    var mercHeaders = ['Proveedor','Departamento','OC','N° Factura','CIF/FOB Original'];
-    if(fobHomol>0) mercHeaders.push('Valor Homologado');
-    mercHeaders.push('%','Costo No Merc.','Costo Landed Costeable');
-    var mercRows = [mercHeaders];
-    mercL.forEach(function(l){
-      var pct = totalMerc>0 ? (l.costo||0)/totalMerc : 0;
-      var costoBase = fobHomol>0 ? fobHomol*pct : (l.costo||0);
-      var noMercPorcion = totalNoMerc * pct;
-      var landedPorcion = costoBase + noMercPorcion;
-      var row = [l.prov||'—', l.deptCat||'—', l.oc||'—', l.numFact||l.nfac||'—', l.costo||0];
-      if(fobHomol>0) row.push(costoBase);
-      row.push(pct*100, noMercPorcion, landedPorcion);
-      mercRows.push(row);
-    });
-    var wsMerc = XLSX.utils.aoa_to_sheet(mercRows);
-    // Formato de moneda para columnas numéricas
-    var mercFmt = '"$"#,##0.00';
-    var numCols = fobHomol>0 ? [4,5,7,8] : [4,6,7];
-    if(wsMerc['!ref']){
-      var range = XLSX.utils.decode_range(wsMerc['!ref']);
-      for(var R=1;R<=range.e.r;R++){
-        numCols.forEach(function(C){
-          var cell = wsMerc[XLSX.utils.encode_cell({r:R,c:C})];
-          if(cell && cell.t==='n'){ cell.z = mercFmt; }
-        });
-      }
-    }
-    XLSX.utils.book_append_sheet(wb, wsMerc, 'Mercancía');
-
-    // ── Hoja 3: Gastos ──
-    if(gastoL.length){
-      var tipoNombres={flete:'Flete Internacional',acarreo:'Acarreo',honorarios:'Honorarios Corredor',itbms:'ITBMS',liquidacion:'Liquidación/DAI',tasa:'Tasa Aduana',uso_sistema:'Uso del Sistema',nota_credito:'Nota de Crédito',descuento:'Descuento',gastos_destino:'Gastos Destino',seguro:'Seguro',almacenaje:'Almacenaje',inspeccion:'Inspección',dmce:'DMCE',formulario:'Formulario',gastos:'Otros Gastos'};
-      var gastoRows = [['Proveedor','Tipo','N° Factura','Monto']];
-      gastoL.forEach(function(l){
-        var nombre = tipoNombres[l.tipoFac||'gastos']||l.tipoFac||'Gasto';
-        gastoRows.push([l.prov||'—', nombre, l.nfac||l.numFact||'—', l.costo||0]);
+      // ── Hoja 1: Resumen ──
+      var ws1=wb2.addWorksheet('Resumen');
+      _exjsTitle(ws1,'DETALLE FACTURAS — Embarque #'+(d.nro||'')+'  ·  '+(d.desc||''),4);
+      ws1.mergeCells('A2:D2');
+      var s2=ws1.getCell('A2'); s2.value='Fecha: '+(d.fecha||'').slice(0,10)+'   ·   Escenario: '+(d.esc||'')+'   ·   Tipo: '+tramite;
+      s2.font={name:'Calibri',size:9,italic:true,color:{argb:'FF555555'}}; s2.alignment={horizontal:'center'}; ws1.getRow(2).height=16;
+      ['Concepto','Monto','',''].forEach(function(h,i){ _exjsHdr(ws1.getCell(3,i+1),h); ws1.getColumn(i+1).width=[34,18,18,18][i]; });
+      ws1.getRow(3).height=26;
+      var sumRows=[
+        ['CIF/FOB Mercancía',totalMerc,false],
+        fobHomol>0?['Valor Homologado (Inventario)',fobHomol,false]:null,
+        ['Costo No Mercancía',totalNoMerc,false],
+        ['Costo Inventario Total (sin ITBMS)',baseInv+totalNoMerc,true],
+        baseInv>0?['Factor Importación %',((baseInv+totalNoMerc)/baseInv-1)*100+'%',false]:null,
+      ].filter(Boolean);
+      sumRows.forEach(function(r,ri){
+        var row=ri+4; var alt=(ri%2===1);
+        _exjsTxt(ws1.getCell(row,1),r[0],alt,r[2]);
+        if(typeof r[1]==='number') _exjsMoney(ws1.getCell(row,2),r[1],alt);
+        else _exjsCenter(ws1.getCell(row,2),r[1],alt);
+        if(r[2]){ ws1.getCell(row,1).font={name:'Calibri',bold:true,size:10,color:{argb:'FF1B3A6B'}}; }
+        ws1.getRow(row).height=18;
       });
-      var totalGastos = gastoL.reduce(function(s,l){return s+(l.costo||0);},0);
-      gastoRows.push(['TOTAL GASTOS','','', totalGastos]);
-      var wsGasto = XLSX.utils.aoa_to_sheet(gastoRows);
-      XLSX.utils.book_append_sheet(wb, wsGasto, 'Gastos');
-    }
 
-    var nro = (d.nro||'embarque').replace(/[^a-zA-Z0-9]/g,'-');
-    XLSX.writeFile(wb, 'embarque-'+nro+'.xlsx');
+      // ── Hoja 2: Facturas Mercancía ──
+      var ws2=wb2.addWorksheet('Facturas Mercancía');
+      _exjsTitle(ws2,'FACTURAS DE MERCANCÍA — #'+(d.nro||''),fobHomol>0?9:8);
+      var mHdrs=['Proveedor','Departamento','OC','N° Factura','CIF/FOB Original'];
+      if(fobHomol>0) mHdrs.push('Homologado');
+      mHdrs.push('%','No Mercancía','Landed Costeable');
+      var mCols=[26,20,14,16,16];
+      if(fobHomol>0) mCols.push(16);
+      mCols.push(10,16,18);
+      mHdrs.forEach(function(h,i){ _exjsHdr(ws2.getCell(3,i+1),h); ws2.getColumn(i+1).width=mCols[i]; });
+      ws2.getRow(3).height=30;
+      mercL.forEach(function(l,ri){
+        var row=ri+4; var alt=(ri%2===1);
+        var pct=totalMerc>0?(l.costo||0)/totalMerc:0;
+        var costoBase=fobHomol>0?fobHomol*pct:(l.costo||0);
+        var noMp=totalNoMerc*pct;
+        var landedP=costoBase+noMp;
+        var ci=1;
+        _exjsTxt(ws2.getCell(row,ci++),l.prov||'—',alt);
+        _exjsTxt(ws2.getCell(row,ci++),l.deptCat||'—',alt);
+        _exjsCenter(ws2.getCell(row,ci++),l.oc||'—',alt);
+        _exjsCenter(ws2.getCell(row,ci++),l.numFact||l.nfac||'—',alt);
+        _exjsMoney(ws2.getCell(row,ci++),l.costo||0,alt);
+        if(fobHomol>0) _exjsMoney(ws2.getCell(row,ci++),costoBase,alt);
+        var pctCell=ws2.getCell(row,ci++); pctCell.value=pct; pctCell.numFmt='0.00%';
+        pctCell.font={name:'Calibri',size:9}; pctCell.alignment={horizontal:'center'};
+        if(alt) pctCell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFEEF4FB'}};
+        _exjsMoney(ws2.getCell(row,ci++),noMp,alt);
+        _exjsMoney(ws2.getCell(row,ci++),landedP,alt);
+        ws2.getRow(row).height=17;
+      });
+      ws2.views=[{state:'frozen',ySplit:3}];
+
+      // ── Hoja 3: Gastos ──
+      if(gastoL.length){
+        var ws3=wb2.addWorksheet('Gastos del Embarque');
+        _exjsTitle(ws3,'GASTOS DEL EMBARQUE — #'+(d.nro||''),4);
+        ['Proveedor','Tipo','N° Factura','Monto'].forEach(function(h,i){ _exjsHdr(ws3.getCell(3,i+1),h); ws3.getColumn(i+1).width=[26,22,16,16][i]; });
+        ws3.getRow(3).height=26;
+        var tipoN={flete:'Flete Internacional',acarreo:'Acarreo',honorarios:'Honorarios',itbms:'ITBMS',liquidacion:'Liquidación/DAI',tasa:'Tasa Aduana',uso_sistema:'Uso del Sistema',nota_credito:'Nota de Crédito',formulario:'Formulario',gastos:'Otros Gastos'};
+        var totG=0;
+        gastoL.forEach(function(l,ri){
+          var row=ri+4; var alt=(ri%2===1);
+          _exjsTxt(ws3.getCell(row,1),l.prov||'—',alt);
+          _exjsTxt(ws3.getCell(row,2),tipoN[l.tipoFac||'gastos']||l.tipoFac||'Gasto',alt);
+          _exjsCenter(ws3.getCell(row,3),l.nfac||l.numFact||'—',alt);
+          _exjsMoney(ws3.getCell(row,4),l.costo||0,alt);
+          totG+=l.costo||0; ws3.getRow(row).height=17;
+        });
+        var totRow=gastoL.length+4;
+        ws3.mergeCells(totRow,1,totRow,3);
+        var tc=ws3.getCell(totRow,1); tc.value='TOTAL GASTOS';
+        tc.font={name:'Calibri',bold:true,size:10,color:{argb:'FFFFFFFF'}};
+        tc.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF1B3A6B'}};
+        tc.alignment={horizontal:'center'};
+        _exjsMoney(ws3.getCell(totRow,4),totG);
+        ws3.getCell(totRow,4).font={name:'Calibri',bold:true,size:10,color:{argb:'FFFFFFFF'}};
+        ws3.getCell(totRow,4).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF1B3A6B'}};
+      }
+
+      _exjsDownload(wb2,'embarque-'+nro+'-'+fecha2+'.xlsx');
+    });
   };
 
   window._hfToggleMes = function(headerId, bodyId){
@@ -18471,15 +18734,41 @@ function renderTopProvs(mode, deptFilter){
     a.click();
   };
   const exportProvXLSX = () => {
-    if(typeof XLSX==='undefined'){_showToast && _showToast('Librería Excel no disponible','red',3000);return;}
-    const wb=XLSX.utils.book_new();
-    const rows=[['#','Proveedor','Tipo','Total','%'],
-      ...sorted.map(([prov,p],i)=>[i+1,prov,p.isZL?'ZL':'IMP',
-        Number(p.total||0),Number(((p.total/totalAll)*100).toFixed(1))])];
-    const ws=XLSX.utils.aoa_to_sheet(rows);
-    ws['!cols']=[{wch:4},{wch:50},{wch:6},{wch:16},{wch:8}];
-    XLSX.utils.book_append_sheet(wb,ws,'Top 10 Proveedores');
-    XLSX.writeFile(wb,'Top10_Proveedores_'+mode+'_'+new Date().toISOString().slice(0,10)+'.xlsx');
+    _exjsLoad(function(){
+      var wb2=new ExcelJS.Workbook(); wb2.creator='Gestión Integral ZLC Panamá';
+      var fecha2=new Date().toISOString().slice(0,10);
+      var ws1=wb2.addWorksheet('Top 10 Proveedores');
+      var modeLabel=mode==='zl'?'Zona Libre':mode==='imp'?'Importación':mode==='dept'&&deptFilter?deptFilter:'Global';
+      _exjsTitle(ws1,'TOP 10 PROVEEDORES — '+modeLabel+'  ·  '+fecha2,5);
+      var hdrs=['#','Proveedor','Tipo','Total Facturado','% del Total'];
+      var cols=[5,50,12,18,12];
+      hdrs.forEach(function(h,i){ _exjsHdr(ws1.getCell(3,i+1),h); ws1.getColumn(i+1).width=cols[i]; });
+      ws1.getRow(3).height=26;
+      sorted.forEach(function([prov,p],ri){
+        var row=ri+4; var alt=(ri%2===1);
+        var tipoColor=p.isZL?'1E8449':'E67E22';
+        _exjsCenter(ws1.getCell(row,1),ri+1,alt,true,'1A5276');
+        _exjsTxt(ws1.getCell(row,2),prov,alt,true);
+        _exjsCenter(ws1.getCell(row,3),p.isZL?'Zona Libre':'Importación',alt,true,tipoColor);
+        _exjsMoney(ws1.getCell(row,4),p.total||0,alt);
+        var pctCell=ws1.getCell(row,5); pctCell.value=(p.total/totalAll); pctCell.numFmt='0.00%';
+        pctCell.font={name:'Calibri',size:9}; pctCell.alignment={horizontal:'center'};
+        if(alt) pctCell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFEEF4FB'}};
+        ws1.getRow(row).height=18;
+      });
+      // Total
+      var totRow=sorted.length+4;
+      ws1.mergeCells(totRow,1,totRow,3);
+      var tc=ws1.getCell(totRow,1); tc.value='TOTAL';
+      tc.font={name:'Calibri',bold:true,size:10,color:{argb:'FFFFFFFF'}};
+      tc.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF1B3A6B'}}; tc.alignment={horizontal:'center'};
+      _exjsMoney(ws1.getCell(totRow,4),totalAll);
+      ws1.getCell(totRow,4).font={name:'Calibri',bold:true,size:10,color:{argb:'FFFFFFFF'}};
+      ws1.getCell(totRow,4).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF1B3A6B'}};
+      _exjsCenter(ws1.getCell(totRow,5),'100%',false,true,'FFFFFF');
+      ws1.getCell(totRow,5).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF1B3A6B'}};
+      _exjsDownload(wb2,'Top10_Proveedores_'+mode+'_'+fecha2+'.xlsx');
+    });
   };
   window._exportProvCSV  = exportProvCSV;
   window._exportProvXLSX = exportProvXLSX;
