@@ -16299,7 +16299,9 @@ function exportDashboardExcel(){
       var snap=d.snap||{};
       var cor=snap.corName||snap.cor||d.esc||'';
       // Quitar "Único — ", "Único - ", "Único · " del inicio
-      cor=cor.replace(/^[Uu]nico\s*[·—\-]+\s*/,'').trim();
+      cor=cor.replace(/^[\xda\xfaUu]nico\s*[\xb7\u2014\-]+\s*/,'').trim();
+      // Normalizar nombre: 'Sababa' solo → 'Sababa Imports'
+      if(/^sababa$/i.test(cor)) cor='Sababa Imports';
       return cor||'—';
     }
     function _isUnicoLiq(d){
@@ -16371,8 +16373,8 @@ function exportDashboardExcel(){
         valorMercInv = _ci2.mercInv || costoOrig;  // Homologado si Local, original si no
         noMerc       = _ci2.costoNM || 0;
         itbms        = _ci2.itbms || 0;
-        landedCost   = (_ci2.landed1||0) || (valorMercInv + noMerc);
-        totalGlobal  = landedCost + itbms;
+        landedCost   = valorMercInv + noMerc;      // Col L = I + J (sin ITBMS)
+        totalGlobal  = valorMercInv + noMerc + itbms; // Col O = I + J + K
       } else {
         valorMercInv = costoOrig;
         noMerc = 0; itbms = 0;
@@ -16385,6 +16387,7 @@ function exportDashboardExcel(){
       totals.orig=(totals.orig||0)+valorMercOrig; totals.inv=(totals.inv||0)+valorMercInv;
       totals.noMerc+=noMerc; totals.itbms+=itbms;
       totals.landed=(totals.landed||0)+landedCost; totals.global+=totalGlobal; totals.ahorro+=(d.ahorro||0);
+      totals.nfac=(totals.nfac||0)+invL.length;
 
       var tipoEmb=_tipoEmbarque(d);
       var tipoEmbColor=tipoEmb==='Suministro'?'E67E22':'1A5276';
@@ -16439,6 +16442,13 @@ function exportDashboardExcel(){
       c.alignment={horizontal:'right',vertical:'middle'};
     });
     ws1.getRow(totRow).height=22;
+    // N° Facturas total — col Q (17)
+    var cQ=ws1.getCell(totRow,17);
+    cQ.value=totals.nfac||0; cQ.numFmt='#,##0';
+    cQ.font={name:'Calibri',bold:true,size:10,color:{argb:'FF'+C_HDR_FG}};
+    cQ.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+C_TOTAL_BG}};
+    cQ.alignment={horizontal:'center',vertical:'middle'};
+    ws1.autoFilter={from:{row:3,column:1},to:{row:3,column:17}};
     ws1.views=[{state:'frozen',ySplit:3}];
 
     // ══════════════════════════════════════
