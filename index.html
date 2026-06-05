@@ -3676,7 +3676,7 @@ function _PLN_BUILD_HTML(){
       +'<span id="_pln_cloud" style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:6px;background:rgba(139,148,158,.1);border:1px solid rgba(139,148,158,.25);color:var(--muted)">☁️ ...</span>'
       +'<button class="xbtn yw" onclick="_plnModalSemana()">+ Semana</button>'
       +'<button id="_plnFobToggleBtn" onclick="window._plnFOBFull=!window._plnFOBFull;document.getElementById(\'_plnFobToggleBtn\').style.background=window._plnFOBFull?\' rgba(63,185,80,.2)\':\'\';_PLN_RENDER()" title="Montos completos / abreviados" class="xbtn" style="font-weight:900">$</button>'
-      +'<button class="xbtn gn" onclick="_plnCSV()">📊 CSV</button>'
+      +'<button class="xbtn gn" onclick="_plnCSV()">&#128196; HTML</button>'
       +'<button class="xbtn rd" onclick="document.getElementById(\'_PLN_OV\').style.display=\'none\';if(typeof volverInicio===\'function\')volverInicio();else if(typeof switchTab===\'function\')switchTab(\'sim\',document.querySelector(\'.tab\'));">✕ Cerrar</button>'
     +'</div>'
   +'</div>'
@@ -5494,23 +5494,177 @@ window._plnDelEq=function(){
   _PLN_SAVE(); _plnCloseEq(); _PLN_RENDER();
 };
 
-// ── Export CSV ──
+// ── Export HTML ──
 window._plnCSV=function(){
   var wk=_plnMkWeek(_PLN_CUR);
-  var rows=[['Tab','Día','Fecha','Vía','Equipo','N°Cont','N°Emb','ETA','Estado','Proveedor','Bultos','FOB','Landed','Depto','%Landed','Cruzado']];
-  ['prog','res'].forEach(function(tab){
-    (wk[tab]||[]).forEach(function(day){
-      (day.cubiculos||[]).forEach(function(cub){
-        var tl=_plnSumLND(cub.rows||[]);
-        (cub.rows||[]).forEach(function(r){
-          var pct=tl>0?((parseFloat(r.landed)||0)/tl*100).toFixed(2):'0';
-          rows.push([tab,day.label,day.date,cub.via||'',cub.tipoCarga||'',cub.nroCont||'',cub.nroEmb||'',cub.eta||'',cub.status||'',r.prov||'',r.bultos||0,(r.fob||0).toFixed(2),(r.landed||0).toFixed(2),r.dept||'',pct,r.matched?'Sí':'No']);
-        });
-      });
+  var tab=_PLN_TAB||'res';
+  var days=wk[tab]||[];
+  function fmt(n){n=parseFloat(n)||0;return '$'+n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
+  function sumF(rows){return (rows||[]).reduce(function(s,r){return s+(parseFloat(r.fob)||0);},0);}
+  function sumL(rows){return (rows||[]).reduce(function(s,r){return s+(parseFloat(r.landed)||0);},0);}
+  function sumH(rows){return (rows||[]).reduce(function(s,r){return s+(parseFloat(r.homol)||0);},0);}
+  var tFOB=0,tLND=0,tHOM=0,tEQ=0,tBTOS=0;
+  days.forEach(function(day){(day.cubiculos||[]).forEach(function(cub){
+    tFOB+=sumF(cub.rows);tLND+=sumL(cub.rows);tHOM+=sumH(cub.rows);
+    tEQ+=(parseInt(cub.nEquipos)||1);
+    tBTOS+=(cub.rows||[]).reduce(function(s,r){return s+(parseInt(r.bultos)||0);},0);
+  });});
+
+  function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+  var colsH='';
+  days.forEach(function(day){
+    var cubs=day.cubiculos||[];
+    if(!cubs.length){colsH+='<td style="vertical-align:top;padding:0 6px;min-width:220px"><div style="background:#1a1f2e;border:1px dashed #30363d;border-radius:10px;padding:20px;text-align:center;color:#8b949e;font-size:13px">Sin cargas</div></td>';return;}
+    var cH='';
+    cubs.forEach(function(cub){
+      var rows=cub.rows||[];
+      var fob=sumF(rows),lnd=sumL(rows),hom=sumH(rows);
+      var hasSab=hom>0;
+      var nEq=parseInt(cub.nEquipos)||1;
+      var btos=rows.reduce(function(s,r){return s+(parseInt(r.bultos)||0);},0);
+      var pzas=rows.reduce(function(s,r){return s+(parseInt(r.piezas)||0);},0);
+      var rH=rows.map(function(r){
+        return '<tr style="border-top:1px solid #21262d">'
+          +'<td style="padding:7px 10px;color:#e6edf3;font-weight:600;font-size:13px">'+esc(r.prov||'')+'</td>'
+          +'<td style="padding:7px 8px;text-align:center;font-size:11px;font-weight:800;color:'+(r.tipo==='IMP'?'#f97316':'#60a5fa')+'">'+esc(r.tipo||'ZL')+'</td>'
+          +'<td style="padding:7px 8px;color:#8b949e;font-size:12px">'+esc(r.dept||'')+'</td>'
+          +'<td style="padding:7px 10px;text-align:right;color:#58a6ff;font-family:monospace;font-weight:700;font-size:13px">'+fmt(r.fob)+'</td>'
+          +(hasSab?'<td style="padding:7px 10px;text-align:right;color:#3fb950;font-family:monospace;font-weight:700;font-size:13px">'+(r.homol>0?fmt(r.homol):'&mdash;')+'</td>':'')
+          +'<td style="padding:7px 10px;text-align:right;color:#f0883e;font-family:monospace;font-weight:700;font-size:13px">'+fmt(r.landed)+'</td>'
+          +'<td style="padding:7px 10px;text-align:right;color:#8b949e;font-size:12px">'+((parseInt(r.piezas)||0).toLocaleString())+'</td>'
+          +'<td style="padding:7px 10px;text-align:right;color:#8b949e;font-size:12px">'+((parseInt(r.bultos)||0).toLocaleString())+'</td>'
+          +'</tr>';
+      }).join('');
+      cH+='<div style="background:#161b22;border:1px solid #30363d;border-radius:10px;margin-bottom:12px;overflow:hidden">'
+        +'<div style="background:#0d1117;padding:10px 14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+        +'<span style="background:#238636;color:#fff;font-size:11px;font-weight:800;padding:3px 8px;border-radius:5px">'+esc(cub.status||'Programado')+'</span>'
+        +(nEq>1?'<span style="background:#1f6feb;color:#fff;font-size:11px;font-weight:800;padding:3px 8px;border-radius:5px">'+nEq+'&times; Equipo</span>':'')
+        +(cub.nroEmb?'<span style="color:#f0883e;font-weight:800;font-size:14px">EMB '+esc(cub.nroEmb)+'</span>':'')
+        +(cub.tipoCarga?'<span style="background:#21262d;color:#8b949e;font-size:11px;padding:3px 8px;border-radius:5px">'+esc(cub.tipoCarga)+'</span>':'')
+        +(cub.eta?'<span style="color:#8b949e;font-size:12px">&#128197; '+esc(cub.eta)+'</span>':'')
+        +'</div>'
+        +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
+        +'<thead><tr style="background:#0d1117">'
+        +'<th style="padding:8px 10px;text-align:left;color:#8b949e;font-size:12px">Proveedor</th>'
+        +'<th style="padding:8px;color:#8b949e;font-size:12px">Org</th>'
+        +'<th style="padding:8px;text-align:left;color:#8b949e;font-size:12px">Depto</th>'
+        +'<th style="padding:8px 10px;text-align:right;color:#8b949e;font-size:12px">FOB</th>'
+        +(hasSab?'<th style="padding:8px 10px;text-align:right;color:#8b949e;font-size:12px">Homol.</th>':'')
+        +'<th style="padding:8px 10px;text-align:right;color:#8b949e;font-size:12px">Landed</th>'
+        +'<th style="padding:8px 10px;text-align:right;color:#8b949e;font-size:12px">Pzas</th>'
+        +'<th style="padding:8px 10px;text-align:right;color:#8b949e;font-size:12px">Btos</th>'
+        +'</tr></thead><tbody>'+rH+'</tbody>'
+        +'<tfoot><tr style="background:#0d1117;border-top:2px solid #30363d">'
+        +'<td colspan="3" style="padding:8px 10px;color:#e6edf3;font-weight:800;font-size:13px">'+rows.length+' prov &middot; '+btos.toLocaleString()+' btos &middot; '+pzas.toLocaleString()+' pzas</td>'
+        +'<td style="padding:8px 10px;text-align:right;color:#58a6ff;font-family:monospace;font-weight:800;font-size:14px">'+fmt(fob)+'</td>'
+        +(hasSab?'<td style="padding:8px 10px;text-align:right;color:#3fb950;font-family:monospace;font-weight:800;font-size:14px">'+fmt(hom)+'</td>':'')
+        +'<td style="padding:8px 10px;text-align:right;color:#f0883e;font-family:monospace;font-weight:800;font-size:14px">'+fmt(lnd)+'</td>'
+        +'<td colspan="2"></td></tr></tfoot></table></div></div>';
     });
+    colsH+='<td style="vertical-align:top;padding:0 6px;min-width:280px">'+cH+'</td>';
   });
-  var csv=rows.map(function(r){return r.map(function(c){return '"'+(String(c||'').replace(/"/g,'""'))+'"';}).join(',');}).join('\r\n');
-  var a=document.createElement('a'); a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv); a.download='Planeacion_'+_PLN_CUR+'.csv'; a.click();
+
+  var fecha=new Date().toLocaleDateString('es-PA',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  var hdrCols=days.map(function(day){
+    var df=sumF((day.cubiculos||[]).reduce(function(a,c){return a.concat(c.rows||[]);},[]));
+    var dl=sumL((day.cubiculos||[]).reduce(function(a,c){return a.concat(c.rows||[]);},[]));
+    var ne=(day.cubiculos||[]).reduce(function(s,c){return s+(parseInt(c.nEquipos)||1);},0);
+    return '<th style="padding:10px 6px;text-align:left;min-width:280px">'
+      +'<div style="background:linear-gradient(135deg,#1f6feb,#388bfd);border-radius:8px;padding:10px 14px">'
+      +'<div style="font-size:16px;font-weight:800;color:#fff">'+esc(day.label||'')+'</div>'
+      +'<div style="font-size:11px;color:rgba(255,255,255,.8)">'+esc(day.date||'')+(ne?' &middot; '+ne+' eq':'')+'</div>'
+      +(df>0?'<div style="font-size:12px;color:#fff;margin-top:3px;font-family:monospace">FOB: '+fmt(df)+' &middot; Lnd: '+fmt(dl)+'</div>':'')
+      +'</div></th>';
+  }).join('');
+
+  var html='<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">'
+    +'<meta name="viewport" content="width=device-width,initial-scale=1">'
+    +'<title>Planeaci\u00f3n Semana '+_PLN_CUR+'</title>'
+    +'<style>*{box-sizing:border-box;margin:0;padding:0}body{background:#0d1117;color:#e6edf3;font-family:Segoe UI,system-ui,sans-serif;padding:20px}table{border-collapse:collapse}@media print{body{padding:10px}}</style>'
+    +'</head><body>'
+    +'<div style="background:linear-gradient(135deg,#1a1f2e,#0d1117);border:1px solid #30363d;border-radius:14px;padding:20px 24px;margin-bottom:20px">'
+    +'<div style="font-size:11px;color:#8b949e;text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px">Planeaci\u00f3n de Carga Semanal \u00b7 ZLC Panam\u00e1</div>'
+    +'<div style="font-size:24px;font-weight:800;color:#e6edf3">Semana del '+esc(_PLN_CUR)+'</div>'
+    +'<div style="font-size:12px;color:#8b949e;margin-top:4px">'+esc(fecha)+'</div>'
+    +'<div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:14px">'
+    +'<div><div style="font-size:11px;color:#8b949e">FOB Total</div><div style="font-size:20px;font-weight:800;color:#58a6ff;font-family:monospace">'+fmt(tFOB)+'</div></div>'
+    +(tHOM>0?'<div><div style="font-size:11px;color:#8b949e">Homologado</div><div style="font-size:20px;font-weight:800;color:#3fb950;font-family:monospace">'+fmt(tHOM)+'</div></div>':'')
+    +'<div><div style="font-size:11px;color:#8b949e">Landed Total</div><div style="font-size:20px;font-weight:800;color:#f0883e;font-family:monospace">'+fmt(tLND)+'</div></div>'
+    +'<div><div style="font-size:11px;color:#8b949e">Equipos</div><div style="font-size:20px;font-weight:800;color:#f8d122;font-family:monospace">'+tEQ+'</div></div>'
+    +'<div><div style="font-size:11px;color:#8b949e">Bultos</div><div style="font-size:20px;font-weight:800;color:#e6edf3;font-family:monospace">'+tBTOS.toLocaleString()+'</div></div>'
+    +'</div></div>'
+    +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:separate;border-spacing:0">'
+    +'<thead><tr>'+hdrCols+'</tr></thead>'
+    +'<tbody><tr>'+colsH+'</tr></tbody>'
+    +'</table></div>'
+    // ── KPIs stats bar ──
+  +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:16px 0;margin-top:16px">'
+  +[
+    {lbl:'FOB Total',val:fmt(tFOB),color:'#58a6ff'},
+    {lbl:'Landed Total',val:fmt(tLND),color:'#f0883e'},
+    {lbl:'Homologado',val:fmt(tHOM),color:'#3fb950'},
+    {lbl:'Equipos',val:tEQ,color:'#f8d122'},
+    {lbl:'Piezas',val:(function(){var p=0;days.forEach(function(d){(d.cubiculos||[]).forEach(function(c){(c.rows||[]).forEach(function(r){p+=parseInt(r.piezas)||0;});});});return p.toLocaleString();}()),color:'#a371f7'},
+    {lbl:'Bultos',val:tBTOS.toLocaleString(),color:'#2dd4bf'}
+  ].map(function(it){
+    return '<div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:12px 16px;text-align:center">'
+      +'<div style="font-size:10px;font-weight:700;color:#8b949e;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">'+it.lbl+'</div>'
+      +'<div style="font-family:monospace;font-size:16px;font-weight:800;color:'+it.color+'">'+it.val+'</div>'
+      +'</div>';
+  }).join('')
+  +'</div>'
+  // ── Tabla por departamento ──
+  +(function(){
+    var dm={},tlfob=0,tllnd=0;
+    days.forEach(function(day){(day.cubiculos||[]).forEach(function(cub){(cub.rows||[]).forEach(function(r){
+      var d=(r.dept||'SIN DEPTO').toUpperCase();
+      var fv=parseFloat(r.fob)||0, lv=parseFloat(r.landed)||fv;
+      if(!dm[d]) dm[d]={fob:0,lnd:0};
+      dm[d].fob+=fv; dm[d].lnd+=lv; tlfob+=fv; tllnd+=lv;
+    });});});
+    var ents=Object.entries(dm).sort(function(a,b){return b[1].lnd-a[1].lnd;});
+    if(!ents.length) return '';
+    var rows=ents.map(function(e,i){
+      var pct=tllnd>0?(e[1].lnd/tllnd*100).toFixed(2):'0.00';
+      var barW=Math.max(2,parseFloat(pct));
+      return '<tr style="background:'+(i%2?'#161b22':'#0d1117')+'">'
+        +'<td style="padding:8px 12px;border:1px solid #30363d;font-weight:600;font-size:13px;color:#e6edf3">'+e[0]+'</td>'
+        +'<td style="padding:8px 12px;border:1px solid #30363d;text-align:right;font-family:monospace;font-weight:700;color:#58a6ff;font-size:13px">'+fmt(e[1].fob)+'</td>'
+        +'<td style="padding:8px 12px;border:1px solid #30363d;text-align:right;font-family:monospace;font-weight:700;color:#3fb950;font-size:13px">'+fmt(e[1].lnd)+'</td>'
+        +'<td style="border:1px solid #30363d;padding:6px 10px;min-width:120px"><div style="height:8px;border-radius:4px;background:linear-gradient(90deg,#f8d122,#f97316);width:'+barW+'%"></div></td>'
+        +'<td style="padding:8px 12px;border:1px solid #30363d;text-align:right;color:#8b949e;font-size:12px">'+pct+'%</td>'
+        +'</tr>';
+    }).join('');
+    var total='<tr style="background:rgba(88,166,255,.08);font-weight:800">'
+      +'<td style="padding:8px 12px;border:1px solid #30363d;font-size:14px;color:#e6edf3">TOTAL</td>'
+      +'<td style="padding:8px 12px;border:1px solid #30363d;text-align:right;font-family:monospace;color:#58a6ff;font-size:14px">'+fmt(tlfob)+'</td>'
+      +'<td style="padding:8px 12px;border:1px solid #30363d;text-align:right;font-family:monospace;color:#3fb950;font-size:14px">'+fmt(tllnd)+'</td>'
+      +'<td style="border:1px solid #30363d"></td>'
+      +'<td style="padding:8px 12px;border:1px solid #30363d;text-align:right;color:#e6edf3">100%</td>'
+      +'</tr>';
+    return '<div style="margin-top:8px">'
+      +'<div style="font-size:11px;font-weight:700;color:#8b949e;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">&#128202; Por Departamento</div>'
+      +'<div style="overflow-x:auto;border-radius:10px;overflow:hidden;border:1px solid #30363d">'
+      +'<table style="width:100%;border-collapse:collapse;min-width:500px">'
+      +'<thead><tr style="background:#161b22">'
+      +'<th style="padding:8px 12px;text-align:left;color:#8b949e;font-size:11px;font-weight:700;border-bottom:1px solid #30363d">DEPARTAMENTO</th>'
+      +'<th style="padding:8px 12px;text-align:right;color:#8b949e;font-size:11px;font-weight:700;border-bottom:1px solid #30363d">FOB</th>'
+      +'<th style="padding:8px 12px;text-align:right;color:#8b949e;font-size:11px;font-weight:700;border-bottom:1px solid #30363d">LANDED</th>'
+      +'<th style="padding:8px 12px;color:#8b949e;font-size:11px;font-weight:700;border-bottom:1px solid #30363d;min-width:120px"></th>'
+      +'<th style="padding:8px 12px;text-align:right;color:#8b949e;font-size:11px;font-weight:700;border-bottom:1px solid #30363d">% TOTAL</th>'
+      +'</tr></thead>'
+      +'<tbody>'+rows+total+'</tbody>'
+      +'</table></div></div>';
+  })()
+  +'<div style="margin-top:20px;text-align:center;color:#8b949e;font-size:11px">Saks Panam\u00e1 \u00b7 Gesti\u00f3n Integral de Compras y Costeo \u00b7 '+new Date().getFullYear()+'</div>'
+  +'</body></html>';
+
+  var blob=new Blob([html],{type:'text/html;charset=utf-8'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');a.href=url;a.download='Planeacion_'+_PLN_CUR+'.html';a.click();
+  setTimeout(function(){URL.revokeObjectURL(url);},3000);
+  if(typeof _showToast==='function') _showToast('\u2705 HTML exportado','green',2000);
 };
 
 // ── Picker — lee window.tendData (misma var que Tendencias) ──
