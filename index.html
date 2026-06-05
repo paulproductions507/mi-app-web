@@ -2832,10 +2832,10 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
     <!-- Buscador — misma lógica que Facturas Disponibles -->
     <div style="position:relative;margin-bottom:10px">
       <input id="pc-buscar" type="text" placeholder="🔍 Buscar proveedor..."
-        oninput="_pcBuscarInput(this)"
+        oninput="_pcProvSearch(this)"
         autocomplete="off" autocorrect="off" spellcheck="false"
         style="width:100%;box-sizing:border-box;background:var(--input-bg,#0d1117);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:13px;font-family:'IBM Plex Mono',monospace">
-      <div id="pc-sugg-list" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:999;background:var(--s1,#161b22);border:1px solid rgba(168,85,247,.4);border-top:none;border-radius:0 0 8px 8px;max-height:200px;overflow-y:auto"></div>
+      <div id="pc-sugg-list" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:3000;background:#fff;border:1px solid #a855f7;border-top:none;border-radius:0 0 8px 8px;max-height:220px;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,.2)"></div>
     </div>
 
     <!-- Formulario edición -->
@@ -5010,7 +5010,7 @@ function _plnCubHtml(cub,di,ci,tab,mon){
     +'<div class="chdr" style="cursor:default">'
       +'<span style="font-size:13px">'+viaIco+'</span>'
       +(function(){var _lr=cub.lugarRecep||fe2.lugarRecep||'';var _st=cub.status||'';var _label=(_st&&_lr)?'Recibido: '+_lr:_st;var _fecha=cub.eta?'<span style="font-size:9px;color:var(--muted);white-space:nowrap">'+_plnFD(cub.eta)+'</span>':'';var _nro=cub.nroEmb?'<span style="font-size:8px;font-weight:800;padding:2px 5px;border-radius:4px;background:rgba(139,148,158,.12);border:1px solid rgba(139,148,158,.3);color:var(--muted);white-space:nowrap;font-family:monospace">EMB#'+_plnESC((cub.nroEmb||'').replace('(parcial)','').trim())+'</span>':'';return (_label?'<span style="font-size:8px;font-weight:700;padding:2px 6px;border-radius:4px;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green-l);white-space:nowrap">'+_plnESC(_label)+'</span>':'')+_fecha+_nro;})()
-      +'<button onclick="event.stopPropagation();_plnDelCub(\''+_PLN_TAB+'\','+di+','+ci+',\''+( cub.id||'' )+'\')" style="margin-left:auto;background:rgba(218,54,51,.15);border:1px solid rgba(218,54,51,.3);color:#f47067;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;flex-shrink:0">×</button>'
+      +'<button '+'onclick="event.stopPropagation();(function(){'+'var _t=\''+_PLN_TAB+'\';'+'var _di='+di+';'+'var _ci='+ci+';'+'var _id=\''+( cub.id||'')+'\';'+'var wk=_plnMkWeek(_PLN_CUR);'+'var arr=wk[_t]&&wk[_t][_di]&&wk[_t][_di].cubiculos;'+'if(arr&&arr[_ci]){arr.splice(_ci,1);_PLN_SAVE();_PLN_RENDER();_showToast(\'\\uD83D\\uDDD1\\uFE0F Carga eliminada\',\'red\',2000);}'+'})()"'+' style="margin-left:auto;background:rgba(218,54,51,.15);border:1px solid rgba(218,54,51,.3);color:#f47067;border-radius:4px;padding:3px 10px;font-size:12px;cursor:pointer;flex-shrink:0">×</button>'
     +'</div>'
     // ── Fila 2: 1×tamaño · IMP:N · [espacio] · 🔍Ver detalle · [espacio] · ✏️Editar
     +'<div id="cub-f2-'+cubKey+'" style="display:flex;flex-wrap:nowrap;gap:6px;padding:4px 8px;align-items:center;justify-content:space-between">'
@@ -8941,6 +8941,7 @@ function calcSab2(){
           // Store ahorro for procesamiento
           window._lastSnap.sc3.ahorroNeto = Math.round(aTotal*100)/100;
           window._lastSnap.sc3.desembolso  = desSab;
+          window._ahorroTotal4C = Math.round((desReg - desSab)*100)/100;
           if(window._lastSnap.sc3.ahorroNeto > 0) window._lastAhorroNeto = window._lastSnap.sc3.ahorroNeto;
 
           const rowA = (c,reg,sab,color)=>{
@@ -9370,6 +9371,37 @@ function _pcBuscarInput(inp){
     box.appendChild(d);
   });
 }
+
+// Busqueda de proveedor en Configuracion - version directa
+window._pcProvSearch = function(inp) {
+  var q = (inp.value || '').trim().toUpperCase();
+  var box = document.getElementById('pc-sugg-list');
+  if (!box) return;
+  box.innerHTML = '';
+  if (q.length < 1) { box.style.display = 'none'; return; }
+  var names = (typeof _PROV_NAMES !== 'undefined') ? _PROV_NAMES : (window._PROV_NAMES || []);
+  var filtered = names.filter(function(n) { return n && n.toUpperCase().indexOf(q) >= 0; }).slice(0, 15);
+  if (!filtered.length) { box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  filtered.forEach(function(name) {
+    var d = document.createElement('div');
+    d.textContent = name;
+    d.style.cssText = 'padding:10px 14px;font-size:13px;color:#111;border-bottom:1px solid #eee;cursor:pointer;background:#fff';
+    function pick(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      inp.value = '';
+      box.style.display = 'none';
+      if (typeof _pcSeleccionar === 'function') _pcSeleccionar(name);
+    }
+    d.addEventListener('touchend', pick, {passive: false});
+    d.addEventListener('mousedown', pick);
+    d.addEventListener('mouseover', function() { d.style.background = '#f3e8ff'; });
+    d.addEventListener('mouseout',  function() { d.style.background = '#fff'; });
+    box.appendChild(d);
+  });
+};
+
 function _pcFiltrar(q){
   var sugg = document.getElementById('pc-sugg');
   if(!sugg) return;
@@ -10698,7 +10730,7 @@ function _corregirItbmsCifExpress(d){
 
 // _corregirLandedUnico — DESACTIVADA: el bug fue corregido en unico.html
 // Los embarques nuevos ya guardan el landed correcto sin itbmsTasa
-function _corregirLandedUnico(d){ return; // no-op }
+function _corregirLandedUnico(d){ return; // no-op
   if(!d || !d.snap) return;
   const isUnico = !!(d.modoUnico || d.tipoEsc==='unico'
     || (d.esc||'').toLowerCase().includes('único')
@@ -25393,7 +25425,6 @@ window._plnDelCub = function(tab, di, ci, cubId){
   _PLN_SAVE();
   _PLN_RENDER();
   _showToast('🗑️ Carga eliminada','red',2000);
-}
 };
 
 // Ventana unificada para editar info del cubículo
