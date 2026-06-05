@@ -25603,6 +25603,16 @@ window._plnEditCont = function(key){
   }
 };
 
+// Re-registrar _plnModuloEmbarques al cargar el DOM por si el scope fallo
+document.addEventListener('DOMContentLoaded', function(){
+  if(typeof window._plnModuloEmbarques !== 'function'){
+    // Intentar recuperar desde _plnModuloEmbarquesImpl
+    if(typeof _plnModuloEmbarquesImpl === 'function'){
+      window._plnModuloEmbarques = _plnModuloEmbarquesImpl;
+    }
+  }
+});
+
 window._plnModuloEmbarques = async function(){
   var old=document.getElementById('_plnEmbMod'); if(old) old.remove();
   var mod=document.createElement('div');
@@ -25905,4 +25915,51 @@ window._plnModuloEmbarques = async function(){
 
         footEl.innerHTML=
           '<div style="background:rgba(248,209,34,.08);border:1px solid rgba(248,209,34,.3);border-radius:8px;padding:10px 12px;margin-bottom:8px">'
-          +'<div style="font-size:12px;font-weight:800;color:'+color+';font-family:monospace;margin-bottom:3px">'            +(it.contenedor ? it.contenedor : '—')          +'</div>'          
+          +'<div style="font-size:11px;font-weight:700;color:#f8d122;margin-bottom:6px">⚡ ¿Dónde agregar Emb. '+_plnESC(d.nro)+'?</div>'
+          +opts
+          +'<button id="_plnEmbNuevo" style="display:block;width:100%;text-align:left;background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:8px;padding:10px 12px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:6px">'
+          +'📦 Crear nuevo cubículo independiente'
+          +'</div>'
+          +'<button id="_plnEmbBack2" style="width:100%;background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer">\u2190 Volver al listado</button>'
+          +'</div>';
+
+        // Botón nuevo cubículo
+        document.getElementById('_plnEmbNuevo').addEventListener('click',function(){
+          wk[_PLN_CTX.tab][dayIdx].cubiculos.push(newCub);
+          _PLN_SAVE(); _PLN_RENDER(); mod.remove(); _plnAutoGuardar('\u2705 Carga asignada y guardada en la nube');
+          if(typeof _showToast==='function') _showToast('\u2705 Emb. '+d.nro+' · nuevo cubículo','green',3000);
+        });
+        // Botón volver
+        document.getElementById('_plnEmbBack2').addEventListener('click',function(){ footEl.style.display='none'; renderList(input.value); });
+        // Botones de fusión
+        footEl.querySelectorAll('[data-cubidx]').forEach(function(btn){
+          btn.addEventListener('click',function(){
+            var cidx=parseInt(btn.getAttribute('data-cubidx'));
+            var targetCub=wk[_PLN_CTX.tab][dayIdx].cubiculos[cidx];
+            // Agregar filas del nuevo embarque al cubículo existente
+            targetCub.rows=(targetCub.rows||[]).concat(rows);
+            // Actualizar encabezado: agregar el nro del embarque fusionado
+            var embsExist=(targetCub.nroEmb||'').split('+').map(function(s){return s.trim();}).filter(Boolean);
+            if(!embsExist.includes(d.nro)) embsExist.push(d.nro);
+            targetCub.nroEmb=embsExist.join(' + ');
+            // Actualizar tipo de carga si el existente estaba vacío
+            if(!targetCub.tipoCarga && tipoEq) targetCub.tipoCarga=tipoEq;
+            _PLN_SAVE(); _PLN_RENDER(); mod.remove(); _plnAutoGuardar('\u2705 Carga asignada y guardada en la nube');
+            if(typeof _showToast==='function') _showToast('\u2705 Emb. '+d.nro+' fusionado · '+(targetCub.rows||[]).length+' provs. totales','green',3500);
+          });
+        });
+
+      } else {
+        // Día vacío — simplemente agregar
+        wk[_PLN_CTX.tab][dayIdx].cubiculos.push(newCub);
+        _PLN_SAVE(); _PLN_RENDER(); mod.remove(); _plnAutoGuardar('\u2705 Emb. '+d.nro+' asignado \u00b7 '+rows.length+' prov. \u2014 guardado en la nube');
+      }
+    });
+  }
+  input.addEventListener('input',function(){ renderList(input.value); });
+  renderList('');
+  setTimeout(function(){ input.focus(); },300);
+};
+</script>
+</body>
+</html>
