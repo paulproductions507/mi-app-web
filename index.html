@@ -3913,8 +3913,17 @@ function _plnCargarExcel(buffer, tipo, nombre){
     var ws = wb.Sheets[wb.SheetNames[0]];
     // Leer con header numérico para acceder por posición (columna C = índice 2)
     var rawRows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
-    var headers = rawRows[0] || [];
-    // Mapear índices exactos por posición
+    // Buscar la fila de encabezados real — puede no ser la fila 0 si hay filas de título antes
+    var hdrRowIdx = 0;
+    for(var _hi=0; _hi<Math.min(rawRows.length,15); _hi++){
+      var _hr = rawRows[_hi]||[];
+      var _hrStr = _hr.map(function(c){return String(c||'').toUpperCase();}).join('|');
+      if(_hrStr.indexOf('PROVEEDOR')>=0 || _hrStr.indexOf('CONTENEDOR')>=0 || _hrStr.indexOf('DEPARTAMEN')>=0){
+        hdrRowIdx = _hi; break;
+      }
+    }
+    var headers = rawRows[hdrRowIdx] || [];
+    // Mapear índices exactos por posición (defaults para si no se encuentra por nombre)
     var iDEPTO   = 0;  // A
     var iPROV    = 1;  // B
     var iCONT    = 2;  // C - # CONTENEDOR
@@ -3927,20 +3936,26 @@ function _plnCargarExcel(buffer, tipo, nombre){
     var iBULTOS  = 20; // U - BULTOS
     var iBOL     = 22; // W - NO. BOL
     var iOC      = 19; // T - # OC
-    // También buscar por nombre como fallback
+    // Buscar columnas por nombre — contenedor: cualquier encabezado que contenga "CONT"
     headers.forEach(function(h,i){
-      var hn = String(h||'').trim().replace(/^'/,'').toUpperCase();
-      if(hn==='# CONTENEDOR'||hn==='CONTENEDOR'||hn==='#CONTENEDOR') iCONT=i;
-      if(hn==='RECIBIDO EN CDF') iRECIB=i;
-      if(hn==='NO. BOL'||hn==='# BOL') iBOL=i;
-      if(hn==='AGENTE') iAGENTE=i;
-      if(hn==='ORIGEN') iORIGEN=i;
-      if(hn==='ETA CDF') iETA=i;
-      if(hn==='BULTOS') iBULTOS=i;
-      if(hn==='# OC') iOC=i;
+      var hn = String(h||'').trim().replace(/^[' ]+/,'').toUpperCase();
+      var hnClean = hn.replace(/[^A-Z0-9]/g,'');
+      // Contenedor: coincidencia exacta primero, luego cualquier que contenga CONT
+      if(hn==='# CONTENEDOR'||hn==='CONTENEDOR'||hn==='#CONTENEDOR'||
+         hn==='#CONT'||hn==='# CONT'||hn==='NO. CONT'||hn==='N. CONT'||
+         hn==='NRO CONT'||hn==='CONTAINER'||hn==='# CONTAINER'||
+         (hnClean.indexOf('CONT')>=0 && hnClean.indexOf('CONT')<=4)) iCONT=i;
+      if(hn==='RECIBIDO EN CDF'||hnClean==='RECIBIDOENCDF') iRECIB=i;
+      if(hn==='NO. BOL'||hn==='# BOL'||hnClean==='NOBOL'||hnClean==='BOL') iBOL=i;
+      if(hn==='AGENTE'||hnClean==='AGENTE') iAGENTE=i;
+      if(hn==='ORIGEN'||hnClean==='ORIGEN') iORIGEN=i;
+      if(hn==='ETA CDF'||hnClean==='ETACDF'||hnClean==='ETA') iETA=i;
+      if(hn==='BULTOS'||hnClean==='BULTOS') iBULTOS=i;
+      if(hn==='# OC'||hn==='#OC'||hnClean==='OC') iOC=i;
     });
+
     // Convertir a objetos usando posiciones
-    var rows = rawRows.slice(1).map(function(r){
+    var rows = rawRows.slice(hdrRowIdx+1).map(function(r){
       return {
         DEPARTAMENTO: r[iDEPTO]||'',
         PROVEEDOR:    r[iPROV]||'',
@@ -3976,7 +3991,8 @@ function _plnCargarExcel(buffer, tipo, nombre){
       rows.forEach(function(r){
         var depto   = String(r['DEPARTAMENTO']||'').trim();
         var prov    = String(r['PROVEEDOR']||'').trim();
-        var cont    = String(r['#CONT']||r["# CONTENEDOR"]||r["'# CONTENEDOR"]||r['# CONTENEDOR']||r['CONTENEDOR']||'').trim().replace(/^'/,'');
+        // Contenedor — usar clave normalizada al parsear
+        var cont=String(r['_CONT_NORM']||r['#CONT']||'').trim().replace(/^'/,'');
         var factura = String(r['#FACTURA']||r['# FACTURA']||'').trim();
         var fob     = parseFloat(String(r['VALOR FOB']||0).replace(/[^0-9.-]/g,''))||0;
         var recib   = String(r['RECIBIDO EN CDF']||'').trim();
@@ -4107,9 +4123,9 @@ function _plnMostrarPickerImport(items, tipo, diaPresel){
     items.forEach(function(it, idx){
       var contLabel = it.contenedor ? '<div style="font-size:12px;font-weight:800;color:'+color+';font-family:monospace;margin-bottom:3px">'+it.contenedor+'</div>' : '';
       var provResumen = contLabel + (it.provs||[]).slice(0,3).map(function(p){
-        return '<div style="font-size:11px;color:#e6edf3"><span style="font-size:10px;font-weight:700;color:'+color+';font-family:monospace">'+(p.cont||it.contenedor||'')+'</span> '+p.prov+(p.depto?' <span style="color:#8b949e;font-size:10px">('+p.depto+')</span>':'')+(p.factura?' <span style="color:#8b949e;font-size:9px">· Fact: '+p.factura+'</span>':'')+'</div>';
+        return '<div style="font-size:11px;color:#111827"><span style="font-size:10px;font-weight:700;color:'+color+';font-family:monospace">'+(p.cont||it.contenedor||'')+'</span> '+p.prov+(p.depto?' <span style="color:#6b7280;font-size:10px">('+p.depto+')</span>':'')+(p.factura?' <span style="color:#6b7280;font-size:9px">· Fact: '+p.factura+'</span>':'')+'</div>';
       }).join('') + ((it.provs||[]).length>3?'<div style="font-size:10px;color:#8b949e">+'+((it.provs||[]).length-3)+' más...</div>':'');
-      listaHtml += '<label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-bottom:1px solid rgba(48,54,61,.4);cursor:pointer">'
+      listaHtml += '<label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-bottom:1px solid #e8eaed;cursor:pointer;background:#ffffff">'
         +'<input type="checkbox" data-idx="'+idx+'" style="margin-top:3px;width:16px;height:16px;accent-color:'+color+';cursor:pointer;flex-shrink:0">'
         +'<div style="flex:1;min-width:0">'
           +'<div style="font-size:13px;font-weight:800;color:'+color+';font-family:monospace;letter-spacing:.05em">'
@@ -4129,25 +4145,25 @@ function _plnMostrarPickerImport(items, tipo, diaPresel){
   var mod = document.createElement('div');
   mod.id = '_PLN_IMPORT_MOD';
   mod.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.75);display:flex;align-items:flex-end;justify-content:center;font-family:Inter,system-ui,sans-serif';
-  mod.innerHTML = '<div style="width:100%;max-width:560px;background:#161b22;border-radius:16px 16px 0 0;max-height:88vh;display:flex;flex-direction:column;border:1px solid #30363d">'
-    +'<div style="padding:14px 16px;border-bottom:1px solid #30363d;display:flex;align-items:center;gap:10px;flex-shrink:0">'
+  mod.innerHTML = '<div style="width:100%;max-width:560px;background:#ffffff;border-radius:16px 16px 0 0;max-height:88vh;display:flex;flex-direction:column;border:1px solid #dde1e7;box-shadow:0 -4px 24px rgba(0,0,0,.12)">'
+    +'<div style="padding:14px 16px;border-bottom:1px solid #e8eaed;display:flex;align-items:center;gap:10px;flex-shrink:0">'
       +'<div style="font-size:14px;font-weight:800;color:'+color+'">'+titulo+'</div>'
-      +'<div style="font-size:10px;color:#8b949e">'+items.length+' registros pendientes</div>'
-      +'<button id="_pln_close_btn1" style="margin-left:auto;background:none;border:none;color:#8b949e;font-size:20px;cursor:pointer;line-height:1">✕</button>'
+      +'<div style="font-size:10px;color:#6b7280;background:#f3f4f6;border-radius:10px;padding:2px 8px">'+items.length+' registros pendientes</div>'
+      +'<button id="_pln_close_btn1" style="margin-left:auto;background:none;border:none;color:#6b7280;font-size:20px;cursor:pointer;line-height:1">✕</button>'
     +'</div>'
-    +'<div style="padding:10px 16px;border-bottom:1px solid #30363d;flex-shrink:0;display:flex;align-items:center;gap:10px">'
-      +'<div style="font-size:11px;font-weight:700;color:#8b949e;white-space:nowrap">DÍA:</div>'
-      +'<select id="_pln_imp_dia" style="flex:1;background:#21262d;border:1px solid #30363d;border-radius:8px;color:#e6edf3;padding:7px 10px;font-size:12px">'+diasOpts+'</select>'
+    +'<div style="padding:10px 16px;border-bottom:1px solid #e8eaed;flex-shrink:0;display:flex;align-items:center;gap:10px">'
+      +'<div style="font-size:11px;font-weight:700;color:#374151;white-space:nowrap">DÍA:</div>'
+      +'<select id="_pln_imp_dia" style="flex:1;background:#f9fafb;border:1px solid #d1d5db;border-radius:8px;color:#111827;padding:7px 10px;font-size:12px">'+diasOpts+'</select>'
     +'</div>'
-    +'<div style="padding:8px 12px;border-bottom:1px solid #30363d;flex-shrink:0;display:flex;gap:8px;align-items:center">'
+    +'<div style="padding:8px 12px;border-bottom:1px solid #e8eaed;flex-shrink:0;display:flex;gap:8px;align-items:center">'
       +'<button id="_pln_sel_all_btn" style="background:rgba('+colorRGB+',.1);border:1px solid rgba('+colorRGB+',.3);color:'+color+';border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer">☑ Todos</button>'
-      +'<button id="_pln_sel_none_btn" style="background:none;border:1px solid #30363d;color:#8b949e;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer">☐ Ninguno</button>'
-      +(tipo==='ext'?'<input id="_pln_cont_filter" type="text" placeholder="Filtrar # Contenedor..." style="flex:1;background:#21262d;border:1px solid #30363d;border-radius:6px;padding:5px 10px;font-size:11px;color:#e6edf3">':'')
+      +'<button id="_pln_sel_none_btn" style="background:#f3f4f6;border:1px solid #d1d5db;color:#374151;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer">☐ Ninguno</button>'
+      +(tipo==='ext'?'<input id="_pln_cont_filter" type="text" placeholder="Filtrar # Contenedor..." style="flex:1;background:#f9fafb;border:1px solid #d1d5db;border-radius:6px;padding:5px 10px;font-size:11px;color:#111827">':'')
     +'</div>'
-    +'<div id="_pln_imp_lista" style="overflow-y:auto;flex:1;-webkit-overflow-scrolling:touch">'+listaHtml+'</div>'
-    +'<div style="padding:12px 16px;border-top:1px solid #30363d;flex-shrink:0;display:flex;gap:8px">'
-      +'<button id="_pln_imp_agregar_btn" style="flex:2;background:linear-gradient(135deg,rgba('+colorRGB+',.25),rgba('+colorRGB+',.12));border:1px solid rgba('+colorRGB+',.5);color:'+color+';border-radius:10px;padding:12px;font-size:13px;font-weight:800;cursor:pointer">✓ Agregar a Programado</button>'
-      +'<button id="_pln_cancel_btn" style="flex:1;background:none;border:1px solid #30363d;color:#8b949e;border-radius:10px;padding:12px;font-size:13px;font-weight:600;cursor:pointer">Cancelar</button>'
+    +'<div id="_pln_imp_lista" style="overflow-y:auto;flex:1;-webkit-overflow-scrolling:touch;background:#ffffff">'+listaHtml+'</div>'
+    +'<div style="padding:12px 16px;border-top:1px solid #e8eaed;flex-shrink:0;display:flex;gap:8px;background:#f9fafb;border-radius:0 0 0 0">'
+      +'<button id="_pln_imp_agregar_btn" style="flex:2;background:linear-gradient(135deg,rgba('+colorRGB+',.9),rgba('+colorRGB+',.7));border:none;color:#fff;border-radius:10px;padding:12px;font-size:13px;font-weight:800;cursor:pointer">✓ Agregar a Programado</button>'
+      +'<button id="_pln_cancel_btn" style="flex:1;background:#ffffff;border:1px solid #d1d5db;color:#374151;border-radius:10px;padding:12px;font-size:13px;font-weight:600;cursor:pointer">Cancelar</button>'
     +'</div>'
   +'</div>';
 
@@ -16474,7 +16490,7 @@ function exportDashboardExcel(){
     t2.alignment={horizontal:'center',vertical:'middle'};
     ws2.getRow(1).height=28;
     var hdrs2=['N° Embarque','Descripción','Fecha','Tipo Trámite','Corredor','Tipo Factura','Proveedor','Departamento','Orden de Compra','N° Factura','Val. Original','Val. Inventario','Gastos','ITBMS','Costo Landed','Notas'];
-    var cols2=[13,28,12,14,20,13,26,22,18,18,16,16,16,14,17,28];
+    var cols2=[13,28,12,14,20,18,26,22,18,18,16,16,16,14,17,32];
     hdrs2.forEach(function(h,i){
       hdrCell(ws2.getCell(2,i+1),h,C_HDR_BG,C_HDR_FG);
       ws2.getColumn(i+1).width=cols2[i];
@@ -16493,12 +16509,14 @@ function exportDashboardExcel(){
       if(!tf||tf==='mercancia') return true;
       // Si tiene OC numérico → mercancía
       if(l.oc && /^\d+/.test(String(l.oc).trim())) return true;
+      // Líneas auto-generadas por Sababa (_autoGasto) → siempre van a servicio, nunca omitir
+      if(l._autoGasto) return false;
       // Tipos de gasto conocidos → servicio
       var gastos=['flete','acarreo','honorarios','liquidacion','tasa','uso_sistema','formulario','dmce','itbms','nota_credito','gastos'];
       if(gastos.indexOf(tf)>=0) return false;
-      // Conceptos calculados internos → excluir
+      // Conceptos calculados internos de embarques viejos → servicio (nunca omitir si tiene costo)
       var ocStr=(l.oc||'').toLowerCase();
-      if(ocStr.indexOf('comisi')>=0||ocStr.indexOf('itbms homol')>=0||ocStr.indexOf('diferencia liq')>=0) return null; // null = omitir
+      if(ocStr.indexOf('diferencia liq')>=0) return l.costo>0?false:null;
       return true;
     };
 
@@ -16509,7 +16527,10 @@ function exportDashboardExcel(){
       var tramite=_tipoTramite(d);
       var corredor=_corredor(d);
       var _ci=_calcCostoInventario(d);
-      var fobHomolEmb=_ci?(_ci.mercInv||0):0;
+      // Usar misma lógica que Hoja 1: mercInv o fallback a costoOrig del embarque
+      var _costoOrigEmb=d.cif||d.fob||d.costoOrig||0;
+      var fobHomolEmb=_ci?(_ci.mercInv||_costoOrigEmb):_costoOrigEmb;
+      var _noMercEmb=_ci?(_ci.costoNM||0):0;
 
       // Separar mercancía vs servicio, omitir conceptos internos calculados
       var mercLines=[]; var svcLines=[];
@@ -16552,7 +16573,7 @@ function exportDashboardExcel(){
         // ITBMS vacío para mercancía (col 14)
         var itM=ws2.getCell(dri,14); itM.value='';
         itM.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+(alt?C_ALT:'FFFFFF')}};
-        // Costo Landed = Val. Inventario (col 15)
+        // Costo Landed = Val. Inventario (col 15) — gastos en filas de servicio
         var ciM=ws2.getCell(dri,15); ciM.value=costoInv_merc; ciM.numFmt='"$"#,##0.00';
         ciM.font={name:'Calibri',bold:true,size:9};
         ciM.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+(alt?'D6EAF8':'EBF5FB')}};
@@ -16570,8 +16591,11 @@ function exportDashboardExcel(){
         var tipoN={flete:'Flete',acarreo:'Acarreo',honorarios:'Honorarios',itbms:'ITBMS',liquidacion:'Liquidación',tasa:'Tasa Aduana',uso_sistema:'Uso Sistema',formulario:'Formulario',dmce:'DMCE',nota_credito:'Nota Crédito',gastos:'Gastos'};
         // Detectar ITBMS Sababa: por flag (nuevos) o por prov+oc (históricos guardados)
         var _isSabItbms=l._sabItbms||(
-          (l.tipoFac||'').toLowerCase()==='itbms'&&
-          (l.prov||'').toUpperCase().indexOf('SABABA')>=0
+          (l.prov||'').toUpperCase().indexOf('SABABA')>=0&&(
+            (l.tipoFac||'').toLowerCase()==='itbms'||
+            (l.oc||'').toLowerCase().indexOf('itbms homol')>=0||
+            (l.oc||'').toLowerCase().indexOf('itbms homologado')>=0
+          )
         );
         var tipoLabel=l._label||(_isSabItbms?'Honorarios / ITBMS':(tipoN[(l.tipoFac||'').toLowerCase()]||'Servicio'));
 
@@ -16617,16 +16641,18 @@ function exportDashboardExcel(){
         }
         // Col 15: Costo Landed = Gastos (sin ITBMS separado)
         var costoLanded=_montoGasto;
-        var ciS=ws2.getCell(dri,15); ciS.value=costoLanded||''; ciS.numFmt='"$"#,##0.00';
+        var ciS=ws2.getCell(dri,15); ciS.value=costoLanded>0?costoLanded:null; ciS.numFmt='"$"#,##0.00';
         ciS.font={name:'Calibri',bold:true,size:9};
         ciS.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+(alt?(_esItbmsSeparado?'F8F9FA':'D6EAF8'):(_esItbmsSeparado?'FFFFFF':'EBF5FB'))}};
         ciS.alignment={horizontal:'right',vertical:'middle'};
         // Col 16: Notas — descriptor para Sababa
         var _notaVal='';
         var _ocLow=(l.oc||'').toLowerCase();
-        if(_isSabItbms) _notaVal='ITBMS Homologado s/Honorario';
-        else if(_tfLow==='honorarios'&&(l.prov||'').toUpperCase().indexOf('SABABA')>=0) _notaVal='Comisión Bruta s/Pago Fiscal';
-        else if(_ocLow.indexOf('comisi')>=0) _notaVal='Comisión Bruta s/Pago Fiscal';
+        if(_isSabItbms) {
+          _notaVal='ITBMS Homologado s/Honorario'; // siempre gana si es ITBMS Sababa
+        } else if((l.prov||'').toUpperCase().indexOf('SABABA')>=0&&(_tfLow==='honorarios'||_ocLow.indexOf('comisi')>=0)) {
+          _notaVal='Comisión Bruta s/Pago Fiscal';
+        }
         var nS=ws2.getCell(dri,16); nS.value=_notaVal;
         nS.font={name:'Calibri',size:8,italic:true,color:{argb:'FF666666'}};
         nS.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+(alt?C_ALT:'FFFFFF')}};
