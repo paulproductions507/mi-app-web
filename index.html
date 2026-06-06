@@ -25923,27 +25923,59 @@ window._plnModuloEmbarques = async function(){
   function getLanded(d){
     var snap=d.snap||{}, inner=snap.snap||snap;
     var esc=(d.esc||'').toLowerCase();
-    if((esc.includes('sababa')||esc.includes('sab'))&&inner.sc3&&inner.sc3.landedG) return parseFloat(inner.sc3.landedG);
-    if(esc.includes('cif')&&inner.sc2&&inner.sc2.landedG) return parseFloat(inner.sc2.landedG);
-    if(inner.sc1&&inner.sc1.landedG) return parseFloat(inner.sc1.landedG);
-    return parseFloat(snap.sc1Base||d.sc1Base||0);
+    var isSab=esc.includes('sababa')||esc.includes('sab');
+    var isCIF=esc.includes('cif');
+    if(isSab&&inner.sc3){
+      var v=inner.sc3.landedG||inner.sc3.landed||inner.sc3.landedCosteable||inner.sc3.landedTotal||0;
+      if(parseFloat(v)>0) return parseFloat(v);
+    }
+    if(isCIF&&inner.sc2){
+      var v2=inner.sc2.landedG||inner.sc2.landed||inner.sc2.landedCosteable||0;
+      if(parseFloat(v2)>0) return parseFloat(v2);
+    }
+    if(inner.sc1){
+      var v3=inner.sc1.landedG||inner.sc1.landed||inner.sc1.landedCosteable||0;
+      if(parseFloat(v3)>0) return parseFloat(v3);
+    }
+    // Last fallback: snap.landed or d.landed
+    return parseFloat(snap.landed||d.landed||snap.sc1Base||d.sc1Base||0);
   }
   function renderList(q){
     q=(q||"").trim().toLowerCase();
     var DIAS=["Lunes","Martes","Miércoles","Jueves","Viernes"];
-    var asigTodo={};
+    var asigTodo={};  // nro -> {di, mon} para embarques completamente asignados
+    var asigParcial={}; // nro -> cantidad de proveedores ya asignados
     Object.keys(_PLN_DATA).forEach(function(mon){
       var wkX=_PLN_DATA[mon];
       (["prog","res"]).forEach(function(tab){
         (wkX[tab]||[]).forEach(function(day,di){
           (day.cubiculos||[]).forEach(function(cub){
             (cub.nroEmb||"").split("+").forEach(function(n){
-              var t=n.trim().replace(/(parcial)/gi,"").trim();
-              if(t&&!asigTodo[t]) asigTodo[t]={di:di,mon:mon};
+              var t=n.trim().replace(/\(parcial\)/gi,"").trim();
+              if(!t) return;
+              var isParcial=(cub.nroEmb||"").toLowerCase().includes("parcial");
+              if(isParcial){
+                // Contar proveedores asignados en este parcial
+                if(!asigParcial[t]) asigParcial[t]=0;
+                asigParcial[t]+=(cub.rows||[]).length;
+              } else {
+                // Asignado completo
+                if(!asigTodo[t]) asigTodo[t]={di:di,mon:mon};
+              }
             });
           });
         });
       });
+    });
+    // Si el total de proveedores asignados en parciales cubre el total del embarque -> marcar como completo
+    Object.keys(asigParcial).forEach(function(nro){
+      if(asigTodo[nro]) return; // ya marcado como completo
+      var d=td.find(function(x){return (x.nro||'').trim()===nro;});
+      if(!d) return;
+      var totalLines=(d.snap&&d.snap.invLines||d.invLines||[]).filter(function(l){return !l.tipoFac||l.tipoFac==='mercancia';}).length;
+      if(totalLines>0 && asigParcial[nro]>=totalLines){
+        asigTodo[nro]={di:-1,mon:'parcial-completo'};
+      }
     });
     if(q){
       var nrosAsig=Object.keys(asigTodo).filter(function(nro){ return nro.toLowerCase().includes(q); });
@@ -25957,10 +25989,11 @@ window._plnModuloEmbarques = async function(){
       if(nrosAsig.length){
         nota=nrosAsig.map(function(nro){
           var inf=asigTodo[nro];
-          var donde=DIAS[inf.di]+(inf.mon!==_PLN_CTX.mon?" (semana "+inf.mon+")":"");
+          var esParcialCompleto=inf.mon==='parcial-completo';
+          var donde=esParcialCompleto?'todos los días (distribuido en parciales)':DIAS[inf.di]+(inf.mon!==_PLN_CTX.mon?" (semana "+inf.mon+")":"");
           return '<div style="background:rgba(248,209,34,.08);border:1px solid rgba(248,209,34,.3);border-radius:8px;padding:10px 12px;margin-bottom:8px">'
-            +'<div style="font-size:12px;font-weight:700;color:#f8d122;margin-bottom:3px">📍 Emb. '+nro+' ya está asignado</div>'
-            +'<div style="font-size:11px;color:var(--muted)">Asignado el <strong style="color:var(--text)">'+donde+'</strong>. Para usarlo, primero elíminalo de ese día.</div>'
+            +'<div style="font-size:12px;font-weight:700;color:#f8d122;margin-bottom:3px">'+(esParcialCompleto?'✅':'📍')+' Emb. '+nro+(esParcialCompleto?' completamente distribuido':' ya está asignado')+'</div>'
+            +'<div style="font-size:11px;color:var(--muted)">'+(esParcialCompleto?'Todas las líneas fueron asignadas en parciales.':'Asignado el <strong style="color:var(--text)">'+donde+'</strong>. Para usarlo, primero elíminalo de ese día.')+'</div>'
             +'</div>';
         }).join("");
       }
@@ -26097,7 +26130,7 @@ window._plnModuloEmbarques = async function(){
       +'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+(d.fecha||'')+' &middot; '+(d.esc||'')+' &middot; '+nEquip+'x '+tipoEq+'</div>'
       +'<div style="display:flex;gap:14px;margin-top:6px;flex-wrap:wrap">'
       +'<div><div style="font-size:9px;color:var(--muted)">FOB</div><div style="font-size:12px;font-weight:700;color:var(--blue-l);font-family:monospace">'+fmt(fob)+'</div></div>'
-      +(isSab&&totHom>0?'<div><div style="font-size:9px;color:var(--muted)">Homologado</div><div style="font-size:12px;font-weight:700;color:var(--green-l);font-family:monospace">'+fmt(totHom)+'</div></div>':'')
+      +'<div><div style="font-size:9px;color:var(--muted)">Inventario</div><div style="font-size:12px;font-weight:700;color:var(--green-l);font-family:monospace">'+fmt(totHom>0?totHom:fob)+'</div></div>'
       +'<div><div style="font-size:9px;color:var(--muted)">Landed</div><div style="font-size:12px;font-weight:700;color:var(--orange-l);font-family:monospace">'+fmt(lndTotal)+'</div></div>'
       +(impCnt>0?'<div style="background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.2);border-radius:6px;padding:4px 8px;font-size:10px;color:#f97316;font-weight:700">IMP: '+impCnt+'</div>':'')
       +(zlCnt>0?'<div style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.2);border-radius:6px;padding:4px 8px;font-size:10px;color:#60a5fa;font-weight:700">ZL: '+zlCnt+'</div>':'')
@@ -26111,7 +26144,7 @@ window._plnModuloEmbarques = async function(){
       +'<th style="padding:6px 6px;color:var(--muted);font-weight:700">Org</th>'
       +'<th style="padding:6px 6px;text-align:left;color:var(--muted);font-weight:700">Dept</th>'
       +'<th style="padding:6px 8px;text-align:right;color:var(--muted);font-weight:700;white-space:nowrap">FOB Orig.</th>'
-      +(isSab?'<th style="padding:6px 8px;text-align:right;color:var(--muted);font-weight:700">Homol.</th>':'')
+      +'<th style="padding:6px 8px;text-align:right;color:var(--muted);font-weight:700">FOB Inventario</th>'
       +'<th style="padding:6px 8px;text-align:right;color:var(--muted);font-weight:700">Landed</th>'
       +'<th style="padding:6px 8px;text-align:right;color:var(--muted);font-weight:700">Piezas</th>'
       +'<th style="padding:6px 8px;text-align:right;color:var(--muted);font-weight:700">Btos</th>'
@@ -26122,7 +26155,7 @@ window._plnModuloEmbarques = async function(){
           +'<td style="padding:7px 6px;text-align:center">'+(r.tipo==='IMP'?'<span style="font-size:8px;font-weight:800;color:#f97316">IMP</span>':'<span style="font-size:8px;font-weight:800;color:#60a5fa">ZL</span>')+'</td>'
           +'<td style="padding:7px 6px;color:var(--muted);white-space:nowrap">'+r.dept+'</td>'
           +'<td style="padding:7px 8px;text-align:right;color:var(--blue-l);font-family:monospace;font-weight:700;white-space:nowrap">'+fmt(r.fob)+'</td>'
-          +(isSab?'<td style="padding:7px 8px;text-align:right;color:'+(r.homol>0?'var(--green-l)':'var(--muted)')+';font-family:monospace;font-weight:700;white-space:nowrap">'+(r.homol>0?fmt(r.homol):'—')+'</td>':'')
+          +'<td style="padding:7px 8px;text-align:right;color:'+(r.homol>0?'var(--green-l)':'var(--blue-l)')+';font-family:monospace;font-weight:700;white-space:nowrap">'+(r.homol>0?fmt(r.homol):fmt(r.fob))+'</td>'
           +'<td style="padding:7px 8px;text-align:right;color:var(--orange-l);font-family:monospace;font-weight:700;white-space:nowrap">'+fmt(r.landed)+'</td>'
           +'<td style="padding:7px 8px;text-align:right;color:var(--muted)">'+r.piezas.toLocaleString()+'</td>'
           +'<td style="padding:7px 8px;text-align:right;color:var(--muted)">'+r.bultos.toLocaleString()+'</td>'
