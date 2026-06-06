@@ -3574,6 +3574,14 @@ function _plnAD(ds,n){ var d=new Date(ds+'T00:00:00'); d.setDate(d.getDate()+n);
 function _plnISO(d){ return d.toISOString().slice(0,10); }
 function _plnLunes(ds){ var d=new Date(ds+'T00:00:00'); var dow=d.getDay(); d.setDate(d.getDate()+(dow===0?-6:1-dow)); return _plnISO(d); }
 function _plnESC(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+// Normaliza el nombre del corredor a partir del campo esc/corredor de tendData
+function _plnCorredorLabel(esc,corredor){
+  var s=(esc||corredor||'').toLowerCase();
+  if(s.includes('sab')) return 'Sababa Imports';
+  if(s.includes('cifexp')||s.includes('cif exp')||s.includes('cif express')||s.includes('sif')) return 'CIF Express';
+  if(s.includes('express')) return 'CIF Express';
+  return esc||corredor||'';
+}
 function _plnQ(sel){ return document.querySelector('#_PLN_OV '+sel); }
 function _plnQA(sel){ return document.querySelectorAll('#_PLN_OV '+sel); }
 function _plnSumFOB(rows){ return (rows||[]).reduce(function(s,r){return s+(parseFloat(r.fob)||0);},0); }
@@ -4707,6 +4715,7 @@ function _plnDiarioCubCard(cub, di, ci, tab, mon, DH_COLORS, ordinalLabel){
     +'<span style="font-size:15px">'+viaIco+'</span>'
     +'<span style="font-size:12px;font-weight:800;color:var(--text)">'+ordinalLabel+' carga</span>'
     +(cub.status?'<span style="font-size:10px;font-weight:700;color:'+sc+';background:rgba(0,0,0,.25);border-radius:4px;padding:1px 6px">'+cub.status+'</span>':'')
+    +(escLabel?'<span style="font-size:9px;font-weight:700;color:var(--orange-l);background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:1px 6px;white-space:nowrap">'+_plnCorredorLabel(escLabel,'').toUpperCase()+'</span>':'')
     +'</div>'
     +'<span style="font-size:11px;color:var(--muted)">✏️</span>'
     +'</div>';
@@ -4718,7 +4727,7 @@ function _plnDiarioCubCard(cub, di, ci, tab, mon, DH_COLORS, ordinalLabel){
   if(origenStr) dataRows.push(['Origen',origenStr,'var(--text)']);
   if(destinoStr) dataRows.push(['Destino',destinoStr,'#2dd4bf']);
   if(cub.nroEmb) dataRows.push(['N° Embarque',cub.nroEmb,'var(--muted)']);
-  if(escLabel) dataRows.push(['Corredor',escLabel.toUpperCase(),'var(--orange-l)']);
+  if(escLabel) dataRows.push(['Corredor',_plnCorredorLabel(escLabel,'').toUpperCase(),'var(--orange-l)']);
   dataRows.push(['Proveedores','<span id="_pvlbl_'+accId+'">'+rows.length+' proveedor'+(rows.length!==1?'es':'')+'</span>','var(--text)']);
   if(totPzs>0) dataRows.push(['Total piezas',totPzs.toLocaleString(),'var(--green-l)']);
   if(totBlt>0) dataRows.push(['Cartones / Bultos',totBlt.toLocaleString(),'var(--muted)']);
@@ -4858,7 +4867,7 @@ function _plnImprimirDia(di){
       +(cub.origen||cub.lugarOrigen?'<tr><td style="color:#888;padding:3px 0">Origen</td><td style="font-weight:700">'+(cub.origen||cub.lugarOrigen)+'</td></tr>':'')
       +(cub.lugarRecep?'<tr><td style="color:#888;padding:3px 0">Destino</td><td style="font-weight:700">'+cub.lugarRecep+'</td></tr>':'')
       +'<tr><td style="color:#888;padding:3px 0">Empaletado</td><td style="font-weight:700">'+(cub.empaletado?'<span style="background:#d1fae5;color:#065f46;border-radius:4px;padding:2px 8px;font-size:11px">SI - Carga empaletada</span>':'<span style="background:#fee2e2;color:#991b1b;border-radius:4px;padding:2px 8px;font-size:11px">NO - Carga en piso</span>')+'</td></tr>'
-      +(esc?'<tr><td style="color:#888;padding:3px 0">Corredor</td><td style="font-weight:700">'+esc.toUpperCase()+'</td></tr>':'')
+      +(esc?'<tr><td style="color:#888;padding:3px 0">Corredor</td><td style="font-weight:700">'+_plnCorredorLabel(esc,'').toUpperCase()+'</td></tr>':'')
       +'<tr><td style="color:#888;padding:3px 0;vertical-align:top">Proveedores</td><td style="font-weight:700">'+provRows.length+' proveedor'+(provRows.length!==1?'es':'')+deptHtml+'</td></tr>'
       +(totPzs>0?'<tr><td style="color:#888;padding:3px 0">Total piezas</td><td style="font-weight:700">'+totPzs.toLocaleString('en-US')+'</td></tr>':'')
       +(totFob>0?'<tr><td style="color:#888;padding:3px 0">FOB Total</td><td style="font-weight:700;font-family:monospace">'+_plnFF(totFob)+'</td></tr>':'')
@@ -4883,9 +4892,110 @@ function _plnImprimirDia(di){
     +'</table></div>'
     :'';
 
-  if(!rows) rows='<p style="color:#999;text-align:center;padding:24px">Sin cargas registradas para este día.</p>';
+  if(!rows) rows='<p style=\'color:#999;text-align:center;padding:24px\'>Sin cargas registradas para este día.</p>';
 
-  var win=window.open('','_blank','width=800,height=700');
+  // ── Gráficas por departamento ──
+  function buildDeptChart(cubList){
+    var dMap={};
+    cubList.forEach(function(item){
+      (item.cub.rows||[]).forEach(function(r){
+        var dept=r.dept||r.deptCat||'Sin Dept';
+        var fob=parseFloat(r.fob)||0;
+        dMap[dept]=(dMap[dept]||0)+fob;
+      });
+    });
+    var keys=Object.keys(dMap).filter(function(k){return dMap[k]>0;}).sort(function(a,b){return dMap[b]-dMap[a];});
+    if(!keys.length) return '';
+    var total=keys.reduce(function(s,k){return s+dMap[k];},0);
+    var COLORS=['#1f6feb','#f0883e','#3fb950','#f85149','#58a6ff','#d29922','#a371f7','#2dd4bf','#e11d48','#84cc16'];
+    var bars=keys.map(function(k,i){
+      var pct=total>0?(dMap[k]/total*100):0;
+      var color=COLORS[i%COLORS.length];
+      var barW=Math.max(pct*4,2);
+      var montoStr=dMap[k]>=1000?(dMap[k]/1000).toFixed(1)+'k':dMap[k].toFixed(0);
+      return '<tr><td style="width:130px;font-size:10px;color:#444;padding:3px 6px 3px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+k+'</td>'
+        +'<td style="padding:3px 6px 3px 0"><div style="background:'+color+';height:14px;width:'+barW+'px;border-radius:2px;display:inline-block"></div></td>'
+        +'<td style="font-size:10px;font-family:monospace;white-space:nowrap;color:#222">'+pct.toFixed(1)+'% — $'+montoStr+'</td></tr>';
+    }).join('');
+    return '<div style="margin-top:18px;border:1px solid #ddd;border-radius:6px;padding:14px">'
+      +'<div style="font-size:12px;font-weight:700;margin-bottom:10px;text-transform:uppercase;letter-spacing:.04em;color:#333">Participacion por Departamento (FOB)</div>'
+      +'<table style="border-collapse:collapse;width:100%">'+bars+'</table>'
+      +'</div>';
+  }
+  var chartHtml = buildDeptChart(allCubs);
+
+  // ── Tabla de detalle de proveedores por carga ──
+  function buildDetailTable(cubList, td2ref){
+    var html='';
+    var ordLabels=['Primera','Segunda','Tercera','Cuarta','Quinta','Sexta','Septima','Octava','Novena','Decima'];
+    cubList.forEach(function(item, idx){
+      var cub=item.cub;
+      var pRows=cub.rows||[];
+      if(!pRows.length) return;
+      var embs2=(cub.nroEmb||'').split('+').map(function(s){return s.trim();}).filter(Boolean);
+      var fe2=embs2.map(function(n){return (td2ref||[]).find(function(d){return (d.nro||'').trim()===n;})||null;}).filter(Boolean)[0]||{};
+      var isSabCub=pRows.some(function(r){return parseFloat(r.homol)>0;});
+      var escLbl2=fe2.esc||cub.corredor||'';
+      var corrLbl=escLbl2?_plnCorredorLabel(escLbl2,''):'';
+      var ordLbl=ordLabels[idx]||('Carga '+(idx+1));
+      html+='<div style="page-break-inside:avoid;margin-top:16px;border:1px solid #ccc;border-radius:6px;overflow:hidden">';
+      html+='<div style="background:#f0f0f0;padding:8px 12px;font-size:12px;font-weight:800">'
+        +ordLbl+' carga'
+        +(item.tipo?' <span style="font-weight:400;color:#666">('+item.tipo+')</span>':'')
+        +(corrLbl?' &nbsp;&middot;&nbsp; <span style="color:#c05;font-weight:700">'+corrLbl.toUpperCase()+'</span>':'')
+        +(cub.nroEmb?' &nbsp;&middot;&nbsp; <span style="font-family:monospace">EMB#'+cub.nroEmb+'</span>':'')
+        +'</div>';
+      var hdCols='<th style="padding:5px 6px;text-align:left;font-weight:700;font-size:10px">Proveedor</th>'
+        +'<th style="padding:5px 6px;text-align:center;font-weight:700;font-size:10px;width:36px">Org</th>'
+        +'<th style="padding:5px 6px;text-align:left;font-weight:700;font-size:10px;width:80px">Depto</th>'
+        +'<th style="padding:5px 6px;text-align:right;font-weight:700;font-size:10px;width:70px">FOB Orig</th>'
+        +(isSabCub?'<th style="padding:5px 6px;text-align:right;font-weight:700;font-size:10px;width:70px">FOB Inv.</th>':'')
+        +'<th style="padding:5px 6px;text-align:right;font-weight:700;font-size:10px;width:70px">Landed</th>'
+        +'<th style="padding:5px 6px;text-align:right;font-weight:700;font-size:10px;width:40px">Pzas</th>'
+        +'<th style="padding:5px 6px;text-align:right;font-weight:700;font-size:10px;width:36px">Bts</th>';
+      html+='<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#e8e8e8">'+hdCols+'</tr></thead><tbody>';
+      var totFobD=0, totHomD=0, totLndD=0, totPzD=0, totBtD=0;
+      pRows.forEach(function(r){
+        var fobV=parseFloat(r.fob||0);
+        var homV=parseFloat(r.homol||0);
+        var lndV=parseFloat(r.landed||r.fob||0);
+        var pzV=parseInt(r.piezas||0);
+        var btV=parseInt(r.bultos||0);
+        totFobD+=fobV; totHomD+=homV; totLndD+=lndV; totPzD+=pzV; totBtD+=btV;
+        var orgTxt=r.tipo==='IMP'?'IMP':'ZL';
+        var orgColor=r.tipo==='IMP'?'#c05':'#1f6feb';
+        var fobInv=homV>0?homV:fobV;
+        var fobInvColor=homV>0?'#065f46':'#333';
+        var nm=((r.prov||r.proveedor||'')).replace(/^S\.I\s*[-\u2013]\s*/i,'').trim()||'—';
+        var fmtN=function(v){return v>=1000?(v/1000).toFixed(1)+'k':v.toFixed(0);};
+        html+='<tr style="border-top:1px solid #eee">'
+          +'<td style="padding:5px 6px;font-size:9px">'+nm+'</td>'
+          +'<td style="padding:5px 6px;text-align:center;font-size:8px;font-weight:800;color:'+orgColor+'">'+orgTxt+'</td>'
+          +'<td style="padding:5px 6px;font-size:9px;color:#555">'+(r.dept||'—')+'</td>'
+          +'<td style="padding:5px 6px;text-align:right;font-family:monospace;font-size:9px">$'+fmtN(fobV)+'</td>'
+          +(isSabCub?'<td style="padding:5px 6px;text-align:right;font-family:monospace;font-size:9px;color:'+fobInvColor+'">'+(homV>0?'$'+fmtN(fobInv):'$'+fmtN(fobV))+'</td>':'')
+          +'<td style="padding:5px 6px;text-align:right;font-family:monospace;font-size:9px">$'+fmtN(lndV)+'</td>'
+          +'<td style="padding:5px 6px;text-align:right;font-size:9px;color:#555">'+(pzV?pzV.toLocaleString('en-US'):'—')+'</td>'
+          +'<td style="padding:5px 6px;text-align:right;font-size:9px;color:#555">'+(btV||'—')+'</td>'
+          +'</tr>';
+      });
+      var fmtT=function(v){return v>=1000?(v/1000).toFixed(1)+'k':v.toFixed(0);};
+      html+='<tr style="border-top:2px solid #bbb;background:#f8f8f8;font-weight:700">'
+        +'<td style="padding:5px 6px;font-size:9px">TOTAL ('+pRows.length+' prov.)</td>'
+        +'<td></td><td></td>'
+        +'<td style="padding:5px 6px;text-align:right;font-family:monospace;font-size:9px">$'+fmtT(totFobD)+'</td>'
+        +(isSabCub?'<td style="padding:5px 6px;text-align:right;font-family:monospace;font-size:9px;color:#065f46">$'+fmtT(totHomD>0?totHomD:totFobD)+'</td>':'')
+        +'<td style="padding:5px 6px;text-align:right;font-family:monospace;font-size:9px">$'+fmtT(totLndD)+'</td>'
+        +'<td style="padding:5px 6px;text-align:right;font-size:9px">'+(totPzD?totPzD.toLocaleString('en-US'):'—')+'</td>'
+        +'<td style="padding:5px 6px;text-align:right;font-size:9px">'+(totBtD||'—')+'</td>'
+        +'</tr>';
+      html+='</tbody></table></div>';
+    });
+    return html;
+  }
+  var detailHtml=buildDetailTable(allCubs, window.tendData||[]);
+
+  var win=window.open('','_blank','width=900,height=800');
   win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8">'
     +'<title>Planeación Diaria — '+DAY_NAMES[di]+' '+dayDate.getDate()+'/'+MESES_C[dayDate.getMonth()]+'/'+dayDate.getFullYear()+'</title>'
     +'<style>body{font-family:Arial,sans-serif;color:#111;background:#fff;padding:24px;max-width:720px;margin:0 auto;}'
@@ -4898,6 +5008,7 @@ function _plnImprimirDia(di){
     +'<p>ZLC Panamá &nbsp;·&nbsp; '+allCubs.length+' carga'+(allCubs.length!==1?'s':'')+'</p></div>'
     +rows
     +totalesHtml
+    +(detailHtml?'<div style="margin-top:28px"><div style="font-size:14px;font-weight:900;text-transform:uppercase;letter-spacing:.04em;border-bottom:2px solid #111;padding-bottom:6px;margin-bottom:4px">🔍 Detalle de Proveedores por Carga</div>'+detailHtml+'</div>':'')+chartHtml
     +'<div style="margin-top:24px;text-align:center"><button onclick="window.print()" style="background:#111;color:#fff;border:none;border-radius:6px;padding:10px 28px;font-size:14px;font-weight:700;cursor:pointer">🖨️ Imprimir</button></div>'
     +'</body></html>');
   win.document.close();
@@ -5106,7 +5217,7 @@ function _plnCubHtml(cub,di,ci,tab,mon){
       +'<div style="font-size:10px">FOB: <strong style="color:var(--blue-l);font-family:IBM Plex Mono,monospace">'+_plnFF(totFob)+'</strong></div>'
       // Línea 3: Escenario: Homol · Landed (o solo Landed si no hay escenario)
       +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:10px">'
-        +(esc2?'<span style="font-weight:700;color:var(--orange-l)">'+_plnESC(esc2)+':</span> ':'')
+        +(esc2?'<span style="font-weight:700;color:var(--orange-l)">'+_plnESC(_plnCorredorLabel(esc2,''))+':</span> ':'')
         +(totHomR>0?'<span>Homol: <strong style="color:var(--green-l);font-family:IBM Plex Mono,monospace">'+_plnFF(totHomR)+'</strong></span>':'')
         +'<span>Landed: <strong style="color:var(--orange-l);font-family:IBM Plex Mono,monospace">'+_plnFF(totLndR)+'</strong></span>'
       +'</div>'
@@ -5581,6 +5692,13 @@ window._plnCSV=function(){
           +'<td style="padding:7px 8px;text-align:right;color:#8b949e;font-size:12px">'+((parseInt(r.bultos)||0).toLocaleString())+'</td>'
           +'</tr>';
       }).join('');
+      var cubIdx = 'c'+(days.indexOf(day))+'_'+(cubs.indexOf(cub));
+      // Build dept breakdown for the modal chart
+      var deptMap={};
+      rows.forEach(function(r){var d=(r.dept||'SIN DEPTO').toUpperCase();if(!deptMap[d])deptMap[d]={fob:0,lnd:0};deptMap[d].fob+=parseFloat(r.fob)||0;deptMap[d].lnd+=parseFloat(r.landed)||parseFloat(r.fob)||0;});
+      var deptEntries=Object.entries(deptMap).sort(function(a,b){return b[1].lnd-a[1].lnd;});
+      var cubData={nroEmb:cub.nroEmb||'',status:cub.status||'',tipoCarga:cub.tipoCarga||'',eta:cub.eta||'',nEquipos:cub.nEquipos||1,nroCont:cub.nroCont||'',hasSab:hasSab,fob:fob,lnd:lnd,hom:hom,btos:btos,pzas:pzas,rows:rows.map(function(r){return{prov:r.prov||'',tipo:r.tipo||'',dept:r.dept||'',numFact:r.numFact||r.nfac||r.factura||'',bultos:parseInt(r.bultos)||0,fob:parseFloat(r.fob)||0,homol:parseFloat(r.homol)||0,landed:parseFloat(r.landed)||parseFloat(r.fob)||0,piezas:parseInt(r.piezas)||0};}),depts:deptEntries.map(function(e){return{dept:e[0],fob:e[1].fob,lnd:e[1].lnd};})};
+      var cubJson=JSON.stringify(cubData).replace(/</g,'\\u003c').replace(/>/g,'\\u003e').replace(/&/g,'\\u0026');
       return '<div style="background:#161b22;border:1px solid #30363d;border-radius:12px;margin-bottom:20px;overflow:hidden">'
         +'<div style="background:#0d1117;padding:10px 14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-bottom:1px solid #30363d">'
         +'<span style="background:#1a7a6e;color:#fff;font-size:11px;font-weight:800;padding:3px 8px;border-radius:5px">'+esc(cub.status||'Programado')+'</span>'
@@ -5588,7 +5706,9 @@ window._plnCSV=function(){
         +(cub.nroEmb?'<span style="color:#f0883e;font-weight:800;font-size:14px">EMB '+esc(cub.nroEmb)+'</span>':'')
         +(cub.tipoCarga?'<span style="background:#21262d;color:#8b949e;font-size:11px;padding:3px 8px;border-radius:5px">'+esc(cub.tipoCarga)+'</span>':'')
         +(cub.eta?'<span style="color:#8b949e;font-size:12px">&#128197; '+_fmtEta(cub.eta)+'</span>':'')
+        +'<button onclick="_plnShowDet(\''+cubIdx+'\')" style="margin-left:auto;background:rgba(88,166,255,.18);border:1px solid rgba(88,166,255,.4);color:#58a6ff;border-radius:6px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">🔍 Ver Detalle</button>'
         +'</div>'
+        +'<script>window._PLN_DET=window._PLN_DET||{};window._PLN_DET[\''+cubIdx+'\']='+cubJson+';<\/script>'
         +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
         +'<thead><tr style="background:#0d1117">'
         +'<th style="padding:7px 10px;text-align:left;color:#8b949e;font-size:11px;border-bottom:1px solid #30363d;min-width:140px">Proveedor</th>'
@@ -5650,31 +5770,15 @@ window._plnCSV=function(){
 
 
   // ── Corredor summary ──
-  var cif_eq=0,cif_lnd=0,sab_eq=0,sab_lnd=0,zl_eq=0,zl_lnd=0;
-  days.forEach(function(day){(day.cubiculos||[]).forEach(function(cub){
-    var esc_=(cub.escenario||cub.tipoCarga||'').toLowerCase();
-    var rows=cub.rows||[];
-    var lnd=sumL(rows);
-    var eq=parseInt(cub.nEquipos)||1;
-    var isSabCub=rows.some(function(r){return parseFloat(r.homol)>0;});
-    var isCIF=(esc_.includes('cif')||esc_.includes('express'));
-    if(isSabCub){ sab_eq+=eq; sab_lnd+=lnd; }
-    else if(isCIF){ cif_eq+=eq; cif_lnd+=lnd; }
-    else { zl_eq+=eq; zl_lnd+=lnd; }
-  });});
-
-    // ── Corredor summary ──
-  var cif_eq=0,cif_lnd=0,sab_eq=0,sab_lnd=0,zl_eq=0,zl_lnd=0;
+  var cif_eq=0,cif_lnd=0,sab_eq=0,sab_lnd=0;
   days.forEach(function(day){(day.cubiculos||[]).forEach(function(cub){
     var rows=cub.rows||[];
     var lnd=sumL(rows);
     var eq=parseInt(cub.nEquipos)||1;
     var isSabCub=rows.some(function(r){return parseFloat(r.homol)>0;});
-    var escLC=(cub.tipoCarga||cub.escenario||'').toLowerCase();
-    var isCIF=escLC.includes('cif')||escLC.includes('express');
+    // Todo lo que NO es Sababa es CIF Express
     if(isSabCub){sab_eq+=eq;sab_lnd+=lnd;}
-    else if(isCIF){cif_eq+=eq;cif_lnd+=lnd;}
-    else{zl_eq+=eq;zl_lnd+=lnd;}
+    else{cif_eq+=eq;cif_lnd+=lnd;}
   });});
 
   var html='<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">'
@@ -5711,10 +5815,9 @@ window._plnCSV=function(){
     +'<div style="background:#161b22;border:1px solid #30363d;border-radius:14px;padding:16px 20px;margin-bottom:16px">'
     +'<div style="font-size:11px;font-weight:700;color:#8b949e;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">🚚 Por Corredor</div>'
     +(function(){
-      var tot_eq=zl_eq+cif_eq+sab_eq, tot_lnd=zl_lnd+cif_lnd+sab_lnd;
+      var tot_eq=cif_eq+sab_eq, tot_lnd=cif_lnd+sab_lnd;
       var cards='';
-      if(zl_eq>0) cards+='<div style="background:#0d1117;border:1px solid #1a7a6e;border-radius:10px;padding:14px"><div style="font-size:10px;font-weight:700;color:#8b949e;text-transform:uppercase;margin-bottom:8px">Zona Libre / Liquidación</div><div style="font-size:15px;font-weight:800;color:#2dd4bf">'+zl_eq+' equipo(s)</div><div style="font-size:16px;font-weight:800;color:#f0883e;font-family:monospace">'+fmt(zl_lnd)+'</div></div>';
-      if(cif_eq>0) cards+='<div style="background:#0d1117;border:1px solid #388bfd;border-radius:10px;padding:14px"><div style="font-size:10px;font-weight:700;color:#8b949e;text-transform:uppercase;margin-bottom:8px">CIF Express / Liquidación</div><div style="font-size:15px;font-weight:800;color:#58a6ff">'+cif_eq+' equipo(s)</div><div style="font-size:16px;font-weight:800;color:#f0883e;font-family:monospace">'+fmt(cif_lnd)+'</div></div>';
+      if(cif_eq>0) cards+='<div style="background:#0d1117;border:1px solid #388bfd;border-radius:10px;padding:14px"><div style="font-size:10px;font-weight:700;color:#8b949e;text-transform:uppercase;margin-bottom:8px">CIF Express</div><div style="font-size:15px;font-weight:800;color:#58a6ff">'+cif_eq+' equipo(s)</div><div style="font-size:16px;font-weight:800;color:#f0883e;font-family:monospace">'+fmt(cif_lnd)+'</div></div>';
       if(sab_eq>0) cards+='<div style="background:#0d1117;border:1px solid #f8d122;border-radius:10px;padding:14px;box-shadow:0 0 10px 1px rgba(248,209,34,.2)"><div style="font-size:10px;font-weight:700;color:#8b949e;text-transform:uppercase;margin-bottom:8px">Sababa Imports</div><div style="font-size:15px;font-weight:800;color:#f8d122;text-shadow:0 1px 5px rgba(0,0,0,.7)">'+sab_eq+' equipo(s)</div><div style="font-size:16px;font-weight:800;color:#f0883e;font-family:monospace">'+fmt(sab_lnd)+'</div></div>';
       cards+='<div style="background:#0d1117;border:2px solid #f0883e;border-radius:10px;padding:14px"><div style="font-size:10px;font-weight:700;color:#f0883e;text-transform:uppercase;margin-bottom:8px">⚡ Total</div><div style="font-size:15px;font-weight:800;color:#e6edf3">'+tot_eq+' equipo(s)</div><div style="font-size:16px;font-weight:800;color:#f0883e;font-family:monospace">'+fmt(tot_lnd)+'</div></div>';
       return '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px">'+cards+'</div>';
@@ -5722,7 +5825,37 @@ window._plnCSV=function(){
     +'</div>'
     +'<div style="margin-top:16px;text-align:center;color:#8b949e;font-size:11px">Grupo Primavera \u00b7 Departamento de Tr\u00e1fico \u00b7 ZLC Panam\u00e1 \u00b7 '+new Date().getFullYear()+'</div>'
     +'<sc'+'ript>'
-    +'var _dark=true;var _RL=[[\'background:#0d1117\',\'background:#ffffff\'],[\'background:#161b22\',\'background:#f8f9fb\'],[\'background:#21262d\',\'background:#eaecef\'],[\'background:#1c2128\',\'background:#f0f4f8\'],[\'border:1px solid #30363d\',\'border:1px solid #d0d7de\'],[\'border:2px solid #30363d\',\'border:2px solid #d0d7de\'],[\'border-bottom:1px solid #30363d\',\'border-bottom:1px solid #d0d7de\'],[\'border:2px dashed #30363d\',\'border:2px dashed #d0d7de\'],[\'color:#e6edf3\',\'color:#1f2328\'],[\'color:#8b949e\',\'color:#57606a\'],[\'color:rgba(255,255,255,.8)\',\'color:rgba(0,0,0,.7)\'],[\'color:#ffffff\',\'color:#1f2328\']];var _RD=_RL.map(function(p){return[p[1],p[0]];});function _applyRep(reps,isLight){var all=document.querySelectorAll(\'[style]\');for(var i=0;i<all.length;i++){var el=all[i];var s=el.getAttribute(\'style\')||\'\';for(var j=0;j<reps.length;j++)s=s.split(reps[j][0]).join(reps[j][1]);el.setAttribute(\'style\',s);if(isLight&&s.indexOf(\'border-radius:12px\')!==-1&&s.indexOf(\'overflow:hidden\')!==-1){el.style.boxShadow=\'0 2px 12px rgba(0,0,0,.10)\';el.style.background=\'#ffffff\';}if(!isLight)el.style.boxShadow=\'\';}document.body.style.background=isLight?\'#f0f4f8\':\'#0d1117\';}function _swTheme(){_dark=!_dark;var btn=document.getElementById(\'_tog\');_applyRep(_dark?_RD:_RL,!_dark);if(btn){btn.textContent=_dark?\'\u2600\uFE0F Claro\':\'\uD83C\uDF19 Oscuro\';btn.style.background=_dark?\'#1a7a6e\':\'#145f55\';}}'
+    +'function _plnShowDet(key){'
+    +'var d=window._PLN_DET&&window._PLN_DET[key];if(!d){alert("No se encontró el detalle.");return;}'
+    +'var fmt=function(n){n=parseFloat(n)||0;return"$"+n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});};'
+    +'var esc=function(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");};'
+    +'var totFob=d.fob,totLnd=d.lnd,totHom=d.hom,totBlt=d.btos,totPzs=d.pzas;'
+    +'var isSab=d.hasSab;'
+    // FOB Inventario: si no es Sababa, hereda FOB original
+    +'var fobInvMostrar=isSab?totHom:totFob;'
+    +'var rowsHtml=d.rows.map(function(r,i){'
+    +'var homV=r.homol,fobV=r.fob;'
+    +'var pct=totFob>0?((fobV/totFob)*100).toFixed(1)+"%":"—";'
+    +'var bg=i%2?"background:#161b22":"background:#0d1117";'
+    +'var orgBadge=r.tipo==="IMP"?"<span style=\\"font-size:9px;font-weight:800;color:#f97316;background:rgba(249,115,22,.12);padding:1px 5px;border-radius:3px\\">IMP</span>":"<span style=\\"font-size:9px;font-weight:800;color:#60a5fa;background:rgba(88,166,255,.12);padding:1px 5px;border-radius:3px\\">ZL</span>";'
+    +'return "<tr style=\\""+bg+";border-top:1px solid #30363d\\"><td style=\\"padding:7px 6px;text-align:center;color:#8b949e;border:1px solid #30363d;font-size:10px\\">"+(i+1)+"</td><td style=\\"padding:7px 8px;text-align:center;border:1px solid #30363d\\">"+orgBadge+"</td><td style=\\"padding:7px 8px;font-weight:700;color:#e6edf3;border:1px solid #30363d\\">"+esc(r.prov)+"</td><td style=\\"padding:7px 8px;color:#8b949e;font-family:monospace;font-size:10px;border:1px solid #30363d\\">"+esc(r.numFact)+"</td><td style=\\"padding:7px 8px;text-align:center;color:#8b949e;border:1px solid #30363d;font-family:monospace\\">"+(r.bultos||0)+"</td><td style=\\"padding:7px 8px;color:#8b949e;border:1px solid #30363d\\">"+esc(r.dept)+"</td><td style=\\"padding:7px 8px;text-align:right;color:#58a6ff;font-family:monospace;font-weight:700;border:1px solid #30363d\\">"+fmt(fobV)+"</td>"+(isSab?"<td style=\\"padding:7px 8px;text-align:right;color:"+(homV>0?"#3fb950":"#8b949e")+";font-family:monospace;font-weight:700;border:1px solid #30363d\\">"+(homV>0?fmt(homV):"—")+"</td>":"")+"<td style=\\"padding:7px 8px;text-align:right;color:#f0883e;font-family:monospace;font-weight:700;border:1px solid #30363d\\">"+fmt(r.landed)+"</td><td style=\\"padding:7px 8px;text-align:right;color:#8b949e;font-family:monospace;border:1px solid #30363d\\">"+(r.piezas||0).toLocaleString()+"</td><td style=\\"padding:7px 8px;text-align:right;color:#8b949e;font-family:monospace;font-size:10px;border:1px solid #30363d\\">"+pct+"</td></tr>";'
+    +'}).join("");'
+    // Dept chart bars
+    +'var maxLnd=Math.max.apply(null,d.depts.map(function(e){return e.lnd;}));'
+    +'var deptBars=d.depts.map(function(e){'
+    +'var pct=maxLnd>0?(e.lnd/maxLnd*100).toFixed(1):0;'
+    +'var pctTotal=totLnd>0?((e.lnd/totLnd)*100).toFixed(1):0;'
+    +'return"<div style=\\"margin-bottom:8px\\"><div style=\\"display:flex;justify-content:space-between;margin-bottom:3px\\"><span style=\\"font-size:10px;color:#e6edf3;font-weight:600\\">"+esc(e.dept)+"</span><span style=\\"font-size:10px;color:#f0883e;font-family:monospace\\">"+fmt(e.lnd)+" <span style=\\"color:#8b949e\\">"+pctTotal+"%</span></span></div><div style=\\"height:6px;border-radius:3px;background:#21262d;overflow:hidden\\"><div style=\\"height:100%;width:"+pct+"%;background:linear-gradient(90deg,#c75000,#f0883e);border-radius:3px\\"></div></div></div>";'
+    +'}).join("");'
+    +'var ov=document.createElement("div");'
+    +'ov.style.cssText="position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.8);display:flex;align-items:center;justify-content:center;padding:16px";'
+    +'ov.innerHTML="<div style=\\"background:#161b22;border:1px solid #30363d;border-radius:14px;width:100%;max-width:820px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,.7)\\"><div style=\\"padding:12px 16px;background:#0d1117;border-bottom:1px solid #30363d;display:flex;align-items:center;gap:10px;flex-shrink:0\\"><div style=\\"flex:1\\"><div style=\\"font-size:16px;font-weight:800;color:#e6edf3\\">🔍 Detalle del Embarque</div><div style=\\"font-size:11px;color:#8b949e;margin-top:2px\\">"+(d.nroEmb?"EMB "+esc(d.nroEmb)+" · ":"")+(d.tipoCarga?esc(d.tipoCarga)+" · ":"")+(d.eta?d.eta+" · ":"")+d.rows.length+" prov · "+totBlt.toLocaleString()+" btos</div></div><div style=\\"display:flex;gap:8px;flex-shrink:0\\"><button onclick=\\"window.print()\\" class=\\"no-print\\" style=\\"background:#1f6feb;border:none;color:#fff;border-radius:7px;padding:5px 14px;font-size:12px;font-weight:700;cursor:pointer\\">🖨️ Imprimir</button><button id=\\"_plnDetOv_close\\" style=\\"background:rgba(218,54,51,.2);border:1px solid rgba(248,81,73,.3);color:#f47067;border-radius:7px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer\\">✕ Cerrar</button></div></div><div style=\\"display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px;padding:10px 16px;background:rgba(88,166,255,.04);border-bottom:1px solid #30363d;flex-shrink:0\\"><div style=\\"text-align:center\\"><div style=\\"font-size:8px;font-weight:700;color:#8b949e;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px\\">FOB Total</div><div style=\\"font-family:monospace;font-size:14px;font-weight:800;color:#58a6ff\\">"+fmt(totFob)+"</div></div><div style=\\"text-align:center\\"><div style=\\"font-size:8px;font-weight:700;color:#8b949e;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px\\">FOB Inventario</div><div style=\\"font-family:monospace;font-size:14px;font-weight:800;color:#3fb950\\">"+fmt(fobInvMostrar)+"</div></div><div style=\\"text-align:center\\"><div style=\\"font-size:8px;font-weight:700;color:#8b949e;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px\\">Landed Total</div><div style=\\"font-family:monospace;font-size:14px;font-weight:800;color:#f0883e\\">"+fmt(totLnd)+"</div></div><div style=\\"text-align:center\\"><div style=\\"font-size:8px;font-weight:700;color:#8b949e;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px\\">Bultos</div><div style=\\"font-family:monospace;font-size:14px;font-weight:800;color:#2dd4bf\\">"+totBlt.toLocaleString()+"</div></div><div style=\\"text-align:center\\"><div style=\\"font-size:8px;font-weight:700;color:#8b949e;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px\\">Piezas</div><div style=\\"font-family:monospace;font-size:14px;font-weight:800;color:#a371f7\\">"+totPzs.toLocaleString()+"</div></div><div style=\\"text-align:center\\"><div style=\\"font-size:8px;font-weight:700;color:#8b949e;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px\\">Facturas</div><div style=\\"font-family:monospace;font-size:14px;font-weight:800;color:#f8d122\\">"+d.rows.length+"</div></div></div><div style=\\"overflow:auto;flex:1;padding:12px 16px\\"><div style=\\"border:1px solid #30363d;border-radius:10px;overflow:hidden;margin-bottom:16px\\"><table style=\\"width:100%;border-collapse:collapse;font-size:12px;min-width:680px\\"><thead><tr style=\\"background:#0d1117\\"><th style=\\"padding:8px 6px;text-align:center;color:#8b949e;border:1px solid #30363d;width:30px\\">#</th><th style=\\"padding:8px 8px;color:#8b949e;border:1px solid #30363d;width:36px\\">Org</th><th style=\\"padding:8px 8px;text-align:left;color:#8b949e;border:1px solid #30363d\\">Suplidor</th><th style=\\"padding:8px 8px;text-align:left;color:#8b949e;border:1px solid #30363d;width:90px\\">N° Factura</th><th style=\\"padding:8px 8px;text-align:center;color:#8b949e;border:1px solid #30363d;width:46px\\">Btos</th><th style=\\"padding:8px 8px;text-align:left;color:#8b949e;border:1px solid #30363d;width:80px\\">Dept</th><th style=\\"padding:8px 8px;text-align:right;color:#8b949e;border:1px solid #30363d;width:100px\\">FOB</th>"+(isSab?"<th style=\\"padding:8px 8px;text-align:right;color:#8b949e;border:1px solid #30363d;width:100px\\">FOB Inv.</th>":"")+"<th style=\\"padding:8px 8px;text-align:right;color:#8b949e;border:1px solid #30363d;width:100px\\">Landed</th><th style=\\"padding:8px 8px;text-align:right;color:#8b949e;border:1px solid #30363d;width:60px\\">Pzas</th><th style=\\"padding:8px 8px;text-align:right;color:#8b949e;border:1px solid #30363d;width:46px\\">%</th></tr></thead><tbody>"+rowsHtml+"</tbody></table></div><div style=\\"background:#0d1117;border:1px solid #30363d;border-radius:10px;padding:14px\\"><div style=\\"font-size:10px;font-weight:700;color:#8b949e;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px\\">📊 Participación por Departamento (Landed)</div>"+deptBars+"</div></div></div>";'
+    +'ov.addEventListener("click",function(e){if(e.target===ov)ov.remove();});'
+    +'document.body.appendChild(ov);'
+    +'var btnC=document.getElementById("_plnDetOv_close");if(btnC)btnC.addEventListener("click",function(){ov.remove();});'
+    +'}'
+    +'var _dark=true;'
+    +'var _RL=[[\'background:#0d1117\',\'background:#ffffff\'],[\'background:#161b22\',\'background:#f8f9fb\'],[\'background:#21262d\',\'background:#eaecef\'],[\'background:#1c2128\',\'background:#f0f4f8\'],[\'border:1px solid #30363d\',\'border:1px solid #d0d7de\'],[\'border:2px solid #30363d\',\'border:2px solid #d0d7de\'],[\'border-bottom:1px solid #30363d\',\'border-bottom:1px solid #d0d7de\'],[\'border:2px dashed #30363d\',\'border:2px dashed #d0d7de\'],[\'color:#e6edf3\',\'color:#1f2328\'],[\'color:#8b949e\',\'color:#57606a\'],[\'color:rgba(255,255,255,.8)\',\'color:rgba(0,0,0,.7)\'],[\'color:#ffffff\',\'color:#1f2328\'],[\'color:#fff\',\'color:#1f2328\'],[\'color:#fff;\',\'color:#1f2328;\']];var _RD=_RL.map(function(p){return[p[1],p[0]];});function _applyRep(reps,isLight){var all=document.querySelectorAll(\'[style]\');for(var i=0;i<all.length;i++){var el=all[i];var s=el.getAttribute(\'style\')||\'\';for(var j=0;j<reps.length;j++)s=s.split(reps[j][0]).join(reps[j][1]);el.setAttribute(\'style\',s);if(isLight&&s.indexOf(\'border-radius:12px\')!==-1&&s.indexOf(\'overflow:hidden\')!==-1){el.style.boxShadow=\'0 2px 12px rgba(0,0,0,.10)\';el.style.background=\'#ffffff\';}if(!isLight)el.style.boxShadow=\'\';}document.body.style.background=isLight?\'#f0f4f8\':\'#0d1117\';}function _swTheme(){_dark=!_dark;var btn=document.getElementById(\'_tog\');_applyRep(_dark?_RD:_RL,!_dark);if(btn){btn.textContent=_dark?\'\u2600\uFE0F Claro\':\'\uD83C\uDF19 Oscuro\';btn.style.background=_dark?\'#1a7a6e\':\'#145f55\';}}'
     +'</'+'script>'
     +'</body></html>';
 
@@ -26080,9 +26213,12 @@ window._plnModuloEmbarques = async function(){
         var lnd2=getLanded(d);
         var tot2=lines2.reduce(function(s,l){return s+(parseFloat(l.costo)||0);},0);
         var isSab2=(d.esc||'').toLowerCase().includes('sab');
+        var snapTipo2=((snap2.tipo||d.tipo||'ZL').toUpperCase());
+        var tipoEmbDef2=(snapTipo2==='EXT'||snapTipo2==='IMP')?'IMP':'ZL';
         var rows2=lines2.map(function(l){
           var fo=parseFloat(l.costo||0),prop=tot2>0?fo/tot2:0;
-          return {prov:l.prov||'—',bultos:parseInt(l.bultos||l.cajas||0),piezas:parseInt(l.piezas||0),fob:fo,landed:lnd2>0?Math.round(lnd2*prop*100)/100:fo,homol:isSab2?parseFloat(l.montoHomologado||0):0,dept:l.dept||l.deptCat||'',tipo:(l.tipoProv==='IMP'||l.tipoProveedor==='IMP')?'IMP':'ZL',matched:true};
+          var tipo2=(l.tipoProv==='IMP'||l.tipoProveedor==='IMP')?'IMP':(l.tipoProv==='ZL'||l.tipoProveedor==='ZL')?'ZL':tipoEmbDef2;
+          return {prov:l.prov||'—',bultos:parseInt(l.bultos||l.cajas||0),piezas:parseInt(l.piezas||0),fob:fo,landed:lnd2>0?Math.round(lnd2*prop*100)/100:fo,homol:isSab2?parseFloat(l.montoHomologado||0):0,dept:l.dept||l.deptCat||'',tipo:tipo2,matched:true};
         });
         var tipoEq2=(snap2.campos&&snap2.campos.s1_equipo)||d.tipoEquipo||'Contenedor';
         wk2[_PLN_CTX.tab][dupDay].cubiculos.splice(dupCub,1);
@@ -26101,11 +26237,16 @@ window._plnModuloEmbarques = async function(){
     var tipoEq=(snap.campos&&snap.campos.s1_equipo)||d.tipoEquipo||'Contenedor';
     var esc=(d.esc||'').toLowerCase();
     var isSab=esc.includes('sababa')||esc.includes('sab');
+    // Tipo del embarque a nivel general (EXT/IMP → IMP, ZL → ZL)
+    var snapTipoEmb=((snap.tipo||d.tipo||'ZL').toUpperCase());
+    var tipoEmbDefault=(snapTipoEmb==='EXT'||snapTipoEmb==='IMP')?'IMP':'ZL';
     var rows=lines.map(function(l){
       var fo=parseFloat(l.costo||0), prop=totCIF>0?fo/totCIF:0;
       var lnd=lndTotal>0?Math.round(lndTotal*prop*100)/100:fo;
       var hom=isSab?parseFloat(l.montoHomologado||0):0;
-      var tipo=(l.tipoProv==='IMP'||l.tipoProveedor==='IMP')?'IMP':'ZL';
+      // Tipo por línea: si la línea tiene tipoProv explícito lo respeta,
+      // si no, hereda el tipo del embarque (IMP o ZL según d.snap.tipo / d.tipo)
+      var tipo=(l.tipoProv==='IMP'||l.tipoProveedor==='IMP')?'IMP':(l.tipoProv==='ZL'||l.tipoProveedor==='ZL')?'ZL':tipoEmbDefault;
       var nfact=l.numFact||l.nroFact||l.nfac||l.factura||l.oc||'';
       return {prov:l.prov||'—',bultos:parseInt(l.bultos||l.cajas||0),piezas:parseInt(l.piezas||0),fob:fo,landed:lnd,homol:hom,dept:l.dept||l.deptCat||'',tipo:tipo,matched:true,numFact:nfact};
     });
