@@ -5681,6 +5681,7 @@ window._plnCSV=function(){
       var pzas=rows.reduce(function(s,r){return s+(parseInt(r.piezas)||0);},0);
       var hasIMP=rows.some(function(r){return r.tipo==='IMP';});
       var tipoBadge=hasIMP?'<span style="background:rgba(249,115,22,.18);border:1px solid rgba(249,115,22,.4);color:#f97316;font-size:10px;font-weight:800;padding:2px 7px;border-radius:5px">&#x1F69B; Importacion</span>':'<span style="background:rgba(45,212,191,.12);border:1px solid rgba(45,212,191,.3);color:#2dd4bf;font-size:10px;font-weight:800;padding:2px 7px;border-radius:5px">&#x1F6A2; Zona Libre</span>';
+      var corrBadge=hasSab?'<span style="background:rgba(240,136,62,.15);border:1px solid #f0883e;color:#f0883e;font-size:10px;font-weight:800;padding:2px 8px;border-radius:5px">&#x1F4E6; Sababa Imports</span>':'<span style="background:rgba(26,122,110,.15);border:1px solid #1a7a6e;color:#2ecc9a;font-size:10px;font-weight:800;padding:2px 8px;border-radius:5px">&#x1F6F3; CIF Express</span>';
       var rH=rows.map(function(r,ri){
         var bg=ri%2?'#161b22':'#0d1117';
         return '<tr style="background:'+bg+'">'
@@ -5703,6 +5704,7 @@ window._plnCSV=function(){
         +'<div style="background:#0d1117;padding:10px 14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-bottom:1px solid #21262d">'
         +(function(){var _lr=cub.lugarRecep||'';var _st=cub.status||'Programado';var _label=(_st&&_lr&&_st.indexOf('Recibido')!==-1)?'Recibido: '+_lr:(_lr&&_st==='Recibido: CDF')?'Recibido: '+_lr:_st;return '<span style="background:#1a7a6e;color:#fff;font-size:12px;font-weight:800;padding:6px 14px;border-radius:8px">'+esc(_label)+'</span>';})()
         +tipoBadge
+        +corrBadge
         +(parseInt(cub.nEquipos)>1?'<span style="background:#1f6feb;color:#fff;font-size:11px;font-weight:800;padding:3px 8px;border-radius:5px">'+(parseInt(cub.nEquipos)||1)+'&times; Equipo</span>':'')
         +(cub.nroEmb?'<span style="color:#f0883e;font-weight:800;font-size:14px">EMB '+esc(cub.nroEmb)+'</span>':'')
         +(cub.tipoCarga?'<span style="background:#21262d;color:#8b949e;font-size:11px;padding:3px 8px;border-radius:5px">'+esc(cub.tipoCarga)+'</span>':'')
@@ -5952,7 +5954,7 @@ window._plnCSV=function(){
     +'var pct=totFob>0?((fobV/totFob)*100).toFixed(1)+"%":"—";var fInv=parseFloat(r.homol)>0?parseFloat(r.homol):fobV;var pctImp=fInv>0?((parseFloat(r.landed)-fInv)/fInv*100).toFixed(1)+"%":"—";'
     +'var bg=i%2?"background:#161b22":"background:#0d1117";'
     +'var orgBadge=r.tipo==="IMP"?"<span style=\\"font-size:9px;font-weight:800;color:#f97316;background:rgba(249,115,22,.12);padding:1px 5px;border-radius:3px\\">IMP</span>":"<span style=\\"font-size:9px;font-weight:800;color:#60a5fa;background:rgba(88,166,255,.12);padding:1px 5px;border-radius:3px\\">ZL</span>";'
-    +'return "<tr style=\\""+bg+";border-top:1px solid #30363d\\"><td style=\\"padding:7px 6px;text-align:center;color:#8b949e;border:1px solid #30363d;font-size:10px\\">"+(i+1)+"</td><td style=\\"padding:7px 8px;text-align:center;border:1px solid #30363d\\">"+orgBadge+"</td><td style=\\"padding:7px 8px;font-weight:700;color:#e6edf3;border:1px solid #30363d\\">"+esc(r.prov)+"</td><td style=\\"padding:7px 8px;color:#8b949e;font-family:monospace;font-size:10px;border:1px solid #30363d\\">"+esc(r.numFact)+"</td><td style=\\"padding:7px 8px;text-align:center;color:#8b949e;border:1px solid #30363d;font-family:monospace\\">"+(r.bultos||0)+"</td><td style=\\"padding:7px 8px;color:#8b949e;border:1px solid #30363d\\">"+esc(r.dept)+"</td><td style=\\"padding:7px 8px;text-align:right;color:#e6edf3;font-family:monospace;font-weight:700;border:1px solid #30363d\\">"+fmt(fobV)+"</td>"+(isSab?"<td style=\\"padding:7px 8px;text-align:right;color:"+(homV>0?"#3fb950":"#8b949e")+";font-family:monospace;font-weight:700;border:1px solid #30363d\\">"+(homV>0?fmt(homV):"—")+"</td>":"")+"<td style=\\"padding:7px 8px;text-align:right;color:#f0883e;font-family:monospace;font-weight:700;border:1px solid #30363d\\">"+fmt(r.landed)+"</td><td style=\\"padding:7px 8px;text-align:right;color:#8b949e;font-family:monospace;border:1px solid #30363d\\">"+(r.piezas||0).toLocaleString()+"</td><td style=\\"padding:7px 8px;text-align:right;color:#8b949e;font-family:monospace;font-size:10px;border:1px solid #30363d\\">"+pct+"</td><td style=\\\"padding:7px 8px;text-align:right;color:#2ecc9a;font-family:monospace;font-size:10px;border:1px solid #30363d\\">"+pctImp+"</td></tr>";'
+    +'return "<tr style=\\""+bg+";border-top:1px solid #30363d\\"><td style=\\"padding:7px 6px;text-align:center;color:#8b949e;border:1px solid #30363d;font-size:10px\\">"+(i+1)+"</td><td style=\\"padding:7px 8px;text-align:center;border:1px solid #30363d\\">"+orgBadge+"</td><td style=\\"padding:7px 8px;font-weight:700;color:#e6edf3;border:1px solid #30363d\\">"+esc(r.prov)+"</td><td style=\\"padding:7px 8px;color:#8b949e;font-family:monospace;font-size:10px;border:1px solid #30363d\\">"+esc(r.numFact)+"</td><td style=\\"padding:7px 8px;text-align:center;color:#8b949e;border:1px solid #30363d;font-family:monospace\\">"+(r.bultos||0)+"</td><td style=\\"padding:7px 8px;color:#8b949e;border:1px solid #30363d;max-width:150px;word-break:break-word;white-space:normal\\">"+esc(r.dept)+"</td><td style=\\"padding:7px 8px;text-align:right;color:#e6edf3;font-family:monospace;font-weight:700;border:1px solid #30363d\\">"+fmt(fobV)+"</td>"+(isSab?"<td style=\\"padding:7px 8px;text-align:right;color:"+(homV>0?"#3fb950":"#8b949e")+";font-family:monospace;font-weight:700;border:1px solid #30363d\\">"+(homV>0?fmt(homV):"—")+"</td>":"")+"<td style=\\"padding:7px 8px;text-align:right;color:#f0883e;font-family:monospace;font-weight:700;border:1px solid #30363d\\">"+fmt(r.landed)+"</td><td style=\\"padding:7px 8px;text-align:right;color:#8b949e;font-family:monospace;border:1px solid #30363d\\">"+(r.piezas||0).toLocaleString()+"</td><td style=\\"padding:7px 8px;text-align:right;color:#8b949e;font-family:monospace;font-size:10px;border:1px solid #30363d\\">"+pct+"</td><td style=\\\"padding:7px 8px;text-align:right;color:#2ecc9a;font-family:monospace;font-size:10px;border:1px solid #30363d\\">"+pctImp+"</td></tr>";'
     +'}).join("");'
     // Dept chart bars
     +'var maxLnd=Math.max.apply(null,d.depts.map(function(e){return e.lnd;}));'
@@ -5986,77 +5988,450 @@ window._plnCSV=function(){
   if(typeof _showToast==='function') _showToast('\u2705 HTML exportado','green',2000);
 };
 // ── Export Excel ──
-window._plnXLS = function(){
-  if(typeof XLSX === 'undefined'){ if(typeof _showToast==='function') _showToast('\u26a0\ufe0f Librería XLSX no cargada','orange',3000); return; }
+window._plnXLS = async function(){
+  if(typeof ExcelJS === 'undefined'){ 
+    if(typeof _showToast==='function') _showToast('⚠️ ExcelJS no cargado','orange',3000); 
+    return; 
+  }
   var wk=_plnMkWeek(_PLN_CUR);
   var tab=_PLN_TAB||'res';
   var days=wk[tab]||[];
+
   function sumF(rows){return (rows||[]).reduce(function(s,r){return s+(parseFloat(r.fob)||0);},0);}
   function sumL(rows){return (rows||[]).reduce(function(s,r){return s+(parseFloat(r.landed)||0);},0);}
   function sumH(rows){return (rows||[]).reduce(function(s,r){return s+(parseFloat(r.homol)||0);},0);}
-  var wb=XLSX.utils.book_new();
+  function sumP(rows){return (rows||[]).reduce(function(s,r){return s+(parseInt(r.piezas)||0);},0);}
+  function sumB(rows){return (rows||[]).reduce(function(s,r){return s+(parseInt(r.bultos)||0);},0);}
 
-  // Sheet 1: Detalle
-  var d1=[['DÍA','FECHA','EMBARQUE','TIPO EQUIPO','ETA','STATUS','PROVEEDOR','ORG','DEPARTAMENTO','FOB','HOMOLOGADO','LANDED','PIEZAS','BULTOS']];
+  // Colors
+  var C = {
+    navy:   '1C2B4A',
+    green:  '1A7A6E',
+    orange: 'C75000',
+    gold:   'B8860B',
+    white:  'FFFFFF',
+    light:  'F0F4F8',
+    mid:    'D6E4EC',
+    row1:   'EBF5FB',
+    row2:   'FDFEFE',
+    sub:    'D5E8D4',
+    subTxt: '1A7A6E',
+    total:  '1C2B4A',
+    muted:  '6B7280',
+    border: '9DB8C8',
+  };
+
+  function hdr(color, bold){
+    return {
+      type:'pattern', pattern:'solid',
+      fgColor:{argb:'FF'+color}
+    };
+  }
+
+  function cell(val, fmt, bold, fg, color, align, border){
+    var o = {value: val};
+    if(fmt) o.numFmt = fmt;
+    o.font = {name:'Calibri', size: bold?10:9, bold:!!bold, color:{argb:'FF'+(color||'1C2B4A')}};
+    if(fg) o.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF'+fg}};
+    o.alignment = {vertical:'middle', horizontal:align||'left', wrapText:true};
+    if(border){
+      var b = {style:'thin', color:{argb:'FF'+C.border}};
+      o.border = {top:b,left:b,bottom:b,right:b};
+    }
+    return o;
+  }
+
+  function moneyFmt(){ return '"$"#,##0.00'; }
+  function pctFmt(){ return '0.0"%"'; }
+
+  var wb = new ExcelJS.Workbook();
+  wb.creator = 'Gestión Integral de Compras y Costeo';
+  wb.lastModifiedBy = 'Sistema ZLC';
+  wb.created = new Date();
+
+  // ═══════════════════════════════════════════════
+  // SHEET 1: Resumen por Embarque
+  // ═══════════════════════════════════════════════
+  var ws1 = wb.addWorksheet('Resumen Embarques', {
+    pageSetup:{paperSize:9, orientation:'landscape', fitToPage:true, fitToWidth:1}
+  });
+
+  // Título principal
+  ws1.mergeCells('A1:N1');
+  var t1 = ws1.getCell('A1');
+  t1.value = 'GESTIÓN INTEGRAL DE COMPRAS Y COSTEO — Resumen por Embarque';
+  t1.font = {name:'Calibri', size:13, bold:true, color:{argb:'FF'+C.white}};
+  t1.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF'+C.navy}};
+  t1.alignment = {vertical:'middle', horizontal:'center'};
+  t1.border = {bottom:{style:'medium',color:{argb:'FF'+C.green}}};
+  ws1.getRow(1).height = 28;
+
+  // Subtítulo
+  ws1.mergeCells('A2:N2');
+  var t2 = ws1.getCell('A2');
+  t2.value = 'Generado: '+new Date().toLocaleDateString('es-PA')+'   ·   ZLC Panamá — Saks';
+  t2.font = {name:'Calibri', size:9, italic:true, color:{argb:'FF'+C.muted}};
+  t2.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF'+C.light}};
+  t2.alignment = {horizontal:'center', vertical:'middle'};
+  ws1.getRow(2).height = 16;
+
+  // Headers
+  var h1 = ['N° Embarque','Descripción / Departamento','Fecha','Tipo Embarque','Tipo de Trámite','Corredor','Tipo Mercancía','Valor Mercancía Original','Valor Mercancía (Inventario)','Costo No Mercancía','ITBMS','Costo Landed','% Importación','% Imp. s/Inv.'];
+  var r3 = ws1.getRow(3);
+  r3.height = 36;
+  h1.forEach(function(h,i){
+    var c = r3.getCell(i+1);
+    c.value = h;
+    c.font = {name:'Calibri',size:9,bold:true,color:{argb:'FF'+C.white}};
+    c.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF'+C.green}};
+    c.alignment = {horizontal:'center',vertical:'middle',wrapText:true};
+    c.border = {top:{style:'thin',color:{argb:'FF'+C.border}},left:{style:'thin',color:{argb:'FF'+C.border}},bottom:{style:'medium',color:{argb:'FF'+C.white}},right:{style:'thin',color:{argb:'FF'+C.border}}};
+  });
+
+  // Acumular datos para Sheet 1 (igual que original: _AD)
+  var _AD = [];
+  var seen = {};
   days.forEach(function(day){
     (day.cubiculos||[]).forEach(function(cub){
-      var rows=cub.rows||[];
-      rows.forEach(function(r,ri){
-        d1.push([
-          ri===0?day.label||'':'', ri===0?day.date||'':'',
-          ri===0?cub.nroEmb||'':'', ri===0?cub.tipoCarga||cub.via||'':'',
-          ri===0?cub.eta||'':'', ri===0?cub.status||'':'',
-          r.prov||'', r.tipo||'ZL', r.dept||'',
-          parseFloat(r.fob)||0, parseFloat(r.homol)||0, parseFloat(r.landed)||0,
-          parseInt(r.piezas)||0, parseInt(r.bultos)||0
-        ]);
+      var rows = cub.rows||[];
+      var corr = cub.corredor||(rows.some(function(r){return r.tipo==='IMP';})?'CIF Express':'Sababa Imports');
+      var tipoCarga = cub.tipoCarga||cub.via||'';
+      var embStr = cub.nroEmb||'';
+      rows.forEach(function(r){
+        _AD.push({
+          nroEmb: embStr,
+          tipoCarga: tipoCarga,
+          eta: cub.eta||day.date||'',
+          status: cub.status||'',
+          corredor: corr,
+          prov: r.prov||'',
+          tipo: r.tipo||'ZL',
+          dept: r.dept||'',
+          fob: parseFloat(r.fob)||0,
+          homol: parseFloat(r.homol)||0,
+          landed: parseFloat(r.landed)||0,
+          piezas: parseInt(r.piezas)||0,
+          bultos: parseInt(r.bultos)||0,
+          noMerc: parseFloat(r.costoNoMerc)||0,
+          itbms: parseFloat(r.itbms)||0,
+        });
       });
-      if(rows.length>1){
-        d1.push(['','','SUBTOTAL '+( cub.nroEmb||''),'','','','','','',
-          sumF(rows),sumH(rows),sumL(rows),
-          rows.reduce(function(s,r){return s+(parseInt(r.piezas)||0);},0),
-          rows.reduce(function(s,r){return s+(parseInt(r.bultos)||0);},0)
-        ]);
-      }
     });
   });
-  var ws1=XLSX.utils.aoa_to_sheet(d1);
-  ws1['!cols']=[{wch:12},{wch:12},{wch:14},{wch:16},{wch:12},{wch:18},{wch:30},{wch:6},{wch:22},{wch:14},{wch:14},{wch:14},{wch:10},{wch:10}];
-  XLSX.utils.book_append_sheet(wb,ws1,'Detalle');
 
-  // Sheet 2: Por Departamento
-  var dm={},tlfob=0,tllnd=0,tlhom=0;
-  days.forEach(function(day){(day.cubiculos||[]).forEach(function(cub){(cub.rows||[]).forEach(function(r){
-    var d=(r.dept||'SIN DEPTO').toUpperCase();
-    var fv=parseFloat(r.fob)||0,lv=parseFloat(r.landed)||fv,hv=parseFloat(r.homol)||0;
-    if(!dm[d]) dm[d]={fob:0,lnd:0,hom:0};
-    dm[d].fob+=fv; dm[d].lnd+=lv; dm[d].hom+=hv;
-    tlfob+=fv; tllnd+=lv; tlhom+=hv;
-  });});});
-  var ents=Object.entries(dm).sort(function(a,b){return b[1].lnd-a[1].lnd;});
-  var d2=[['DEPARTAMENTO','FOB','HOMOLOGADO','LANDED','% TOTAL']];
-  ents.forEach(function(e){
-    d2.push([e[0],e[1].fob,e[1].hom,e[1].lnd,tllnd>0?parseFloat((e[1].lnd/tllnd*100).toFixed(2)):0]);
+  // Calcular totales globales para % participación
+  var tFobTot = _AD.reduce(function(s,r){return s+r.fob;},0);
+
+  // Agrupar por embarque para Sheet 1
+  var embMap = {};
+  var embOrder = [];
+  _AD.forEach(function(r){
+    if(!embMap[r.nroEmb]){
+      embMap[r.nroEmb] = {
+        nroEmb:r.nroEmb, tipoCarga:r.tipoCarga, eta:r.eta,
+        corredor:r.corredor, tipo:r.tipo,
+        depts:[], fob:0, homol:0, landed:0, noMerc:0, itbms:0, piezas:0, bultos:0
+      };
+      embOrder.push(r.nroEmb);
+    }
+    var e = embMap[r.nroEmb];
+    if(e.depts.indexOf(r.dept)<0) e.depts.push(r.dept);
+    e.fob += r.fob; e.homol += r.homol; e.landed += r.landed;
+    e.noMerc += r.noMerc; e.itbms += r.itbms;
+    e.piezas += r.piezas; e.bultos += r.bultos;
   });
-  d2.push(['TOTAL',tlfob,tlhom,tllnd,100]);
-  var ws2=XLSX.utils.aoa_to_sheet(d2);
-  ws2['!cols']=[{wch:28},{wch:16},{wch:16},{wch:16},{wch:10}];
-  XLSX.utils.book_append_sheet(wb,ws2,'Por Departamento');
 
-  // Sheet 3: KPI
-  var tEQ=0,tPZAS=0,tBTOS=0;
-  days.forEach(function(day){(day.cubiculos||[]).forEach(function(cub){
-    tEQ+=parseInt(cub.nEquipos)||1;
-    (cub.rows||[]).forEach(function(r){tPZAS+=parseInt(r.piezas)||0;tBTOS+=parseInt(r.bultos)||0;});
-  });});
-  var d3=[['KPI','VALOR'],['FOB Total',tlfob],['Homologado',tlhom],['Landed Total',tllnd],['Equipos',tEQ],['Piezas',tPZAS],['Bultos',tBTOS]];
-  var ws3=XLSX.utils.aoa_to_sheet(d3);
-  ws3['!cols']=[{wch:20},{wch:18}];
-  XLSX.utils.book_append_sheet(wb,ws3,'KPI');
+  var tFob=0, tHom=0, tLnd=0, tNM=0, tIT=0;
+  var dataRow = 4;
+  embOrder.forEach(function(k, ki){
+    var e = embMap[k];
+    var fInv = e.homol > 0 ? e.homol : e.fob;
+    var pctFob = tFobTot > 0 ? (e.fob/tFobTot)*100 : 0;
+    var pctInv = fInv > 0 ? ((e.landed - fInv)/fInv)*100 : 0;
+    var deptStr = e.depts.join(', ');
+    // Calcular participacion porcentual de departamentos
+    var deptPcts = e.depts.map(function(d){
+      var df = _AD.filter(function(r){return r.nroEmb===k && r.dept===d;});
+      var dfob = df.reduce(function(s,r){return s+r.fob;},0);
+      return d+' '+(e.fob>0?Math.round(dfob/e.fob*100)+'%':'');
+    }).join(', ');
 
-  XLSX.writeFile(wb,'Planeacion_'+_PLN_CUR+'.xlsx');
-  if(typeof _showToast==='function') _showToast('\u2705 Excel exportado','green',2000);
+    var bg = ki%2===0 ? C.row1 : C.row2;
+    var row = ws1.getRow(dataRow);
+    row.height = deptStr.length > 40 ? 28 : 18;
+
+    var vals = [
+      e.nroEmb, deptPcts, e.eta, e.tipoCarga,
+      e.tipo==='IMP'?'Importación':'Local',
+      e.corredor, e.tipo==='IMP'?'Importación':'Zona Libre',
+      e.fob, fInv, e.noMerc, e.itbms, e.landed,
+      pctFob/100, pctInv/100
+    ];
+    var fmts = [null,null,null,null,null,null,null,
+      moneyFmt(),moneyFmt(),moneyFmt(),moneyFmt(),moneyFmt(),
+      '0.0"%"','0.0"%"'];
+    var colors = [C.navy,null,null,null,null,null,null,null,null,null,null,C.orange,C.muted,C.green];
+    vals.forEach(function(v,i){
+      var c = row.getCell(i+1);
+      c.value = v;
+      if(fmts[i]) c.numFmt = fmts[i];
+      c.font = {name:'Calibri',size:9,bold:i===0,color:{argb:'FF'+(colors[i]||'1C2B4A')}};
+      c.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF'+bg}};
+      c.alignment = {vertical:'middle',horizontal:i<3?'left':'center',wrapText:true};
+      var b = {style:'thin',color:{argb:'FF'+C.border}};
+      c.border = {top:b,left:b,bottom:b,right:b};
+    });
+    tFob+=e.fob; tHom+=e.homol; tLnd+=e.landed; tNM+=e.noMerc; tIT+=e.itbms;
+    dataRow++;
+  });
+
+  // Fila total Sheet 1
+  var totRow = ws1.getRow(dataRow);
+  totRow.height = 20;
+  var totVals = ['TOTAL','','','','','','',tFob,tHom>0?tHom:tFob,tNM,tIT,tLnd,'100%',''];
+  totVals.forEach(function(v,i){
+    var c = totRow.getCell(i+1);
+    c.value = v;
+    if(i>=7 && i<=11 && typeof v==='number') c.numFmt = moneyFmt();
+    c.font = {name:'Calibri',size:10,bold:true,color:{argb:'FF'+C.white}};
+    c.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF'+C.navy}};
+    c.alignment = {horizontal:i<3?'left':'center',vertical:'middle'};
+    var b = {style:'medium',color:{argb:'FF'+C.green}};
+    c.border = {top:b,left:{style:'thin',color:{argb:'FF'+C.border}},bottom:b,right:{style:'thin',color:{argb:'FF'+C.border}}};
+  });
+
+  // Anchos columnas Sheet 1
+  ws1.columns = [
+    {width:12},{width:38},{width:13},{width:16},{width:13},
+    {width:16},{width:14},{width:16},{width:16},
+    {width:14},{width:10},{width:16},{width:10},{width:10}
+  ];
+  ws1.views = [{state:'frozen', xSplit:0, ySplit:3}];
+
+  // ═══════════════════════════════════════════════
+  // SHEET 2: Detalle Facturas
+  // ═══════════════════════════════════════════════
+  var ws2 = wb.addWorksheet('Detalle Facturas', {
+    pageSetup:{paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1}
+  });
+
+  ws2.mergeCells('A1:M1');
+  var dt1 = ws2.getCell('A1');
+  dt1.value = 'DETALLE DE FACTURAS POR EMBARQUE';
+  dt1.font = {name:'Calibri',size:13,bold:true,color:{argb:'FF'+C.white}};
+  dt1.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF'+C.navy}};
+  dt1.alignment = {horizontal:'center',vertical:'middle'};
+  ws2.getRow(1).height = 28;
+
+  ws2.mergeCells('A2:M2');
+  var dt2 = ws2.getCell('A2');
+  dt2.value = 'Generado: '+new Date().toLocaleDateString('es-PA')+'   ·   ZLC Panamá';
+  dt2.font = {name:'Calibri',size:9,italic:true,color:{argb:'FF'+C.muted}};
+  dt2.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF'+C.light}};
+  dt2.alignment = {horizontal:'center'};
+  ws2.getRow(2).height = 16;
+
+  var h2 = ['N° Embarque','OC / Pedido','N° Factura','Org.','Suplidor','Departamento','Fecha','FOB Original','FOB Inventario','Costo No Merc.','ITBMS','Costo Landed','% Imp.'];
+  var r2h = ws2.getRow(3);
+  r2h.height = 30;
+  h2.forEach(function(h,i){
+    var c = r2h.getCell(i+1);
+    c.value = h;
+    c.font = {name:'Calibri',size:9,bold:true,color:{argb:'FF'+C.white}};
+    c.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF'+C.orange}};
+    c.alignment = {horizontal:'center',vertical:'middle',wrapText:true};
+    var b = {style:'thin',color:{argb:'FF'+C.border}};
+    c.border = {top:b,left:b,bottom:{style:'medium',color:{argb:'FF'+C.white}},right:b};
+  });
+
+  var d2r = 4;
+  var prevEmb = null;
+  _AD.forEach(function(r, ri){
+    var fInv = r.homol > 0 ? r.homol : r.fob;
+    var pctImp = fInv > 0 ? ((r.landed - fInv)/fInv)*100 : 0;
+    var bg = ri%2===0 ? C.row1 : C.row2;
+
+    if(r.nroEmb !== prevEmb){
+      // Fila de embarque
+      if(prevEmb !== null){
+        // Subtotal del embarque anterior
+        var embRows = _AD.filter(function(x){return x.nroEmb===prevEmb;});
+        var stRow = ws2.getRow(d2r);
+        stRow.height = 16;
+        var stVals = ['SUBTOTAL '+prevEmb,'','','','','','',
+          sumF(embRows), embRows.reduce(function(s,x){return s+(x.homol>0?x.homol:x.fob);},0),
+          sumF(embRows.map(function(x){return {fob:x.noMerc};})),
+          embRows.reduce(function(s,x){return s+x.itbms;},0),
+          sumL(embRows), ''
+        ];
+        stVals.forEach(function(v,i){
+          var c = stRow.getCell(i+1);
+          c.value = v;
+          if(i>=7 && typeof v==='number') c.numFmt = moneyFmt();
+          c.font = {name:'Calibri',size:9,bold:true,color:{argb:'FF'+C.subTxt}};
+          c.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF'+C.sub}};
+          c.alignment = {horizontal:i<3?'left':'center',vertical:'middle'};
+          var b = {style:'thin',color:{argb:'FF'+C.border}};
+          c.border = {top:b,left:b,bottom:b,right:b};
+        });
+        d2r++;
+      }
+      prevEmb = r.nroEmb;
+    }
+
+    var dRow = ws2.getRow(d2r);
+    dRow.height = 16;
+    var dVals = [r.nroEmb, '', '', r.tipo, r.prov, r.dept, r.eta,
+      r.fob, fInv, r.noMerc, r.itbms, r.landed, pctImp/100];
+    var dFmts = [null,null,null,null,null,null,null,
+      moneyFmt(),moneyFmt(),moneyFmt(),moneyFmt(),moneyFmt(),'0.0"%"'];
+    dVals.forEach(function(v,i){
+      var c = dRow.getCell(i+1);
+      c.value = v;
+      if(dFmts[i]) c.numFmt = dFmts[i];
+      c.font = {name:'Calibri',size:9,color:{argb:'FF'+(i===12?C.green:i===11?C.orange:'1C2B4A')}};
+      c.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF'+bg}};
+      c.alignment = {horizontal:i<6?'left':'center',vertical:'middle',wrapText:i===5};
+      var b = {style:'thin',color:{argb:'FF'+C.border}};
+      c.border = {top:b,left:b,bottom:b,right:b};
+    });
+    d2r++;
+  });
+
+  // Último subtotal
+  if(prevEmb){
+    var embRows = _AD.filter(function(x){return x.nroEmb===prevEmb;});
+    var stRow = ws2.getRow(d2r);
+    stRow.height = 16;
+    var stVals = ['SUBTOTAL '+prevEmb,'','','','','','',
+      sumF(embRows), embRows.reduce(function(s,x){return s+(x.homol>0?x.homol:x.fob);},0),
+      0, embRows.reduce(function(s,x){return s+x.itbms;},0), sumL(embRows), ''
+    ];
+    stVals.forEach(function(v,i){
+      var c = stRow.getCell(i+1);
+      c.value = v;
+      if(i>=7 && typeof v==='number') c.numFmt = moneyFmt();
+      c.font = {name:'Calibri',size:9,bold:true,color:{argb:'FF'+C.subTxt}};
+      c.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF'+C.sub}};
+      c.alignment = {horizontal:i<3?'left':'center',vertical:'middle'};
+      var b = {style:'thin',color:{argb:'FF'+C.border}};
+      c.border = {top:b,left:b,bottom:b,right:b};
+    });
+    d2r++;
+  }
+
+  ws2.columns = [
+    {width:12},{width:14},{width:14},{width:6},{width:30},{width:26},
+    {width:12},{width:14},{width:14},{width:13},{width:10},{width:14},{width:10}
+  ];
+  ws2.views = [{state:'frozen',xSplit:0,ySplit:3}];
+
+  // ═══════════════════════════════════════════════
+  // SHEET 3: Por Departamento
+  // ═══════════════════════════════════════════════
+  var ws3 = wb.addWorksheet('Por Departamento', {
+    pageSetup:{paperSize:9,orientation:'portrait',fitToPage:true,fitToWidth:1}
+  });
+
+  ws3.mergeCells('A1:G1');
+  var pd1 = ws3.getCell('A1');
+  pd1.value = 'RESUMEN POR DEPARTAMENTO — SEMANA '+_PLN_CUR;
+  pd1.font = {name:'Calibri',size:13,bold:true,color:{argb:'FF'+C.white}};
+  pd1.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF'+C.navy}};
+  pd1.alignment = {horizontal:'center',vertical:'middle'};
+  ws3.getRow(1).height = 28;
+
+  var hd3 = ['Departamento','FOB Original','FOB Inventario','Landed','% Participación','% Importación','Bultos'];
+  var r3h = ws3.getRow(2);
+  r3h.height = 24;
+  hd3.forEach(function(h,i){
+    var c = r3h.getCell(i+1);
+    c.value = h;
+    c.font = {name:'Calibri',size:9,bold:true,color:{argb:'FF'+C.white}};
+    c.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF'+C.navy}};
+    c.alignment = {horizontal:'center',vertical:'middle',wrapText:true};
+    var b = {style:'thin',color:{argb:'FF'+C.border}};
+    c.border = {top:b,left:b,bottom:{style:'medium',color:{argb:'FF'+C.green}},right:b};
+  });
+
+  var dm={}, tlfob=0, tllnd=0, tlhom=0, tlbts=0;
+  _AD.forEach(function(r){
+    var d=(r.dept||'SIN DEPTO').toUpperCase();
+    if(!dm[d]) dm[d]={fob:0,lnd:0,hom:0,bts:0};
+    dm[d].fob+=r.fob; dm[d].lnd+=r.landed;
+    dm[d].hom+=r.homol>0?r.homol:r.fob;
+    dm[d].bts+=r.bultos;
+    tlfob+=r.fob; tllnd+=r.landed;
+    tlhom+=(r.homol>0?r.homol:r.fob);
+    tlbts+=r.bultos;
+  });
+
+  var ents=Object.entries(dm).sort(function(a,b){return b[1].lnd-a[1].lnd;});
+  var d3r = 3;
+  ents.forEach(function(e, ei){
+    var bg = ei%2===0 ? C.row1 : C.row2;
+    var fInvD = e[1].hom > 0 ? e[1].hom : e[1].fob;
+    var pctPart = tllnd>0 ? e[1].lnd/tllnd : 0;
+    var pctImpD = fInvD>0 ? (e[1].lnd-fInvD)/fInvD : 0;
+    var dRow = ws3.getRow(d3r);
+    dRow.height = 16;
+    var vals = [e[0], e[1].fob, e[1].hom>0?e[1].hom:e[1].fob, e[1].lnd, pctPart, pctImpD, e[1].bts];
+    vals.forEach(function(v,i){
+      var c = dRow.getCell(i+1);
+      c.value = v;
+      if(i>=1 && i<=3) c.numFmt = moneyFmt();
+      if(i===4 || i===5) c.numFmt = '0.0"%"';
+      c.font = {name:'Calibri',size:9,bold:false,color:{argb:'FF'+(i===3?C.orange:i===5?C.green:'1C2B4A')}};
+      c.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF'+bg}};
+      c.alignment = {horizontal:i===0?'left':'center',vertical:'middle'};
+      var b = {style:'thin',color:{argb:'FF'+C.border}};
+      c.border = {top:b,left:b,bottom:b,right:b};
+    });
+    d3r++;
+  });
+
+  // Total Dept
+  var totD = ws3.getRow(d3r);
+  totD.height = 20;
+  var fInvTot = tlhom>0?tlhom:tlfob;
+  var pctImpTot = fInvTot>0?(tllnd-fInvTot)/fInvTot:0;
+  [['TOTAL',tlfob,tlhom>0?tlhom:tlfob,tllnd,1,pctImpTot,tlbts]].forEach(function(row){
+    row.forEach(function(v,i){
+      var c = totD.getCell(i+1);
+      c.value = v;
+      if(i>=1 && i<=3) c.numFmt = moneyFmt();
+      if(i===4||i===5) c.numFmt = '0.0"%"';
+      c.font = {name:'Calibri',size:10,bold:true,color:{argb:'FF'+C.white}};
+      c.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF'+C.navy}};
+      c.alignment = {horizontal:i===0?'left':'center',vertical:'middle'};
+      var b = {style:'medium',color:{argb:'FF'+C.green}};
+      c.border = {top:b,left:{style:'thin',color:{argb:'FF'+C.border}},bottom:b,right:{style:'thin',color:{argb:'FF'+C.border}}};
+    });
+  });
+
+  ws3.columns = [{width:30},{width:16},{width:16},{width:16},{width:14},{width:14},{width:10}];
+  ws3.views = [{state:'frozen',xSplit:0,ySplit:2}];
+
+  // ═══════════════════════════════════════════════
+  // Generar y descargar
+  // ═══════════════════════════════════════════════
+  try {
+    var buf = await wb.xlsx.writeBuffer();
+    var blob = new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'Planeacion_'+_PLN_CUR+'.xlsx';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function(){document.body.removeChild(a); URL.revokeObjectURL(url);}, 1000);
+    if(typeof _showToast==='function') _showToast('✅ Excel exportado exitosamente','green',3000);
+  } catch(err) {
+    console.error('Excel error:', err);
+    if(typeof _showToast==='function') _showToast('❌ Error al exportar: '+err.message,'red',4000);
+  }
 };
+
 
 // ── Picker — lee window.tendData (misma var que Tendencias) ──
 window._plnOpenPicker = function(mon, di){
