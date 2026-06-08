@@ -26619,6 +26619,14 @@ window._plnModuloEmbarques = async function(){
   var td=window.tendData||[];
   if(!td.length){ listEl.innerHTML='<div style="text-align:center;padding:30px;color:var(--muted);font-size:13px">Sin embarques.<br>Abre Tendencias primero.</div>'; return; }
   function fmt(n){ return '$'+(parseFloat(n)||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  var asigCount={};  // populated by renderList, read by mkRow
+  function _getNEq(d){
+    if(!d) return 1;
+    if(d.equipos&&parseInt(d.equipos)>0) return parseInt(d.equipos);
+    var sn=d.snap||{};
+    var v=parseInt((sn.campos&&sn.campos.s1_equipos)||sn.equipos||0);
+    return v>0?v:1;
+  }
   function getLanded(d){
     var snap=d.snap||{}, inner=snap.snap||snap;
     var esc=(d.esc||'').toLowerCase();
@@ -26651,6 +26659,9 @@ window._plnModuloEmbarques = async function(){
     q=(q||"").trim().toLowerCase();
     var DIAS=["Lunes","Martes","Miércoles","Jueves","Viernes"];
     var asigTodo={};
+    // Contar cuántos cubículos tiene cada nroEmb asignado en todo el plan
+    asigCount={}; // reset — shared with mkRow
+    // Contar filas (facturas/proveedores) asignadas por nroEmb en todo el plan
     Object.keys(_PLN_DATA).forEach(function(mon){
       var wkX=_PLN_DATA[mon];
       (["prog","res"]).forEach(function(tab){
@@ -26658,11 +26669,26 @@ window._plnModuloEmbarques = async function(){
           (day.cubiculos||[]).forEach(function(cub){
             (cub.nroEmb||"").split("+").forEach(function(n){
               var t=n.trim().replace(/(parcial)/gi,"").trim();
-              if(t&&!asigTodo[t]) asigTodo[t]={di:di,mon:mon};
+              if(!t) return;
+              if(!asigCount[t]) asigCount[t]={rowsAsig:0,di:di,mon:mon};
+              // sumar filas de este cubículo que pertenecen a este nroEmb
+              asigCount[t].rowsAsig+=(cub.rows||[]).length;
+              asigCount[t].di=di; asigCount[t].mon=mon;
             });
           });
         });
       });
+    });
+    // Marcar completo cuando filas asignadas >= filas totales del embarque en tendData
+    Object.keys(asigCount).forEach(function(nro){
+      var inf=asigCount[nro];
+      var embData=td.find(function(x){return (x.nro||"").trim()===nro;});
+      if(!embData){ asigTodo[nro]=inf; return; } // si no está en tendData, ocultar
+      var totalRows=(embData.snap&&embData.snap.invLines||embData.invLines||[])
+        .filter(function(l){return !l.tipoFac||l.tipoFac==="mercancia";}).length;
+      if(totalRows<=0) totalRows=1;
+      inf.totalRows=totalRows;
+      if(inf.rowsAsig>=totalRows) asigTodo[nro]=inf;
     });
     if(q){
       var nrosAsig=Object.keys(asigTodo).filter(function(nro){ return nro.toLowerCase().includes(q); });
@@ -26677,10 +26703,11 @@ window._plnModuloEmbarques = async function(){
         nota=nrosAsig.map(function(nro){
           var inf=asigTodo[nro];
           var donde=DIAS[inf.di]+(inf.mon!==_PLN_CTX.mon?" (semana "+inf.mon+")":"");
-          return '<div style="background:rgba(248,209,34,.08);border:1px solid rgba(248,209,34,.3);border-radius:8px;padding:10px 12px;margin-bottom:8px">'
-            +'<div style="font-size:12px;font-weight:700;color:#f8d122;margin-bottom:3px">📍 Emb. '+nro+' ya está asignado</div>'
-            +'<div style="font-size:11px;color:var(--muted)">Asignado el <strong style="color:var(--text)">'+donde+'</strong>. Para usarlo, primero elíminalo de ese día.</div>'
-            +'</div>';
+          var embData2=td.find(function(x){return (x.nro||"").trim()===nro;});
+          var nEqEmb2=_getNEq(embData2);
+          var cntAsig2=(asigCount[nro]&&asigCount[nro].rowsAsig)||0;
+          var totalR2=(embData2&&(embData2.snap&&embData2.snap.invLines||embData2.invLines||[]).filter(function(l){return !l.tipoFac||l.tipoFac==="mercancia";}).length)||1; var eqLbl=cntAsig2>0?" &middot; "+cntAsig2+"/"+totalR2+" fact. asignadas":"";
+          return '<div style="background:rgba(248,209,34,.08);border:1px solid rgba(248,209,34,.3);border-radius:8px;padding:10px 12px;margin-bottom:8px">'            +'<div style="font-size:12px;font-weight:700;color:#f8d122;margin-bottom:3px">\u2705 Emb. '+nro+' asignado completo'+eqLbl+'</div>'            +'<div style="font-size:11px;color:var(--muted)">\xdaltimo equipo en <strong style="color:var(--text)">'+donde+'</strong>. Para reutilizarlo, elim\xednalo del plan primero.</div>'            +'</div>';
         }).join("");
       }
       if(!disp.length&&!nota){
@@ -26710,18 +26737,19 @@ window._plnModuloEmbarques = async function(){
     var fob=parseFloat((d.snap&&d.snap.sc1&&(d.snap.sc1.cif||d.snap.sc1.fob))||d.cif||0);
     var lnd=getLanded(d);
     var snap=d.snap||{}, tipoEq=(snap.campos&&snap.campos.s1_equipo)||d.tipoEquipo||"";
-    var nEquip=parseInt((snap.campos&&snap.campos.s1_equipos)||1)||1;
+    var nEquip=_getNEq(d);
     var deptos=[...new Set(lines.map(function(l){return l.dept||l.deptCat||"";}).filter(Boolean))].slice(0,3).join(", ");
     var nro=(d.nro||"").trim();
-    return '<div class="_plnEmbItem" data-nro="'+nro+'" style="padding:11px 12px;border:1px solid var(--border);border-radius:9px;margin-bottom:7px;cursor:pointer;background:var(--bg)">'
-      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div style="flex:1;min-width:0">'
-      +'<div style="font-size:13px;font-weight:700;color:var(--orange-l)">Emb. '+nro+'</div>'
-      +'<div style="font-size:11px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+( d.desc||"")+'</div>'
-      +'<div style="font-size:10px;color:var(--muted)">'+( d.fecha||"")+' &middot; '+( d.esc||"")+(tipoEq?" &middot; "+nEquip+"x "+tipoEq:"")+(lines.length?" &middot; "+lines.length+" prov.":"")+(deptos?" &middot; "+deptos:"")+'</div>'
-      +'</div><div style="text-align:right;flex-shrink:0">'
-      +'<div style="font-size:11px;font-weight:700;color:var(--green-l);font-family:monospace">'+fmt(fob)+'</div>'
-      +'<div style="font-size:10px;color:var(--orange-l);font-family:monospace">'+fmt(lnd)+'</div>'
-      +'<div style="font-size:9px;color:var(--muted)">FOB / Landed</div></div></div></div>';
+    // Badge de parcial pendiente si algunas facturas ya asignadas pero no todas
+    var asigInf=asigCount[nro];
+    var rowsAsig=asigInf?asigInf.rowsAsig:0;
+    var totalLines=(d.snap&&d.snap.invLines||d.invLines||[]).filter(function(l){return !l.tipoFac||l.tipoFac==="mercancia";}).length||1;
+    var parcialBadge='';
+    if(rowsAsig>0&&rowsAsig<totalLines){
+      var faltantes=totalLines-rowsAsig;
+      parcialBadge='<span style="display:inline-block;margin-top:3px;background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.4);color:#79c0ff;border-radius:4px;padding:1px 6px;font-size:9px;font-weight:700">\u231b '+rowsAsig+'/'+totalLines+' fact. &middot; '+faltantes+' pendiente'+(faltantes>1?'s':'')+'</span>';
+    }
+    return '<div class="_plnEmbItem" data-nro="'+nro+'" style="padding:11px 12px;border:1px solid '+(rowsAsig>0?'rgba(88,166,255,.4)':'var(--border)')+';border-radius:9px;margin-bottom:7px;cursor:pointer;background:var(--bg)">'      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div style="flex:1;min-width:0">'      +'<div style="font-size:13px;font-weight:700;color:var(--orange-l)">Emb. '+nro+'</div>'      +'<div style="font-size:11px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+( d.desc||"")+parcialBadge+'</div>'      +'<div style="font-size:10px;color:var(--muted)">'+( d.fecha||'')+' &middot; '+( d.esc||"")+(tipoEq?" &middot; "+nEquip+"x "+tipoEq:"")+(lines.length?" &middot; "+lines.length+" prov.":"")+(deptos?" &middot; "+deptos:"")+' </div>'      +'</div><div style="text-align:right;flex-shrink:0">'      +'<div style="font-size:11px;font-weight:700;color:var(--green-l);font-family:monospace">'+fmt(fob)+'</div>'      +'<div style="font-size:10px;color:var(--orange-l);font-family:monospace">'+fmt(lnd)+'</div>'      +'<div style="font-size:9px;color:var(--muted)">FOB / Landed</div></div></div></div>';
   }
   function selectEmbarque(nro){
     var d=td.find(function(x){return (x.nro||'').trim()===nro.trim();}); if(!d){alert('No encontrado: '+nro);return;}
