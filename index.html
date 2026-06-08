@@ -5707,8 +5707,17 @@ window._plnCSV=function(){
       // Recalculate landed costeable (sin ITBMS) from snap if available
       var _cubNro=(cub.nroEmb||'').split('+')[0].trim();
       var _cubTd=(window.tendData||[]).find(function(d){return(d.nro||'').trim().toUpperCase()===_cubNro.toUpperCase();});
-      var _cubSc1=(_cubTd&&_cubTd.snap&&_cubTd.snap.sc1)||{};
-      var _cubLandedOk=_cubSc1.landed1||_cubSc1.landedCosteable||0;
+      var _cubSnap=(_cubTd&&_cubTd.snap)||{};
+      var _cubInner=_cubSnap.snap||_cubSnap;
+      var _cubEsc=((_cubTd&&_cubTd.esc)||'').toLowerCase();
+      var _cubIsSab=_cubEsc.includes('sababa')||_cubEsc.includes('sab')||cub.tipoCarga&&cub.tipoCarga.toLowerCase().includes('sab');
+      var _cubIsCIF=_cubEsc.includes('cif')||cub.tipoCarga&&cub.tipoCarga.toLowerCase().includes('cif');
+      function _tryV(v){var n=parseFloat(v);return(!isNaN(n)&&n>0)?n:0;}
+      var _cubLandedOk=0;
+      if(_cubIsSab&&_cubInner.sc3) _cubLandedOk=_tryV(_cubInner.sc3.landed1)||_tryV(_cubInner.sc3.landedCosteable)||_tryV(_cubInner.sc3.landedTotal);
+      if(!_cubLandedOk&&_cubIsCIF&&_cubInner.sc2) _cubLandedOk=_tryV(_cubInner.sc2.landed1)||_tryV(_cubInner.sc2.landedCosteable);
+      if(!_cubLandedOk&&_cubInner.sc1) _cubLandedOk=_tryV(_cubInner.sc1.landed1)||_tryV(_cubInner.sc1.landedCosteable)||_tryV(_cubInner.sc1.landed);
+      if(!_cubLandedOk) _cubLandedOk=_tryV(_cubSnap.landed)||_tryV(_cubTd&&_cubTd.landed)||0;
       var _cubTotFobRaw=rows.reduce(function(s,r){return s+(parseFloat(r.fob)||0);},0);
 var cubData={nroEmb:cub.nroEmb||'',status:cub.status||'',lugarRecep:cub.lugarRecep||'',tipoCarga:cub.tipoCarga||'',eta:cub.eta||'',nEquipos:cub.nEquipos||1,nroCont:cub.nroCont||'',origen:(function(){var _cp=cub.pais||'';var _cc=cub.ciudad||'';if(_cc||_cp)return [_cc,_cp].filter(Boolean).join(', ');if(cub.origen)return cub.origen;var _sn=(_cubTd&&_cubTd.snap)||{};var _cam=_sn.campos||{};var _p=_cam.s1_pais_emb||_sn.pais||(_cubTd&&_cubTd.pais)||'';var _c=_cam.s1_ciudad_emb||_sn.ciudad||(_cubTd&&_cubTd.ciudad)||'';return [_c,_p].filter(Boolean).join(', ');}()),hasSab:hasSab,fob:fob,lnd:lnd,hom:hom,btos:btos,pzas:pzas,rows:rows.map(function(r){return{prov:r.prov||'',tipo:r.tipo||'',dept:r.dept||'',numFact:r.numFact||r.nfac||r.factura||'',bultos:parseInt(r.bultos)||0,fob:parseFloat(r.fob)||0,homol:parseFloat(r.homol)||0,landed:(function(){var _p=_cubTotFobRaw>0?(parseFloat(r.fob)||0)/_cubTotFobRaw:0;return _cubLandedOk>0?Math.round(_cubLandedOk*_p*100)/100:(parseFloat(r.landed)||parseFloat(r.fob)||0);}()),piezas:parseInt(r.piezas)||0};}),depts:deptEntries.map(function(e){return{dept:e[0],fob:e[1].fob,lnd:e[1].lnd};})};
       var cubJson=JSON.stringify(cubData).replace(/</g,'\\u003c').replace(/>/g,'\\u003e').replace(/&/g,'\\u0026');
@@ -5717,7 +5726,7 @@ var cubData={nroEmb:cub.nroEmb||'',status:cub.status||'',lugarRecep:cub.lugarRec
         +(function(){var _lr=cub.lugarRecep||'';var _st=cub.status||'Programado';var _label=(_st&&_lr&&_st.indexOf('Recibido')!==-1)?'Recibido: '+_lr:(_lr&&_st==='Recibido: CDF')?'Recibido: '+_lr:_st;return '<span style="background:#1a7a6e;color:#fff;font-size:12px;font-weight:800;padding:6px 14px;border-radius:8px">'+esc(_label)+'</span>';})()
         +tipoBadge
         +corrBadge
-        +(parseInt(cub.nEquipos)>1?'<span style="background:#1f6feb;color:#fff;font-size:11px;font-weight:800;padding:3px 8px;border-radius:5px">'+(parseInt(cub.nEquipos)||1)+'&times; Equipo</span>':'')
+        +(cubData.origen?'<span style="background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.3);color:#58a6ff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px">&#127758; '+esc(cubData.origen)+'</span>':'')
         +(cub.nroEmb?'<span style="color:#f0883e;font-weight:800;font-size:14px">EMB '+esc(cub.nroEmb)+'</span>':'')
         +(cub.tipoCarga?'<span style="background:#21262d;color:#8b949e;font-size:11px;padding:3px 8px;border-radius:5px">'+esc(cub.tipoCarga)+'</span>':'')
         +(cub.eta?'<span style="color:#8b949e;font-size:12px">&#128197; '+_fmtEta(cub.eta)+'</span>':'')
@@ -5843,12 +5852,16 @@ var cubData={nroEmb:cub.nroEmb||'',status:cub.status||'',lugarRecep:cub.lugarRec
     +'var totR=ws1.getRow(dataRow);totR.height=20;var totV=["TOTAL","","","","","","",tFob,tHom>0?tHom:tFob,tNM,tIT,tLnd,1,pImpTot,(_AD||[]).length];var totFmts=[null,null,null,null,null,null,null,mFmt(),mFmt(),mFmt(),mFmt(),mFmt(),pFmt(),pFmt(),null];totV.forEach(function(v,i){var c=totR.getCell(i+1);setCell(c,v,{fmt:totFmts[i],bold:true,fc:C.white,bg:C.navy,ha:i<3?"left":"center",bdr:{top:{style:"medium",color:{argb:"FF"+C.green}},bottom:{style:"medium",color:{argb:"FF"+C.green}},left:{style:"thin",color:{argb:"FF"+C.border}},right:{style:"thin",color:{argb:"FF"+C.border}}}});});'
     +'ws1.columns=[{width:12},{width:38},{width:13},{width:16},{width:13},{width:16},{width:14},{width:16},{width:16},{width:14},{width:10},{width:16},{width:10},{width:10},{width:8}];ws1.views=[{state:"frozen",xSplit:0,ySplit:3}];'
     +'var ws2=wb.addWorksheet("Detalle Facturas",{pageSetup:{paperSize:9,orientation:"landscape",fitToPage:true,fitToWidth:1}});'
-    +'ws2.mergeCells("A1:M1");var dt1=ws2.getCell("A1");dt1.value="DETALLE DE FACTURAS POR EMBARQUE";dt1.font={name:"Calibri",size:13,bold:true,color:{argb:"FF"+C.white}};dt1.fill={type:"pattern",pattern:"solid",fgColor:{argb:"FF"+C.navy}};dt1.alignment={horizontal:"center",vertical:"middle"};ws2.getRow(1).height=28;'
-    +'ws2.mergeCells("A2:M2");var dt2=ws2.getCell("A2");dt2.value="Generado: "+new Date().toLocaleDateString("es-PA")+"   ·   ZLC Panamá";dt2.font={name:"Calibri",size:9,italic:true,color:{argb:"FF"+C.muted}};dt2.fill={type:"pattern",pattern:"solid",fgColor:{argb:"FF"+C.light}};dt2.alignment={horizontal:"center"};ws2.getRow(2).height=16;'
-    +'var h2=["N° Embarque","OC / Pedido","N° Factura","Org.","Suplidor","Departamento","Fecha","FOB Original","FOB Inventario","Costo No Merc.","ITBMS","Costo Landed","% Imp."];var r2h=ws2.getRow(3);r2h.height=30;h2.forEach(function(h,i){var c=r2h.getCell(i+1);setCell(c,h,{bold:true,fc:C.white,bg:C.orange,ha:"center",wrap:true,bdr:hdrBdr(C.border)});});'
-    +'var d2r=4,prevEmb=null;(_AD||[]).forEach(function(r,ri){var fInv=r.homol>0?r.homol:r.fob;var pctImp=fInv>0?((r.landed-fInv)/fInv):0;var bg=ri%2===0?C.row1:C.row2;if(r.nroEmb!==prevEmb){if(prevEmb!==null){var embR=(_AD||[]).filter(function(x){return x.nroEmb===prevEmb;});var stR=ws2.getRow(d2r);stR.height=16;var stV=["SUBTOTAL "+prevEmb,"","","","","","",embR.reduce(function(s,x){return s+x.fob;},0),embR.reduce(function(s,x){return s+(x.homol>0?x.homol:x.fob);},0),embR.reduce(function(s,x){return s+(x.noMerc||0);},0),embR.reduce(function(s,x){return s+(x.itbms||0);},0),embR.reduce(function(s,x){return s+x.landed;},0),""];var stFmts=[null,null,null,null,null,null,null,mFmt(),mFmt(),mFmt(),mFmt(),mFmt(),null];stV.forEach(function(v,i){var c=stR.getCell(i+1);setCell(c,v,{fmt:stFmts[i],bold:true,fc:C.subTxt,bg:C.sub,ha:i<3?"left":"center",bdr:bdr(C.border)});});d2r++;}prevEmb=r.nroEmb;}var dRow=ws2.getRow(d2r);dRow.height=16;var dV=[r.nroEmb,"",r.numFact||r.nfac||r.factura||"",r.tipo,r.prov,r.dept,r.eta,r.fob,fInv,r.noMerc||0,r.itbms||0,r.landed,pctImp];var dFmts=[null,null,null,null,null,null,null,mFmt(),mFmt(),mFmt(),mFmt(),mFmt(),pFmt()];dV.forEach(function(v,i){var c=dRow.getCell(i+1);setCell(c,v,{fmt:dFmts[i],fc:i===12?C.green:i===11?C.orange:null,bg:bg,ha:i<6?"left":"center",bdr:bdr(C.border)});});d2r++;});'
-    +'if(prevEmb){var embRl=(_AD||[]).filter(function(x){return x.nroEmb===prevEmb;});var stRl=ws2.getRow(d2r);stRl.height=16;var stVl=["SUBTOTAL "+prevEmb,"","","","","","",embRl.reduce(function(s,x){return s+x.fob;},0),embRl.reduce(function(s,x){return s+(x.homol>0?x.homol:x.fob);},0),embRl.reduce(function(s,x){return s+(x.noMerc||0);},0),embRl.reduce(function(s,x){return s+(x.itbms||0);},0),embRl.reduce(function(s,x){return s+x.landed;},0),""];var stFlmts=[null,null,null,null,null,null,null,mFmt(),mFmt(),mFmt(),mFmt(),mFmt(),null];stVl.forEach(function(v,i){var c=stRl.getCell(i+1);setCell(c,v,{fmt:stFlmts[i],bold:true,fc:C.subTxt,bg:C.sub,ha:i<3?"left":"center",bdr:bdr(C.border)});});d2r++;}var totR2=ws2.getRow(d2r);totR2.height=20;var totV2=["TOTAL","","","","","","",tFobTot,tFogInvTot,(_AD||[]).reduce(function(s,r){return s+(r.noMerc||0);},0),(_AD||[]).reduce(function(s,r){return s+(r.itbms||0);},0),tLndTot,pImpTot];var totF2=[null,null,null,null,null,null,null,mFmt(),mFmt(),mFmt(),mFmt(),mFmt(),pFmt()];totV2.forEach(function(v,i){var c=totR2.getCell(i+1);setCell(c,v,{fmt:totF2[i],bold:true,fc:C.white,bg:C.navy,ha:i<3?"left":"center",bdr:{top:{style:"medium",color:{argb:"FF"+C.green}},bottom:{style:"medium",color:{argb:"FF"+C.green}},left:{style:"thin",color:{argb:"FF"+C.border}},right:{style:"thin",color:{argb:"FF"+C.border}}}});});'
-    +'ws2.columns=[{width:12},{width:14},{width:14},{width:6},{width:30},{width:26},{width:12},{width:14},{width:14},{width:13},{width:10},{width:14},{width:10}];ws2.views=[{state:"frozen",xSplit:0,ySplit:3}];'
+    +'ws2.mergeCells("A1:M1");var _dt1=ws2.getCell("A1");_dt1.value="DETALLE DE FACTURAS POR EMBARQUE";_dt1.font={name:"Calibri",size:13,bold:true,color:{argb:"FFFFFFFF"}};_dt1.fill={type:"pattern",pattern:"solid",fgColor:{argb:"FF1C2B4A"}};_dt1.alignment={horizontal:"center",vertical:"middle"};ws2.getRow(1).height=28;'
+    +'ws2.mergeCells("A2:M2");var _dt2=ws2.getCell("A2");_dt2.value="Generado: "+new Date().toLocaleDateString("es-PA")+"   ·   ZLC Panamá — Grupo Primavera Holding, S.A.";_dt2.font={name:"Calibri",size:9,italic:true,color:{argb:"FF6B7280"}};_dt2.fill={type:"pattern",pattern:"solid",fgColor:{argb:"FFF0F4F8"}};_dt2.alignment={horizontal:"center"};ws2.getRow(2).height=15;'
+    +'var _h2=["N° Embarque","Proveedor","Departamento","N° Factura","Org","Bultos","Piezas","FOB Original","FOB Inventario","Costo No Merc.","Costo Landed","% Imp.","% Part. EMB"];var _r2h=ws2.getRow(3);_r2h.height=32;_h2.forEach(function(h,i){var _c=_r2h.getCell(i+1);setCell(_c,h,{bold:true,fc:"FFFFFF",bg:"2C3E6B",ha:i<4?"left":"center",wrap:true,bdr:{top:{style:"thin",color:{argb:"FF4A6FA5"}},left:{style:"thin",color:{argb:"FF4A6FA5"}},bottom:{style:"medium",color:{argb:"FFFFFFFF"}},right:{style:"thin",color:{argb:"FF4A6FA5"}}}});});'
+    +'var _tFobAll=(_AD||[]).reduce(function(s,r){return s+(parseFloat(r.fob)||0);},0);'
+    +'var _d2r=4,_prevE=null;(_AD||[]).forEach(function(r,ri){var _fInv=parseFloat(r.homol)>0?parseFloat(r.homol):parseFloat(r.fob)||0;var _fob=parseFloat(r.fob)||0;var _lnd=parseFloat(r.landed)||_fob;var _pImp=_fInv>0?(_lnd-_fInv)/_fInv:0;'
+    +'if(r.nroEmb!==_prevE){if(_prevE!==null){var _eR=(_AD||[]).filter(function(x){return x.nroEmb===_prevE;});var _eFob=_eR.reduce(function(s,x){return s+(parseFloat(x.fob)||0);},0);var _eFInv=_eR.reduce(function(s,x){var h=parseFloat(x.homol)||0,f=parseFloat(x.fob)||0;return s+(h>0?h:f);},0);var _eNM=_eR.reduce(function(s,x){return s+(parseFloat(x.noMerc)||0);},0);var _eLnd=_eR.reduce(function(s,x){return s+(parseFloat(x.landed)||parseFloat(x.fob)||0);},0);var _eBlt=_eR.reduce(function(s,x){return s+(parseInt(x.bultos)||0);},0);var _ePzs=_eR.reduce(function(s,x){return s+(parseInt(x.piezas)||0);},0);var _ePct=_eFInv>0?(_eLnd-_eFInv)/_eFInv:0;var _stR=ws2.getRow(_d2r);_stR.height=14;["Subtotal EMB "+_prevE,"","","","",_eBlt,_ePzs,_eFob,_eFInv,_eNM,_eLnd,_ePct,""].forEach(function(v,i){var _c=_stR.getCell(i+1);setCell(_c,v,{fmt:i>=7&&i<=10?mFmt():i===11?pFmt():i>=5&&i<=6?nFmt():null,bold:true,fc:"1A5276",bg:"D6EAF8",ha:i<4?"left":"center",bdr:{top:{style:"thin",color:{argb:"FF9DB8C8"}},left:{style:"thin",color:{argb:"FF9DB8C8"}},bottom:{style:"medium",color:{argb:"FF1A5276"}},right:{style:"thin",color:{argb:"FF9DB8C8"}}}});});_d2r++;}  _prevE=r.nroEmb;}'
+    +'var _bg2=ri%2===0?"EBF5FB":"FDFEFE";var _pPart=_tFobAll>0?_fob/_tFobAll:0;var _noMerc=parseFloat(r.noMerc)||0;var _dRow=ws2.getRow(_d2r);_dRow.height=16;[r.nroEmb||"" ,r.prov||"",r.dept||"",r.numFact||r.nfac||r.factura||"",r.tipo||"ZL",parseInt(r.bultos)||0,parseInt(r.piezas)||0,_fob,_fInv,_noMerc,_lnd,_pImp,_pPart].forEach(function(v,i){var _c=_dRow.getCell(i+1);setCell(_c,v,{fmt:i>=7&&i<=10?mFmt():i===11||i===12?pFmt():i>=5&&i<=6?nFmt():null,bold:i===0,fc:i===0?"1C2B4A":i===10?"C75000":i===11?"1A7A6E":null,bg:_bg2,ha:i<4?"left":"center",bdr:{top:{style:"thin",color:{argb:"FF9DB8C8"}},left:{style:"thin",color:{argb:"FF9DB8C8"}},bottom:{style:"thin",color:{argb:"FF9DB8C8"}},right:{style:"thin",color:{argb:"FF9DB8C8"}}}});});_d2r++;});'
+    +'if(_prevE){var _eRL=(_AD||[]).filter(function(x){return x.nroEmb===_prevE;});var _eFobL=_eRL.reduce(function(s,x){return s+(parseFloat(x.fob)||0);},0);var _eFInvL=_eRL.reduce(function(s,x){var h=parseFloat(x.homol)||0,f=parseFloat(x.fob)||0;return s+(h>0?h:f);},0);var _eNML=_eRL.reduce(function(s,x){return s+(parseFloat(x.noMerc)||0);},0);var _eLndL=_eRL.reduce(function(s,x){return s+(parseFloat(x.landed)||parseFloat(x.fob)||0);},0);var _eBltL=_eRL.reduce(function(s,x){return s+(parseInt(x.bultos)||0);},0);var _ePzsL=_eRL.reduce(function(s,x){return s+(parseInt(x.piezas)||0);},0);var _ePctL=_eFInvL>0?(_eLndL-_eFInvL)/_eFInvL:0;var _stRL=ws2.getRow(_d2r);_stRL.height=14;["Subtotal EMB "+_prevE,"","","","",_eBltL,_ePzsL,_eFobL,_eFInvL,_eNML,_eLndL,_ePctL,""].forEach(function(v,i){var _c=_stRL.getCell(i+1);setCell(_c,v,{fmt:i>=7&&i<=10?mFmt():i===11?pFmt():i>=5&&i<=6?nFmt():null,bold:true,fc:"1A5276",bg:"D6EAF8",ha:i<4?"left":"center",bdr:{top:{style:"thin",color:{argb:"FF9DB8C8"}},left:{style:"thin",color:{argb:"FF9DB8C8"}},bottom:{style:"medium",color:{argb:"FF1A5276"}},right:{style:"thin",color:{argb:"FF9DB8C8"}}}});});_d2r++;}'
+    +'var _totR2=ws2.getRow(_d2r);_totR2.height=20;var _tNM=(_AD||[]).reduce(function(s,r){return s+(parseFloat(r.noMerc)||0);},0);var _tLndAll=(_AD||[]).reduce(function(s,r){return s+(parseFloat(r.landed)||parseFloat(r.fob)||0);},0);var _tBlt=(_AD||[]).reduce(function(s,r){return s+(parseInt(r.bultos)||0);},0);var _tPzs=(_AD||[]).reduce(function(s,r){return s+(parseInt(r.piezas)||0);},0);var _tPct=tFogInvTot>0?(_tLndAll-tFogInvTot)/tFogInvTot:0;["TOTAL GENERAL","","","","",_tBlt,_tPzs,tFobTot,tFogInvTot,_tNM,_tLndAll,_tPct,1].forEach(function(v,i){var _c=_totR2.getCell(i+1);setCell(_c,v,{fmt:i>=7&&i<=10?mFmt():i===11||i===12?pFmt():i>=5&&i<=6?nFmt():null,bold:true,fc:"FFFFFF",bg:"1C2B4A",ha:i<4?"left":"center",bdr:{top:{style:"medium",color:{argb:"FF4A6FA5"}},left:{style:"thin",color:{argb:"FF4A6FA5"}},bottom:{style:"medium",color:{argb:"FF4A6FA5"}},right:{style:"thin",color:{argb:"FF4A6FA5"}}}});});'
+    +'ws2.columns=[{width:14},{width:32},{width:24},{width:14},{width:5},{width:7},{width:8},{width:14},{width:14},{width:13},{width:14},{width:9},{width:9}];ws2.views=[{state:"frozen",xSplit:0,ySplit:3}];ws2.autoFilter={from:{row:3,column:1},to:{row:3,column:13}};'
     +'var ws3=wb.addWorksheet("Por Departamento",{pageSetup:{paperSize:9,orientation:"portrait",fitToPage:true,fitToWidth:1}});'
     +'ws3.mergeCells("A1:G1");var pd1=ws3.getCell("A1");pd1.value="RESUMEN POR DEPARTAMENTO";pd1.font={name:"Calibri",size:13,bold:true,color:{argb:"FF"+C.white}};pd1.fill={type:"pattern",pattern:"solid",fgColor:{argb:"FF"+C.navy}};pd1.alignment={horizontal:"center",vertical:"middle"};ws3.getRow(1).height=28;'
     +'var hd3=["Departamento","FOB Original","FOB Inventario","Landed","% Participación","% Importación","Bultos"];var r3h=ws3.getRow(2);r3h.height=24;hd3.forEach(function(h,i){var c=r3h.getCell(i+1);setCell(c,h,{bold:true,fc:C.white,bg:C.navy,ha:"center",wrap:true,bdr:hdrBdr(C.border)});});'
@@ -6468,7 +6481,20 @@ function _plnPickerRender(q){
     items.forEach(function(d){
       var snap=d.snap||{},sc1=snap.sc1||{};
       var fob=sc1.fob||sc1.cif||d.cif||0;
-      var landed=snap.sc1Base||d.sc1Base||d.landed||0;
+      var landed=(function(_d){
+        var _sn=_d.snap||{},_in=_sn.snap||_sn;
+        var _e=(_d.esc||'').toLowerCase();
+        var _iS=_e.includes('sababa')||_e.includes('sab');
+        var _iC=_e.includes('cif');
+        var _iU=_e.includes('único')||_e.includes('unico');
+        function _tv(v){var n=parseFloat(v);return(!isNaN(n)&&n>0)?n:0;}
+        // Único: sc1.landed = FOB + No Merc (Landed Costeable correcto)
+        if(_iU&&_in.sc1){var vu=_tv(_in.sc1.landed)||_tv(_in.sc1.landedCosteable)||_tv(_in.sc1.landed1);if(vu>0)return vu;}
+        if(_iS&&_in.sc3){var v=_tv(_in.sc3.landed1)||_tv(_in.sc3.landedCosteable)||_tv(_in.sc3.landedTotal);if(v>0)return v;}
+        if(_iC&&_in.sc2){var v2=_tv(_in.sc2.landed1)||_tv(_in.sc2.landedCosteable);if(v2>0)return v2;}
+        if(_in.sc1){var v3=_tv(_in.sc1.landed1)||_tv(_in.sc1.landedCosteable)||_tv(_in.sc1.landed);if(v3>0)return v3;}
+        return _tv(_sn.landed)||_tv(_d.landed)||0;
+      }(d));
       var lines=(snap.invLines||d.invLines||[]).filter(function(l){return !l.tipoFac||l.tipoFac==='mercancia';});
       var tipoEq=d.tipoEquipo||snap.tipoEquipo||snap.equipo||(snap.campos&&snap.campos.s1_equipo)||'';
       var nEquip=parseInt(d.equipos||(snap.campos&&snap.campos.s1_equipos)||snap.nEquipos||1)||1;
@@ -6507,13 +6533,28 @@ window._plnPickerSelect = function(nro){
   var snap=found.snap||{}, _sc1p=snap.sc1||{}, _sc3p=snap.sc3||{};
   var lines=(snap.invLines||found.invLines||[]).filter(function(l){return !l.tipoFac||l.tipoFac==='mercancia';});
   var totCIF=lines.reduce(function(s,l){return s+(parseFloat(l.costo)||0);},0);
+  // Detectar Único: sc1.landed = FOB + No Merc (Landed Costeable correcto)
+  var _esPickerLow=(found.esc||'').toLowerCase();
+  var _isUnicoPicker=_esPickerLow.includes('único')||_esPickerLow.includes('unico');
   // Detectar si es Sababa: usa sc3.landed1 (homologado + no mercancía, sin ITBMS)
   // Para CIF Express / Liquidación Aduanal: usa sc1.landed1
-  var _isSabPicker=(snap.compar==='sababa')||( (_sc3p.landed1||0)>0 && !(snap.sc2&&(snap.sc2.landed1||0)>0) );
-  var landedTotal=_isSabPicker
-    ?(_sc3p.landed1||_sc3p.landedCosteable||0)
-    :(_sc1p.landed1||_sc1p.landedCosteable||snap.sc1Base||found.sc1Base||found.landed||0);
-  if(!landedTotal) landedTotal=_sc1p.landed1||_sc1p.landedCosteable||snap.sc1Base||found.sc1Base||found.landed||0;
+  var _isSabPicker=!_isUnicoPicker&&((snap.compar==='sababa')||( (_sc3p.landed1||0)>0 && !(snap.sc2&&(snap.sc2.landed1||0)>0) ));
+  var landedTotal=_isUnicoPicker
+    ?(_sc1p.landed||_sc1p.landedCosteable||_sc1p.landed1||0)
+    :_isSabPicker
+    ?(_sc3p.landed1||_sc3p.landedCosteable||_sc3p.landedTotal||0)
+    :(_sc1p.landed1||_sc1p.landedCosteable||_sc1p.landed||snap.sc1Base||found.sc1Base||found.landed||0);
+  if(!landedTotal){var _sfn=found.snap||{},_sin=_sfn.snap||_sfn,_se=(found.esc||'').toLowerCase();
+    function _stv(v){var n=parseFloat(v);return(!isNaN(n)&&n>0)?n:0;}
+    var _siS=_se.includes('sababa')||_se.includes('sab');
+    var _siC=_se.includes('cif');
+    var _siU=_se.includes('único')||_se.includes('unico');
+    if(_siU&&_sin.sc1) landedTotal=_stv(_sin.sc1.landed)||_stv(_sin.sc1.landedCosteable)||_stv(_sin.sc1.landed1);
+    if(!landedTotal&&_siS&&_sin.sc3) landedTotal=_stv(_sin.sc3.landed1)||_stv(_sin.sc3.landedCosteable)||_stv(_sin.sc3.landedTotal);
+    if(!landedTotal&&_siC&&_sin.sc2) landedTotal=_stv(_sin.sc2.landed1)||_stv(_sin.sc2.landedCosteable);
+    if(!landedTotal&&_sin.sc1) landedTotal=_stv(_sin.sc1.landed1)||_stv(_sin.sc1.landedCosteable)||_stv(_sin.sc1.landed);
+    if(!landedTotal) landedTotal=_stv(_sfn.landed)||_stv(found.landed)||0;
+  }
   var rows=lines.map(function(l){
     var prop=totCIF>0?((parseFloat(l.costo)||0)/totCIF):0;
     return {prov:l.prov||'—',bultos:l.bultos||l.cajas||0,piezas:l.piezas||0,
@@ -26583,7 +26624,13 @@ window._plnModuloEmbarques = async function(){
     var esc=(d.esc||'').toLowerCase();
     var isSab=esc.includes('sababa')||esc.includes('sab');
     var isCIF=esc.includes('cif');
+    var isUnico=esc.includes('único')||esc.includes('unico');
     function tryV(v){var n=parseFloat(v);return(!isNaN(n)&&n>0)?n:0;}
+    // Único: sc1.landed = FOB + No Merc (Landed Costeable correcto)
+    if(isUnico&&inner.sc1){
+      var vu=tryV(inner.sc1.landed)||tryV(inner.sc1.landedCosteable)||tryV(inner.sc1.landed1);
+      if(vu>0) return vu;
+    }
     // Siempre usar landed1 (Costo Costeable = Merc + No Merc SIN ITBMS)
     // landedG incluye ITBMS y NO debe usarse para costear inventario
     if(isSab&&inner.sc3){
@@ -26595,7 +26642,7 @@ window._plnModuloEmbarques = async function(){
       if(v2>0) return v2;
     }
     if(inner.sc1){
-      var v3=tryV(inner.sc1.landed1)||tryV(inner.sc1.landedCosteable);
+      var v3=tryV(inner.sc1.landed1)||tryV(inner.sc1.landedCosteable)||tryV(inner.sc1.landed);
       if(v3>0) return v3;
     }
     return tryV(snap.landed)||tryV(d.landed)||tryV(snap.sc1Base)||tryV(d.sc1Base)||0;
