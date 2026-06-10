@@ -493,20 +493,24 @@ async function showDiffPreview() {
   try {
     const diffResult = await pyodide.runPythonAsync(`
 import openpyxl, io, json as _json
-from decimal import Decimal, ROUND_HALF_UP
-def _D2(v): return Decimal(str(v)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 _wb = openpyxl.load_workbook(io.BytesIO(bytes(file_bytes_preview)), data_only=True)
 _ws = _wb.active
-# Correct formula: sum of AF column (Costo Total, index 31) minus E1
-_e1 = _D2(_ws['E1'].value or 0)
-_af_sum = Decimal('0')
+_e1 = float(_ws['E1'].value or 0)
+def _f2(v):
+    if v is None: return None
+    if isinstance(v,(int,float)): return float(v)
+    try: return float(str(v).replace(",","").strip())
+    except: return None
+_af_rows = []
 for _row in _ws.iter_rows(min_row=5, max_row=_ws.max_row, values_only=True):
-    _c = _row[2]
-    _af = _row[31] if len(_row) > 31 else None
-    if _c and isinstance(_c,(int,float)) and _c != 0 and _af is not None:
-        try: _af_sum += Decimal(str(_af))
-        except: pass
-str(float(_D2(_af_sum - _e1)))
+    _c  = _f2(_row[2])
+    _af = _f2(_row[31]) if len(_row) > 31 else None
+    if _c and _c != 0 and _af and _af != 0:
+        _pzas = int(_c)
+        _d = round(_af / _pzas, 2)
+        _af_rows.append(round(_d * _pzas, 2))
+_sum_e = round(sum(_af_rows), 2)
+str(round(_sum_e - _e1, 2))
 `);
     const diffEl = document.getElementById('pyDiff');
     const diffVal = parseFloat(diffResult);
@@ -530,64 +534,51 @@ async function processFile() {
   const result = await pyodide.runPythonAsync(`
 import openpyxl, io, json
 
-from decimal import Decimal, ROUND_HALF_UP
-
-def D2(v):
-    """Round to 2 decimal places using Decimal to avoid float errors."""
-    return Decimal(str(v)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+def _f(v):
+    if v is None: return None
+    if isinstance(v, (int, float)): return float(v)
+    try: return float(str(v).replace(',','').strip())
+    except: return None
 
 wb = openpyxl.load_workbook(io.BytesIO(bytes(file_bytes)), data_only=True)
 ws_name = wb.sheetnames[0]
 ws = wb[ws_name]
-e1 = D2(ws['E1'].value or 0)
+e1 = float(ws['E1'].value or 0)
 
 rows = []
 for i, row in enumerate(ws.iter_rows(min_row=5, max_row=ws.max_row, values_only=True), start=5):
-    c   = row[2]   # PZA col C
-    d   = row[3]   # Landed Uni col D (unit cost)
-    e   = row[4]   # Landed Total col E (original)
-    af  = row[31] if len(row) > 31 else None  # Costo Total col AF
-    b   = row[1]   # Description col B
-    a   = row[0]   # SKU col A
-    if c and isinstance(c,(int,float)) and c!=0 and af is not None:
-        try:
-            pzas  = int(c)
-            e_orig = D2(af)           # use AF (Costo Total) as the value to adjust
-            if e_orig == 0: continue
-            d_cur  = D2(d) if d else D2(e_orig / pzas)  # current unit cost from col D
-            d_new  = D2(e_orig / pzas)                   # recalculated unit cost
-            e_new  = D2(d_new * pzas)
-            rows.append({
-                'row': i,
-                'sku': str(a) if a else '',
-                'desc': str(b) if b else '',
-                'pzas': pzas,
-                'e_orig': float(e_orig),
-                'd_new': float(d_new),
-                'e_new': float(e_new),
-                'adj_d': float(d_new),
-                'adj_e': float(e_new),
-                'adjusted': False,
-                'note': ''
-            })
-        except: pass
+    c  = _f(row[2])
+    af = _f(row[31]) if len(row) > 31 else None
+    b  = row[1]; a = row[0]
+    if not c or c == 0 or not af or af == 0: continue
+    try:
+        pzas  = int(c)
+        d_new = round(af / pzas, 2)
+        e_new = round(d_new * pzas, 2)
+        rows.append({
+            'row': i,
+            'sku':  str(a) if a else '',
+            'desc': str(b) if b else '',
+            'pzas': pzas,
+            'e_orig': af,
+            'd_new':  d_new,
+            'e_new':  e_new,
+            'adj_d':  d_new,
+            'adj_e':  e_new,
+            'adjusted': False,
+            'note': ''
+        })
+    except: pass
 
-# Correct diff: sum of AF (Costo Total col 31) minus E1
-af_sum = sum(D2(r['e_new']) for r in rows)  # e_new is built from AF below
-# Recompute using actual AF values
-af_total = Decimal('0')
-for _r in ws.iter_rows(min_row=5, max_row=ws.max_row, values_only=True):
-    _c, _af = _r[2], (_r[31] if len(_r) > 31 else None)
-    if _c and isinstance(_c,(int,float)) and _c != 0 and _af is not None:
-        try: af_total += Decimal(str(_af))
-        except: pass
-diff = D2(af_total - e1)
-diff_cents = int(diff * 100)
+# Diff = sum(D_rounded * PZA) - E1
+sum_enew = round(sum(r['e_new'] for r in rows), 2)
+diff = round(sum_enew - e1, 2)
+diff_cents = int(round(diff * 100))
 
-# Sort by e_new desc
-rows.sort(key=lambda x: -x['e_new'])
+# Sort by pzas desc — largest lines absorb most cents
+rows.sort(key=lambda x: -x['pzas'])
 
-# Greedy reduction
+# PASS 1: Greedy — each line whose pzas <= remaining absorbs full -$0.01/unit
 remaining = diff_cents
 for r in rows:
     if remaining <= 0: break
@@ -596,10 +587,34 @@ for r in rows:
         r['adj_e'] = round(r['adj_d'] * r['pzas'], 2)
         remaining -= r['pzas']
         r['adjusted'] = True
-        r['note'] = 'Unit -$0.01 adj'
+        r['note'] = 'D -0.01'
+
+# PASS 2: Residual cents — distribute one cent at a time onto largest lines
+# D stays 2 decimals; E absorbs the cent directly, D = round(E/PZA, 2)
+if remaining > 0:
+    for r in sorted(rows, key=lambda x: -x['pzas']):
+        if remaining <= 0: break
+        r['adj_e'] = round(r['adj_e'] - 0.01, 2)
+        r['adj_d'] = round(r['adj_e'] / r['pzas'], 2)
+        remaining -= 1
+        r['adjusted'] = True
+        r['note'] = (r['note'] + ' +res').strip() if r['note'] else 'E res'
+
+# Guarantee: if still remaining (should never happen), force onto largest
+if remaining > 0:
+    biggest = max(rows, key=lambda x: x['pzas'])
+    biggest['adj_e'] = round(biggest['adj_e'] - remaining * 0.01, 2)
+    biggest['adj_d'] = round(biggest['adj_e'] / biggest['pzas'], 2)
+    biggest['adjusted'] = True
+    remaining = 0
 
 # Re-sort by original row order
 rows.sort(key=lambda x: x['row'])
+
+# Enforce 2 decimals on all D and E values
+for r in rows:
+    r['adj_d'] = round(r['adj_d'], 2)
+    r['adj_e'] = round(r['adj_e'], 2)
 
 final_sum = round(sum(r['adj_e'] for r in rows), 2)
 adj_count = sum(1 for r in rows if r['adjusted'])
@@ -722,8 +737,8 @@ ws_main = wb_main.active
 
 # Apply cost adjustments on principal
 for row_num, r in adjusted_rows.items():
-    ws_main.cell(row=row_num, column=4).value = r['adj_d']
-    ws_main.cell(row=row_num, column=5).value = r['adj_e']
+    ws_main.cell(row=row_num, column=4).value = round(float(r['adj_d']), 2)
+    ws_main.cell(row=row_num, column=5).value = round(float(r['adj_e']), 2)
 
 # Physically DELETE columns AE(31), AF(32), AG(33)
 ws_main.delete_cols(31, 3)
