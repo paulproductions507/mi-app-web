@@ -217,17 +217,51 @@
     header { padding: 0 16px; }
     .panel { padding: 0 12px 40px; }
   }
+
+  /* HISTORIAL MODAL */
+  #histModal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:999; align-items:center; justify-content:center; padding:16px; }
+  #histModal.open { display:flex; }
+  .hist-box { background:#fff; border-radius:16px; width:100%; max-width:860px; max-height:90vh; display:flex; flex-direction:column; box-shadow:0 20px 60px rgba(0,0,0,.25); overflow:hidden; }
+  .hist-hdr { background:linear-gradient(135deg,#1a7a6e,#145f55); color:white; padding:18px 24px; display:flex; align-items:center; gap:12px; }
+  .hist-hdr h2 { font-size:16px; font-weight:700; flex:1; }
+  .hist-body { padding:20px 24px; overflow-y:auto; flex:1; }
+  .hist-search { width:100%; padding:10px 14px; border:1px solid #d0e8e4; border-radius:10px; font-size:13px; margin-bottom:16px; box-sizing:border-box; outline:none; }
+  .hist-search:focus { border-color:#1a7a6e; box-shadow:0 0 0 3px rgba(26,122,110,.12); }
+  .hist-table { width:100%; border-collapse:collapse; font-size:12px; }
+  .hist-table th { background:#1a7a6e; color:white; padding:8px 10px; text-align:left; font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.5px; }
+  .hist-table td { padding:9px 10px; border-bottom:1px solid #e8f5f3; vertical-align:middle; }
+  .hist-table tr:hover td { background:#f0faf8; }
+  .hist-empty { text-align:center; color:#5a7a75; padding:40px; font-size:13px; }
+  .hist-badge { display:inline-block; background:#e8f5f3; color:#1a7a6e; border-radius:10px; padding:2px 8px; font-size:10px; font-weight:700; }
+  .hist-badge.red { background:#fdecea; color:#c0392b; }
+  .hist-detail-btn { background:rgba(26,122,110,.1); border:1px solid rgba(26,122,110,.3); color:#1a7a6e; border-radius:6px; padding:3px 10px; font-size:11px; font-weight:600; cursor:pointer; }
+  .hist-del-btn { background:rgba(192,57,43,.08); border:1px solid rgba(192,57,43,.25); color:#c0392b; border-radius:6px; padding:3px 8px; font-size:11px; cursor:pointer; margin-left:4px; }
+  /* DETAIL MODAL */
+  #detailModal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:1000; align-items:center; justify-content:center; padding:16px; }
+  #detailModal.open { display:flex; }
+  .detail-box { background:#fff; border-radius:16px; width:100%; max-width:780px; max-height:90vh; display:flex; flex-direction:column; box-shadow:0 20px 60px rgba(0,0,0,.3); overflow:hidden; }
+  .detail-hdr { background:linear-gradient(135deg,#1a7a6e,#145f55); color:white; padding:16px 22px; display:flex; align-items:center; gap:10px; }
+  .detail-hdr h3 { font-size:14px; font-weight:700; flex:1; }
+  .detail-body { padding:18px 22px; overflow-y:auto; flex:1; }
+  .detail-kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:16px; }
+  .detail-kpi { background:#f0faf8; border:1px solid #d0e8e4; border-radius:10px; padding:10px 12px; text-align:center; }
+  .detail-kpi .val { font-size:15px; font-weight:800; color:#1a7a6e; font-family:monospace; }
+  .detail-kpi .lbl { font-size:10px; color:#5a7a75; margin-top:2px; }
+  @media(max-width:600px) { .detail-kpis { grid-template-columns:repeat(2,1fr); } }
+
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
 <header>
-  <div class="logo-mark">GP</div>
+  <div class="logo-mark" style="font-size:20px;background:rgba(255,255,255,0.15);color:white;border:none">📉</div>
   <div class="header-text">
     <h1>Ajuste de Prorrateo</h1>
     <p>Departamento de Tráfico · Grupo Primavera Holding S.A.</p>
   </div>
   <div class="header-badge">v4.0</div>
+  <button onclick="abrirHistorial()" style="margin-left:12px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:white;border-radius:20px;padding:5px 14px;font-size:11px;font-weight:600;cursor:pointer;letter-spacing:0.5px">📋 Historial</button>
 </header>
 
 <!-- STEPPER -->
@@ -249,7 +283,10 @@
       <div class="feature"><span>🔒</span>Export preserva 100% del formato original vía openpyxl</div>
       <div class="feature"><span>📋</span>Historial de ajustes en pestaña adicional para auditoría</div>
     </div>
-    <button class="btn-primary" onclick="goTo(2)">Comenzar →</button>
+    <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+      <button class="btn-primary" onclick="goTo(2)">Comenzar →</button>
+      <button class="btn-secondary" onclick="abrirHistorial()" style="display:flex;align-items:center;gap:6px">📋 Ver Historial</button>
+    </div>
   </div>
 </div>
 
@@ -323,13 +360,39 @@
     <h2>¡Excel exportado exitosamente!</h2>
     <p id="exportSummary">El archivo fue generado con el mismo formato del original, costos ajustados y pestaña de auditoría.</p>
     <div style="margin-top:24px; display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
-      <button class="btn-primary" onclick="goTo(2)">Procesar otro archivo</button>
-      <button class="btn-secondary" onclick="goTo(1)">Volver al inicio</button>
+      <button class="btn-primary" onclick="resetApp();goTo(2)">Procesar otro archivo</button>
+      <button class="btn-secondary" onclick="resetApp();goTo(1)">Volver al inicio</button>
     </div>
   </div>
 </div>
 
 <script>
+
+// ── RESET ───────────────────────────────────────────────────────────────────
+function resetApp() {
+  fileBytes = null;
+  resultRows = null;
+  summaryData = null;
+  // Clear file input
+  const fi = document.getElementById('fileInput');
+  if (fi) fi.value = '';
+  // Reset UI
+  const fn = document.getElementById('fileName');
+  if (fn) fn.textContent = '—';
+  const fs = document.getElementById('fileSize');
+  if (fs) fs.textContent = '';
+  const fi2 = document.getElementById('fileInfo');
+  if (fi2) fi2.classList.remove('visible');
+  const bp = document.getElementById('btnProcess');
+  if (bp) bp.disabled = true;
+  const rb = document.getElementById('residualBox');
+  if (rb) rb.classList.remove('visible');
+  const tb = document.getElementById('reviewBody');
+  if (tb) tb.innerHTML = '';
+  const diff = document.getElementById('pyDiff');
+  if (diff) { diff.style.display='none'; diff.textContent=''; }
+}
+
 // ── STATE ──────────────────────────────────────────────────────────────────
 let pyodide = null;
 let fileBytes = null;
@@ -747,7 +810,235 @@ base64.b64encode(buf.read()).decode()
 
   btn.disabled = false; btn.textContent = '⬇ Exportar Excel corregido';
   goTo(4);
+  guardarEnSupabase();
 }
+
+// ── SUPABASE ────────────────────────────────────────────────────────────────
+const _SB_URL = 'https://kgrunsunahooitmqzaaq.supabase.co';
+const _SB_KEY = 'sb_publishable_pRDW1CDvw8iKlSy8oTz5uA_v0GA4GkA';
+let _sb = null;
+
+function initSupabase() {
+  try {
+    _sb = window.supabase.createClient(_SB_URL, _SB_KEY);
+    console.log('Supabase conectado — Prorrateo');
+  } catch(e) {
+    console.warn('Supabase no disponible:', e);
+  }
+}
+
+async function guardarEnSupabase() {
+  if (!_sb || !summaryData || !resultRows) return;
+  const fileName = document.getElementById('fileName').textContent;
+  const payload = {
+    archivo: fileName,
+    fecha_proceso: new Date().toISOString(),
+    e1_base: summaryData.e1,
+    diferencia_inicial: summaryData.diff_orig,
+    residuo_final: summaryData.remaining_cents / 100,
+    lineas_ajustadas: summaryData.adj_count,
+    total_filas: resultRows.length,
+    filas: resultRows
+  };
+  try {
+    const { error } = await _sb.from('prorrateo_historial').insert([payload]);
+    if (error) {
+      console.warn('No se pudo guardar en Supabase:', error.message);
+      _mostrarToastProrr('⚠ No se pudo guardar en la nube: ' + error.message, 'warn');
+    } else {
+      _mostrarToastProrr('☁ Guardado en historial de la nube', 'ok');
+    }
+  } catch(e) {
+    console.warn('Error Supabase:', e);
+  }
+}
+
+function _mostrarToastProrr(msg, tipo) {
+  let t = document.getElementById('_prorr_toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = '_prorr_toast';
+    t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);padding:10px 20px;border-radius:20px;font-size:13px;font-weight:600;z-index:9999;transition:opacity .3s;white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,.2)';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.background = tipo === 'ok' ? '#1a7a6e' : '#c0392b';
+  t.style.color = 'white';
+  t.style.opacity = '1';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.style.opacity = '0'; }, 3000);
+}
+
+// ── HISTORIAL ───────────────────────────────────────────────────────────────
+let _histData = [];
+
+async function abrirHistorial() {
+  document.getElementById('histModal').classList.add('open');
+  document.getElementById('histSearch').value = '';
+  await cargarHistorial();
+}
+
+function cerrarHistorial() {
+  document.getElementById('histModal').classList.remove('open');
+}
+
+async function cargarHistorial() {
+  const content = document.getElementById('histContent');
+  content.innerHTML = '<div class="hist-empty">Cargando...</div>';
+  if (!_sb) {
+    content.innerHTML = '<div class="hist-empty">⚠ Supabase no disponible</div>';
+    return;
+  }
+  try {
+    const { data, error } = await _sb
+      .from('prorrateo_historial')
+      .select('id, archivo, fecha_proceso, e1_base, diferencia_inicial, residuo_final, lineas_ajustadas, total_filas, filas')
+      .order('fecha_proceso', { ascending: false })
+      .limit(200);
+    if (error) throw error;
+    _histData = data || [];
+    renderHistorial(_histData);
+  } catch(e) {
+    content.innerHTML = '<div class="hist-empty">❌ Error al cargar: ' + e.message + '</div>';
+  }
+}
+
+function filtrarHistorial() {
+  const q = document.getElementById('histSearch').value.toLowerCase().trim();
+  if (!q) { renderHistorial(_histData); return; }
+  const filtered = _histData.filter(r =>
+    (r.archivo || '').toLowerCase().includes(q)
+  );
+  renderHistorial(filtered);
+}
+
+function renderHistorial(rows) {
+  const content = document.getElementById('histContent');
+  if (!rows.length) {
+    content.innerHTML = '<div class="hist-empty">No se encontraron registros.</div>';
+    return;
+  }
+  const fmt = v => '$' + parseFloat(v||0).toLocaleString('es-PA', {minimumFractionDigits:2, maximumFractionDigits:2});
+  const fmtDate = s => {
+    if (!s) return '—';
+    const d = new Date(s);
+    return d.toLocaleDateString('es-PA') + ' ' + d.toLocaleTimeString('es-PA', {hour:'2-digit',minute:'2-digit'});
+  };
+  let html = `<table class="hist-table">
+    <thead><tr>
+      <th>#</th>
+      <th>Archivo / Recibo</th>
+      <th>Fecha Proceso</th>
+      <th>E1 Base</th>
+      <th>Diferencia</th>
+      <th>Residuo</th>
+      <th>Líneas Adj.</th>
+      <th>Acciones</th>
+    </tr></thead><tbody>`;
+  rows.forEach((r, i) => {
+    const resOk = parseFloat(r.residuo_final||0) === 0;
+    html += `<tr>
+      <td style="color:#5a7a75;font-size:11px">${i+1}</td>
+      <td style="font-weight:600;color:#1a2e2b;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.archivo||''}">${r.archivo||'—'}</td>
+      <td style="color:#5a7a75;font-size:11px;white-space:nowrap">${fmtDate(r.fecha_proceso)}</td>
+      <td style="font-family:monospace;font-size:12px">${fmt(r.e1_base)}</td>
+      <td style="font-family:monospace;font-size:12px;color:#c0392b">${fmt(r.diferencia_inicial)}</td>
+      <td>${resOk ? '<span class="hist-badge">$0.00</span>' : '<span class="hist-badge red">' + fmt(r.residuo_final) + '</span>'}</td>
+      <td style="text-align:center;font-weight:700;color:#1a7a6e">${r.lineas_ajustadas||0}</td>
+      <td style="white-space:nowrap">
+        <button class="hist-detail-btn" onclick="verDetalle(${r.id})">🔍 Ver</button>
+        <button class="hist-del-btn" onclick="eliminarRegistro(${r.id})">🗑</button>
+      </td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  content.innerHTML = html;
+}
+
+async function verDetalle(id) {
+  const rec = _histData.find(r => r.id === id);
+  if (!rec) return;
+  const fmt = v => '$' + parseFloat(v||0).toLocaleString('es-PA', {minimumFractionDigits:2, maximumFractionDigits:2});
+  document.getElementById('detailTitle').textContent = rec.archivo || 'Detalle';
+  const filas = rec.filas || [];
+  let body = `
+    <div class="detail-kpis">
+      <div class="detail-kpi"><div class="val">${fmt(rec.e1_base)}</div><div class="lbl">E1 Base</div></div>
+      <div class="detail-kpi"><div class="val" style="color:#c0392b">${fmt(rec.diferencia_inicial)}</div><div class="lbl">Diferencia inicial</div></div>
+      <div class="detail-kpi"><div class="val" style="color:${parseFloat(rec.residuo_final||0)===0?'#1a7a6e':'#c0392b'}">${fmt(rec.residuo_final)}</div><div class="lbl">Residuo final</div></div>
+      <div class="detail-kpi"><div class="val">${rec.lineas_ajustadas||0} / ${rec.total_filas||0}</div><div class="lbl">Líneas ajustadas</div></div>
+    </div>
+    <table class="hist-table" style="font-size:11px">
+      <thead><tr>
+        <th>Fila</th><th>SKU</th><th>Descripción</th><th>Pzas</th>
+        <th>E Original</th><th>E Ajustado</th><th>Δ</th><th>Estado</th>
+      </tr></thead><tbody>`;
+  filas.forEach(r => {
+    const delta = (parseFloat(r.adj_e||0) - parseFloat(r.e_orig||0)).toFixed(2);
+    body += `<tr class="${r.adjusted?'diff-changed':''}">
+      <td>${r.row}</td>
+      <td style="font-family:monospace">${r.sku||''}</td>
+      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.desc||''}">${r.desc||''}</td>
+      <td style="text-align:right">${r.pzas}</td>
+      <td style="text-align:right;font-family:monospace">${parseFloat(r.e_orig||0).toFixed(2)}</td>
+      <td style="text-align:right;font-family:monospace;font-weight:600">${parseFloat(r.adj_e||0).toFixed(2)}</td>
+      <td style="text-align:right;font-family:monospace;color:${parseFloat(delta)<0?'#c0392b':'#1a7a6e'}">${delta}</td>
+      <td>${r.adjusted ? '<span class="hist-badge">Adj</span>' : '<span style="color:#5a7a75;font-size:10px">—</span>'}</td>
+    </tr>`;
+  });
+  body += '</tbody></table>';
+  document.getElementById('detailBody').innerHTML = body;
+  document.getElementById('detailModal').classList.add('open');
+}
+
+function cerrarDetalle() {
+  document.getElementById('detailModal').classList.remove('open');
+}
+
+async function eliminarRegistro(id) {
+  if (!confirm('¿Eliminar este registro del historial?')) return;
+  try {
+    const { error } = await _sb.from('prorrateo_historial').delete().eq('id', id);
+    if (error) throw error;
+    _histData = _histData.filter(r => r.id !== id);
+    filtrarHistorial();
+    _mostrarToastProrr('🗑 Registro eliminado', 'ok');
+  } catch(e) {
+    _mostrarToastProrr('❌ Error al eliminar: ' + e.message, 'err');
+  }
+}
+
+// Init Supabase on load
+window.addEventListener('load', initSupabase);
+
 </script>
+
+<!-- HISTORIAL MODAL -->
+<div id="histModal">
+  <div class="hist-box">
+    <div class="hist-hdr">
+      <span style="font-size:20px">📋</span>
+      <h2>Historial de Ajustes — Prorrateo</h2>
+      <button onclick="cerrarHistorial()" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:white;border-radius:8px;padding:5px 12px;font-size:12px;cursor:pointer">✕ Cerrar</button>
+    </div>
+    <div class="hist-body">
+      <input type="text" class="hist-search" id="histSearch" placeholder="🔍 Buscar por nombre de archivo o número de recibo..." oninput="filtrarHistorial()">
+      <div id="histContent"><div class="hist-empty">Cargando historial...</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- DETAIL MODAL -->
+<div id="detailModal">
+  <div class="detail-box">
+    <div class="detail-hdr">
+      <span style="font-size:18px">🔍</span>
+      <h3 id="detailTitle">Detalle del ajuste</h3>
+      <button onclick="cerrarDetalle()" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:white;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer">✕</button>
+    </div>
+    <div class="detail-body" id="detailBody"></div>
+  </div>
+</div>
+
 </body>
 </html>
