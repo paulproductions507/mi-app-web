@@ -497,31 +497,16 @@ from decimal import Decimal, ROUND_HALF_UP
 def _D2(v): return Decimal(str(v)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 _wb = openpyxl.load_workbook(io.BytesIO(bytes(file_bytes_preview)), data_only=True)
 _ws = _wb.active
-# Try to read AG column (index 32) sum — that is the pre-calculated difference in the Excel
-_ag_sum = Decimal('0')
-_has_ag = False
+# Correct formula: sum of AF column (Costo Total, index 31) minus E1
+_e1 = _D2(_ws['E1'].value or 0)
+_af_sum = Decimal('0')
 for _row in _ws.iter_rows(min_row=5, max_row=_ws.max_row, values_only=True):
-    if len(_row) > 32 and _row[32] is not None:
-        try:
-            _v = Decimal(str(_row[32]))
-            if _v != 0:
-                _has_ag = True
-            _ag_sum += _v
+    _c = _row[2]
+    _af = _row[31] if len(_row) > 31 else None
+    if _c and isinstance(_c,(int,float)) and _c != 0 and _af is not None:
+        try: _af_sum += Decimal(str(_af))
         except: pass
-if _has_ag:
-    str(float(_D2(_ag_sum)))
-else:
-    # Fallback: recalculate from E col
-    _e1 = _D2(_ws['E1'].value or 0)
-    _total = Decimal('0')
-    for _row in _ws.iter_rows(min_row=5, max_row=_ws.max_row, values_only=True):
-        _c, _e = _row[2], _row[4]
-        if _c and isinstance(_c,(int,float)) and _c!=0 and _e is not None:
-            try:
-                _pzas = int(_c); _eo = _D2(_e)
-                if _eo > 0: _total += _D2(_D2(_eo/_pzas)*_pzas)
-            except: pass
-    str(float(_total - _e1))
+str(float(_D2(_af_sum - _e1)))
 `);
     const diffEl = document.getElementById('pyDiff');
     const diffVal = parseFloat(diffResult);
@@ -558,17 +543,20 @@ e1 = D2(ws['E1'].value or 0)
 
 rows = []
 for i, row in enumerate(ws.iter_rows(min_row=5, max_row=ws.max_row, values_only=True), start=5):
-    c = row[2]  # PZA col C
-    e = row[4]  # Landed Total col E
-    b = row[1]  # Description col B
-    a = row[0]  # SKU col A
-    if c and isinstance(c,(int,float)) and c!=0 and e is not None:
+    c   = row[2]   # PZA col C
+    d   = row[3]   # Landed Uni col D (unit cost)
+    e   = row[4]   # Landed Total col E (original)
+    af  = row[31] if len(row) > 31 else None  # Costo Total col AF
+    b   = row[1]   # Description col B
+    a   = row[0]   # SKU col A
+    if c and isinstance(c,(int,float)) and c!=0 and af is not None:
         try:
-            pzas = int(c)
-            e_orig = D2(e)
+            pzas  = int(c)
+            e_orig = D2(af)           # use AF (Costo Total) as the value to adjust
             if e_orig == 0: continue
-            d_new = D2(e_orig / pzas)
-            e_new = D2(d_new * pzas)
+            d_cur  = D2(d) if d else D2(e_orig / pzas)  # current unit cost from col D
+            d_new  = D2(e_orig / pzas)                   # recalculated unit cost
+            e_new  = D2(d_new * pzas)
             rows.append({
                 'row': i,
                 'sku': str(a) if a else '',
@@ -584,24 +572,16 @@ for i, row in enumerate(ws.iter_rows(min_row=5, max_row=ws.max_row, values_only=
             })
         except: pass
 
-# Compute diff: prefer AG column sum if present, else use recalculated total
-ag_sum = Decimal('0')
-has_ag = False
-for _agrow in ws.iter_rows(min_row=5, max_row=ws.max_row, values_only=True):
-    if len(_agrow) > 32 and _agrow[32] is not None:
-        try:
-            _agv = Decimal(str(_agrow[32]))
-            if _agv != 0:
-                has_ag = True
-            ag_sum += _agv
+# Correct diff: sum of AF (Costo Total col 31) minus E1
+af_sum = sum(D2(r['e_new']) for r in rows)  # e_new is built from AF below
+# Recompute using actual AF values
+af_total = Decimal('0')
+for _r in ws.iter_rows(min_row=5, max_row=ws.max_row, values_only=True):
+    _c, _af = _r[2], (_r[31] if len(_r) > 31 else None)
+    if _c and isinstance(_c,(int,float)) and _c != 0 and _af is not None:
+        try: af_total += Decimal(str(_af))
         except: pass
-
-if has_ag:
-    diff = D2(ag_sum)
-else:
-    total_new_e = sum(D2(r['e_new']) for r in rows)
-    diff = total_new_e - e1
-
+diff = D2(af_total - e1)
 diff_cents = int(diff * 100)
 
 # Sort by e_new desc
