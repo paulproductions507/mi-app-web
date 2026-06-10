@@ -493,18 +493,20 @@ async function showDiffPreview() {
   try {
     const diffResult = await pyodide.runPythonAsync(`
 import openpyxl, io, json as _json
+from decimal import Decimal, ROUND_HALF_UP
+def _D2(v): return Decimal(str(v)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 _wb = openpyxl.load_workbook(io.BytesIO(bytes(file_bytes_preview)), data_only=True)
 _ws = _wb.active
-_e1 = float(_ws['E1'].value or 0)
-_total = 0
+_e1 = _D2(_ws['E1'].value or 0)
+_total = Decimal('0')
 for _row in _ws.iter_rows(min_row=5, max_row=_ws.max_row, values_only=True):
     _c, _e = _row[2], _row[4]
     if _c and isinstance(_c,(int,float)) and _c!=0 and _e is not None:
         try:
-            _pzas = int(_c); _eo = float(_e)
-            if _eo > 0: _total += round(round(_eo/_pzas,2)*_pzas, 2)
+            _pzas = int(_c); _eo = _D2(_e)
+            if _eo > 0: _total += _D2(_D2(_eo/_pzas)*_pzas)
         except: pass
-str(round(_total - _e1, 2))
+str(float(_total - _e1))
 `);
     const diffEl = document.getElementById('pyDiff');
     const diffVal = parseFloat(diffResult);
@@ -528,10 +530,16 @@ async function processFile() {
   const result = await pyodide.runPythonAsync(`
 import openpyxl, io, json
 
+from decimal import Decimal, ROUND_HALF_UP
+
+def D2(v):
+    """Round to 2 decimal places using Decimal to avoid float errors."""
+    return Decimal(str(v)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
 wb = openpyxl.load_workbook(io.BytesIO(bytes(file_bytes)), data_only=True)
 ws_name = wb.sheetnames[0]
 ws = wb[ws_name]
-e1 = float(ws['E1'].value or 0)
+e1 = D2(ws['E1'].value or 0)
 
 rows = []
 for i, row in enumerate(ws.iter_rows(min_row=5, max_row=ws.max_row, values_only=True), start=5):
@@ -542,29 +550,29 @@ for i, row in enumerate(ws.iter_rows(min_row=5, max_row=ws.max_row, values_only=
     if c and isinstance(c,(int,float)) and c!=0 and e is not None:
         try:
             pzas = int(c)
-            e_orig = float(e)
+            e_orig = D2(e)
             if e_orig == 0: continue
-            d_new = round(e_orig / pzas, 2)
-            e_new = round(d_new * pzas, 2)
+            d_new = D2(e_orig / pzas)
+            e_new = D2(d_new * pzas)
             rows.append({
                 'row': i,
                 'sku': str(a) if a else '',
                 'desc': str(b) if b else '',
                 'pzas': pzas,
-                'e_orig': e_orig,
-                'd_new': d_new,
-                'e_new': e_new,
-                'adj_d': d_new,
-                'adj_e': e_new,
+                'e_orig': float(e_orig),
+                'd_new': float(d_new),
+                'e_new': float(e_new),
+                'adj_d': float(d_new),
+                'adj_e': float(e_new),
                 'adjusted': False,
                 'note': ''
             })
         except: pass
 
-# Compute diff
-total_new_e = round(sum(r['e_new'] for r in rows), 2)
-diff = round(total_new_e - e1, 2)
-diff_cents = int(round(diff * 100))
+# Compute diff using Decimal sums — no float accumulation error
+total_new_e = sum(D2(r['e_new']) for r in rows)
+diff = total_new_e - e1
+diff_cents = int(diff * 100)
 
 # Sort by e_new desc
 rows.sort(key=lambda x: -x['e_new'])
