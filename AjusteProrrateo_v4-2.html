@@ -283,10 +283,7 @@
       <div class="feature"><span>🔒</span>Export preserva 100% del formato original vía openpyxl</div>
       <div class="feature"><span>📋</span>Historial de ajustes en pestaña adicional para auditoría</div>
     </div>
-    <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
-      <button class="btn-primary" onclick="goTo(2)">Comenzar →</button>
-      <button class="btn-secondary" onclick="abrirHistorial()" style="display:flex;align-items:center;gap:6px">📋 Ver Historial</button>
-    </div>
+    <button class="btn-primary" onclick="goTo(2)">Comenzar →</button>
   </div>
 </div>
 
@@ -809,8 +806,11 @@ base64.b64encode(buf.read()).decode()
     `Archivo "${origName}_CORREGIDO.xlsx" generado. ${summaryData.adj_count} líneas ajustadas. Diferencia final: $${(summaryData.remaining_cents/100).toFixed(2)}. Hoja "Historial Ajuste" incluida para auditoría.`;
 
   btn.disabled = false; btn.textContent = '⬇ Exportar Excel corregido';
+  // Capture filename before goTo resets anything
+  const _savedFileName = document.getElementById('fileName').textContent;
   goTo(4);
-  guardarEnSupabase();
+  // Small delay to ensure DOM settled, then save
+  setTimeout(() => guardarEnSupabase(_savedFileName), 500);
 }
 
 // ── SUPABASE ────────────────────────────────────────────────────────────────
@@ -827,9 +827,13 @@ function initSupabase() {
   }
 }
 
-async function guardarEnSupabase() {
-  if (!_sb || !summaryData || !resultRows) return;
-  const fileName = document.getElementById('fileName').textContent;
+async function guardarEnSupabase(fileNameOverride) {
+  // Re-init Supabase if not ready
+  if (!_sb) initSupabase();
+  if (!_sb) { console.warn('Supabase no inicializado'); return; }
+  if (!summaryData || !resultRows) { console.warn('Sin datos para guardar'); return; }
+
+  const fileName = fileNameOverride || document.getElementById('fileName').textContent || 'Sin nombre';
   const payload = {
     archivo: fileName,
     fecha_proceso: new Date().toISOString(),
@@ -840,16 +844,19 @@ async function guardarEnSupabase() {
     total_filas: resultRows.length,
     filas: resultRows
   };
+  console.log('Guardando en Supabase:', fileName, payload);
   try {
-    const { error } = await _sb.from('prorrateo_historial').insert([payload]);
+    const { data, error } = await _sb.from('prorrateo_historial').insert([payload]).select();
     if (error) {
-      console.warn('No se pudo guardar en Supabase:', error.message);
-      _mostrarToastProrr('⚠ No se pudo guardar en la nube: ' + error.message, 'warn');
+      console.error('Supabase insert error:', error);
+      _mostrarToastProrr('⚠ Error al guardar: ' + error.message, 'warn');
     } else {
+      console.log('Guardado OK:', data);
       _mostrarToastProrr('☁ Guardado en historial de la nube', 'ok');
     }
   } catch(e) {
-    console.warn('Error Supabase:', e);
+    console.error('guardarEnSupabase catch:', e);
+    _mostrarToastProrr('⚠ Error de conexión: ' + e.message, 'warn');
   }
 }
 
