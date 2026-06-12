@@ -1242,6 +1242,9 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
     <button onclick="_startProgress();cargarSesionNube()" style="background:none;border:none;color:var(--muted);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 8px;border-radius:8px;transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,.06)'" onmouseout="this.style.background='none'" title="Cargar desde Nube">
       <span style="font-size:16px">📥</span><span style="font-size:9px;color:var(--muted2)">Nube↓</span>
     </button>
+    <button onclick="_abrirBackupsSemanales()" style="background:none;border:none;color:var(--muted);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 8px;border-radius:8px;transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,.06)'" onmouseout="this.style.background='none'" title="Backups Semanales">
+      <span style="font-size:16px">🗄️</span><span style="font-size:9px;color:var(--muted2)">Backups</span>
+    </button>
     <button onclick="document.getElementById('sesion-file-input').click()" style="background:none;border:none;color:var(--muted);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 8px;border-radius:8px;transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,.06)'" onmouseout="this.style.background='none'" title="Cargar Local">
       <span style="font-size:16px">📂</span><span style="font-size:9px;color:var(--muted2)">Cargar</span>
     </button>
@@ -6975,6 +6978,7 @@ function switchTab(id,el){
   if(id==='tendencias'){
     setTimeout(async ()=>{
       if(_sb) await _pullTendFromCloud();
+      if(_sb && typeof _autoBackupSemanal==='function') _autoBackupSemanal();
       _populateProveedorFilter();
       if(typeof _loadFiltrosTend==='function') await _loadFiltrosTend();
       // Establecer filtro de mes actual si no hay filtro activo
@@ -11724,11 +11728,120 @@ async function _syncTendToCloud(){
       }),
       updated_at: new Date().toISOString()
     };
-    await _sb.from('simulador_sesiones').upsert(payload, { onConflict: 'nombre' });
-  } catch(e){ console.warn('Cloud sync error:', e.message); }
+    const _r = await _sb.from('simulador_sesiones').upsert(payload, { onConflict: 'nombre' });
+    if(_r && _r.error){
+      console.error('Cloud sync error:', _r.error);
+      if(typeof _showToast==='function') _showToast('⚠️ No se pudo sincronizar con la nube: '+(_r.error.message||'error desconocido'),'red',6000);
+      throw _r.error;
+    }
+  } catch(e){
+    console.error('Cloud sync error:', e);
+    if(typeof _showToast==='function') _showToast('⚠️ No se pudo sincronizar con la nube: '+(e.message||e),'red',6000);
+    throw e;
+  }
 }
 
-// Pull desde Supabase — reemplaza tendData con lo de la nube. Sin merge con local.
+// ══════════════════════════════════════════════════════════════
+// BACKUPS SEMANALES — respaldo automático rotativo
+// Cada semana (lunes-domingo) crea/actualiza una fila _BACKUP_AAAA-Wss
+// con una copia completa de tendData. Se conservan las últimas 8 semanas.
+// ══════════════════════════════════════════════════════════════
+function _isoWeekKey(d){
+  d = new Date(d || Date.now());
+  d.setHours(0,0,0,0);
+  d.setDate(d.getDate() + (1 - (d.getDay()===0?7:d.getDay()))); // lunes de esta semana
+  const yearStart = new Date(d.getFullYear(),0,1);
+  const week = Math.ceil((((d - yearStart) / 86400000) + yearStart.getDay()+1) / 7);
+  return d.getFullYear() + '-W' + String(week).padStart(2,'0');
+}
+
+async function _autoBackupSemanal(){
+  if(!_sb || !tendData || !tendData.length) return;
+  try{
+    const key = '_BACKUP_' + _isoWeekKey();
+    const payload = {
+      nombre: key,
+      datos: JSON.stringify({
+        tendData: tendData,
+        deleted: Array.from(window._deletedEmbarques||[]),
+        backup_date: new Date().toISOString(),
+        count: tendData.length
+      }),
+      updated_at: new Date().toISOString()
+    };
+    const r = await _sb.from('simulador_sesiones').upsert(payload, {onConflict:'nombre'});
+    if(r.error){ console.warn('Backup semanal error:', r.error); return; }
+    console.log('🗄️ Backup semanal actualizado:', key, '('+tendData.length+' embarques)');
+
+    // Limpieza: conservar solo los últimos 8 backups
+    const { data: rows } = await _sb.from('simulador_sesiones')
+      .select('nombre, updated_at')
+      .like('nombre', '_BACKUP_%')
+      .order('updated_at', { ascending: false });
+    if(rows && rows.length > 8){
+      const toDelete = rows.slice(8).map(r=>r.nombre);
+      for(const nombre of toDelete){
+        await _sb.from('simulador_sesiones').delete().eq('nombre', nombre);
+      }
+    }
+  }catch(e){ console.warn('Backup semanal error:', e); }
+}
+
+// Modal para ver y restaurar backups semanales
+async function _abrirBackupsSemanales(){
+  if(!_sb){ initSupabase(); await new Promise(r=>setTimeout(r,400)); }
+  if(!_sb){ _showToast('⚠️ Sin conexión a la nube','red',3000); return; }
+  const { data: rows, error } = await _sb.from('simulador_sesiones')
+    .select('nombre, datos, updated_at')
+    .like('nombre', '_BACKUP_%')
+    .order('updated_at', { ascending: false });
+  if(error){ _showToast('⚠️ Error al cargar backups: '+error.message,'red',4000); return; }
+  if(!rows || !rows.length){ _showToast('ℹ️ Aún no hay backups semanales guardados.','orange',4000); return; }
+
+  const old = document.getElementById('_backupsModal'); if(old) old.remove();
+  const modal = document.createElement('div');
+  modal.id = '_backupsModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px';
+  modal.innerHTML = '<div style="background:var(--s1);border:1px solid var(--border);border-radius:14px;padding:20px;max-width:480px;width:100%;max-height:80vh;overflow-y:auto" onclick="event.stopPropagation()">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div style="font-size:14px;font-weight:700;color:var(--text)">🗄️ Backups Semanales</div><button onclick="document.getElementById(\'_backupsModal\').remove()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer">×</button></div>'
+    +'<div style="font-size:11px;color:var(--muted);margin-bottom:14px">Restaura tu historial completo de embarques a como estaba al momento del backup. Se conservan las últimas 8 semanas.</div>'
+    +'<div id="_backupsList">'
+    + rows.map(function(r,i){
+        let info='';
+        try{ const p=JSON.parse(r.datos); info=(p.count||0)+' embarques · '+(p.backup_date||r.updated_at).slice(0,16).replace('T',' '); }catch(e){ info=r.updated_at.slice(0,16).replace('T',' '); }
+        const semana=r.nombre.replace('_BACKUP_','');
+        return '<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;background:var(--bg)">'
+          +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;color:var(--text)">Semana '+semana+'</div><div style="font-size:11px;color:var(--muted)">'+info+'</div></div>'
+          +'<button onclick="_restaurarBackupSemanal('+i+')" style="background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:6px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0">♻️ Restaurar</button>'
+          +'</div>';
+      }).join('')
+    +'</div></div>';
+  modal.onclick = () => modal.remove();
+  document.body.appendChild(modal);
+  window._backupsListaCache = rows;
+}
+
+async function _restaurarBackupSemanal(idx){
+  const rows = window._backupsListaCache;
+  if(!rows || !rows[idx]) return;
+  let parsed;
+  try{ parsed = JSON.parse(rows[idx].datos); }catch(e){ _showToast('⚠️ Backup corrupto','red',3000); return; }
+  if(!parsed.tendData || !Array.isArray(parsed.tendData)){ _showToast('⚠️ Backup sin datos válidos','red',3000); return; }
+  const semana = rows[idx].nombre.replace('_BACKUP_','');
+  if(!confirm('¿Restaurar el backup de la semana '+semana+' ('+parsed.tendData.length+' embarques)?\n\nEsto reemplazará tu historial actual de embarques ('+(tendData?tendData.length:0)+' embarques) con la versión del backup, tanto local como en la nube.')) return;
+
+  tendData = parsed.tendData;
+  window.tendData = tendData;
+  window._deletedEmbarques = new Set(parsed.deleted||[]);
+  saveTendData();
+  try{ await _syncTendToCloud(); }catch(e){}
+  renderTend();
+  if(typeof renderTopProvs==='function') renderTopProvs();
+  if(typeof updateCmpNroList==='function') updateCmpNroList();
+  document.getElementById('_backupsModal')?.remove();
+  _showToast('♻️ Historial restaurado desde backup de la semana '+semana+' ('+tendData.length+' embarques)','green',5000);
+}
+
 async function _pullTendFromCloud(){
   if(!_sb) return false;
   try {
