@@ -382,7 +382,10 @@ datalist option{background:var(--s2);color:var(--text)}
   <button onclick="_guardarCambiosUnico()" style="flex:1;background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.3);color:var(--green);border-radius:10px;padding:10px 8px;font-size:12px;font-weight:700;cursor:pointer">💾 Guardar</button>
   <button class="btn btn-calc" onclick="calcular()" style="flex:2">⚡ Calcular Costo Único →</button>
 </div>
-<button class="btn btn-proc" id="btn-proc" style="display:none;border:1px solid;width:100%;margin-bottom:8px" onclick="procesar()">✅ Procesar al Historial</button>
+<div style="display:flex;gap:8px;margin-bottom:8px">
+<button class="btn btn-proc" id="btn-proc" style="display:none;border:1px solid;flex:2" onclick="procesar()">✅ Procesar al Historial</button>
+<button onclick="_guardarNubeManual()" style="display:none;flex:1;background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:#58a6ff;border-radius:10px;padding:10px 8px;font-size:12px;font-weight:700;cursor:pointer" id="btn-nube-manual" title="Guardar este embarque en la nube sin reiniciar el formulario">☁️ Guardar Nube</button>
+</div>
 
 <!-- ══ DESCARGAR RESULTADO ══ -->
 <div id="download-btns" style="display:none;margin-top:8px">
@@ -849,6 +852,7 @@ function calcular(){
     +'</div>';
 
   document.getElementById('btn-proc').style.display='block';
+  var _bnm=document.getElementById('btn-nube-manual'); if(_bnm) _bnm.style.display='block';
   document.getElementById('btn-proc').scrollIntoView({behavior:'smooth',block:'center'});
   document.getElementById('download-btns').style.display='block';
   toast('✅ Costo Único calculado','green');
@@ -918,11 +922,28 @@ async function _pushToCloud(data){
       };
       var r=await _sb.from('simulador_sesiones').upsert(payload,{onConflict:'nombre'});
       if(!r.error){
+        // También guardar fila individual del embarque (nombre=nro) — para que
+        // Planeación de Carga lo detecte igual que los embarques normales.
+        try{
+          var datosInd={
+            version:'3.5.7.4', fecha:new Date().toISOString(),
+            tipo:'unico', termino: data.terminoEmb||'CIF', compar:'unico', exon:false,
+            snap: data.snap, campos:{}, invLines: data.invLines||[],
+            nro: data.nro||'', desc: data.desc||'', origen: data.pais||''
+          };
+          var rInd=await _sb.from('simulador_sesiones').upsert(
+            {nombre:data.nro, datos:JSON.stringify(datosInd), updated_at:new Date().toISOString()},
+            {onConflict:'nombre'}
+          );
+          if(rInd.error) console.warn('SB upsert individual error:',rInd.error);
+        }catch(eInd){ console.warn('SB push individual:',eInd); }
         document.getElementById('cloud-badge').textContent='☁️ Guardado ✓';
         document.getElementById('cloud-badge').style.color='var(--green)';
         return true;
       } else {
         console.warn('SB upsert error:',r.error);
+        document.getElementById('cloud-badge').textContent='⚠️ Error nube';
+        document.getElementById('cloud-badge').style.color='var(--red,#f85149)';
       }
     }catch(e){ console.warn('SB push:',e); }
   }
@@ -938,18 +959,8 @@ async function _pushToCloud(data){
 // ═══════════════════════════════════════════════
 // PROCESAR AL HISTORIAL
 // ═══════════════════════════════════════════════
-async function procesar(){
-  if(!lastCalc||!lastCalc.cif){ toast('⚠️ Calcula primero.','red'); return; }
-  var d=lastCalc;
-  if(!d.nro){ if(!confirm('No hay N° de Embarque. ¿Continuar?')) return; }
-
-  var btn=document.getElementById('btn-proc');
-  btn.textContent='⏳ Guardando en la nube…';
-  btn.disabled=true;
-  var _sEl=document.getElementById('estatus');
-  if(_sEl) _sEl.value='Procesado';
-
-  var data={
+function _buildUnicoData(d){
+  return {
     nro: d.nro||('UNI-'+Date.now()),
     desc: d.desc||'Embarque Único',
     fecha: d.fecha||new Date().toISOString().slice(0,10),
@@ -981,6 +992,37 @@ async function procesar(){
     invLines: buildInvLines(d),
     status: 'completo'
   };
+}
+
+// Botón manual "☁️ Guardar Nube" — fuerza el guardado del embarque actual
+// sin reiniciar el formulario (a diferencia de "Procesar al Historial")
+async function _guardarNubeManual(){
+  if(!lastCalc||!lastCalc.cif){ toast('⚠️ Calcula primero.','red'); return; }
+  var d=lastCalc;
+  if(!d.nro){ toast('⚠️ Ingresa el N° de Embarque primero.','red'); return; }
+  var data=_buildUnicoData(d);
+  var badge=document.getElementById('cloud-badge');
+  if(badge){ badge.textContent='☁️ Guardando…'; badge.style.color='var(--muted)'; }
+  var ok=await _pushToCloud(data);
+  if(ok){
+    toast('☁️ Guardado en la nube: '+data.nro,'green');
+  } else {
+    toast('⚠️ No se pudo guardar en la nube — revisa la conexión','red');
+  }
+}
+
+async function procesar(){
+  if(!lastCalc||!lastCalc.cif){ toast('⚠️ Calcula primero.','red'); return; }
+  var d=lastCalc;
+  if(!d.nro){ if(!confirm('No hay N° de Embarque. ¿Continuar?')) return; }
+
+  var btn=document.getElementById('btn-proc');
+  btn.textContent='⏳ Guardando en la nube…';
+  btn.disabled=true;
+  var _sEl=document.getElementById('estatus');
+  if(_sEl) _sEl.value='Procesado';
+
+  var data=_buildUnicoData(d);
 
   var ok = await _pushToCloud(data);
 
