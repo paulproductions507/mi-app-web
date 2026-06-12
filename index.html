@@ -21215,7 +21215,7 @@ async function procesarUnico(){
   // Save directo a nube — await garantiza escritura
   if(!_sb){ initSupabase(); await new Promise(r=>setTimeout(r,600)); }
   try{ await _syncTendToCloud(); }catch(e){ console.warn('syncTend:',e); }
-  try{ await guardarSesionNube(); }catch(e){}
+  try{ await autoGuardarSupabase(nro || ('UNICO-'+Date.now())); }catch(e){ console.error('autoGuardarSupabase (unico):',e); }
   if(typeof renderTend==='function') renderTend();
   if(typeof renderTopProvs==='function') renderTopProvs();
   if(typeof renderDashboardKPIs==='function') renderDashboardKPIs();
@@ -22984,10 +22984,15 @@ async function autoGuardarSupabase(nombre){
     };
     if(!_sb) return;
     // Guardar sesión individual del embarque
-    await _sb.from('simulador_sesiones').upsert(
+    const _r1 = await _sb.from('simulador_sesiones').upsert(
       {nombre, datos:JSON.stringify(datos), updated_at:new Date().toISOString()},
       {onConflict:'nombre'}
     );
+    if(_r1 && _r1.error){
+      console.error('Error guardando sesión individual:', _r1.error);
+      if(typeof _showToast==='function') _showToast('⚠️ No se pudo guardar el embarque '+nombre+' en la nube: '+(_r1.error.message||'error desconocido'),'red',6000);
+      throw _r1.error;
+    }
     // SIEMPRE actualizar el registro maestro de tendData
     await _syncTendToCloud();
     console.log('✅ Auto-guardado en Supabase:', nombre);
