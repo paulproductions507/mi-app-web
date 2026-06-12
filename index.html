@@ -21816,51 +21816,18 @@ function guardarSesion(){
 }
 
 async function guardarSesionNube(){
-  // Build session data — incluye campos del formulario igual que la versión local
-  const snap = window._lastSnap || {};
-  const _camposIds = [
-    's1_cif','s1_fob','s1_flete_fob','s1_seguro','s1_cif_calc',
-    's1_ar','s1_itbms','s1_traspaso','s1_dif_pago',
-    's1_reng','s1_gzlc','s1_tasa','s2_form',
-    's1_equipo','s1_acarreo','s1_equipos','s1_dmce','s1_agente',
-    's1_nro_emb','s1_desc_emb','s1_origen_emb','s1_pais_emb','s1_ciudad_emb',
-    's1_tipo_emb','s1_destino','s1_cartones','s1_id_fiscal',
-    'sc_costo_zl','sc_trasp','sc_fob','sc_flete','sc_com','sc_pago',
-    'sc_flete_sab','sc_origen_sab','sc_comision_display','sc2_hon_ng',
-    's2_costo_zl','s2_trasp','s2_fob','s2_flete','s2_dif_fob','s2_dif_cif','s2_pago','s2_com',
-    's2_flete_sab','s2_agente',
-    'solo_hon_pct','solo_nombre'
-  ];
-  const campos = {};
-  _camposIds.forEach(id => {
-    const el = document.getElementById(id);
-    if(el) campos[id] = el.value;
-  });
-
-  const datos = {
-    version: "3.5.7.4",
-    fecha: new Date().toISOString(),
-    tipo, termino, compar, exon,
-    sabTipo: typeof sabTipo !== 'undefined' ? sabTipo : 'ZL',
-    sab2Tipo: typeof sab2Tipo !== 'undefined' ? sab2Tipo : 'ZL',
-    sabTipoCmp: typeof sabTipoCmp !== 'undefined' ? sabTipoCmp : 'ZL',
-    snap,
-    campos,   // ← ahora SÍ guarda los campos del formulario
-    invLines,
-    tendData: window.tendData || [],
-    nro: campos.s1_nro_emb || "",
-    desc: campos.s1_desc_emb || "",
-    origen: campos.s1_origen_emb || "",
-  };
-
-  const nombre = prompt(
-    "Nombre para esta sesión en la nube:",
-    datos.nro || ("sesion_" + new Date().toISOString().slice(0,10))
-  );
-  if(!nombre) return;
-
-  const ok = await guardarEnSupabase(nombre, datos);
-  if(ok) _showToast("☁️ Guardado en la nube: " + nombre, 'green', 3000);
+  const _nroEl = document.getElementById('s1_nro_emb');
+  const nro = (_nroEl && _nroEl.value ? _nroEl.value.trim() : '') || '';
+  const nombre = nro || ('sesion_' + new Date().toISOString().slice(0,16).replace(/[:T]/g,'-'));
+  if(!_sb){ initSupabase(); await new Promise(r=>setTimeout(r,400)); }
+  if(!_sb){ if(typeof _showToast==='function') _showToast('⚠️ Sin conexión a la nube — verifica tu internet','red',5000); return; }
+  try{
+    await autoGuardarSupabase(nombre);
+    if(typeof _showToast==='function') _showToast('☁️ Guardado en la nube: '+nombre,'green',3000);
+  }catch(e){
+    // autoGuardarSupabase ya muestra el toast rojo con el detalle del error
+    console.error('guardarSesionNube error:', e);
+  }
 }
 
 
