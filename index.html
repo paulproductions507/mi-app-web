@@ -11633,24 +11633,39 @@ function _corregirAhorroNegativoSababa(d){
   if(!((d.ahorro||0) < 0)) return false; // solo corrige negativos
   const snap = d.snap;
   const sc1 = snap.sc1||{}, sc3 = snap.sc3||{};
-  if(!((sc3.comision||0) > 0)) return false; // no es un embarque Sababa con datos
+  const esSababa = (d.esc||'').toLowerCase().includes('sababa');
 
-  // ── Misma fórmula del "COMPARATIVO DE DESEMBOLSO — 4 Criterios" del dashboard ──
-  const r1_flete = (snap.termino==='FOB' && snap.tipo==='EXT') ? (snap.flete||0) : 0;
-  const c1_reg = (sc1.arancel||0)+(sc1.itbms||0)+(sc1.tasa||0)+(sc1.itbmsTasaFinal||0)+(sc1.form1||0);
-  const c2_reg = r1_flete + (sc1.agente||0) + (sc1.acarreo||0) + (sc1.dmce||0);
-  const c3_reg = sc1.hon||0;
+  if((sc3.comision||0) > 0){
+    // ── Datos completos: recalcular con la misma fórmula del Comparativo (4 Criterios) ──
+    const r1_flete = (snap.termino==='FOB' && snap.tipo==='EXT') ? (snap.flete||0) : 0;
+    const c1_reg = (sc1.arancel||0)+(sc1.itbms||0)+(sc1.tasa||0)+(sc1.itbmsTasaFinal||0)+(sc1.form1||0);
+    const c2_reg = r1_flete + (sc1.agente||0) + (sc1.acarreo||0) + (sc1.dmce||0);
+    const c3_reg = sc1.hon||0;
 
-  const c1_sab = sc3.itbmsHomol||0;
-  const c2_sab = (sc3.flete||0) + (sc3.gastos||0);
-  const c3_sab = (sc3.comBruta!==undefined && sc3.comBruta!==null) ? sc3.comBruta : ((sc3.comision||0)-(sc3.itbmsHomol||0));
+    const c1_sab = sc3.itbmsHomol||0;
+    const c2_sab = (sc3.flete||0) + (sc3.gastos||0);
+    const c3_sab = (sc3.comBruta!==undefined && sc3.comBruta!==null) ? sc3.comBruta : ((sc3.comision||0)-(sc3.itbmsHomol||0));
 
-  const ahorroCorr = Math.round(((c1_reg-c1_sab)+(c2_reg-c2_sab)+(c3_reg-c3_sab))*100)/100;
-  if(ahorroCorr === d.ahorro) return false;
+    const ahorroCorr = Math.round(((c1_reg-c1_sab)+(c2_reg-c2_sab)+(c3_reg-c3_sab))*100)/100;
+    if(ahorroCorr === d.ahorro) return false;
 
-  d.ahorro = ahorroCorr;
-  sc3.ahorroNeto = ahorroCorr;
-  return true;
+    d.ahorro = ahorroCorr;
+    sc3.ahorroNeto = ahorroCorr;
+    d._requiereReproceso = false;
+    return true;
+  }
+
+  if(esSababa){
+    // ── Datos incompletos en el snap guardado (sc3 vacío) — no se puede recalcular
+    //    con confianza. En lugar de mostrar un número negativo o inventado, se
+    //    neutraliza a $0 y se marca para reprocesar manualmente (Editar → Procesar). ──
+    d.ahorro = 0;
+    if(sc3.ahorroNeto !== undefined) sc3.ahorroNeto = 0;
+    d._requiereReproceso = true;
+    return true;
+  }
+
+  return false;
 }
 
 function loadTendData(){
@@ -14282,8 +14297,8 @@ function renderTend(){
         <div style="font-size:10px;font-weight:700;color:${nroColor};white-space:nowrap">${d.nro||'—'} ${unicoBadge}</div>
         <div><div style="font-size:12px;font-weight:500;color:var(--text)">${d.desc}${isPend?'&nbsp;<span class="badge-pendiente">🟡 PENDIENTE</span>':''}${d.status==='parcial'?'&nbsp;<span style="background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:3px;padding:1px 5px;font-size:9px;font-weight:700">🚢 PARCIAL</span>':''}</div><div style="font-size:10px;color:var(--muted);display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-top:2px">${d.fecha} · ${d.esc||''}&nbsp;<span style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:var(--blue-l)">${viaIco} ${viaLabel}</span>${d.tramiteTipo?`<span style="background:${tramiteBg};border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:${tramiteColor}">${d.tramiteTipo}</span>`:''}${d.lugarRecep?`<span style="background:rgba(45,212,191,.1);border:1px solid rgba(45,212,191,.25);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:#2dd4bf">🏭 ${d.lugarRecep}</span>`:''}
 </div></div>
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--green-l);font-weight:700;white-space:nowrap">${window._fmtMoney(_ahorroDisplay)}</div>
-        <div style="font-size:11px;color:var(--orange-l);white-space:nowrap">${pct}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:${d._requiereReproceso?'var(--orange-l)':'var(--green-l)'};font-weight:700;white-space:nowrap">${d._requiereReproceso?'⚠ Reprocesar':window._fmtMoney(_ahorroDisplay)}</div>
+        <div style="font-size:11px;color:var(--orange-l);white-space:nowrap">${d._requiereReproceso?'':pct}</div>
         <div style="display:flex;gap:4px;align-items:center">
           <button class="btn-reabrir" onclick="event.stopPropagation();reabrirEmbarquePendiente(${idx})" style="${isPend?'':'background:rgba(88,166,255,.1);border-color:rgba(88,166,255,.3);color:var(--blue-l)'}">✏️ ${isPend?'Reabrir':'Editar'}</button>
           <button onclick="event.stopPropagation();_corregirFechaUI(${idx})" title="Corregir fecha del embarque" style="background:rgba(248,209,34,.1);border:1px solid rgba(248,209,34,.3);color:#f8d122;border-radius:5px;padding:2px 6px;font-size:10px;cursor:pointer;height:22px">📅</button>
