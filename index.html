@@ -11637,38 +11637,72 @@ function _corregirAhorroNegativoSababa(d){
   const snap = d.snap;
   const sc1 = snap.sc1||{}, sc3 = snap.sc3||{};
   const esSababa = (d.esc||'').toLowerCase().includes('sababa');
+  if(!esSababa) return false;
 
+  const R = n => Math.round((n||0)*100)/100;
+
+  // ── Intento 1: sc3 tiene comision > 0 (datos completos) ──
   if((sc3.comision||0) > 0){
-    // ── Datos completos: recalcular con la misma fórmula del Comparativo (4 Criterios) ──
     const r1_flete = (snap.termino==='FOB' && snap.tipo==='EXT') ? (snap.flete||0) : 0;
     const c1_reg = (sc1.arancel||0)+(sc1.itbms||0)+(sc1.tasa||0)+(sc1.itbmsTasaFinal||0)+(sc1.form1||0);
     const c2_reg = r1_flete + (sc1.agente||0) + (sc1.acarreo||0) + (sc1.dmce||0);
     const c3_reg = sc1.hon||0;
-
     const c1_sab = sc3.itbmsHomol||0;
     const c2_sab = (sc3.flete||0) + (sc3.gastos||0);
     const c3_sab = (sc3.comBruta!==undefined && sc3.comBruta!==null) ? sc3.comBruta : ((sc3.comision||0)-(sc3.itbmsHomol||0));
-
-    const ahorroCorr = Math.round(((c1_reg-c1_sab)+(c2_reg-c2_sab)+(c3_reg-c3_sab))*100)/100;
+    const ahorroCorr = R((c1_reg-c1_sab)+(c2_reg-c2_sab)+(c3_reg-c3_sab));
     if(ahorroCorr === d.ahorro) return false;
-
     d.ahorro = ahorroCorr;
     sc3.ahorroNeto = ahorroCorr;
     d._requiereReproceso = false;
     return true;
   }
 
-  if(esSababa){
-    // ── Datos incompletos en el snap guardado (sc3 vacío) — no se puede recalcular
-    //    con confianza. En lugar de mostrar un número negativo o inventado, se
-    //    neutraliza a $0 y se marca para reprocesar manualmente (Editar → Procesar). ──
-    d.ahorro = 0;
-    if(sc3.ahorroNeto !== undefined) sc3.ahorroNeto = 0;
-    d._requiereReproceso = true;
+  // ── Intento 2: sc3 tiene mercHomol o baseAjustada — reconstruir comision al 10% ──
+  // Cubre embarques donde sc3.comision quedó en 0 por el bug de guardado,
+  // pero sc3.mercHomol / sc3.baseAjustada / sc3.itbmsHomol sí se guardaron.
+  const baseAj = sc3.baseAjustada || (sc3.mercHomol ? sc3.mercHomol * 1.07 : 0);
+  if(baseAj > 0){
+    const comPct = snap.sc3ComPct || 0.10;
+    const comisionReconstruida = R(baseAj * comPct);
+    const itbmsH = sc3.itbmsHomol || R(sc3.mercHomol * 0.07);
+    const fleteR  = sc3.flete  || (snap.termino==='FOB' && snap.tipo==='EXT' ? (snap.flete||0) : 0);
+    const gastosR = sc3.gastos || sc1.agente || 0;
+
+    const r1_flete = (snap.termino==='FOB' && snap.tipo==='EXT') ? (snap.flete||0) : 0;
+    const c1_reg = (sc1.arancel||0)+(sc1.itbms||0)+(sc1.tasa||0)+(sc1.itbmsTasaFinal||0)+(sc1.form1||0);
+    const c2_reg = r1_flete + (sc1.agente||0) + (sc1.acarreo||0) + (sc1.dmce||0);
+    const c3_reg = sc1.hon||0;
+    const c1_sab = itbmsH;
+    const c2_sab = fleteR + gastosR;
+    const c3_sab = R(comisionReconstruida - itbmsH);
+    const ahorroCorr = R((c1_reg-c1_sab)+(c2_reg-c2_sab)+(c3_reg-c3_sab));
+    d.ahorro = ahorroCorr;
+    sc3.ahorroNeto = ahorroCorr;
+    sc3.comision = comisionReconstruida;
+    sc3.itbmsHomol = itbmsH;
+    sc3.comBruta = c3_sab;
+    d._requiereReproceso = false;
     return true;
   }
 
-  return false;
+  // ── Intento 3: comparar landed1 de sc1 vs sc3 como diferencia de desembolso ──
+  // Último recurso cuando sc3 está casi vacío pero tiene landed1.
+  if((sc3.landed1||0) > 0 && (sc1.landed1||0) > 0){
+    const ahorroCorr = R(sc1.landed1 - sc3.landed1);
+    if(ahorroCorr > 0){
+      d.ahorro = ahorroCorr;
+      sc3.ahorroNeto = ahorroCorr;
+      d._requiereReproceso = false;
+      return true;
+    }
+  }
+
+  // ── Sin datos suficientes: neutralizar a 0 en vez de mostrar negativo ──
+  d.ahorro = 0;
+  if(sc3.ahorroNeto !== undefined) sc3.ahorroNeto = 0;
+  d._requiereReproceso = true;
+  return true;
 }
 
 function loadTendData(){
@@ -12976,20 +13010,28 @@ async function procesarEmbarque(){
   });
   const snap={
     nro: nro||`SIN-NRO-${Date.now()}`, desc, fecha,
-    // ── Ahorro: leer directamente del snap actualizado por calcSab2() ──
-    // Para Sababa: sc3.ahorroNeto es escrito por el bloque Comparativo de 4 Criterios
-    // (el mismo que muestra el dashboard). Es la fuente de verdad — no _ahorroTotal4C.
-    // Para CIF Express: _ahorroTotal4C es correcto.
+    // ── Ahorro: calcular inline con fórmula 4 Criterios — fuente única ──
+    // Se calcula aquí mismo desde _lastSnap (ya poblado por calc()+calcSab2()),
+    // sin depender de _ahorroTotal4C que puede estar desactualizado.
     ahorro: (function(){
       const _sc = window._lastSnap || {};
       if(compar === 'sababa'){
-        // Leer del comparativo de 4 Criterios de calcSab2 — siempre correcto
-        const _ah = _sc.sc3 && typeof _sc.sc3.ahorroNeto === 'number' ? _sc.sc3.ahorroNeto : null;
-        if(_ah !== null) return Math.round(_ah*100)/100;
+        const _sc1 = _sc.sc1 || {}, _sc3 = _sc.sc3 || {};
+        const _flete = (_sc.termino==='FOB' && _sc.tipo==='EXT') ? (_sc.flete||0) : 0;
+        const _c1r = (_sc1.arancel||0)+(_sc1.itbms||0)+(_sc1.tasa||0)+(_sc1.itbmsTasaFinal||0)+(_sc1.form1||0);
+        const _c2r = _flete + (_sc1.agente||0) + (_sc1.acarreo||0) + (_sc1.dmce||0);
+        const _c3r = _sc1.hon||0;
+        const _c1s = _sc3.itbmsHomol||0;
+        const _c2s = (_sc3.flete||0) + (_sc3.gastos||0);
+        const _c3s = (_sc3.comBruta!==undefined&&_sc3.comBruta!==null) ? _sc3.comBruta : ((_sc3.comision||0)-(_sc3.itbmsHomol||0));
+        const _ah = Math.round(((_c1r-_c1s)+(_c2r-_c2s)+(_c3r-_c3s))*100)/100;
+        if(_sc3.comision > 0 || _sc3.itbmsHomol > 0) return _ah;
       }
-      // CIF Express: usar _ahorroTotal4C
-      if(typeof window._ahorroTotal4C === 'number' && window._ahorroTotal4C !== 0) return Math.round(window._ahorroTotal4C*100)/100;
-      if(compar === 'cifexp' && _sc.sc2 && (_sc.sc2.ahorroNeto || 0) !== 0) return _sc.sc2.ahorroNeto;
+      // CIF Express
+      if(compar === 'cifexp'){
+        if(typeof window._ahorroTotal4C === 'number' && window._ahorroTotal4C !== 0) return Math.round(window._ahorroTotal4C*100)/100;
+        if(_sc.sc2 && (_sc.sc2.ahorroNeto||0) !== 0) return _sc.sc2.ahorroNeto;
+      }
       return window._lastAhorroNeto || 0;
     })(),
     cif:    window._lastCIF||0,
