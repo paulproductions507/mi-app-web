@@ -2827,7 +2827,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
      CONFIGURACIÓN DE PROVEEDORES — País/Ciudad default
      ══════════════════════════════════════════════════════ -->
 <div class="card" style="margin-bottom:14px">
-  <div class="card-hd" style="cursor:pointer;user-select:none" onclick="_toggleSection('provconfig-body','provconfig-icon',this);_pcCargarCache()">
+  <div class="card-hd" style="cursor:pointer;user-select:none" onclick="_toggleSection('provconfig-body','provconfig-icon',this);_pcCargarCache().then(function(){ if(typeof _pcRenderSinOrigen==='function') _pcRenderSinOrigen(); })">
     <div class="dot" style="background:#58a6ff"></div>
     <h3>🏭 Origen de Proveedores</h3>
     <span id="provconfig-icon" style="margin-left:auto;font-size:12px;color:var(--muted)">▶</span>
@@ -2843,6 +2843,9 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
     <button type="button" onclick="_pcAbrirBuscador()" style="width:100%;text-align:left;background:#ffffff;border:1px solid #d0d7de;border-radius:8px;padding:11px 12px;color:#1f2328;font-size:13px;font-family:'IBM Plex Mono',monospace;cursor:pointer;display:flex;align-items:center;gap:8px">
       <span>🔍</span><span style="color:#57606a">Buscar / elegir proveedor…</span>
     </button>
+
+    <!-- Panel: proveedores SIN origen configurado, priorizados por monto -->
+    <div id="pc-sinorigen" style="margin-top:14px"></div>
   </div>
 </div>
 
@@ -6947,6 +6950,13 @@ function switchTab(id,el){
     setTimeout(async ()=>{
       if(_sb) await _pullTendFromCloud();
       if(_sb && typeof _autoBackupSemanal==='function') _autoBackupSemanal();
+      // Cargar Origen de Proveedores — necesario para que la búsqueda por
+      // país/ciudad funcione aunque el usuario nunca haya abierto Configuración.
+      if(typeof _pcCargarCache==='function'){
+        _pcCargarCache().then(function(){
+          if(typeof renderTend==='function') renderTend();
+        }).catch(function(){});
+      }
       _populateProveedorFilter();
       if(typeof _loadFiltrosTend==='function') await _loadFiltrosTend();
       // Establecer filtro de mes actual si no hay filtro activo
@@ -10398,24 +10408,42 @@ window._pcCache = {}; // { prov_nombre: {pais, ciudad} }
 window._pcSelected = null;
 
 async function _pcCargarCache(){
-  // Intentar Supabase primero
+  // 1) Base: lo que ya está guardado localmente (nunca se debe perder).
+  var local = {};
+  try {
+    var raw = localStorage.getItem('_pcCache');
+    if(raw) local = JSON.parse(raw) || {};
+  } catch(e){ local = {}; }
+
+  // 2) Traer de Supabase y FUSIONAR (la nube complementa/actualiza, pero las
+  // entradas que solo existen localmente NUNCA se borran por esto).
+  var cloud = {};
+  var cloudOk = false;
   try {
     if(window._sb){
       const { data, error } = await window._sb.from('prov_config').select('prov_nombre,pais,ciudad');
       if(!error && data){
-        window._pcCache = {};
-        data.forEach(function(r){ window._pcCache[r.prov_nombre] = {pais:r.pais||'', ciudad:r.ciudad||''}; });
-        try{ localStorage.setItem('_pcCache', JSON.stringify(window._pcCache)); }catch(e){}
+        cloudOk = true;
+        data.forEach(function(r){ cloud[r.prov_nombre] = {pais:r.pais||'', ciudad:r.ciudad||''}; });
       }
     }
   } catch(e){ console.warn('prov_config Supabase error', e); }
-  // Fallback localStorage
-  if(!Object.keys(window._pcCache||{}).length){
-    try {
-      var local = localStorage.getItem('_pcCache');
-      if(local){ window._pcCache = JSON.parse(local); }
-      else { window._pcCache = {}; }
-    } catch(e){ window._pcCache = {}; }
+
+  var merged = Object.assign({}, local, cloud);
+  window._pcCache = merged;
+  try{ localStorage.setItem('_pcCache', JSON.stringify(merged)); }catch(e){}
+
+  // 3) Autorreparación: si hay entradas que solo existían localmente (nunca
+  // llegaron a la nube por una falla previa), subirlas ahora silenciosamente.
+  if(cloudOk && window._sb){
+    var faltantes = Object.keys(local).filter(function(k){ return !cloud[k]; });
+    faltantes.forEach(function(k){
+      var v = local[k];
+      window._sb.from('prov_config').upsert(
+        { prov_nombre: k, pais: v.pais||'', ciudad: v.ciudad||'', updated_at: new Date().toISOString() },
+        { onConflict: 'prov_nombre' }
+      ).catch(function(e){ console.warn('prov_config re-sync error', k, e); });
+    });
   }
 }
 
@@ -10469,6 +10497,31 @@ function _pcSugerirCiudades(pais, q){
   return todos.filter(function(c){ return c.toLowerCase().includes(qq); });
 }
 
+// Búsqueda en _pcCache tolerante a diferencias de mayúsculas/espacios/puntos
+// entre el nombre del proveedor en las facturas (l.prov) y el nombre tal cual
+// fue configurado en "Origen de Proveedores". Sin esto, una pequeña diferencia
+// (ej. punto final, espacios extra) hace que el origen configurado no se encuentre.
+// Normaliza acentos (México→Mexico, Panamá→Panama) para que las comparaciones
+// de origen no fallen por diferencias de tilde entre el dato guardado y el filtro.
+function _sinAcentos(s){
+  return (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+}
+
+function _pcLookup(provName){
+  if(!provName || !window._pcCache) return null;
+  if(window._pcCache[provName]) return window._pcCache[provName];
+  var norm = function(s){ return (s||'').trim().toUpperCase().replace(/\s+/g,' ').replace(/\.+$/,''); };
+  var target = norm(provName);
+  if(!target) return null;
+  if(!window._pcCacheNormIdx || window._pcCacheNormIdxSize !== Object.keys(window._pcCache).length){
+    var idx = {};
+    Object.keys(window._pcCache).forEach(function(k){ idx[norm(k)] = window._pcCache[k]; });
+    window._pcCacheNormIdx = idx;
+    window._pcCacheNormIdxSize = Object.keys(window._pcCache).length;
+  }
+  return window._pcCacheNormIdx[target] || null;
+}
+
 function _pcGetAllProvNames(){
   var seen = {};
   var srcNames = (typeof _PROV_NAMES !== 'undefined') ? _PROV_NAMES : (window._PROV_NAMES || []);
@@ -10482,9 +10535,58 @@ function _pcGetAllProvNames(){
   }).sort(function(a,b){ return a.localeCompare(b,'es',{sensitivity:'base'}); });
 }
 
+// Panel "Proveedores sin origen configurado, priorizados por monto".
+// La búsqueda por país/ciudad SOLO encuentra embarques de proveedores que ya
+// tienen su origen configurado aquí. Este panel muestra cuáles proveedores
+// (de los que SÍ aparecen en tus embarques procesados) faltan, ordenados por
+// el monto total que representan — para configurar primero los que más impactan.
+function _pcRenderSinOrigen(){
+  var el = document.getElementById('pc-sinorigen');
+  if(!el) return;
+  if(typeof _buildHistProvRows !== 'function' || typeof tendData === 'undefined'){
+    el.innerHTML = '';
+    return;
+  }
+  try{
+    var rows = _buildHistProvRows().filter(function(r){ return r.seccion==='merc'; });
+    var totals = {};
+    rows.forEach(function(r){
+      var k = (r.prov||'').trim();
+      if(!k) return;
+      if(!totals[k]) totals[k] = 0;
+      totals[k] += (r.costo||0);
+    });
+    var faltantes = Object.keys(totals).filter(function(p){ return !_pcLookup(p); })
+      .sort(function(a,b){ return totals[b]-totals[a]; });
+
+    if(!faltantes.length){
+      el.innerHTML = '<div style="font-size:11px;color:var(--green-l,#3fb950);background:rgba(63,185,80,.08);border:1px solid rgba(63,185,80,.25);border-radius:8px;padding:10px 12px">✅ Todos los proveedores de tus embarques procesados ya tienen origen configurado.</div>';
+      return;
+    }
+
+    var TOP = 15;
+    var top = faltantes.slice(0, TOP);
+    var fmt2 = function(n){ return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
+    var nmAttr = function(s){ return s.replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;'); };
+
+    el.innerHTML = '<div style="font-size:10px;font-weight:700;color:var(--orange-l,#f0883e);text-transform:uppercase;margin-bottom:6px">⚠️ '+faltantes.length+' proveedor(es) de tus embarques SIN origen — los de mayor monto primero</div>'
+      + top.map(function(p){
+          return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 4px;border-bottom:1px solid rgba(48,54,61,.3)">'
+            +'<div style="min-width:0;flex:1"><div style="font-size:12px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+p.replace(/</g,'&lt;')+'</div>'
+            +'<div style="font-size:10px;color:var(--muted)">'+fmt2(totals[p])+' acumulado</div></div>'
+            +'<button onclick="_pcSeleccionar(\''+nmAttr(p)+'\')" style="flex-shrink:0;background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer">Configurar</button>'
+            +'</div>';
+        }).join('')
+      + (faltantes.length>TOP ? '<div style="font-size:10px;color:var(--muted);padding:6px 4px">… y '+(faltantes.length-TOP)+' más. Usa el buscador de arriba para configurarlos.</div>' : '');
+  } catch(err){
+    el.innerHTML = '<div style="font-size:11px;color:#f85149">⚠️ Error: '+(err&&err.message||err)+'</div>';
+    console.error('_pcRenderSinOrigen error:', err);
+  }
+}
 // Modal de pantalla completa: buscador + lista filtrable de proveedores.
 // Mismo patrón de overlay fijo que _pcOrigenModal / Backups (garantiza visibilidad).
 function _pcAbrirBuscador(){
+
   var old = document.getElementById('_pcBuscadorModal'); if(old) old.remove();
   var modal = document.createElement('div');
   modal.id = '_pcBuscadorModal';
@@ -10634,11 +10736,12 @@ async function _pcGuardarUno(nombre, pais, ciudad){
 function _pcBuscarHijos(nombrePadre){
   // Si el propio nombre ya es una variante S.I -, no propagar de nuevo.
   if(/^S\.?\s*I\.?\s*-/i.test(nombrePadre.trim())) return [];
-  var padreUp = nombrePadre.trim().toUpperCase();
+  var norm = function(s){ return (s||'').trim().toUpperCase().replace(/\s+/g,' ').replace(/\.+$/,''); };
+  var padreUp = norm(nombrePadre);
   return _pcGetAllProvNames().filter(function(n){
     var m = n.match(/^S\.?\s*I\.?\s*-\s*(.+)$/i);
     if(!m) return false;
-    return m[1].trim().toUpperCase() === padreUp;
+    return norm(m[1]) === padreUp;
   });
 }
 
@@ -10651,6 +10754,7 @@ async function _pcGuardarDatos(nombre, pais, ciudad){
   var base = (pais||ciudad) ? ('✅ Origen guardado para '+nombre+': '+(pais||'—')+(ciudad?' · '+ciudad:'')) : ('🗑️ Origen eliminado para '+nombre);
   if(hijos.length) base += ' · +'+hijos.length+' variante(s) S.I heredada(s)';
   _showToast(base, 'green', 4000);
+  if(typeof _pcRenderSinOrigen==='function') _pcRenderSinOrigen();
 }
 
 async function _pcEliminar(nombre){
@@ -11611,7 +11715,7 @@ async function _rescatarEmbarqueCloud(nro){
   if(!window._sb){ alert('Sin conexión a Supabase.'); return; }
   try {
     // Buscar en todas las sesiones guardadas
-    var {data, error} = await _sb.from('simulaciones')
+    var {data, error} = await _sb.from('simulador_sesiones')
       .select('nombre,datos')
       .eq('nombre', String(nro));
     if(error) throw error;
@@ -11625,14 +11729,18 @@ async function _rescatarEmbarqueCloud(nro){
       if(parsed && parsed.snap){
         var newEntry = {
           nro: String(nro),
-          fecha: parsed.snap.fecha || parsed.fecha || '',
-          fechaDoc: parsed.snap.fecha || parsed.fecha || '',
-          esc: parsed.snap.esc || parsed.esc || '',
-          desc: parsed.snap.desc || parsed.desc || '',
-          ahorro: parsed.snap.ahorro || 0,
-          cif: parsed.snap.cif || 0,
+          fecha: (parsed.fecha||'').slice(0,10) || '',
+          fechaDoc: (parsed.fecha||'').slice(0,10) || '',
+          esc: parsed.compar==='cifexp' ? 'CIF Express' : 'Sababa',
+          desc: parsed.desc || (parsed.campos&&parsed.campos.s1_desc_emb) || '',
+          ahorro: (parsed.compar==='cifexp' ? (parsed.snap.sc2&&parsed.snap.sc2.ahorroNeto) : (parsed.snap.sc3&&parsed.snap.sc3.ahorroNeto)) || 0,
+          cif: (parsed.campos&&parseFloat(parsed.campos.s1_cif)) || parsed.snap.CIF || (parsed.snap.sc1&&parsed.snap.sc1.base) || 0,
+          pais:   (parsed.campos&&parsed.campos.s1_pais_emb)   || '',
+          ciudad: (parsed.campos&&parsed.campos.s1_ciudad_emb) || '',
+          origen: parsed.origen || (parsed.campos&&parsed.campos.s1_origen_emb) || '',
+          idFiscal: (parsed.campos&&parsed.campos.s1_id_fiscal) || '',
           snap: parsed.snap,
-          invLines: parsed.snap.invLines || [],
+          invLines: parsed.invLines || parsed.snap.invLines || [],
           status: 'procesado'
         };
         tendData.unshift(newEntry);
@@ -11643,7 +11751,7 @@ async function _rescatarEmbarqueCloud(nro){
       }
     }
     // Si no hay sesión específica, buscar en _TEND_MASTER
-    var {data:master} = await _sb.from('simulaciones').select('datos').eq('nombre','_TEND_MASTER').single();
+    var {data:master} = await _sb.from('simulador_sesiones').select('datos').eq('nombre','_TEND_MASTER').single();
     if(master){
       var mData = typeof master.datos==='string' ? JSON.parse(master.datos) : master.datos;
       var mTend = mData.tendData || [];
@@ -12213,18 +12321,9 @@ function _getFilteredTendData(){
                          _escL.includes('cif') ? 'importacion cif exterior ext' :
                          _escL.includes('liq') ? 'liquidacion aduanal' : '';
       const _provNames = ((d.snap&&d.snap.invLines)||d.invLines||[]).map(function(l){return (l.prov||'').toLowerCase();}).join(' ');
-      // Buscar en origen: usar todos los campos posibles donde se guarda
-      const _campos2   = (d.snap&&d.snap.campos)||{};
-      const _origenAll = [
-        d.origen||'',                        // campo raíz (s1_origen_emb texto libre)
-        d.pais||'',                          // campo raíz pais
-        _campos2.s1_pais_emb||'',            // país seleccionado
-        _campos2.s1_ciudad_emb||'',          // ciudad seleccionada
-        _campos2.s1_origen_emb||'',          // origen texto libre en campos
-        d.snap&&d.snap.origen||''            // origen en snap
-      ].join(' ').toLowerCase();
-      const txt=[(d.nro||''),(d.desc||''),(d.esc||''),(d.tramiteTipo||''),(d.idFiscal||''),_tipoAlias,_provNames,_origenAll].join(' ').toLowerCase();
-      if(!txt.includes(buscar)) return false;
+      const _ocNumbers = ((d.snap&&d.snap.invLines)||d.invLines||[]).map(function(l){return (l.oc||l.nfac||'').toLowerCase();}).join(' ');
+      const txt=[(d.nro||''),(d.desc||''),(d.esc||''),(d.tramiteTipo||''),(d.idFiscal||''),_tipoAlias,_provNames,_ocNumbers].join(' ').toLowerCase();
+      if(!_sinAcentos(txt).includes(_sinAcentos(buscar))) return false;
     }
     if(origen && typeof _origenMatchFiltro==='function'){
       if(!_origenMatchFiltro(d, origen)) return false;
@@ -12835,7 +12934,7 @@ async function procesarEmbarque(){
     tipoEquipo: document.getElementById('s1_equipo')?.value||'',
     viaTransporte: document.getElementById('s1_via_transporte')?.value||'SEA',
     // ── Contenedores múltiples ──
-    contenedores: window._contenedores && window._contenedores.length > 1
+    contenedores: window._contenedores && window._contenedores.length >= 1
       ? JSON.parse(JSON.stringify(window._contenedores))
       : null,
     noDmceAcarreo: window._noDmceAcarreo || false,
@@ -13125,7 +13224,7 @@ function reabrirEmbarquePendiente(idx){
     if(viaEl) viaEl.value = d.viaTransporte;
   }
   // ── Restaurar contenedores múltiples ──
-  if(d.contenedores && d.contenedores.length > 1){
+  if(d.contenedores && d.contenedores.length >= 1){
     window._contenedores = JSON.parse(JSON.stringify(d.contenedores));
     setTimeout(function(){ if(typeof _renderContenedores==='function') _renderContenedores(); }, 100);
   } else {
@@ -13159,9 +13258,9 @@ function reabrirEmbarquePendiente(idx){
     _set('s1_cif', s.CIF || (s.sc1 && s.sc1.base) || '');
   }
   _set('s1_ar_ajuste', s.arAjuste || (s.snap && s.snap.arAjuste) || '0');
-  _set('s1_acarreo', s.acarreo || '');
-  _set('s1_dmce',    s.dmce    || '');
-  _set('s1_agente',  s.agente  || '');
+  _set('s1_acarreo', (s.sc1&&s.sc1.acarreo) || s.acarreo || '');
+  _set('s1_dmce',    (s.sc1&&s.sc1.dmce)    || s.dmce    || '');
+  _set('s1_agente',  (s.sc1&&s.sc1.agente)  || s.agente  || '');
 
   // ── 6. Tasas / porcentajes ──
   if(s.arPct  !== undefined) _set('s1_ar',    ((s.arPct ||0)*100).toFixed(2));
@@ -13754,6 +13853,15 @@ function deleteTend(idx){
     if(!window._deletedEmbarques) window._deletedEmbarques = new Set();
     if(d.nro) window._deletedEmbarques.add(String(d.nro));
     if(d.ts)  window._deletedEmbarques.add(String(d.ts));
+    // ── Borrar también la sesión individual en Supabase (simulador_sesiones) ──
+    // Sin esto, el registro queda "huérfano" en la nube con datos viejos y puede
+    // resurgir en una sincronización posterior.
+    if(window._sb && d.nro){
+      const _nroDel = String(d.nro);
+      _sb.from('simulador_sesiones').delete().eq('nombre', _nroDel).then(function(_r){
+        if(_r && _r.error) console.error('Error borrando sesión individual '+_nroDel+':', _r.error);
+      });
+    }
   }
   tendData.splice(idx,1);
   saveTendData(); // sincroniza maestro + lista negra a Supabase
@@ -14126,7 +14234,7 @@ function renderTend(){
         <div style="font-size:10px;font-weight:700;color:${nroColor};white-space:nowrap">${d.nro||'—'} ${unicoBadge}</div>
         <div><div style="font-size:12px;font-weight:500;color:var(--text)">${d.desc}${isPend?'&nbsp;<span class="badge-pendiente">🟡 PENDIENTE</span>':''}${d.status==='parcial'?'&nbsp;<span style="background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:3px;padding:1px 5px;font-size:9px;font-weight:700">🚢 PARCIAL</span>':''}</div><div style="font-size:10px;color:var(--muted);display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-top:2px">${d.fecha} · ${d.esc||''}&nbsp;<span style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:var(--blue-l)">${viaIco} ${viaLabel}</span>${d.tramiteTipo?`<span style="background:${tramiteBg};border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:${tramiteColor}">${d.tramiteTipo}</span>`:''}${d.lugarRecep?`<span style="background:rgba(45,212,191,.1);border:1px solid rgba(45,212,191,.25);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:#2dd4bf">🏭 ${d.lugarRecep}</span>`:''}
 </div></div>
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--green-l);font-weight:700;white-space:nowrap">$${(_ahorroDisplay/1000).toFixed(2)}k</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--green-l);font-weight:700;white-space:nowrap">${window._fmtMoney(_ahorroDisplay)}</div>
         <div style="font-size:11px;color:var(--orange-l);white-space:nowrap">${pct}</div>
         <div style="display:flex;gap:4px;align-items:center">
           <button class="btn-reabrir" onclick="event.stopPropagation();reabrirEmbarquePendiente(${idx})" style="${isPend?'':'background:rgba(88,166,255,.1);border-color:rgba(88,166,255,.3);color:var(--blue-l)'}">✏️ ${isPend?'Reabrir':'Editar'}</button>
@@ -14276,7 +14384,7 @@ function renderTend(){
           <span style="font-size:13px;font-weight:700;color:var(--text)">${yr}</span>
           <span style="font-size:10px;color:var(--muted)">${yrCount} embarque${yrCount!==1?'s':''}</span>
         </div>
-        <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:var(--green-l)">$${(yrTotal/1000).toFixed(2)}k ahorro</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:var(--green-l)">${window._fmtMoney(yrTotal)} ahorro</span>
       </div>
       <div id="${yrId}-body">`;
 
@@ -14387,6 +14495,10 @@ function renderHistProv(){
     <input id="hp-buscar" type="text" placeholder="Buscar proveedor, OC, embarque, depto..."
       oninput="_histProvSearch()"
       style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:7px;padding:8px 10px;color:var(--text);font-size:12px;box-sizing:border-box;margin-bottom:8px">
+    <label style="display:flex;align-items:center;gap:7px;font-size:11px;color:var(--text);font-weight:600;margin-bottom:8px;cursor:pointer">
+      <input id="hp-agrupar" type="checkbox" onchange="_renderHistProvList()" style="width:15px;height:15px;accent-color:var(--green-l,#3fb950)">
+      👥 Agrupar por proveedor (total acumulado · toca para ver sus embarques)
+    </label>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
       <select id="hp-seccion" onchange="_renderHistProvList()" style="background:var(--s2);border:1px solid var(--border);border-radius:7px;padding:7px 8px;color:var(--text);font-size:11px">
         <option value="merc">🏭 Proveedores Mercancía</option>
@@ -15632,6 +15744,52 @@ function _editarFactHistProv(embarqueIdx, provName, factInfo, seccion){
   _editarNumFactHistorial(embarqueIdx, lineKey, currentNfac);
 }
 
+// Modal: lista de embarques que componen el total agrupado de un proveedor.
+// Mismo patrón de overlay fijo (garantiza visibilidad) que los demás modales.
+function _hpAbrirEmbarquesProveedor(provName){
+  var g = (window._hpGrupos||{})[provName];
+  if(!g) return;
+  var fmt2 = function(n){return'$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});};
+
+  // Un embarque puede tener varias líneas para el mismo proveedor (mercancía +
+  // servicios) — agrupar por nro para mostrar un total por embarque.
+  var porEmb = {};
+  var ordenEmb = [];
+  g.embs.forEach(function(r){
+    var key = r.nro+'|'+r._dIdx;
+    if(!porEmb[key]){ porEmb[key]={nro:r.nro,fecha:r.fecha,esc:r.esc,_dIdx:r._dIdx,costo:0,piezas:0}; ordenEmb.push(key); }
+    porEmb[key].costo += (r.costo||0);
+    porEmb[key].piezas += (r.piezas||0);
+  });
+  ordenEmb.sort(function(a,b){
+    var na=parseInt((porEmb[a].nro||'0').replace(/\D/g,''))||0;
+    var nb=parseInt((porEmb[b].nro||'0').replace(/\D/g,''))||0;
+    return nb-na;
+  });
+
+  var old = document.getElementById('_hpEmbModal'); if(old) old.remove();
+  var modal = document.createElement('div');
+  modal.id = '_hpEmbModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:99998;display:flex;align-items:center;justify-content:center;padding:16px';
+  modal.innerHTML = '<div style="background:var(--s1);border:1px solid var(--border);border-radius:14px;padding:18px;max-width:460px;width:100%;max-height:85vh;overflow-y:auto" onclick="event.stopPropagation()">'
+    +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;gap:8px">'
+    +'<div style="font-size:14px;font-weight:700;color:var(--text);line-height:1.4">🏭 '+provName.replace(/</g,'&lt;')+'</div>'
+    +'<button onclick="document.getElementById(\'_hpEmbModal\').remove()" style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;flex-shrink:0;line-height:1">×</button>'
+    +'</div>'
+    +'<div style="font-size:11px;color:var(--muted);margin-bottom:12px">'+ordenEmb.length+' embarque'+(ordenEmb.length!==1?'s':'')+' · Total '+fmt2(g.costo)+' — toca uno para ver su detalle</div>'
+    + ordenEmb.map(function(key){
+        var e = porEmb[key];
+        return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 4px;border-bottom:1px solid rgba(48,54,61,.3);cursor:pointer" onclick="document.getElementById(\'_hpEmbModal\').remove();abrirFacturasEmbarque('+e._dIdx+')">'
+          +'<div><div style="font-size:12px;font-weight:700;color:var(--orange-l)">'+(e.nro||'—')+'</div>'
+          +'<div style="font-size:10px;color:var(--muted)">'+(e.fecha||'—')+' · '+(e.esc||'')+(e.piezas>0?(' · '+e.piezas.toLocaleString()+' pzas'):'')+'</div></div>'
+          +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:'+(e.costo<0?'var(--green-l)':'var(--blue-l)')+'">'+fmt2(e.costo)+'</div>'
+          +'</div>';
+      }).join('')
+    +'</div>';
+  modal.onclick = function(){ modal.remove(); };
+  document.body.appendChild(modal);
+}
+
 function _renderHistProvList(){
   var _mb=document.getElementById('tab-modal-body');
   var root=(_mb&&_mb.querySelector('#histprov-root'))||document.getElementById('histprov-root');
@@ -15696,6 +15854,37 @@ function _renderHistProvList(){
     '</div>';
     return;
   }
+  // ── Vista agrupada por proveedor: una fila por proveedor con el total
+  // acumulado de los embarques que coinciden con el filtro actual; al tocar
+  // se abre un modal con el listado de esos embarques (N°, fecha, monto).
+  var agrupar = !!(root.querySelector('#hp-agrupar')||{}).checked;
+  if(agrupar){
+    var grupos = {};
+    var orden = [];
+    f.forEach(function(r){
+      var key = r.prov;
+      if(!grupos[key]){ grupos[key]={prov:r.prov,costo:0,piezas:0,embs:[]}; orden.push(key); }
+      var g = grupos[key];
+      g.costo += (r.costo||0);
+      g.piezas += (r.piezas||0);
+      g.embs.push(r);
+    });
+    orden.sort(function(a,b){ return grupos[b].costo - grupos[a].costo; });
+    window._hpGrupos = grupos; // para el modal de embarques
+    listEl.innerHTML = orden.map(function(key){
+      var g = grupos[key];
+      var nEmb = new Set(g.embs.map(function(r){ return r.nro; })).size;
+      return '<div style="background:var(--s1);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:7px;cursor:pointer" onclick="_hpAbrirEmbarquesProveedor('+JSON.stringify(key).replace(/"/g,'&quot;')+')">'
+        +'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">'
+        +'<span style="font-size:12px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">'+g.prov+'</span>'
+        +'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:13px;font-weight:800;color:'+(g.costo<0?'var(--green-l)':'var(--blue-l)')+'">'+fmt2(g.costo)+'</span>'
+        +'</div>'
+        +'<div style="font-size:10px;color:var(--muted);margin-top:3px">'+nEmb+' embarque'+(nEmb!==1?'s':'')+(g.piezas>0?' · '+g.piezas.toLocaleString()+' pzas':'')+' — toca para ver detalle</div>'
+        +'</div>';
+    }).join('');
+    return;
+  }
+
   var rubroLabels={flete:'🚢 Flete',honorarios:'💼 Honorarios',acarreo:'📦 Acarreo',itbms:'🧾 ITBMS',mv:'💰 Master Value',nota_credito:'🏷️ Nota de Crédito',gastos:'📋 Otros Gastos'};
   listEl.innerHTML=f.map(function(r){
     var isNegCosto = r.costo < 0;
@@ -18254,20 +18443,40 @@ function _renderDeptChart(all){
 
     var fmt2 = function(n){ return window._fmtMoney ? window._fmtMoney(n) : ('$'+Number(n||0).toFixed(2)); };
 
-    // Build inline provider rows for accordion
-    var provRows = sp.map(function(p){
+    // Agrupar por proveedor: si un proveedor aparece en varios embarques dentro
+    // de este departamento, mostrar UNA fila con el total acumulado; al tocar
+    // se abre un modal con el listado de esos embarques (N°, OC, monto).
+    var grupos = {};
+    var ordenG = [];
+    sp.forEach(function(p){
+      var key = p.prov;
+      if(!grupos[key]){ grupos[key]={prov:p.prov,costo:0,piezas:0,tipo:p.tipo,items:[]}; ordenG.push(key); }
+      grupos[key].costo += (p.costo||0);
+      grupos[key].piezas += (p.piezas||0);
+      grupos[key].items.push(p);
+    });
+    ordenG.sort(function(a,b){ return grupos[b].costo - grupos[a].costo; });
+
+    var provRows = ordenG.map(function(key){
+      var p = grupos[key];
       var pct = totalProv>0 ? (p.costo/totalProv*100).toFixed(1)+'%' : '—';
       var tipoBadge = p.tipo==='IMP'
         ? '<span style="background:rgba(240,136,62,.15);border:1px solid rgba(240,136,62,.4);color:#f08632;border-radius:3px;padding:0 5px;font-size:9px;font-weight:700">🚢 IMP</span>'
         : '<span style="background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.4);color:#58a6ff;border-radius:3px;padding:0 5px;font-size:9px;font-weight:700">🚛 ZL</span>';
-      var ocBadge  = p.oc ? '<span style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:#58a6ff;border-radius:3px;padding:0 4px;font-size:9px;font-weight:600">OC: '+p.oc+'</span>' : '';
       var pzBadge  = p.piezas>0 ? '<span style="color:#8b949e;font-size:9px">🔢 '+Number(p.piezas).toLocaleString()+' pzas</span>' : '';
-      var clickFn  = p.nro ? 'window._abrirPorNro(\''+p.nro+'\')' : (p.dIdx>=0 ? 'abrirFacturasEmbarque('+p.dIdx+')' : '');
+      var single = p.items.length===1 ? p.items[0] : null;
+      var ocBadge = single && single.oc ? '<span style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:#58a6ff;border-radius:3px;padding:0 4px;font-size:9px;font-weight:600">OC: '+single.oc+'</span>' : '';
+      var embInfo = single
+        ? (single.nro ? '<span style="color:#8b949e;font-size:9px">Emb. '+single.nro+'</span>' : '')
+        : '<span style="background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:#3fb950;border-radius:3px;padding:0 5px;font-size:9px;font-weight:700">'+p.items.length+' embarques · toca para ver</span>';
+      var clickFn = single
+        ? (single.nro ? 'window._abrirPorNro(\''+single.nro+'\')' : (single.dIdx>=0 ? 'abrirFacturasEmbarque('+single.dIdx+')' : ''))
+        : '_deptAbrirEmbarquesProveedor(\''+dkey.replace(/'/g,"\\'")+'\',\''+p.prov.replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;')+'\')';
       return '<div onclick="'+(clickFn ? 'event.stopPropagation();'+clickFn : '')+'" style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:8px 14px;border-bottom:1px solid rgba(255,255,255,.04);'+(clickFn?'cursor:pointer;':'')+'transition:background .12s" onmouseover="'+(clickFn?'this.style.background=\'rgba(255,255,255,.05)\'':'')+'" onmouseout="this.style.background=\'transparent\'">'
         +'<div style="flex:1;min-width:0">'
         +'<div style="font-size:11px;font-weight:700;color:#e6edf3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+p.prov+'</div>'
         +'<div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-top:2px">'+tipoBadge
-        +(p.nro?'<span style="color:#8b949e;font-size:9px">Emb. '+p.nro+'</span>':'')+ocBadge+pzBadge+'</div>'
+        +embInfo+ocBadge+pzBadge+'</div>'
         +'</div>'
         +'<div style="text-align:right;flex-shrink:0">'
         +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:'+color+'">'+fmt2(p.costo)+'</div>'
@@ -18410,6 +18619,44 @@ window._abrirPorNro = function(nro){
     var m = document.getElementById('_deptModal'); if(m) m.remove();
     abrirFacturasEmbarque(idx);
   }
+};
+
+// Modal: cuando un proveedor aparece en varios embarques dentro del mismo
+// departamento (Valor Mercancía por Departamento), lista esos embarques
+// (N°, OC, monto, piezas) para elegir cuál abrir. Mismo patrón de overlay
+// fijo que los demás modales (garantiza visibilidad).
+window._deptAbrirEmbarquesProveedor = function(dkey, provName){
+  var info = (window._deptChartProvs||{})[dkey];
+  if(!info) return;
+  var items = info.provs.filter(function(p){ return p.prov===provName; });
+  var fmt2 = function(n){ return window._fmtMoney ? window._fmtMoney(n) : ('$'+Number(n||0).toFixed(2)); };
+  var total = items.reduce(function(s,p){ return s+(p.costo||0); }, 0);
+  items.sort(function(a,b){
+    var na=parseInt((a.nro||'0').replace(/\D/g,''))||0;
+    var nb=parseInt((b.nro||'0').replace(/\D/g,''))||0;
+    return nb-na;
+  });
+
+  var old = document.getElementById('_deptProvEmbModal'); if(old) old.remove();
+  var modal = document.createElement('div');
+  modal.id = '_deptProvEmbModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:99998;display:flex;align-items:center;justify-content:center;padding:16px';
+  modal.innerHTML = '<div style="background:var(--s1);border:1px solid var(--border);border-radius:14px;padding:18px;max-width:460px;width:100%;max-height:85vh;overflow-y:auto" onclick="event.stopPropagation()">'
+    +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;gap:8px">'
+    +'<div style="font-size:14px;font-weight:700;color:var(--text);line-height:1.4">🏭 '+provName.replace(/</g,'&lt;')+'</div>'
+    +'<button onclick="document.getElementById(\'_deptProvEmbModal\').remove()" style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;flex-shrink:0;line-height:1">×</button>'
+    +'</div>'
+    +'<div style="font-size:11px;color:var(--muted);margin-bottom:12px">'+items.length+' embarque'+(items.length!==1?'s':'')+' · Total '+fmt2(total)+' — toca uno para ver su detalle</div>'
+    + items.map(function(p){
+        return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 4px;border-bottom:1px solid rgba(48,54,61,.3);cursor:pointer" onclick="document.getElementById(\'_deptProvEmbModal\').remove();'+(p.nro?('window._abrirPorNro(\''+p.nro+'\')'):(p.dIdx>=0?('abrirFacturasEmbarque('+p.dIdx+')'):''))+'">'
+          +'<div><div style="font-size:12px;font-weight:700;color:var(--orange-l)">'+(p.nro||'—')+'</div>'
+          +'<div style="font-size:10px;color:var(--muted)">'+(p.oc?('OC: '+p.oc):'')+(p.piezas>0?(' · '+Number(p.piezas).toLocaleString()+' pzas'):'')+'</div></div>'
+          +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:var(--blue-l)">'+fmt2(p.costo)+'</div>'
+          +'</div>';
+      }).join('')
+    +'</div>';
+  modal.onclick = function(){ modal.remove(); };
+  document.body.appendChild(modal);
 };
 
 // ── AGRUPACIONES COLAPSABLES ─────────────────────────
@@ -22152,38 +22399,39 @@ function _abrirSelectorRubro(callback){
   document.body.appendChild(modal);
 }
 
+// Mapa País → Ciudades. Definido a nivel global desde el arranque (no depende de
+// haber editado el campo País de un embarque) — usado tanto por el autocompletado
+// de Ciudad en el formulario de embarque como por los filtros de origen en Tendencias.
+window._CIUDADES_POR_PAIS = {
+  'USA':['Nueva York','Los Ángeles','Miami','Houston','Chicago','Los Angeles'],
+  'China':['Guangzhou','Shanghai','Shenzhen','Ningbo','Tianjin','Yiwu','Qingdao'],
+  'Panamá':['Zona Libre de Colón','Ciudad de Panamá','Balboa','Manzanillo','Puerto Cristóbal'],
+  'Panama':['Zona Libre de Colón','Ciudad de Panamá','Balboa','Manzanillo','Puerto Cristóbal'],
+  'Colombia':['Bogotá','Medellín','Barranquilla','Cali','Buenaventura'],
+  'Mexico':['Ciudad de México','Monterrey','Guadalajara','Manzanillo','Veracruz'],
+  'Brasil':['São Paulo','Rio de Janeiro','Manaus','Santos','Itajaí'],
+  'India':['Mumbai','Delhi','Chennai','Kolkata','Nhava Sheva'],
+  'Vietnam':['Ciudad Ho Chi Minh','Hanói','Haiphong','Da Nang'],
+  'Korea':['Seúl','Busan','Incheon'],
+  'Japan':['Tokio','Osaka','Kobe','Yokohama','Nagoya'],
+  'Taiwan':['Taipéi','Taichung','Kaohsiung','Keelung'],
+  'Turkey':['Estambul','Izmir','Mersin','Bursa'],
+  'Espana':['Barcelona','Madrid','Valencia','Algeciras','Bilbao'],
+  'Italia':['Génova','La Spezia','Livorno','Milán','Nápoles','Roma'],
+  'Alemania':['Hamburgo','Bremen','Frankfurt','Munich'],
+  'Portugal':['Lisboa','Oporto','Setúbal','Sines'],
+  'Bangladesh':['Daca','Chittagong'],
+  'Pakistan':['Karachi','Lahore'],
+  'Indonesia':['Yakarta','Surabaya'],
+  'Malasia':['Kuala Lumpur','Port Klang','Penang'],
+  'Tailandia':['Bangkok','Laem Chabang'],
+  'Puerto Rico':['San Juan','Ponce'],
+  'Otro':['— Ingresar manualmente —'],
+};
+
 function _actualizarCiudades(pais){
   const dl = document.getElementById('_ciudad_list');
   if(!dl) return;
-  // Define city map inline if not already defined globally
-  // Always refresh city map with latest data
-  {
-    window._CIUDADES_POR_PAIS = {
-      'USA':['Nueva York','Los Ángeles','Miami','Houston','Chicago','Los Angeles'],
-      'China':['Guangzhou','Shanghai','Shenzhen','Ningbo','Tianjin','Yiwu','Qingdao'],
-      'Panamá':['Zona Libre de Colón','Ciudad de Panamá','Balboa','Manzanillo','Puerto Cristóbal'],
-      'Colombia':['Bogotá','Medellín','Barranquilla','Cali','Buenaventura'],
-      'Mexico':['Ciudad de México','Monterrey','Guadalajara','Manzanillo','Veracruz'],
-      'Brasil':['São Paulo','Rio de Janeiro','Manaus','Santos','Itajaí'],
-      'India':['Mumbai','Delhi','Chennai','Kolkata','Nhava Sheva'],
-      'Vietnam':['Ciudad Ho Chi Minh','Hanói','Haiphong','Da Nang'],
-      'Korea':['Seúl','Busan','Incheon'],
-      'Japan':['Tokio','Osaka','Kobe','Yokohama','Nagoya'],
-      'Taiwan':['Taipéi','Taichung','Kaohsiung','Keelung'],
-      'Turkey':['Estambul','Izmir','Mersin','Bursa'],
-      'Espana':['Barcelona','Madrid','Valencia','Algeciras','Bilbao'],
-      'Italia':['Génova','La Spezia','Livorno','Milán','Nápoles','Roma'],
-      'Alemania':['Hamburgo','Bremen','Frankfurt','Munich'],
-      'Portugal':['Lisboa','Oporto','Setúbal','Sines'],
-      'Bangladesh':['Daca','Chittagong'],
-      'Pakistan':['Karachi','Lahore'],
-      'Indonesia':['Yakarta','Surabaya'],
-      'Malasia':['Kuala Lumpur','Port Klang','Penang'],
-      'Tailandia':['Bangkok','Laem Chabang'],
-      'Puerto Rico':['San Juan','Ponce'],
-      'Otro':['— Ingresar manualmente —'],
-    };
-  }
   const ciudades = _CIUDADES_POR_PAIS[pais] || [];
   dl.innerHTML = ciudades.map(c=>'<option value="'+c+'">').join('');
   // Clear ciudad field when country changes
@@ -22519,19 +22767,22 @@ function _origenMatchFiltro(tendRecord, filtroOrigen){
     campos.s1_origen_emb  || ''
   ].map(function(v){ return (v||'').toLowerCase(); });
 
-  // Si ningún campo del embarque tiene dato, buscar en prov_config por cada proveedor de las invLines
-  var tieneOrigenEmb = candidatos.some(function(v){ return v.length > 0; });
-  if(!tieneOrigenEmb && window._pcCache) {
+  // Además de los campos propios del embarque, siempre agregar el país/ciudad
+  // configurado por proveedor (Origen de Proveedores) como candidatos extra —
+  // un proveedor de alto volumen configurado como "China" debe coincidir en
+  // TODOS sus embarques, no solo en los que no tengan ningún otro campo de
+  // origen propio rellenado.
+  if(window._pcCache) {
     var provs = ((tendRecord.invLines||[]).map(function(l){ return l.prov||''; }))
       .concat([(tendRecord.snap&&tendRecord.snap.invLines||[]).map(function(l){ return l.prov||''; })].flat ? [].flat.call((tendRecord.snap&&tendRecord.snap.invLines||[]).map(function(l){ return l.prov||''; })) : [])
       .filter(Boolean);
     provs.forEach(function(p){
-      var def = window._pcCache[p];
+      var def = _pcLookup(p);
       if(def){ candidatos.push((def.pais||'').toLowerCase()); candidatos.push((def.ciudad||'').toLowerCase()); }
     });
   }
 
-  return candidatos.some(function(v){ return v && v.includes(q); });
+  return candidatos.some(function(v){ return v && _sinAcentos(v).includes(_sinAcentos(q)); });
 }
 
 // ═══════════════════════════════════════════════════════
