@@ -11628,6 +11628,31 @@ function _corregirItbmsHomolSababa(d){
   });
 }
 
+function _corregirAhorroNegativoSababa(d){
+  if(!d || !d.snap) return false;
+  if(!((d.ahorro||0) < 0)) return false; // solo corrige negativos
+  const snap = d.snap;
+  const sc1 = snap.sc1||{}, sc3 = snap.sc3||{};
+  if(!((sc3.comision||0) > 0)) return false; // no es un embarque Sababa con datos
+
+  // ── Misma fórmula del "COMPARATIVO DE DESEMBOLSO — 4 Criterios" del dashboard ──
+  const r1_flete = (snap.termino==='FOB' && snap.tipo==='EXT') ? (snap.flete||0) : 0;
+  const c1_reg = (sc1.arancel||0)+(sc1.itbms||0)+(sc1.tasa||0)+(sc1.itbmsTasaFinal||0)+(sc1.form1||0);
+  const c2_reg = r1_flete + (sc1.agente||0) + (sc1.acarreo||0) + (sc1.dmce||0);
+  const c3_reg = sc1.hon||0;
+
+  const c1_sab = sc3.itbmsHomol||0;
+  const c2_sab = (sc3.flete||0) + (sc3.gastos||0);
+  const c3_sab = (sc3.comBruta!==undefined && sc3.comBruta!==null) ? sc3.comBruta : ((sc3.comision||0)-(sc3.itbmsHomol||0));
+
+  const ahorroCorr = Math.round(((c1_reg-c1_sab)+(c2_reg-c2_sab)+(c3_reg-c3_sab))*100)/100;
+  if(ahorroCorr === d.ahorro) return false;
+
+  d.ahorro = ahorroCorr;
+  sc3.ahorroNeto = ahorroCorr;
+  return true;
+}
+
 function loadTendData(){
   // Primero intentar localStorage (fallback robusto cuando Supabase no conecta)
   try {
@@ -11637,6 +11662,15 @@ function loadTendData(){
       tendData.forEach(d => { _corregirItbmsCifExpress(d); });
       tendData.forEach(d => { _corregirLandedUnico(d); });
       tendData.forEach(d => { _corregirItbmsHomolSababa(d); });
+      // ── Reparación automática de ahorros negativos (fórmula 4 Criterios) ──
+      var _ahFixCount = 0;
+      tendData.forEach(d => { if(_corregirAhorroNegativoSababa(d)) _ahFixCount++; });
+      if(_ahFixCount > 0){
+        setTimeout(function(){
+          if(typeof saveTendData==='function') saveTendData();
+          if(typeof _showToast==='function') _showToast('✅ Ahorro corregido automáticamente en '+_ahFixCount+' embarque(s)','green',6000);
+        }, 900);
+      }
       return; }
   } catch(e){}
   tendData = [];
@@ -12018,6 +12052,15 @@ async function _pullTendFromCloud(){
     tendData.forEach(d => { _corregirItbmsCifExpress(d); });
     tendData.forEach(d => { _corregirLandedUnico(d); });
     tendData.forEach(d => { _corregirItbmsHomolSababa(d); });
+
+    // ── Reparación automática de ahorros negativos (fórmula 4 Criterios) ──
+    let _ahFixCount = 0;
+    tendData.forEach(d => { if(_corregirAhorroNegativoSababa(d)) _ahFixCount++; });
+    if(_ahFixCount > 0){
+      console.log(`✅ ${_ahFixCount} embarque(s) con ahorro negativo corregido automáticamente`);
+      if(typeof _showToast==='function') _showToast('✅ Ahorro corregido automáticamente en '+_ahFixCount+' embarque(s)','green',6000);
+      _syncTendToCloud();
+    }
 
     // 5. Si encontramos embarques nuevos en sesiones individuales,
     //    actualizar el maestro para que la próxima vez ya estén ahí
@@ -12598,6 +12641,11 @@ async function procesarEmbarque(){
   const _cifEl = document.getElementById('s1_cif');
   const _cifVal = parseFloat(_cifEl?.value||0);
   if(typeof calc==='function') calc();
+  // ── Sababa: recalcular comparativo de 4 Criterios — es la fuente de verdad ──
+  // calc() (bloque Hero) y calcSab2() (Comparativo) pueden producir window._ahorroTotal4C
+  // distintos. calcSab2() corre la fórmula correcta (la que se ve en el dashboard),
+  // así que debe ejecutarse AL FINAL para que su valor sea el que se guarda en snap.ahorro.
+  if(compar==='sababa' && typeof calcSab2==='function') calcSab2();
   // Pequeña espera para que calc() termine de actualizar window._ahorroTotal4C / window._lastCIF
   await new Promise(r=>setTimeout(r,150));
   if(!window._lastCIF && _cifVal <= 0){
