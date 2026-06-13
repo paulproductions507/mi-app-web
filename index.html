@@ -8630,7 +8630,10 @@ function calc(){
           ? (c1_altVal + c2_cifVal + c3_cif + c4_alt)
           : (c1_altVal + sc3_flete + sc3_gastos + c3_sab + c4_alt);
         const ahorroTotal = desReg - desAlt;
-        window._ahorroTotal4C = ahorroTotal; // guardar para snap.ahorro
+        // ── CRÍTICO: para Sababa, el Comparativo de 4 Criterios de calcSab2() es la
+        // fuente de verdad (usa comBruta calculado correctamente). El bloque Hero solo
+        // escribe _ahorroTotal4C para CIF Express — para Sababa lo escribe calcSab2().
+        if(!isSab) window._ahorroTotal4C = ahorroTotal; // solo CIF Express aquí
         const a1 = c1_reg - c1_altVal;
         const a2 = isCIF ? (c2_reg - c2_cifVal) : (c2_reg - (sc3_flete + sc3_gastos));
         const a3 = c3_reg - c3_alt;
@@ -11683,7 +11686,7 @@ function loadTendData(){
       if(_ahFixCount > 0){
         setTimeout(function(){
           if(typeof saveTendData==='function') saveTendData();
-          if(typeof _showToast==='function') _showToast('✅ Ahorro corregido automáticamente en '+_ahFixCount+' embarque(s)','green',6000);
+          console.log('[Auto-fix] Ahorro corregido en '+_ahFixCount+' embarque(s) — silencioso');
         }, 900);
       }
       return; }
@@ -12072,8 +12075,7 @@ async function _pullTendFromCloud(){
     let _ahFixCount = 0;
     tendData.forEach(d => { if(_corregirAhorroNegativoSababa(d)) _ahFixCount++; });
     if(_ahFixCount > 0){
-      console.log(`✅ ${_ahFixCount} embarque(s) con ahorro negativo corregido automáticamente`);
-      if(typeof _showToast==='function') _showToast('✅ Ahorro corregido automáticamente en '+_ahFixCount+' embarque(s)','green',6000);
+      console.log('[Auto-fix] Ahorro corregido en '+_ahFixCount+' embarque(s) — silencioso');
       _syncTendToCloud();
     }
 
@@ -12974,15 +12976,20 @@ async function procesarEmbarque(){
   });
   const snap={
     nro: nro||`SIN-NRO-${Date.now()}`, desc, fecha,
-    // ── Usar ahorro del COMPARATIVO DE DESEMBOLSO (4 Criterios) — fuente confiable ──
+    // ── Ahorro: leer directamente del snap actualizado por calcSab2() ──
+    // Para Sababa: sc3.ahorroNeto es escrito por el bloque Comparativo de 4 Criterios
+    // (el mismo que muestra el dashboard). Es la fuente de verdad — no _ahorroTotal4C.
+    // Para CIF Express: _ahorroTotal4C es correcto.
     ahorro: (function(){
-      // Usar siempre el Total Desembolso del comparativo 4 Criterios — es el valor que el usuario ve
-      if(typeof window._ahorroTotal4C === 'number' && window._ahorroTotal4C !== 0) return Math.round(window._ahorroTotal4C*100)/100;
       const _sc = window._lastSnap || {};
-      const _isSab = compar === 'sababa';
-      const _isCif = compar === 'cifexp';
-      if(_isSab && _sc.sc3 && (_sc.sc3.ahorroNeto || 0) !== 0) return _sc.sc3.ahorroNeto;
-      if(_isCif && _sc.sc2 && (_sc.sc2.ahorroNeto || 0) !== 0) return _sc.sc2.ahorroNeto;
+      if(compar === 'sababa'){
+        // Leer del comparativo de 4 Criterios de calcSab2 — siempre correcto
+        const _ah = _sc.sc3 && typeof _sc.sc3.ahorroNeto === 'number' ? _sc.sc3.ahorroNeto : null;
+        if(_ah !== null) return Math.round(_ah*100)/100;
+      }
+      // CIF Express: usar _ahorroTotal4C
+      if(typeof window._ahorroTotal4C === 'number' && window._ahorroTotal4C !== 0) return Math.round(window._ahorroTotal4C*100)/100;
+      if(compar === 'cifexp' && _sc.sc2 && (_sc.sc2.ahorroNeto || 0) !== 0) return _sc.sc2.ahorroNeto;
       return window._lastAhorroNeto || 0;
     })(),
     cif:    window._lastCIF||0,
