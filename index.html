@@ -12658,9 +12658,16 @@ async function procesarEmbarque(){
   if(typeof calc==='function') calc();
   // ── Sababa: recalcular comparativo de 4 Criterios — es la fuente de verdad ──
   // calc() (bloque Hero) y calcSab2() (Comparativo) pueden producir window._ahorroTotal4C
-  // distintos. calcSab2() corre la fórmula correcta (la que se ve en el dashboard),
-  // así que debe ejecutarse AL FINAL para que su valor sea el que se guarda en snap.ahorro.
-  if(compar==='sababa' && typeof calcSab2==='function') calcSab2();
+  // distintos. calcSab2() corre la fórmula correcta (la que se ve en el dashboard), pero
+  // depende de sab2Tipo y de los campos s2_agente/s2_flete_sab, que solo se sincronizan
+  // vía syncSC3fromSC1() (igual que los botones "Aplicar"). Sin ese paso, calcSab2()
+  // o no hace nada (sab2Tipo vacío) o usa valores viejos. Por eso debe ir: calc() →
+  // syncSC3fromSC1() → calcSab2(), y este último valor es el que se guarda en snap.ahorro.
+  if(compar==='sababa'){
+    if(typeof syncSC3fromSC1==='function') syncSC3fromSC1();
+    await new Promise(r=>setTimeout(r,80));
+    if(typeof calcSab2==='function') calcSab2();
+  }
   // Pequeña espera para que calc() termine de actualizar window._ahorroTotal4C / window._lastCIF
   await new Promise(r=>setTimeout(r,150));
   if(!window._lastCIF && _cifVal <= 0){
