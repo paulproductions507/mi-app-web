@@ -2827,7 +2827,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
      CONFIGURACIÓN DE PROVEEDORES — País/Ciudad default
      ══════════════════════════════════════════════════════ -->
 <div class="card" style="margin-bottom:14px">
-  <div class="card-hd" style="cursor:pointer;user-select:none" onclick="_toggleSection('provconfig-body','provconfig-icon',this);_pcCargarCache().then(function(){ _pcRenderLista(); })">
+  <div class="card-hd" style="cursor:pointer;user-select:none" onclick="_toggleSection('provconfig-body','provconfig-icon',this);_pcCargarCache()">
     <div class="dot" style="background:#58a6ff"></div>
     <h3>🏭 Origen de Proveedores</h3>
     <span id="provconfig-icon" style="margin-left:auto;font-size:12px;color:var(--muted)">▶</span>
@@ -2837,47 +2837,12 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       Configura el País y Ciudad/Puerto de origen por defecto de cada proveedor. El embarque puede sobreescribir estos valores para casos específicos.
     </div>
 
-    <!-- Buscador — misma lógica que Facturas Disponibles -->
-    <div style="position:relative;margin-bottom:10px">
-      <input id="pc-buscar" type="text" placeholder="🔍 Buscar proveedor..."
-        oninput="_pcProvSearch(this)"
-        autocomplete="off" autocorrect="off" spellcheck="false"
-        style="width:100%;box-sizing:border-box;background:var(--input-bg,#0d1117);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:13px;font-family:'IBM Plex Mono',monospace">
-      <div id="pc-sugg-list" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:3000;background:#fff;border:1px solid #a855f7;border-top:none;border-radius:0 0 8px 8px;max-height:220px;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,.2)"></div>
-    </div>
+    <!-- Buscador — MISMO MOTOR que Facturas Disponibles: datalist nativo del navegador -->
 
-    <!-- Formulario edición -->
-    <div id="pc-form" style="display:none;background:var(--input-bg,#0d1117);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px">
-      <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:8px" id="pc-form-title">— Proveedor —</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
-        <div>
-          <div style="font-size:10px;color:var(--muted);margin-bottom:4px">PAÍS DE ORIGEN</div>
-          <input id="pc-pais" type="text" placeholder="Ej: China"
-            style="width:100%;box-sizing:border-box;background:var(--bg,#0d1117);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px;font-family:'IBM Plex Mono',monospace">
-        </div>
-        <div>
-          <div style="font-size:10px;color:var(--muted);margin-bottom:4px">CIUDAD / PUERTO</div>
-          <input id="pc-ciudad" type="text" placeholder="Ej: Guangzhou"
-            style="width:100%;box-sizing:border-box;background:var(--bg,#0d1117);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px;font-family:'IBM Plex Mono',monospace">
-        </div>
-      </div>
-      <div style="display:flex;gap:8px">
-        <button onclick="_pcGuardar()"
-          style="flex:2;background:linear-gradient(135deg,rgba(63,185,80,.2),rgba(46,160,67,.15));border:1px solid rgba(63,185,80,.4);color:var(--green-l,#3fb950);border-radius:8px;padding:9px;font-size:12px;font-weight:700;cursor:pointer">
-          💾 Guardar
-        </button>
-        <button onclick="_pcCancelar()"
-          style="flex:1;background:none;border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:9px;font-size:12px;font-weight:600;cursor:pointer">
-          ✕ Cancelar
-        </button>
-      </div>
-    </div>
-
-    <!-- Lista de proveedores configurados -->
-    <div style="font-size:10px;color:var(--muted);margin-bottom:6px">PROVEEDORES CON ORIGEN CONFIGURADO</div>
-    <div id="pc-lista" style="max-height:220px;overflow-y:auto">
-      <div style="font-size:11px;color:var(--muted2);text-align:center;padding:16px">Sin proveedores configurados aún</div>
-    </div>
+    <!-- Selector de proveedores con buscador en pantalla completa -->
+    <button type="button" onclick="_pcAbrirBuscador()" style="width:100%;text-align:left;background:#ffffff;border:1px solid #d0d7de;border-radius:8px;padding:11px 12px;color:#1f2328;font-size:13px;font-family:'IBM Plex Mono',monospace;cursor:pointer;display:flex;align-items:center;gap:8px">
+      <span>🔍</span><span style="color:#57606a">Buscar / elegir proveedor…</span>
+    </button>
   </div>
 </div>
 
@@ -2923,8 +2888,11 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
 
 <!-- HERRAMIENTAS DE MANTENIMIENTO -->
 <div class="card" style="margin-bottom:14px">
-  <div class="card-hd"><div class="dot r"></div><h3>🔧 Mantenimiento de Datos</h3></div>
-  <div class="card-bd">
+  <div class="card-hd" style="cursor:pointer;user-select:none" onclick="_toggleSection('mant-body','mant-icon',this)">
+    <div class="dot r"></div><h3>🔧 Mantenimiento de Datos</h3>
+    <span id="mant-icon" style="margin-left:auto;font-size:12px;color:var(--muted)">▶</span>
+  </div>
+  <div id="mant-body" class="card-bd" style="display:none">
     <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Herramientas para corregir y normalizar datos de proveedores en el historial de embarques.</div>
     <button onclick="_correrProcesoProveedores()" style="background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.3);color:var(--red-l);border-radius:8px;padding:8px 18px;font-size:12px;font-weight:700;cursor:pointer">🔄 Correr Proceso de Proveedores</button>
     <div style="font-size:10px;color:var(--muted2);margin-top:6px">Normaliza nombres de proveedores (S.I., homologados, etc.) en todos los embarques del historial.</div>
@@ -3106,8 +3074,8 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
 
 <!-- DEPARTAMENTOS CONFIG -->
 <div class="card" style="margin-bottom:14px">
-  <div class="card-hd" style="cursor:pointer;user-select:none" onclick="_toggleSection('card-body-__departamentos___ca','card-chev-__departamentos___ca',this)"><div class="dot g"></div><h3>📂 Departamentos / Categorías de Inventario</h3><span id="card-chev-__departamentos___ca" style="margin-left:auto;font-size:11px;color:var(--muted)">▼</span>
-  <div class="card-bd">
+  <div class="card-hd" style="cursor:pointer;user-select:none" onclick="_toggleSection('card-body-__departamentos___ca','card-chev-__departamentos___ca',this)"><div class="dot g"></div><h3>📂 Departamentos / Categorías de Inventario</h3><span id="card-chev-__departamentos___ca" style="margin-left:auto;font-size:11px;color:var(--muted)">▶</span></div>
+  <div id="card-body-__departamentos___ca" class="card-bd" style="display:none">
     <p class="note" style="margin-bottom:12px">Lista de categorías que aparece en el módulo de Facturas. Edita, agrega o elimina según tu negocio.</p>
     <div id="dept-config-list" style="max-height:320px;overflow-y:auto;margin-bottom:10px"></div>
     <div style="display:flex;gap:8px;margin-top:8px">
@@ -3123,8 +3091,8 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
 
 <!-- VISUALIZACIÓN CONFIG -->
 <div class="card" style="margin-bottom:14px">
-  <div class="card-hd" style="cursor:pointer;user-select:none" onclick="_toggleSection('card-body-__visualizaci_n_de_g','card-chev-__visualizaci_n_de_g',this)"><div class="dot b"></div><h3>📊 Visualización de Gráficas</h3><span id="card-chev-__visualizaci_n_de_g" style="margin-left:auto;font-size:11px;color:var(--muted)">▼</span>
-  <div class="card-bd">
+  <div class="card-hd" style="cursor:pointer;user-select:none" onclick="_toggleSection('card-body-__visualizaci_n_de_g','card-chev-__visualizaci_n_de_g',this)"><div class="dot b"></div><h3>📊 Visualización de Gráficas</h3><span id="card-chev-__visualizaci_n_de_g" style="margin-left:auto;font-size:11px;color:var(--muted)">▶</span></div>
+  <div id="card-body-__visualizaci_n_de_g" class="card-bd" style="display:none">
     <div class="field">
       <label>Orientación de barras en tendencias</label>
       <div class="seg" id="chart-orient-seg">
@@ -6155,7 +6123,7 @@ var cubData={nroEmb:cub.nroEmb||'',status:cub.status||'',lugarRecep:cub.lugarRec
     +'var _curThemeIdx=(_INIT_THEME===\'light\')?1:(_INIT_THEME===\'green\'?2:0);'
     +'var _ORIG_MAP=new WeakMap();'
     +'function _origStyle(el){if(!_ORIG_MAP.has(el))_ORIG_MAP.set(el,el.getAttribute(\'style\')||\'\');return _ORIG_MAP.get(el);}'
-    +'var _RL=[[\'background:#0d1117\',\'background:#ffffff\'],[\'background:#161b22\',\'background:#f8f9fb\'],[\'background:#21262d\',\'background:#eaecef\'],[\'background:#1c2128\',\'background:#f0f4f8\'],[\'background:#13181f\',\'background:#eef1f4\'],[\'border:1px solid #30363d\',\'border:1px solid #d0d7de\'],[\'border:2px solid #30363d\',\'border:2px solid #d0d7de\'],[\'border-bottom:1px solid #30363d\',\'border-bottom:1px solid #d0d7de\'],[\'border:2px dashed #30363d\',\'border:2px dashed #d0d7de\'],[\'border-top:2px solid #21262d\',\'border-top:2px solid #e2e8f0\'],[\'border-bottom:1px solid #21262d\',\'border-bottom:1px solid #e2e8f0\'],[\'color:#e6edf3\',\'color:#1f2328\'],[\'color:#8b949e\',\'color:#57606a\'],[\'color:rgba(255,255,255,.8)\',\'color:rgba(0,0,0,.7)\'],[\'color:#ffffff\',\'color:#1f2328\'],[\'background:#161b22;border-top:1px solid #21262d\',\'background:#f0f4f8;border-top:1px solid #e2e8f0\'],[\'background:#0d1117;border-top:1px solid #21262d\',\'background:#ffffff;border-top:1px solid #e2e8f0\']];'
+    +'var _RL=[[\'background:#0d1117\',\'background:#ffffff\'],[\'background:#1a2530\',\'background:#ffffff\'],[\'background:#161b22\',\'background:#f8f9fb\'],[\'background:#21262d\',\'background:#eaecef\'],[\'background:#1c2128\',\'background:#f0f4f8\'],[\'background:#13181f\',\'background:#eef1f4\'],[\'border:1px solid #30363d\',\'border:1px solid #d0d7de\'],[\'border:2px solid #30363d\',\'border:2px solid #d0d7de\'],[\'border-bottom:1px solid #30363d\',\'border-bottom:1px solid #d0d7de\'],[\'border:2px dashed #30363d\',\'border:2px dashed #d0d7de\'],[\'border-top:2px solid #21262d\',\'border-top:2px solid #e2e8f0\'],[\'border-bottom:1px solid #21262d\',\'border-bottom:1px solid #e2e8f0\'],[\'color:#e6edf3\',\'color:#1f2328\'],[\'color:#8b949e\',\'color:#57606a\'],[\'color:rgba(255,255,255,.8)\',\'color:rgba(0,0,0,.7)\'],[\'color:#ffffff\',\'color:#1f2328\'],[\'background:#161b22;border-top:1px solid #21262d\',\'background:#f0f4f8;border-top:1px solid #e2e8f0\'],[\'background:#0d1117;border-top:1px solid #21262d\',\'background:#ffffff;border-top:1px solid #e2e8f0\']];'
     +'var _RG=[[\'background:#0d1117\',\'background:rgba(0,0,0,.18)\'],[\'background:#1a2530\',\'background:linear-gradient(135deg,#1C2B4A 0%,#1a7a6e 100%)\'],[\'background:#161b22\',\'background:rgba(255,255,255,.06)\'],[\'background:#21262d\',\'background:rgba(255,255,255,.12)\'],[\'background:#1c2128\',\'background:rgba(255,255,255,.08)\'],[\'background:#13181f\',\'background:rgba(255,255,255,.05)\'],[\'border:1px solid #30363d\',\'border:1px solid rgba(255,255,255,.25)\'],[\'border:2px solid #30363d\',\'border:2px solid rgba(255,255,255,.25)\'],[\'border-bottom:1px solid #30363d\',\'border-bottom:1px solid rgba(255,255,255,.25)\'],[\'border:2px dashed #30363d\',\'border:2px dashed rgba(255,255,255,.35)\'],[\'border-top:2px solid #21262d\',\'border-top:2px solid rgba(255,255,255,.25)\'],[\'border-bottom:1px solid #21262d\',\'border-bottom:1px solid rgba(255,255,255,.25)\'],[\'color:#e6edf3\',\'color:#ffffff\'],[\'color:#8b949e\',\'color:rgba(255,255,255,.62)\'],[\'background:#161b22;border-top:1px solid #21262d\',\'background:rgba(255,255,255,.06);border-top:1px solid rgba(255,255,255,.25)\'],[\'background:#0d1117;border-top:1px solid #21262d\',\'background:rgba(0,0,0,.18);border-top:1px solid rgba(255,255,255,.25)\']];'
     +'function _applyTheme(mode){'
     +'  var all=document.querySelectorAll(\'[style]\');'
@@ -6958,7 +6926,7 @@ function switchTab(id,el){
     pane.style.animation='_slideInLeft .32s cubic-bezier(.22,.61,.36,1) both';
   }
   if(el) el.classList.add('on');
-  if(id==='config'){ renderConfig(); if(typeof renderDeptConfig==='function') renderDeptConfig(); _pcCargarCache().then(_pcRenderLista); }
+  if(id==='config'){ renderConfig(); if(typeof renderDeptConfig==='function') renderDeptConfig(); _pcCargarCache(); }
   if(id==='cifexp'){ updateCifExpDisplays(); }
   if(id==='facturas'){ renderInvLines(); }
   // Open sidebar when entering main simulator tabs (if not already pinned)
@@ -10449,14 +10417,6 @@ async function _pcCargarCache(){
       else { window._pcCache = {}; }
     } catch(e){ window._pcCache = {}; }
   }
-  // Conectar input buscador — mismo patrón que Facturas Disponibles
-  setTimeout(function(){
-    var inp = document.getElementById('pc-buscar');
-    if(inp && !inp._pcBound){
-      inp._pcBound = true;
-      inp.oninput = function(){ _pcBuscarInput(this); };
-    }
-  }, 200);
 }
 
 // Lista de países base + ciudades conocidas (se enriquece con aprendizaje)
@@ -10509,188 +10469,156 @@ function _pcSugerirCiudades(pais, q){
   return todos.filter(function(c){ return c.toLowerCase().includes(qq); });
 }
 
-function _pcRenderLista(){
-  var el = document.getElementById('pc-lista');
-  if(!el) return;
-  var keys = Object.keys(window._pcCache).sort();
-  if(!keys.length){
-    el.innerHTML = '<div style="font-size:11px;color:var(--muted2);text-align:center;padding:16px">Sin proveedores configurados aún</div>';
+function _pcGetAllProvNames(){
+  var seen = {};
+  var srcNames = (typeof _PROV_NAMES !== 'undefined') ? _PROV_NAMES : (window._PROV_NAMES || []);
+  return (srcNames||[]).filter(function(n){
+    if(!n) return false;
+    var up = n.trim().toUpperCase();
+    if(up==='NO USAR') return false;
+    if(seen[up]) return false;
+    seen[up] = true;
+    return true;
+  }).sort(function(a,b){ return a.localeCompare(b,'es',{sensitivity:'base'}); });
+}
+
+// Modal de pantalla completa: buscador + lista filtrable de proveedores.
+// Mismo patrón de overlay fijo que _pcOrigenModal / Backups (garantiza visibilidad).
+function _pcAbrirBuscador(){
+  var old = document.getElementById('_pcBuscadorModal'); if(old) old.remove();
+  var modal = document.createElement('div');
+  modal.id = '_pcBuscadorModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:#ffffff;z-index:99998;display:flex;flex-direction:column;padding:14px';
+  modal.innerHTML = '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">'
+    +'<input id="_pcBuscadorInput" type="text" placeholder="🔍 Escribe para filtrar..." autocomplete="off" autocorrect="off" spellcheck="false" oninput="_pcBuscadorOnInput()" style="flex:1;box-sizing:border-box;background:#f6f8fa;border:1px solid #d0d7de;border-radius:8px;padding:11px 12px;color:#1f2328;font-size:14px;font-family:\'IBM Plex Mono\',monospace">'
+    +'<button onclick="document.getElementById(\'_pcBuscadorModal\').remove()" style="background:none;border:none;color:#57606a;font-size:24px;cursor:pointer;flex-shrink:0;line-height:1">×</button>'
+    +'</div>'
+    +'<div id="_pcBuscadorList" style="flex:1;overflow-y:auto"></div>';
+  document.body.appendChild(modal);
+  _pcBuscadorRender();
+  setTimeout(function(){ var inp=document.getElementById('_pcBuscadorInput'); if(inp) inp.focus(); }, 100);
+}
+
+function _pcBuscadorRender(){
+  var listEl = document.getElementById('_pcBuscadorList');
+  if(!listEl) return;
+  var q = (document.getElementById('_pcBuscadorInput')||{}).value || '';
+  q = q.trim().toUpperCase();
+  var allNames = _pcGetAllProvNames();
+  if(q) allNames = allNames.filter(function(n){ return n.toUpperCase().indexOf(q) >= 0; });
+
+  if(!allNames.length){
+    listEl.innerHTML = '<div style="font-size:12px;color:#57606a;text-align:center;padding:24px">Sin resultados para "'+q+'"</div>';
     return;
   }
-  el.innerHTML = '';
-  keys.forEach(function(k){
-    var v = window._pcCache[k];
-    var row = document.createElement('div');
-    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(48,54,61,.3)';
-    var info = document.createElement('div');
-    info.style.cssText = 'flex:1;min-width:0';
-    info.innerHTML = '<div style="font-size:11px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+k+'</div>'
-      +'<div style="font-size:10px;color:var(--muted)">'+(v.pais||'—')+(v.ciudad?' · '+v.ciudad:'')+'</div>';
-    var btnEdit = document.createElement('button');
-    btnEdit.textContent = '✏️';
-    btnEdit.style.cssText = 'background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:#58a6ff;border-radius:6px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer';
-    btnEdit.addEventListener('click', function(){ _pcSeleccionar(k); });
-    var btnDel = document.createElement('button');
-    btnDel.textContent = '✕';
-    btnDel.style.cssText = 'background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.25);color:#f85149;border-radius:6px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer';
-    btnDel.addEventListener('click', function(){ _pcEliminar(k); });
-    row.appendChild(info); row.appendChild(btnEdit); row.appendChild(btnDel);
-    el.appendChild(row);
-  });
+  // Limitar render para fluidez; el buscador acota más al escribir.
+  var CAP = 80;
+  var shown = allNames.slice(0, CAP);
+  listEl.innerHTML = '<div style="font-size:10px;color:#57606a;padding:4px 2px 8px">'+allNames.length+' proveedor(es)'+(allNames.length>CAP?' — mostrando los primeros '+CAP+', sigue escribiendo para acotar':'')+'</div>'
+    + shown.map(function(k){
+      var v = window._pcCache[k];
+      var configured = !!(v && (v.pais || v.ciudad));
+      return '<div class="_pcBRow" data-nm="'+k.replace(/"/g,'&quot;')+'" style="padding:10px 6px;border-bottom:1px solid #eaecef;cursor:pointer">'
+        +'<div style="font-size:13px;font-weight:600;color:#1f2328">'+k.replace(/</g,'&lt;')+'</div>'
+        +'<div style="font-size:11px;color:'+(configured?'#1a7f37':'#57606a')+'">'+(configured?('🌍 '+(v.pais||'—')+(v.ciudad?' · '+v.ciudad:'')):'Sin origen configurado')+'</div>'
+        +'</div>';
+    }).join('');
 }
 
-function _pcMostrarSugg(items, onSelect){
-  var sugg = document.getElementById('pc-sugg');
-  if(!sugg) return;
-  if(!items||!items.length){ sugg.style.display='none'; return; }
-  sugg.style.display='block';
-  sugg.innerHTML = items.map(function(n){
-    return '<div style="padding:9px 12px;font-size:12px;color:#111827;cursor:pointer;border-bottom:1px solid #f3f4f6;font-family:monospace" '+
-      'onmousedown="event.preventDefault()" '+
-      'onclick="(function(){var f=window._pcSuggCallback;if(f)f('+JSON.stringify(n).replace(/"/g,"'")+')})()">'+
-      n+'</div>';
-  }).join('');
-  window._pcSuggCallback = onSelect;
+// Debounce: evita re-renderizar en cada tecla cuando hay ~3500 nombres;
+// espera una breve pausa de escritura antes de filtrar (sensación más fluida).
+var _pcBuscadorDebounce = null;
+function _pcBuscadorOnInput(){
+  if(_pcBuscadorDebounce) clearTimeout(_pcBuscadorDebounce);
+  _pcBuscadorDebounce = setTimeout(_pcBuscadorRender, 150);
 }
 
-function _pcBuscarInput(inp){
-  var q=(inp.value||'').trim().toUpperCase();
-  var box=document.getElementById('pc-sugg-list');
-  if(!box){box=document.createElement('div');box.id='pc-sugg-list';
-    box.style.cssText='display:none;position:absolute;left:0;right:0;top:100%;z-index:999;background:var(--s1,#161b22);border:1px solid rgba(168,85,247,.4);border-top:none;border-radius:0 0 8px 8px;max-height:200px;overflow-y:auto';
-    inp.parentNode.appendChild(box);}
-  box.innerHTML='';
-  if(q.length<1){box.style.display='none';return;}
-  var names=(window._PROV_NAMES||[]).filter(function(n){return n.toUpperCase().includes(q);}).slice(0,15);
-  if(!names.length){box.style.display='none';return;}
-  box.style.display='block';
-  names.forEach(function(name){
-    var d=document.createElement('div');
-    d.textContent=name;
-    d.style.cssText='padding:10px 14px;font-size:12px;color:var(--text);border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer';
-    function pick(e){e.preventDefault();e.stopPropagation();
-      document.getElementById('pc-buscar').value='';
-      box.style.display='none';
-      _pcSeleccionar(name);}
-    d.addEventListener('touchend',pick,{passive:false});
-    d.addEventListener('mousedown',pick);
-    d.onmouseover=function(){this.style.background='rgba(168,85,247,.15)';};
-    d.onmouseout=function(){this.style.background='';};
-    box.appendChild(d);
-  });
-}
-
-// Busqueda de proveedor en Configuracion - version directa
-window._pcProvSearch = function(inp) {
-  var q = (inp.value || '').trim().toUpperCase();
-  var box = document.getElementById('pc-sugg-list');
-  if (!box) return;
-  box.innerHTML = '';
-  if (q.length < 1) { box.style.display = 'none'; return; }
-  var names = (typeof _PROV_NAMES !== 'undefined') ? _PROV_NAMES : (window._PROV_NAMES || []);
-  var filtered = names.filter(function(n) { return n && n.toUpperCase().indexOf(q) >= 0; }).slice(0, 15);
-  if (!filtered.length) { box.style.display = 'none'; return; }
-  box.style.display = 'block';
-  filtered.forEach(function(name) {
-    var d = document.createElement('div');
-    d.textContent = name;
-    d.style.cssText = 'padding:10px 14px;font-size:13px;color:#111;border-bottom:1px solid #eee;cursor:pointer;background:#fff';
-    function pick(e) {
-      e.preventDefault();
-      e.stopPropagation();
-      inp.value = '';
-      box.style.display = 'none';
-      if (typeof _pcSeleccionar === 'function') _pcSeleccionar(name);
-    }
-    d.addEventListener('touchend', pick, {passive: false});
-    d.addEventListener('mousedown', pick);
-    d.addEventListener('mouseover', function() { d.style.background = '#f3e8ff'; });
-    d.addEventListener('mouseout',  function() { d.style.background = '#fff'; });
-    box.appendChild(d);
-  });
-};
-
-function _pcFiltrar(q){
-  var sugg = document.getElementById('pc-sugg');
-  if(!sugg) return;
-  if(!q || q.length < 1){ sugg.style.display='none'; return; }
-  var names = (window._PROV_NAMES||[]).filter(function(n){ return n && n.toLowerCase().includes(q.toLowerCase()); }).slice(0,12);
-  _pcMostrarSugg(names, function(nombre){
-    document.getElementById('pc-buscar').value = '';
-    sugg.style.display = 'none';
-    _pcSeleccionar(nombre);
-  });
-}
-
-// Autocomplete para campo País
-function _pcIniciarAutocomplete(){
-  var paisEl   = document.getElementById('pc-pais');
-  var ciudadEl = document.getElementById('pc-ciudad');
-  var sugg     = document.getElementById('pc-sugg');
-  if(!paisEl||!ciudadEl||!sugg) return;
-
-  function showPaisSugg(q){
-    var items = _pcSugerirPaises(q);
-    _pcMostrarSugg(items, function(p){
-      paisEl.value = p;
-      sugg.style.display = 'none';
-      ciudadEl.value = '';
-      ciudadEl.focus();
-    });
-  }
-  function showCiudadSugg(q){
-    var pais = paisEl.value.trim();
-    var items = _pcSugerirCiudades(pais, q);
-    _pcMostrarSugg(items, function(c){
-      ciudadEl.value = c;
-      sugg.style.display = 'none';
-    });
-  }
-
-  paisEl.addEventListener('focus',   function(){ showPaisSugg(this.value); });
-  paisEl.addEventListener('input',   function(){ showPaisSugg(this.value); });
-  paisEl.addEventListener('keyup',   function(){ showPaisSugg(this.value); });
-  ciudadEl.addEventListener('focus', function(){ showCiudadSugg(this.value); });
-  ciudadEl.addEventListener('input', function(){ showCiudadSugg(this.value); });
-  ciudadEl.addEventListener('keyup', function(){ showCiudadSugg(this.value); });
-}
+// Delegación de clicks/touch para las filas del buscador (creadas dinámicamente)
+document.addEventListener('click', function(e){
+  var row = e.target.closest && e.target.closest('._pcBRow');
+  if(!row) return;
+  var nombre = row.dataset.nm;
+  var modal = document.getElementById('_pcBuscadorModal'); if(modal) modal.remove();
+  _pcSeleccionar(nombre);
+});
 
 function _pcSeleccionar(nombre){
   window._pcSelected = nombre;
   var v = window._pcCache[nombre] || {pais:'', ciudad:''};
-  var title = document.getElementById('pc-form-title');
-  if(title) title.textContent = nombre;
-  var paisEl   = document.getElementById('pc-pais');
-  var ciudadEl = document.getElementById('pc-ciudad');
-  if(paisEl)   paisEl.value   = v.pais;
-  if(ciudadEl) ciudadEl.value = v.ciudad;
-  var form = document.getElementById('pc-form');
-  if(form){ form.style.display = 'block'; setTimeout(_pcIniciarAutocomplete, 50); }
-  // Ocultar sugg del buscador
-  var sugg = document.getElementById('pc-sugg');
-  if(sugg) sugg.style.display = 'none';
+
+  var old = document.getElementById('_pcOrigenModal'); if(old) old.remove();
+  var modal = document.createElement('div');
+  modal.id = '_pcOrigenModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px';
+
+  var paises = Array.from(new Set((window._pcPaisesBase||[]).concat(_pcGetPaisesAprendidos())))
+    .sort(function(a,b){ return a.localeCompare(b,'es',{sensitivity:'base'}); });
+  if(v.pais && !paises.some(function(p){ return p.toLowerCase()===v.pais.toLowerCase(); })) paises.unshift(v.pais);
+  var nmAttr = nombre.replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+
+  var paisOptions = paises.map(function(p){
+    return '<option value="'+p.replace(/"/g,'&quot;')+'"'+(p.toLowerCase()===(v.pais||'').toLowerCase()?' selected':'')+'>'+p+'</option>';
+  }).join('') + '<option value="__otro__"'+((v.pais && !paises.some(function(p){return p.toLowerCase()===v.pais.toLowerCase();}))?' selected':'')+'>➕ Otro (escribir país)…</option>';
+
+  var ciudadesIniciales = (window._pcCiudadesBase||{})[v.pais] || _pcGetCiudadesAprendidas(v.pais) || [];
+  var ciudadDatalist = ciudadesIniciales.map(function(c){ return '<option value="'+c.replace(/"/g,'&quot;')+'">'; }).join('');
+
+  modal.innerHTML = '<div style="background:var(--s1);border:1px solid var(--border);border-radius:14px;padding:20px;max-width:420px;width:100%;max-height:85vh;overflow-y:auto" onclick="event.stopPropagation()">'
+    +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;gap:8px">'
+    +'<div style="font-size:14px;font-weight:700;color:var(--text);line-height:1.4">🏭 '+nombre+'</div>'
+    +'<button onclick="document.getElementById(\'_pcOrigenModal\').remove()" style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;flex-shrink:0;line-height:1">×</button>'
+    +'</div>'
+    +'<div style="font-size:10px;color:var(--muted);margin-bottom:4px;font-weight:700;text-transform:uppercase">PAÍS DE ORIGEN</div>'
+    +'<select id="_pcModalPais" onchange="_pcOnModalPaisChange(this)" style="width:100%;box-sizing:border-box;background:var(--bg,#0d1117);border:1px solid var(--border);border-radius:8px;padding:9px 10px;color:var(--text);font-size:13px;font-family:\'IBM Plex Mono\',monospace;margin-bottom:8px"><option value="">— Selecciona —</option>'+paisOptions+'</select>'
+    +'<input id="_pcModalPaisOtro" type="text" value="'+((v.pais && paisOptions.indexOf('selected')===-1)?(v.pais||'').replace(/"/g,'&quot;'):'')+'" placeholder="Escribe el nombre del país" autocomplete="off" style="display:'+((v.pais && paises.every(function(p){return p.toLowerCase()!==v.pais.toLowerCase();}))?'block':'none')+';width:100%;box-sizing:border-box;background:var(--bg,#0d1117);border:1px solid rgba(167,113,247,.4);border-radius:8px;padding:9px 10px;color:var(--text);font-size:13px;font-family:\'IBM Plex Mono\',monospace;margin-bottom:8px;margin-top:6px">'
+    +'<div style="font-size:10px;color:var(--muted);margin:14px 0 4px;font-weight:700;text-transform:uppercase">CIUDAD / PUERTO</div>'
+    +'<input id="_pcModalCiudad" type="text" value="'+(v.ciudad||'').replace(/"/g,'&quot;')+'" placeholder="Ej: Guangzhou" list="_pcModalCiudadDL" autocomplete="off" style="width:100%;box-sizing:border-box;background:var(--bg,#0d1117);border:1px solid var(--border);border-radius:8px;padding:9px 10px;color:var(--text);font-size:13px;font-family:\'IBM Plex Mono\',monospace;margin-bottom:16px">'
+    +'<datalist id="_pcModalCiudadDL">'+ciudadDatalist+'</datalist>'
+    +'<div style="display:flex;gap:8px">'
+    +'<button onclick="_pcGuardarModal(\''+nmAttr+'\')" style="flex:2;background:linear-gradient(135deg,rgba(63,185,80,.2),rgba(46,160,67,.15));border:1px solid rgba(63,185,80,.4);color:var(--green-l,#3fb950);border-radius:8px;padding:10px;font-size:13px;font-weight:700;cursor:pointer">💾 Guardar</button>'
+    +(((v.pais||v.ciudad)) ? '<button onclick="_pcEliminarModal(\''+nmAttr+'\')" style="flex:1;background:rgba(218,54,51,.08);border:1px solid rgba(218,54,51,.25);color:var(--red-l,#f85149);border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer">🗑️ Quitar</button>' : '')
+    +'<button onclick="document.getElementById(\'_pcOrigenModal\').remove()" style="flex:1;background:none;border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer">Cancelar</button>'
+    +'</div>'
+    +'</div>';
+
+  modal.onclick = function(){ modal.remove(); };
+  document.body.appendChild(modal);
+}
+
+// Al cambiar el país en el modal: muestra/oculta el campo "Otro" y actualiza
+// el datalist de ciudades sugeridas para ese país.
+function _pcOnModalPaisChange(sel){
+  var otro = document.getElementById('_pcModalPaisOtro');
+  if(otro) otro.style.display = (sel.value==='__otro__') ? 'block' : 'none';
+  var paisVal = (sel.value==='__otro__') ? '' : sel.value;
+  var ciudades = (window._pcCiudadesBase||{})[paisVal] || _pcGetCiudadesAprendidas(paisVal) || [];
+  var dl = document.getElementById('_pcModalCiudadDL');
+  if(dl) dl.innerHTML = ciudades.map(function(c){ return '<option value="'+c.replace(/"/g,'&quot;')+'">'; }).join('');
+}
+
+
+async function _pcGuardarModal(nombre){
+  var paisSel = (document.getElementById('_pcModalPais')||{}).value || '';
+  var pais = (paisSel==='__otro__') ? ((document.getElementById('_pcModalPaisOtro')||{}).value||'') : paisSel;
+  var ciudad = (document.getElementById('_pcModalCiudad')||{}).value || '';
+  await _pcGuardarDatos(nombre, pais.trim(), ciudad.trim());
+  var m = document.getElementById('_pcOrigenModal'); if(m) m.remove();
+}
+
+async function _pcEliminarModal(nombre){
+  await _pcGuardarDatos(nombre, '', '');
+  var m = document.getElementById('_pcOrigenModal'); if(m) m.remove();
 }
 
 function _pcEditar(nombre){ _pcSeleccionar(nombre); }
 
-function _pcCancelar(){
-  window._pcSelected = null;
-  var form = document.getElementById('pc-form');
-  if(form) form.style.display = 'none';
-}
-
-async function _pcGuardar(){
-  var nombre = window._pcSelected;
-  if(!nombre){ _showToast('⚠️ Selecciona un proveedor primero','orange',2000); return; }
-  var pais   = (document.getElementById('pc-pais')||{}).value||'';
-  var ciudad = (document.getElementById('pc-ciudad')||{}).value||'';
-  // Guardar en memoria y localStorage inmediatamente
+// Lógica de guardado compartida — usada por _pcSeleccionar (modal) y _pcGuardarModal
+// Guarda el origen para un solo proveedor, sin avisos ni propagación (uso interno).
+async function _pcGuardarUno(nombre, pais, ciudad){
   window._pcCache[nombre] = { pais: pais, ciudad: ciudad };
   try{ localStorage.setItem('_pcCache', JSON.stringify(window._pcCache)); }catch(e){}
-  // Aprender país y ciudad para sugerencias futuras
   if(pais)  _pcAprenderPais(pais);
   if(ciudad) _pcAprenderCiudad(pais, ciudad);
-  // Intentar Supabase
   try {
     if(window._sb){
       await window._sb.from('prov_config').upsert(
@@ -10699,9 +10627,30 @@ async function _pcGuardar(){
       );
     }
   } catch(e){ console.warn('prov_config save error', e); }
-  _pcCancelar();
-  _pcRenderLista();
-  _showToast('✅ Origen guardado para '+nombre,'green',2500);
+}
+
+// Busca variantes "hijas" S.I - <nombre> de un proveedor padre (mismo nombre,
+// con el prefijo de facturación fiscal Sababa por delante).
+function _pcBuscarHijos(nombrePadre){
+  // Si el propio nombre ya es una variante S.I -, no propagar de nuevo.
+  if(/^S\.?\s*I\.?\s*-/i.test(nombrePadre.trim())) return [];
+  var padreUp = nombrePadre.trim().toUpperCase();
+  return _pcGetAllProvNames().filter(function(n){
+    var m = n.match(/^S\.?\s*I\.?\s*-\s*(.+)$/i);
+    if(!m) return false;
+    return m[1].trim().toUpperCase() === padreUp;
+  });
+}
+
+async function _pcGuardarDatos(nombre, pais, ciudad){
+  await _pcGuardarUno(nombre, pais, ciudad);
+  var hijos = _pcBuscarHijos(nombre);
+  for(var i=0;i<hijos.length;i++){
+    await _pcGuardarUno(hijos[i], pais, ciudad);
+  }
+  var base = (pais||ciudad) ? ('✅ Origen guardado para '+nombre+': '+(pais||'—')+(ciudad?' · '+ciudad:'')) : ('🗑️ Origen eliminado para '+nombre);
+  if(hijos.length) base += ' · +'+hijos.length+' variante(s) S.I heredada(s)';
+  _showToast(base, 'green', 4000);
 }
 
 async function _pcEliminar(nombre){
@@ -10709,7 +10658,6 @@ async function _pcEliminar(nombre){
   try {
     await window._sb.from('prov_config').delete().eq('prov_nombre', nombre);
     delete window._pcCache[nombre];
-    _pcRenderLista();
     _showToast('🗑 Eliminado','orange',2000);
   } catch(e){
     _showToast('❌ Error: '+e.message,'red',3000);
@@ -12546,14 +12494,13 @@ function _asignSaltar(){
 
 
 async function procesarEmbarque(){
-  // Si hay CIF en el formulario pero no se ha calculado, calcular ahora
+  // Recalcular SIEMPRE antes de procesar — garantiza que snap.ahorro (modal "Embarque Procesado")
+  // coincida exactamente con el COMPARATIVO DE DESEMBOLSO del dashboard (fuente de verdad).
   const _cifEl = document.getElementById('s1_cif');
   const _cifVal = parseFloat(_cifEl?.value||0);
-  if(_cifVal > 0 && !window._lastCIF){
-    if(typeof calc==='function') calc();
-    // Pequeña espera para que calc() termine
-    await new Promise(r=>setTimeout(r,150));
-  }
+  if(typeof calc==='function') calc();
+  // Pequeña espera para que calc() termine de actualizar window._ahorroTotal4C / window._lastCIF
+  await new Promise(r=>setTimeout(r,150));
   if(!window._lastCIF && _cifVal <= 0){
     _showToast('⚠️ Ingresa el valor CIF y presiona Calcular antes de procesar.', 'red', 4000);
     return;
@@ -21802,15 +21749,17 @@ function renderInvLines(){
         +'<button onclick="removeInvLine('+i+')" style="flex-shrink:0;background:rgba(218,54,51,.1);border:1px solid rgba(218,54,51,.2);color:var(--red-l);border-radius:6px;width:30px;height:36px;cursor:pointer;font-size:14px">×</button>'
         +'</div>'
         +'<div style="display:flex;gap:6px;margin-bottom:6px">'
-        +'<div style="flex:1"><input type="number" value="'+(l.bultos||'')+'" placeholder="Bultos" oninput="invLines['+i+'].bultos=parseInt(this.value)||0;_autoSumBultos()" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:5px;padding:5px 8px;color:var(--text);font-size:11px"></div>'
-        +'<div style="flex:1"><input type="number" value="'+(l.piezas||'')+'" placeholder="Piezas" oninput="invLines['+i+'].piezas=parseInt(this.value)||0;_autoSumPiezas()" style="width:100%;background:var(--s2);border:1px solid rgba(88,166,255,.25);border-radius:5px;padding:5px 8px;color:var(--blue-l);font-size:11px;font-family:\'IBM Plex Mono\',monospace"></div>'
-        +'<div style="flex:2"><input type="text" value="'+(l.oc||'')+'" placeholder="OC / Orden de Compra" oninput="invLines['+i+'].oc=this.value" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:5px;padding:5px 8px;color:var(--text);font-size:11px"></div>'
-        +'<div style="flex:1"><input type="number" value="'+(l.traspaso||'')+'" placeholder="Traspaso" oninput="invLines['+i+'].traspaso=parseFloat(this.value)||0;_autoSumTraspaso()" style="width:100%;background:var(--s2);border:1px solid rgba(63,185,80,.25);border-radius:5px;padding:5px 8px;color:var(--green-l);font-size:11px;font-family:\'IBM Plex Mono\',monospace"></div>'
+        +'<div style="flex:1"><div style="font-size:8px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.03em;margin-bottom:2px">Bultos</div><input type="number" value="'+(l.bultos||'')+'" placeholder="0" oninput="invLines['+i+'].bultos=parseInt(this.value)||0;_autoSumBultos()" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:5px;padding:5px 8px;color:var(--text);font-size:11px"></div>'
+        +'<div style="flex:1"><div style="font-size:8px;color:var(--blue-l);font-weight:700;text-transform:uppercase;letter-spacing:.03em;margin-bottom:2px">Piezas</div><input type="number" value="'+(l.piezas||'')+'" placeholder="0" oninput="invLines['+i+'].piezas=parseInt(this.value)||0;_autoSumPiezas()" style="width:100%;background:var(--s2);border:1px solid rgba(88,166,255,.25);border-radius:5px;padding:5px 8px;color:var(--blue-l);font-size:11px;font-family:\'IBM Plex Mono\',monospace"></div>'
+        +'<div style="flex:2"><div style="font-size:8px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.03em;margin-bottom:2px">N° Orden de Compra</div><input type="text" value="'+(l.oc||'')+'" placeholder="OC" oninput="invLines['+i+'].oc=this.value" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:5px;padding:5px 8px;color:var(--text);font-size:11px"></div>'
+        +'<div style="flex:1"><div style="font-size:8px;color:var(--green-l);font-weight:700;text-transform:uppercase;letter-spacing:.03em;margin-bottom:2px">Traspaso ($)</div><input type="number" value="'+(l.traspaso||'')+'" placeholder="0.00" oninput="invLines['+i+'].traspaso=parseFloat(this.value)||0;_autoSumTraspaso()" style="width:100%;background:var(--s2);border:1px solid rgba(63,185,80,.25);border-radius:5px;padding:5px 8px;color:var(--green-l);font-size:11px;font-family:\'IBM Plex Mono\',monospace"></div>'
         +'</div>'
-        +'<div style="display:flex;gap:6px;margin-bottom:5px;padding:5px 8px;background:rgba(167,113,247,.06);border-radius:6px;border:1px solid rgba(167,113,247,.2)">'
-        +'<div style="font-size:9px;color:#a371f7;font-weight:700;display:flex;align-items:center;gap:4px;white-space:nowrap;min-width:70px">🔗 Homol.:</div>'
-        +'<input type="text" value="'+(l.ocHomologada||'')+'" placeholder="OC Homologada" oninput="invLines['+i+'].ocHomologada=this.value" style="flex:1;background:rgba(167,113,247,.05);border:1px solid rgba(167,113,247,.25);border-radius:4px;padding:4px 6px;color:#a371f7;font-size:10px;min-width:0">'
-        +'<input type="number" value="'+(l.montoHomologado||'')+'" placeholder="Monto Homol." step="0.01" oninput="invLines['+i+'].montoHomologado=parseFloat(this.value)||0" style="width:110px;flex-shrink:0;background:rgba(167,113,247,.05);border:1px solid rgba(167,113,247,.25);border-radius:4px;padding:4px 6px;color:#a371f7;font-size:10px;font-family:\'IBM Plex Mono\',monospace;text-align:right">'
+        +'<div style="display:flex;flex-direction:column;gap:4px;margin-bottom:5px;padding:5px 8px;background:rgba(167,113,247,.06);border-radius:6px;border:1px solid rgba(167,113,247,.2)">'
+        +'<div style="font-size:9px;color:#a371f7;font-weight:700">🔗 Homologado</div>'
+        +'<div style="display:flex;gap:6px">'
+        +'<div style="flex:1;min-width:0"><div style="font-size:8px;color:#a371f7;font-weight:700;text-transform:uppercase;letter-spacing:.03em;margin-bottom:2px">OC Homologada</div><input type="text" value="'+(l.ocHomologada||'')+'" placeholder="OC Homol." oninput="invLines['+i+'].ocHomologada=this.value" style="width:100%;box-sizing:border-box;background:rgba(167,113,247,.05);border:1px solid rgba(167,113,247,.25);border-radius:4px;padding:4px 6px;color:#a371f7;font-size:10px"></div>'
+        +'<div style="flex-shrink:0;width:110px"><div style="font-size:8px;color:#a371f7;font-weight:700;text-transform:uppercase;letter-spacing:.03em;margin-bottom:2px">Monto Homol. ($)</div><input type="number" value="'+(l.montoHomologado||'')+'" placeholder="0.00" step="0.01" oninput="invLines['+i+'].montoHomologado=parseFloat(this.value)||0" style="width:100%;box-sizing:border-box;background:rgba(167,113,247,.05);border:1px solid rgba(167,113,247,.25);border-radius:4px;padding:4px 6px;color:#a371f7;font-size:10px;font-family:\'IBM Plex Mono\',monospace;text-align:right"></div>'
+        +'</div>'
         +'</div>'
         +'<div style="display:flex;gap:5px;align-items:center;margin-bottom:6px">'
         +'<input type="text" value="'+(l.numFact||l.nfac||'')+'" placeholder="N° Factura Suplidor" id="nfact-merc-'+i+'" onchange="invLines['+i+'].numFact=this.value;invLines['+i+'].nfac=this.value;" oninput="invLines['+i+'].numFact=this.value;invLines['+i+'].nfac=this.value;" style="flex:1;background:'+(l._factSaved?'rgba(63,185,80,.08)':'var(--s2)')+';border:1px solid '+(l._factSaved?'rgba(63,185,80,.35)':'rgba(88,166,255,.2)')+';border-radius:5px;padding:5px 8px;color:'+(l._factSaved?'var(--green-l)':'var(--text)')+';font-size:11px;font-weight:'+(l._factSaved?'600':'400')+'">'
@@ -22258,7 +22207,7 @@ function _autoSumPiezas(){
   const total=invLines.reduce((s,l)=>s+(l.piezas||0),0);
   window._totalPiezas = total;
   const el=document.getElementById('inv-piezas-label');
-  if(el) el.textContent = total>0 ? '🔢 '+total.toLocaleString()+' piezas' : '';
+  if(el) el.textContent = total>0 ? '🔢 '+total.toLocaleString('en-US')+' piezas' : '';
   calcInvTotals();
 }
 // ── Aplicar plantilla de Proveedores al Escenario Único ──
@@ -23107,7 +23056,7 @@ function calcInvTotals(){
   _setAll('inv-term-label',  isFOB ? 'FOB' : 'CIF');
   _setAll('inv-apply-note',  `Total se aplicará al campo "${isFOB?'Valor FOB':'Valor CIF'}".`);
   _setAll('inv-traspaso-label', trasTotal>0 ? '🔄 Traspaso total: '+f(trasTotal) : '');
-  _setAll('inv-piezas-label',   totalPiezas>0 ? '🔢 '+totalPiezas.toLocaleString()+' piezas' : '');
+  _setAll('inv-piezas-label',   totalPiezas>0 ? '🔢 '+totalPiezas.toLocaleString('en-US')+' piezas' : '');
 
   drawInvPie();
 }
