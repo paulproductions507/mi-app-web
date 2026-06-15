@@ -11,7 +11,7 @@
 // Verificación automática de versión — fuerza recarga si el servidor tiene versión nueva
 (function(){
   var VER_KEY = '_app_build_zlc';
-  var VER_BUILD = '20260615-FIX13';
+  var VER_BUILD = '20260615-FIX15';
   try {
     var saved = sessionStorage.getItem(VER_KEY);
     if(saved && saved !== VER_BUILD){
@@ -10266,23 +10266,28 @@ function calcSab2(){
     window._lastSnap.sc3.pagFinal    = pagFinal;
     window._lastSnap.sc3.landed1     = landed;
     window._lastSnap.sc3.noMerc      = noMerc;
+    window._lastSnap.sc3.flete       = fleteStd;
+    window._lastSnap.sc3.gastos      = agente;
     window._lastSnap.sc3.desembolso  = mercHomol + comision + fleteStd + agente;
-    // Actualizar ahorro real con valores manuales corregidos
-    const _sc1desemb = (window._lastSnap.sc1?.base||0)+(window._lastSnap.sc1?.arancel||0)
-                     +(window._lastSnap.sc1?.itbms||0)+(window._lastSnap.sc1?.itbmsTasaFinal||0)
-                     +(window._lastSnap.sc1?.hon||0)+(window._lastSnap.sc1?.tasa||0)
-                     +(window._lastSnap.sc1?.form1||0)+(window._lastSnap.sc1?.noMerc||0)
-                     -((window._lastSnap.sc1?.noMerc||0)-(window._lastSnap.sc1?.arancel||0)-(window._lastSnap.sc1?.hon||0)-(window._lastSnap.sc1?.tasa||0)-(window._lastSnap.sc1?.form1||0)); // simplify
-    const _sc3desemb = (window._lastSnap.sc1?.base||0) + comision + fleteStd + agente;
-    const _ahorroReal = (window._lastSnap.sc1?.landed1||0) + (window._lastSnap.sc1?.itbms||0)
-                      + (window._lastSnap.sc1?.itbmsTasaFinal||0)
-                      - _sc3desemb + (window._lastSnap.sc1?.arancel||0);
-    window._lastSnap.sc3.ahorroNeto = landed > 0
-      ? Math.round(((window._lastSnap.sc1?.landedG||0) - window._lastSnap.sc3.desembolso) * 100) / 100
-      : 0;
-    if(window._lastSnap.sc3.ahorroNeto > 0){
-      window._lastAhorroNeto = window._lastSnap.sc3.ahorroNeto;
-    }
+
+    // ── Ahorro 4-Criterios: calcular aquí mismo con valores frescos de calcSab2 ──
+    // Esta es la fuente de verdad — idéntica al panel comparativo visible.
+    const _sc1 = window._lastSnap.sc1 || {};
+    const _comBruta4C = Math.max(0, comision - itbmsHomol);
+    const _isFOBext4C = (window._lastSnap.termino==='FOB' && window._lastSnap.tipo==='EXT');
+    const _r1_flete4C = _isFOBext4C ? (window._lastSnap.flete||0) : (fleteStd > 0 ? fleteStd : 0);
+    const _c1_reg4C   = (_sc1.arancel||0)+(_sc1.itbms||0)+(_sc1.tasa||0)+(_sc1.itbmsTasaFinal||0)+(_sc1.form1||0);
+    const _c2_reg4C   = _r1_flete4C + (_sc1.agente||0) + (_sc1.acarreo||0) + (_sc1.dmce||0);
+    const _c3_reg4C   = _sc1.hon||0;
+    const _c1_sab4C   = itbmsHomol;
+    const _c2_sab4C   = fleteStd + agente;
+    const _c3_sab4C   = _comBruta4C;
+    const _ahorro4C   = Math.round(((_c1_reg4C-_c1_sab4C)+(_c2_reg4C-_c2_sab4C)+(_c3_reg4C-_c3_sab4C))*100)/100;
+
+    // Escribir en TODOS los lugares donde procesarEmbarque puede leerlo
+    window._ahorroTotal4C              = _ahorro4C;
+    window._lastSnap.sc3.ahorroNeto   = _ahorro4C;
+    if(_ahorro4C > 0) window._lastAhorroNeto = _ahorro4C;
   }
 }
 
@@ -11732,9 +11737,7 @@ function loadTendData(){
       tendData.forEach(d => { _corregirItbmsHomolSababa(d); });
       // ── Corrección ahorro Sababa con flete: recalcula embarques donde el flete
       //    distorsionó el comparativo (flete en c2_sab pero no en c2_reg) ──
-      var _ahorroFixed = false;
-      tendData.forEach(d => { if(_corregirAhorroNegativoSababa(d)) _ahorroFixed = true; });
-      if(_ahorroFixed) saveTendData();
+      // _corregirAhorroNegativoSababa removida — causaba sobreescritura incorrecta
       // ── Reparación automática desactivada — operaba silenciosamente pero
       //    interfería con la carga de datos desde Supabase ──
       return; }
@@ -12119,9 +12122,7 @@ async function _pullTendFromCloud(){
     tendData.forEach(d => { _corregirLandedUnico(d); });
     tendData.forEach(d => { _corregirItbmsHomolSababa(d); });
     // ── Corrección ahorro Sababa con flete (embarques no FOB/EXT) ──
-    var _ahorroFixed2 = false;
-    tendData.forEach(d => { if(_corregirAhorroNegativoSababa(d)) _ahorroFixed2 = true; });
-    if(_ahorroFixed2){ _syncTendToCloud(); console.log('✅ Ahorro Sababa corregido por flete'); }
+    // _corregirAhorroNegativoSababa removida — causaba sobreescritura incorrecta
 
     // ── Reparación automática desactivada ──
 
@@ -13022,60 +13023,13 @@ async function procesarEmbarque(){
   });
   const snap={
     nro: nro||`SIN-NRO-${Date.now()}`, desc, fecha,
-    // ── Ahorro: fórmula 4 Criterios directa — fuente DOM + snap ──
-    // Leer valores del DOM en este momento exacto (post calc+calcSab2),
-    // sin depender de ventana de tiempo de renders anteriores.
+    // ── Ahorro: _ahorroTotal4C es la fuente única de verdad ──
+    // Escrito por calcSab2() con la fórmula 4-Criterios correcta.
     ahorro: (function(){
       const R = n => Math.round((n||0)*100)/100;
-      const vd = id => parseFloat(document.getElementById(id)?.value||0)||0;
-      const _sc = window._lastSnap || {};
-
-      // ── SABABA ──
-      if(compar === 'sababa'){
-        const sc1 = _sc.sc1||{}, sc3 = _sc.sc3||{};
-
-        // Leer comision e itbmsHomol del DOM directamente (más fresco que el snap)
-        const _comDom    = vd('s2_comision_display');
-        const _itbPct    = vd('s2_itbms')/100 || 0.07;
-        const _itbHDom   = sc3.itbmsHomol || 0;   // calculado por calcSab2
-
-        // comision: priorizar DOM si > 0, sino snap
-        const _comision  = _comDom > 0 ? _comDom : (sc3.comision||0);
-        // itbmsHomol: snap (calculado por calcSab2)
-        const _itbmsH    = _itbHDom > 0 ? _itbHDom : R(_comision / (1 + 1/_itbPct));
-        // comBruta = honorario neto Sababa
-        const _comBruta  = (sc3.comBruta !== undefined && sc3.comBruta !== null && sc3.comBruta > 0)
-          ? sc3.comBruta
-          : R(_comision - _itbmsH);
-
-        // flete Sababa del DOM
-        const _fleteDom  = vd('s2_flete_sab') || vd('s2_flete') || sc3.flete || 0;
-        // gastos agente Sababa del DOM
-        const _agenteDom = vd('s2_agente') || sc3.gastos || 0;
-
-        if(_comision > 0 && (sc1.arancel||0) > 0){
-          // c2_reg: flete en ambos lados si Sababa paga flete
-          const _isFOBext = (_sc.termino==='FOB' && _sc.tipo==='EXT');
-          const r1_flete  = _isFOBext ? (_sc.flete||0) : (_fleteDom > 0 ? _fleteDom : 0);
-          const c1_reg = (sc1.arancel||0)+(sc1.itbms||0)+(sc1.tasa||0)+(sc1.itbmsTasaFinal||0)+(sc1.form1||0);
-          const c2_reg = r1_flete + (sc1.agente||0) + (sc1.acarreo||0) + (sc1.dmce||0);
-          const c3_reg = sc1.hon||0;
-          const c1_sab = _itbmsH;
-          const c2_sab = _fleteDom + _agenteDom;
-          const c3_sab = _comBruta;
-          return R((c1_reg-c1_sab) + (c2_reg-c2_sab) + (c3_reg-c3_sab));
-        }
-        // Fallback: diferencia de desembolsos del comparativo
+      if(compar === 'sababa' || compar === 'cifexp'){
         if(typeof window._ahorroTotal4C === 'number' && window._ahorroTotal4C !== 0)
           return R(window._ahorroTotal4C);
-        return R(sc3.ahorroNeto || window._lastAhorroNeto || 0);
-      }
-
-      // ── CIF EXPRESS ──
-      if(compar === 'cifexp'){
-        if(typeof window._ahorroTotal4C === 'number' && window._ahorroTotal4C !== 0)
-          return R(window._ahorroTotal4C);
-        return R(_sc.sc2?.ahorroNeto || window._lastAhorroNeto || 0);
       }
       return R(window._lastAhorroNeto || 0);
     })(),
