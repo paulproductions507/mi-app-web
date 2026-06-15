@@ -11,7 +11,7 @@
 // Verificación automática de versión — fuerza recarga si el servidor tiene versión nueva
 (function(){
   var VER_KEY = '_app_build_zlc';
-  var VER_BUILD = '20260613-FIX10';
+  var VER_BUILD = '20260615-FIX11';
   try {
     var saved = sessionStorage.getItem(VER_KEY);
     if(saved && saved !== VER_BUILD){
@@ -8608,7 +8608,10 @@ function calc(){
         const c1_altVal = isCIF ? 0 : c1_sab3;
 
         // ── CRITERIO 2: Gastos Origen/Destino ──
-        const c2_reg = sc1_flete_nm + agente + acarreo + dmce;
+        // FIX: para Sababa, si hay flete en sc3, también incluirlo en c2_reg
+        // (mismo flete en ambos escenarios → se cancela en el comparativo)
+        const _sc3FleteHero = isSab ? (sc3_flete||0) : 0;
+        const c2_reg = (sc1_flete_nm>0 ? sc1_flete_nm : _sc3FleteHero) + agente + acarreo + dmce;
         const c2_alt = isCIF ? agente : (sc3_flete + sc3_gastos); // CIF: gastos sin acarreo/DMCE
         // CIF absorbe acarreo/DMCE en su comisión
         const c2_cifVal = agente; // solo gastos, sin acarreo/DMCE (absorbidos)
@@ -10087,7 +10090,12 @@ function calcSab2(){
           const r1_tasa    = snap1.tasa||0;
           const r1_itbmsTa = snap1.itbmsTasaFinal||0;  // ITBMS s/tasa
           const r1_usoSis  = snap1.form1||0;
-          const r1_flete   = (window._lastSnap?.termino==='FOB'&&window._lastSnap?.tipo==='EXT')?(window._lastSnap?.flete||0):0;
+          // FIX: r1_flete debe incluir el flete cuando Sababa lo paga (fleteStd>0),
+          // ya que ambos escenarios incurren en el mismo costo de flete —
+          // excluirlo solo de c2_reg distorsionaría el comparativo de ahorro.
+          const r1_flete   = (window._lastSnap?.termino==='FOB'&&window._lastSnap?.tipo==='EXT')
+            ? (window._lastSnap?.flete||0)
+            : (fleteStd>0 ? fleteStd : 0);
           const r1_gastos  = (snap1.agente||0);
           const r1_acarreo = snap1.acarreo||0;
           const r1_dmce    = snap1.dmce||0;
@@ -11634,22 +11642,29 @@ function _corregirItbmsHomolSababa(d){
 
 function _corregirAhorroNegativoSababa(d){
   if(!d || !d.snap) return false;
-  if(!((d.ahorro||0) < 0)) return false; // solo corrige negativos
   const snap = d.snap;
   const sc1 = snap.sc1||{}, sc3 = snap.sc3||{};
   const esSababa = (d.esc||'').toLowerCase().includes('sababa');
   if(!esSababa) return false;
+  // Solo corregir si el ahorro parece incorrecto (negativo, o si sc3.flete>0 y el flete
+  // no fue considerado en c2_reg del comparativo anterior)
+  const tieneFleteNoFOB = (sc3.flete||0)>0 && !(snap.termino==='FOB' && snap.tipo==='EXT');
+  if(!tieneFleteNoFOB && (d.ahorro||0) >= 0) return false;
 
   const R = n => Math.round((n||0)*100)/100;
 
   // ── Intento 1: sc3 tiene comision > 0 (datos completos) ──
   if((sc3.comision||0) > 0){
-    const r1_flete = (snap.termino==='FOB' && snap.tipo==='EXT') ? (snap.flete||0) : 0;
+    // FIX: incluir flete en c2_reg cuando Sababa también lo paga (mismo costo, se cancela)
+    const sc3Flete = sc3.flete||0;
+    const r1_flete = (snap.termino==='FOB' && snap.tipo==='EXT')
+      ? (snap.flete||0)
+      : (sc3Flete>0 ? sc3Flete : 0);
     const c1_reg = (sc1.arancel||0)+(sc1.itbms||0)+(sc1.tasa||0)+(sc1.itbmsTasaFinal||0)+(sc1.form1||0);
     const c2_reg = r1_flete + (sc1.agente||0) + (sc1.acarreo||0) + (sc1.dmce||0);
     const c3_reg = sc1.hon||0;
     const c1_sab = sc3.itbmsHomol||0;
-    const c2_sab = (sc3.flete||0) + (sc3.gastos||0);
+    const c2_sab = sc3Flete + (sc3.gastos||0);
     const c3_sab = (sc3.comBruta!==undefined && sc3.comBruta!==null) ? sc3.comBruta : ((sc3.comision||0)-(sc3.itbmsHomol||0));
     const ahorroCorr = R((c1_reg-c1_sab)+(c2_reg-c2_sab)+(c3_reg-c3_sab));
     if(ahorroCorr === d.ahorro) return false;
@@ -11715,6 +11730,11 @@ function loadTendData(){
       tendData.forEach(d => { _corregirItbmsCifExpress(d); });
       tendData.forEach(d => { _corregirLandedUnico(d); });
       tendData.forEach(d => { _corregirItbmsHomolSababa(d); });
+      // ── Corrección ahorro Sababa con flete: recalcula embarques donde el flete
+      //    distorsionó el comparativo (flete en c2_sab pero no en c2_reg) ──
+      var _ahorroFixed = false;
+      tendData.forEach(d => { if(_corregirAhorroNegativoSababa(d)) _ahorroFixed = true; });
+      if(_ahorroFixed) saveTendData();
       // ── Reparación automática desactivada — operaba silenciosamente pero
       //    interfería con la carga de datos desde Supabase ──
       return; }
@@ -12098,6 +12118,10 @@ async function _pullTendFromCloud(){
     tendData.forEach(d => { _corregirItbmsCifExpress(d); });
     tendData.forEach(d => { _corregirLandedUnico(d); });
     tendData.forEach(d => { _corregirItbmsHomolSababa(d); });
+    // ── Corrección ahorro Sababa con flete (embarques no FOB/EXT) ──
+    var _ahorroFixed2 = false;
+    tendData.forEach(d => { if(_corregirAhorroNegativoSababa(d)) _ahorroFixed2 = true; });
+    if(_ahorroFixed2){ _syncTendToCloud(); console.log('✅ Ahorro Sababa corregido por flete'); }
 
     // ── Reparación automática desactivada ──
 
