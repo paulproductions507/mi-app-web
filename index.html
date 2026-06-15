@@ -11,7 +11,7 @@
 // Verificación automática de versión — fuerza recarga si el servidor tiene versión nueva
 (function(){
   var VER_KEY = '_app_build_zlc';
-  var VER_BUILD = '20260613-FIX9';
+  var VER_BUILD = '20260613-FIX10';
   try {
     var saved = sessionStorage.getItem(VER_KEY);
     if(saved && saved !== VER_BUILD){
@@ -1218,7 +1218,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       <button class="btn-inicio" onclick="volverInicio()" style="display:none">⌂ Inicio</button>
       <div class="hdr-badge">⚡ Activo</div>
       <div id="cloud-status-badge" style="font-size:10px;background:rgba(139,148,158,.12);border:1px solid rgba(139,148,158,.25);color:var(--muted);padding:2px 8px;border-radius:10px;font-weight:500;white-space:nowrap;cursor:pointer" onclick="cargarSesionNube()" title="Estado de sincronización con la nube">☁️ Nube</div>
-      <div style="font-size:9px;background:rgba(63,185,80,.15);border:1px solid rgba(63,185,80,.4);color:#3fb950;padding:2px 8px;border-radius:10px;font-weight:700;white-space:nowrap">v13JUN-FIX9</div>
+      <div style="font-size:9px;background:rgba(63,185,80,.15);border:1px solid rgba(63,185,80,.4);color:#3fb950;padding:2px 8px;border-radius:10px;font-weight:700;white-space:nowrap;display:none">v13JUN-FIX10</div>
     </div>
   </div><!-- /inner row1 -->
   </div><!-- /row1 border -->
@@ -11715,15 +11715,8 @@ function loadTendData(){
       tendData.forEach(d => { _corregirItbmsCifExpress(d); });
       tendData.forEach(d => { _corregirLandedUnico(d); });
       tendData.forEach(d => { _corregirItbmsHomolSababa(d); });
-      // ── Reparación automática de ahorros negativos (fórmula 4 Criterios) ──
-      var _ahFixCount = 0;
-      tendData.forEach(d => { if(_corregirAhorroNegativoSababa(d)) _ahFixCount++; });
-      if(_ahFixCount > 0){
-        setTimeout(function(){
-          if(typeof saveTendData==='function') saveTendData();
-          console.log('[Auto-fix] Ahorro corregido en '+_ahFixCount+' embarque(s) — silencioso');
-        }, 900);
-      }
+      // ── Reparación automática desactivada — operaba silenciosamente pero
+      //    interfería con la carga de datos desde Supabase ──
       return; }
   } catch(e){}
   tendData = [];
@@ -12106,13 +12099,7 @@ async function _pullTendFromCloud(){
     tendData.forEach(d => { _corregirLandedUnico(d); });
     tendData.forEach(d => { _corregirItbmsHomolSababa(d); });
 
-    // ── Reparación automática de ahorros negativos (fórmula 4 Criterios) ──
-    let _ahFixCount = 0;
-    tendData.forEach(d => { if(_corregirAhorroNegativoSababa(d)) _ahFixCount++; });
-    if(_ahFixCount > 0){
-      console.log('[Auto-fix] Ahorro corregido en '+_ahFixCount+' embarque(s) — silencioso');
-      _syncTendToCloud();
-    }
+    // ── Reparación automática desactivada ──
 
     // 5. Si encontramos embarques nuevos en sesiones individuales,
     //    actualizar el maestro para que la próxima vez ya estén ahí
@@ -13011,27 +12998,21 @@ async function procesarEmbarque(){
   });
   const snap={
     nro: nro||`SIN-NRO-${Date.now()}`, desc, fecha,
-    // ── Ahorro: calcular inline con fórmula 4 Criterios — fuente única ──
-    // Se calcula aquí mismo desde _lastSnap (ya poblado por calc()+calcSab2()),
-    // sin depender de _ahorroTotal4C que puede estar desactualizado.
+    // ── Ahorro: fuente única = _ahorroTotal4C generado por calcSab2()/calc() ──
+    // calcSab2() ya corrió justo arriba (syncSC3fromSC1 → calcSab2) y escribió
+    // window._ahorroTotal4C con la misma fórmula 4-Criterios que muestra el dashboard.
+    // NO recalcular inline — eso producía valores distintos al comparativo visible.
     ahorro: (function(){
       const _sc = window._lastSnap || {};
-      if(compar === 'sababa'){
-        const _sc1 = _sc.sc1 || {}, _sc3 = _sc.sc3 || {};
-        const _flete = (_sc.termino==='FOB' && _sc.tipo==='EXT') ? (_sc.flete||0) : 0;
-        const _c1r = (_sc1.arancel||0)+(_sc1.itbms||0)+(_sc1.tasa||0)+(_sc1.itbmsTasaFinal||0)+(_sc1.form1||0);
-        const _c2r = _flete + (_sc1.agente||0) + (_sc1.acarreo||0) + (_sc1.dmce||0);
-        const _c3r = _sc1.hon||0;
-        const _c1s = _sc3.itbmsHomol||0;
-        const _c2s = (_sc3.flete||0) + (_sc3.gastos||0);
-        const _c3s = (_sc3.comBruta!==undefined&&_sc3.comBruta!==null) ? _sc3.comBruta : ((_sc3.comision||0)-(_sc3.itbmsHomol||0));
-        const _ah = Math.round(((_c1r-_c1s)+(_c2r-_c2s)+(_c3r-_c3s))*100)/100;
-        if(_sc3.comision > 0 || _sc3.itbmsHomol > 0) return _ah;
-      }
-      // CIF Express
-      if(compar === 'cifexp'){
-        if(typeof window._ahorroTotal4C === 'number' && window._ahorroTotal4C !== 0) return Math.round(window._ahorroTotal4C*100)/100;
-        if(_sc.sc2 && (_sc.sc2.ahorroNeto||0) !== 0) return _sc.sc2.ahorroNeto;
+      // Sababa y CIF Express: usar _ahorroTotal4C (escrito por calcSab2/calc)
+      if(compar === 'sababa' || compar === 'cifexp'){
+        if(typeof window._ahorroTotal4C === 'number' && window._ahorroTotal4C !== 0)
+          return Math.round(window._ahorroTotal4C*100)/100;
+        // Fallback: ahorroNeto guardado en snap por calcSab2
+        if(compar === 'sababa' && _sc.sc3 && (_sc.sc3.ahorroNeto||0) !== 0)
+          return Math.round((_sc.sc3.ahorroNeto)*100)/100;
+        if(compar === 'cifexp' && _sc.sc2 && (_sc.sc2.ahorroNeto||0) !== 0)
+          return Math.round((_sc.sc2.ahorroNeto)*100)/100;
       }
       return window._lastAhorroNeto || 0;
     })(),
