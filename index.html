@@ -11,7 +11,7 @@
 // Verificación automática de versión — fuerza recarga si el servidor tiene versión nueva
 (function(){
   var VER_KEY = '_app_build_zlc';
-  var VER_BUILD = '20260615-FIX15';
+  var VER_BUILD = '20260615-FIX16';
   try {
     var saved = sessionStorage.getItem(VER_KEY);
     if(saved && saved !== VER_BUILD){
@@ -14235,12 +14235,20 @@ function renderTend(){
     if(isUnico) return; // embarques únicos no tienen ahorro comparativo
 
     if(isSab && sc3.comision>0){
-      // ── Fórmula correcta (4 Criterios): excluir base de ambos lados, incluir itbmsHomol en SC3 ──
-      const _sc1Desemb = (sc1.arancel||0)+(sc1.itbms||0)+(sc1.hon||0)+(sc1.tasa||0)+(sc1.form1||0)+(sc1.itbmsTasaFinal||0)+(sc1.flete||0)+(sc1.acarreo||0)+(sc1.dmce||0)+(sc1.agente||0);
-      const _itbmsH = sc3.itbmsHomol||0;
-      const _sc3Desemb = _itbmsH + (sc3.flete||0) + (sc3.gastos||0) + (sc3.comision - _itbmsH);
-      const _ahorroCorrect = Math.round((_sc1Desemb - _sc3Desemb)*100)/100;
-      // Solo corregir si la diferencia con el valor guardado es material (>$1)
+      // ── Fórmula 4 Criterios correcta ──
+      const _itbmsH   = sc3.itbmsHomol||0;
+      const _comBruta = sc3.comBruta || Math.max(0,(sc3.comision||0)-_itbmsH);
+      const _sc3Flete = sc3.flete||0;
+      // FIX: flete en c2_reg cuando Sababa lo paga (FOB/EXT: siempre; Local: si sc3 tiene flete)
+      const _isFOBext = (sn.termino==='FOB' && sn.tipo==='EXT');
+      const _r1flete  = _isFOBext ? (sn.flete||sc1.flete||_sc3Flete||0) : (_sc3Flete>0?_sc3Flete:0);
+      const _c1_reg   = (sc1.arancel||0)+(sc1.itbms||0)+(sc1.tasa||0)+(sc1.itbmsTasaFinal||0)+(sc1.form1||0);
+      const _c2_reg   = _r1flete+(sc1.agente||0)+(sc1.acarreo||0)+(sc1.dmce||0);
+      const _c3_reg   = sc1.hon||0;
+      const _c1_sab   = _itbmsH;
+      const _c2_sab   = _sc3Flete+(sc3.gastos||0);
+      const _c3_sab   = _comBruta;
+      const _ahorroCorrect = Math.round(((_c1_reg-_c1_sab)+(_c2_reg-_c2_sab)+(_c3_reg-_c3_sab))*100)/100;
       if(Math.abs((d.ahorro||0) - _ahorroCorrect) > 1 && _ahorroCorrect !== 0){
         d.ahorro = _ahorroCorrect; _tendFixed=true;
       } else if(!d.ahorro && _ahorroCorrect>0){
