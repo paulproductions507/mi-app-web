@@ -11,7 +11,7 @@
 // Verificación automática de versión — fuerza recarga si el servidor tiene versión nueva
 (function(){
   var VER_KEY = '_app_build_zlc';
-  var VER_BUILD = '20260615-FIX12';
+  var VER_BUILD = '20260615-FIX13';
   try {
     var saved = sessionStorage.getItem(VER_KEY);
     if(saved && saved !== VER_BUILD){
@@ -13022,37 +13022,56 @@ async function procesarEmbarque(){
   });
   const snap={
     nro: nro||`SIN-NRO-${Date.now()}`, desc, fecha,
-    // ── Ahorro: calculado directamente desde _lastSnap (4 Criterios) ──
-    // Se recalcula inline en el momento de procesar para garantizar que coincide
-    // con el comparativo visible, sin depender del render del panel DOM.
+    // ── Ahorro: fórmula 4 Criterios directa — fuente DOM + snap ──
+    // Leer valores del DOM en este momento exacto (post calc+calcSab2),
+    // sin depender de ventana de tiempo de renders anteriores.
     ahorro: (function(){
       const R = n => Math.round((n||0)*100)/100;
+      const vd = id => parseFloat(document.getElementById(id)?.value||0)||0;
       const _sc = window._lastSnap || {};
-      // ── SABABA: fórmula 4 Criterios idéntica al panel calcSab2() ──
+
+      // ── SABABA ──
       if(compar === 'sababa'){
         const sc1 = _sc.sc1||{}, sc3 = _sc.sc3||{};
-        if((sc3.comision||0) > 0 && (sc1.arancel||0) > 0){
-          const sc3Flete = sc3.flete||0;
-          // FIX: flete en c2_reg cuando Sababa lo paga (mismo costo, se cancela)
-          const r1_flete = (_sc.termino==='FOB' && _sc.tipo==='EXT')
-            ? (_sc.flete||0)
-            : (sc3Flete > 0 ? sc3Flete : 0);
+
+        // Leer comision e itbmsHomol del DOM directamente (más fresco que el snap)
+        const _comDom    = vd('s2_comision_display');
+        const _itbPct    = vd('s2_itbms')/100 || 0.07;
+        const _itbHDom   = sc3.itbmsHomol || 0;   // calculado por calcSab2
+
+        // comision: priorizar DOM si > 0, sino snap
+        const _comision  = _comDom > 0 ? _comDom : (sc3.comision||0);
+        // itbmsHomol: snap (calculado por calcSab2)
+        const _itbmsH    = _itbHDom > 0 ? _itbHDom : R(_comision / (1 + 1/_itbPct));
+        // comBruta = honorario neto Sababa
+        const _comBruta  = (sc3.comBruta !== undefined && sc3.comBruta !== null && sc3.comBruta > 0)
+          ? sc3.comBruta
+          : R(_comision - _itbmsH);
+
+        // flete Sababa del DOM
+        const _fleteDom  = vd('s2_flete_sab') || vd('s2_flete') || sc3.flete || 0;
+        // gastos agente Sababa del DOM
+        const _agenteDom = vd('s2_agente') || sc3.gastos || 0;
+
+        if(_comision > 0 && (sc1.arancel||0) > 0){
+          // c2_reg: flete en ambos lados si Sababa paga flete
+          const _isFOBext = (_sc.termino==='FOB' && _sc.tipo==='EXT');
+          const r1_flete  = _isFOBext ? (_sc.flete||0) : (_fleteDom > 0 ? _fleteDom : 0);
           const c1_reg = (sc1.arancel||0)+(sc1.itbms||0)+(sc1.tasa||0)+(sc1.itbmsTasaFinal||0)+(sc1.form1||0);
           const c2_reg = r1_flete + (sc1.agente||0) + (sc1.acarreo||0) + (sc1.dmce||0);
           const c3_reg = sc1.hon||0;
-          const c1_sab = sc3.itbmsHomol||0;
-          const c2_sab = sc3Flete + (sc3.gastos||0);
-          const c3_sab = (sc3.comBruta !== undefined && sc3.comBruta !== null)
-            ? sc3.comBruta
-            : R((sc3.comision||0) - (sc3.itbmsHomol||0));
+          const c1_sab = _itbmsH;
+          const c2_sab = _fleteDom + _agenteDom;
+          const c3_sab = _comBruta;
           return R((c1_reg-c1_sab) + (c2_reg-c2_sab) + (c3_reg-c3_sab));
         }
-        // Fallback si snap incompleto: usar _ahorroTotal4C
+        // Fallback: diferencia de desembolsos del comparativo
         if(typeof window._ahorroTotal4C === 'number' && window._ahorroTotal4C !== 0)
           return R(window._ahorroTotal4C);
-        return R(_sc.sc3?.ahorroNeto || window._lastAhorroNeto || 0);
+        return R(sc3.ahorroNeto || window._lastAhorroNeto || 0);
       }
-      // ── CIF EXPRESS: usar _ahorroTotal4C escrito por calc() ──
+
+      // ── CIF EXPRESS ──
       if(compar === 'cifexp'){
         if(typeof window._ahorroTotal4C === 'number' && window._ahorroTotal4C !== 0)
           return R(window._ahorroTotal4C);
@@ -13136,11 +13155,14 @@ async function procesarEmbarque(){
     if(_mercLines.length > 0){
       _showAsignacionFacturas(snap, _conts, function(){
         window._procOverlayNro = nro;
-        var _sn3 = window._lastSnap||snap||{};
+        var _sn3    = window._lastSnap||snap||{};
         var _isSab3 = (_sn3.compar==='sababa') || ((_sn3.sc3&&(_sn3.sc3.landed1||0))>0 && !_sn3.sc2);
-        var _lb3 = _isSab3 ? (_sn3.sc3&&(_sn3.sc3.landed1||_sn3.sc3.base)||0) : (_sn3.sc1&&(_sn3.sc1.landed1||_sn3.sc1.base)||0);
-        var _cb3 = window._sc1_base||window._lastCIF||0;
-        var _fv3 = (_cb3>0&&_lb3>0) ? (((_lb3/_cb3)-1)*100).toFixed(2)+'%' : '—';
+        var _gc3    = snap.gastoComp || 0;
+        var _lb3Raw = _isSab3 ? (_sn3.sc3&&(_sn3.sc3.landed1||_sn3.sc3.base)||0) : (_sn3.sc1&&(_sn3.sc1.landed1||_sn3.sc1.base)||0);
+        var _lb3    = _lb3Raw - _gc3;
+        var _cb3    = window._sc1_base||window._lastCIF||0;
+        var _baseFact3 = (_isSab3 && (_sn3.sc3?.mercHomol||0)>0) ? _sn3.sc3.mercHomol : _cb3;
+        var _fv3    = (_baseFact3>0&&_lb3>0) ? (((_lb3/_baseFact3)-1)*100).toFixed(2)+'%' : '—';
         _showProcessingOverlay(nro, desc, _cb3, _ahorroDisplay, _lb3, _fv3, function(){
           _guardarYRecargar(_nroGuardar);
         });
@@ -13150,15 +13172,25 @@ async function procesarEmbarque(){
   }
   // Show processing overlay, then save+reload
   window._procOverlayNro = nro;
-  // Extraer landed y factor del snap recién guardado
-  var _snapProc = window._lastSnap || snap || {};
-  var _isSab = (_snapProc.compar === 'sababa') || ((_snapProc.sc3&&(_snapProc.sc3.landed1||0))>0 && !_snapProc.sc2);
-  var _landedVal = _isSab
+  // Extraer landed y factor del snap recién guardado — sin gastoComp
+  var _snapProc  = window._lastSnap || snap || {};
+  var _isSab     = (_snapProc.compar === 'sababa') || ((_snapProc.sc3&&(_snapProc.sc3.landed1||0))>0 && !_snapProc.sc2);
+  var _gc        = snap.gastoComp || 0;  // gastoComp es ajuste contable, no desembolso real
+
+  // Landed sin gastoComp — el landed real operativo
+  var _landedRaw = _isSab
     ? (_snapProc.sc3 && (_snapProc.sc3.landed1||_snapProc.sc3.base)||0)
     : (_snapProc.sc1 && (_snapProc.sc1.landed1||_snapProc.sc1.base)||0);
-  var _cifBase2 = window._sc1_base||window._lastCIF||0;
-  var _factorVal = (_cifBase2 > 0 && _landedVal > 0)
-    ? (((_landedVal / _cifBase2) - 1) * 100).toFixed(2) + '%'
+  var _landedVal = _landedRaw - _gc; // restar gastoComp para mostrar el real
+
+  // Base para el factor: Sababa usa mercHomol (homologado), Regular usa FOB
+  var _cifBase2  = window._sc1_base || window._lastCIF || 0;
+  var _baseFactorSab = (_isSab && (_snapProc.sc3?.mercHomol||0) > 0)
+    ? _snapProc.sc3.mercHomol
+    : _cifBase2;
+  var _baseFactorUse = _isSab ? _baseFactorSab : _cifBase2;
+  var _factorVal = (_baseFactorUse > 0 && _landedVal > 0)
+    ? (((_landedVal / _baseFactorUse) - 1) * 100).toFixed(2) + '%'
     : '—';
   _showProcessingOverlay(nro, desc, _cifBase2, _ahorroDisplay, _landedVal, _factorVal, function(){
     _guardarYRecargar(_nroGuardar);
