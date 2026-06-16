@@ -208,7 +208,7 @@ datalist option{background:var(--s2);color:var(--text)}
     </div>
     <div class="r2">
       <div class="field"><label>N° Factura Tesoro Nacional <span style="font-weight:400;color:var(--blue);font-size:9px">para impuestos</span></label><input type="text" id="nfac-tesoro" placeholder="Ej: TN-2026-00123"><p class="note">Número de la factura con la que se pagan los impuestos al Tesoro Nacional</p></div>
-      <div class="field"><label>Cant. Equipos / Contenedores</label><input type="number" id="cant-equipos" placeholder="1" min="0" step="1" value="1"><p class="note">Cantidad de contenedores, paletas o equipos logísticos</p></div>
+      <div class="field"><label>Cant. Equipos / Contenedores</label><input type="number" id="cant-equipos" placeholder="1" min="0" step="1" value="1" oninput="_renderContenedoresUnico()"><p class="note">Cantidad de contenedores, paletas o equipos logísticos</p></div>
     </div>
     <div class="field"><label>Tipo de Mercancía</label><input type="text" id="desc" placeholder="Ej: Hogar 47%, Ropa 22%"></div>
 
@@ -253,6 +253,22 @@ datalist option{background:var(--s2);color:var(--text)}
         </select>
       </div>
       <div class="field"><label>Cant. Cartones</label><input type="number" id="cartones" placeholder="0" min="0" step="1"></div>
+    </div>
+    <div class="r2">
+      <div class="field"><label>🏭 Sede de Recepción</label>
+        <select id="sede-recep" onchange="saveState()">
+          <option value="">— Selecciona —</option>
+          <option value="CDF">CDF</option>
+          <option value="Westland">Westland</option>
+        </select>
+      </div>
+      <div class="field" id="blk-nro-cont-unico"><label>N° Contenedor</label><input type="text" id="nro-cont" placeholder="Ej: MSCU1234567" oninput="saveState()"></div>
+    </div>
+    <!-- Multi-contenedores: un campo de N° por cada equipo cuando hay 2+ -->
+    <div id="multi-contenedores-wrap" style="display:none;margin-bottom:10px">
+      <div style="font-size:10px;font-weight:700;color:var(--blue,#58a6ff);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px" id="multi-contenedores-hdr">🚢 Equipos — N° de Contenedor</div>
+      <div id="multi-contenedores-list"></div>
+      <p class="note" style="margin-top:4px">Indica el N° de cada contenedor. Se preguntará al procesar si las facturas son las mismas para todos o distintas por contenedor.</p>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">
       <div class="field" style="margin:0">
@@ -669,7 +685,7 @@ function calcLive(){
   var mercPura = R(cif - _fletePlantilla - _segPlantilla); // valor mercancía sin flete/seguro (gastos_destino nunca estuvo en el CIF)
 
   var landed=R(mercPura+arancel+hon+tasa+uso+agente+dmce+extras); // itbmsTasa excluido del landed — va a Otros Gastos
-  var factor=cif>0?((landed/cif)-1)*100:0;
+  var factor=mercPura>0?((landed/mercPura)-1)*100:0; // Factor sobre Mercancía (base), NUNCA sobre CIF
 
   // ── Nota informativa de mapeo CIF/Costeo ──
   var _noteEl = document.getElementById('agente-fs-note');
@@ -805,7 +821,7 @@ function calcular(){
     .reduce(function(s,l){return s+(l.costo||0);},0) : 0;
   var mercPuraC = R(cif - _fletePlantillaC - _segPlantillaC);
   var landed=R(mercPuraC+arancel+hon+tasa+uso+agente+extras); // itbmsTasa excluido del landed
-  var factor=cif>0?((landed/cif)-1)*100:0;
+  var factor=mercPuraC>0?((landed/mercPuraC)-1)*100:0; // Factor sobre Mercancía (base), NUNCA sobre CIF
   var landed_g=R(landed+itbms);
 
   lastCalc={cor,nro,desc,pais,ciudad,tipoEmb,fecha,provCor,corName,
@@ -813,6 +829,7 @@ function calcular(){
     arancel,itbms,itbmsTasa,hon,tasa,uso,agente,extras,landed,landed_g,factor,
     gastosRows, honNfac:gv('hon-nfac'), idFiscal:gv('id-fiscal'),
     nfacTesoro:gv('nfac-tesoro'), cantEquipos:parseInt(gv('cant-equipos'))||1,
+    nroCont:gv('nro-cont'), sedeRecepcion:gv('sede-recep')||'',
     cartones:parseInt(gv('cartones'))||0, estatus:gv('estatus'),
     viaTransporte:gv('via-transporte')||'SEA',
     terminoEmb:gv('termino-emb')||'CIF',
@@ -874,14 +891,9 @@ function calcular(){
     +'<div style="font-size:10px;font-weight:700;color:var(--purple);letter-spacing:.1em;text-transform:uppercase;text-align:center;margin-bottom:12px">ESCENARIO ÚNICO · '+(nro||'—')+' · '+corName+'</div>'
     // KPIs
     +'<div class="kpi-grid" style="margin-bottom:14px">'
-    +'<div class="kpi purple"><div class="kpi-label">Valor CIF</div><div class="kpi-val">'+fmt(cif)+'</div></div>'
+    +'<div class="kpi purple"><div class="kpi-label">Valor Mercancía</div><div class="kpi-val">'+fmt(mercPuraC)+'</div></div>'
     +'<div class="kpi green"><div class="kpi-label">Costo Landed</div><div class="kpi-val">'+fmt(landed)+'</div></div>'
     +'<div class="kpi orange"><div class="kpi-label">Factor Import.</div><div class="kpi-val">'+factor.toFixed(2)+'%</div></div>'
-    +'</div>'
-    // Mercancía
-    +'<div style="background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:8px">'
-    +'<div style="padding:6px 12px;background:var(--s2);font-size:10px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.06em">Mercancía</div>'
-    +'<div style="padding:8px 12px"><div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700"><span>Valor FOB / Mercancía</span><span style="font-family:monospace;color:var(--green)">'+fmt(mercPuraC)+'</span></div></div>'
     +'</div>'
     // Impuestos (Tesoro Nacional)
     +secHtml('🏛️ Impuestos — Tesoro Nacional','var(--red)',impuestos,totalImpuestos,true)
@@ -923,6 +935,62 @@ function _autoViaTransporte(tipoEmb){
   else if(tipoEmb==='') {}
   else el.value='SEA';
   saveState();
+}
+
+// ════════════════════════════════════════
+// MULTI-CONTENEDORES — N° de contenedor por equipo (mismo patrón que index.html)
+// ════════════════════════════════════════
+if(typeof window._contenedoresUnico==='undefined') window._contenedoresUnico=[];
+function _renderContenedoresUnico(){
+  var nEq = parseInt(gv('cant-equipos'))||1;
+  var wrap = document.getElementById('multi-contenedores-wrap');
+  var list = document.getElementById('multi-contenedores-list');
+  var blkSimple = document.getElementById('blk-nro-cont-unico');
+  if(!wrap||!list) return;
+
+  var debeMostrar = nEq >= 2;
+  wrap.style.display = debeMostrar ? 'block' : 'none';
+  if(blkSimple) blkSimple.style.display = debeMostrar ? 'none' : '';
+  if(!debeMostrar){ window._contenedoresUnico=[]; saveState(); return; }
+
+  while(window._contenedoresUnico.length < nEq) window._contenedoresUnico.push({num:''});
+  while(window._contenedoresUnico.length > nEq) window._contenedoresUnico.pop();
+
+  var html = window._contenedoresUnico.map(function(c,i){
+    return '<div style="background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px">'
+      +'<div style="font-size:10px;font-weight:700;color:var(--blue,#58a6ff);margin-bottom:6px">🚢 Equipo '+(i+1)+'</div>'
+      +'<input type="text" value="'+(c.num||'')+'" placeholder="Nº Contenedor (ej: MSCU1234567)" '
+      +'oninput="window._contenedoresUnico['+i+'].num=this.value;saveState()" '
+      +'style="width:100%;background:var(--bg,#0d1117);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text);font-size:12px;font-family:monospace">'
+      +'</div>';
+  }).join('');
+  list.innerHTML = html;
+  saveState();
+}
+
+// ── Modal: Despacho Parcial o Completo — idéntico criterio que index.html ──
+// Se dispara al procesar cuando hay 2+ equipos: pregunta si las facturas son
+// las mismas para todos los contenedores o distintas por contenedor.
+function _preguntarFacturasPorContenedor(){
+  var nEq = parseInt(gv('cant-equipos'))||1;
+  if(nEq < 2) return Promise.resolve('completo');
+  return new Promise(function(resolve){
+    var ov=document.createElement('div');
+    ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:999999;display:flex;align-items:center;justify-content:center;padding:20px';
+    ov.innerHTML='<div style="background:var(--s1,#161b22);border:2px solid rgba(88,166,255,.3);border-radius:16px;padding:24px;max-width:360px;width:100%">'
+      +'<div style="font-size:22px;margin-bottom:10px">🚢</div>'
+      +'<div style="font-size:13px;font-weight:800;color:var(--blue,#58a6ff);margin-bottom:8px">Despacho — '+nEq+' Contenedores</div>'
+      +'<div style="font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.6">¿Las facturas de proveedores son las mismas para todos los contenedores, o cada contenedor trae facturas distintas?</div>'
+      +'<div style="display:flex;flex-direction:column;gap:8px">'
+      +'<button id="_dp_mismas" style="background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.35);color:var(--green,#3fb950);border-radius:10px;padding:11px;font-size:12px;font-weight:700;cursor:pointer">✅ Mismas facturas para todos</button>'
+      +'<button id="_dp_distintas" style="background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.35);color:var(--blue,#58a6ff);border-radius:10px;padding:11px;font-size:12px;font-weight:700;cursor:pointer">🔀 Facturas distintas por contenedor</button>'
+      +'<button id="_dp_cancel" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:10px;padding:10px;font-size:12px;cursor:pointer">← Cancelar</button>'
+      +'</div></div>';
+    document.body.appendChild(ov);
+    document.getElementById('_dp_mismas').onclick=function(){ov.remove();resolve('mismas');};
+    document.getElementById('_dp_distintas').onclick=function(){ov.remove();resolve('distintas');};
+    document.getElementById('_dp_cancel').onclick=function(){ov.remove();resolve('cancelar');};
+  });
 }
 
 // ═══════════════════════════════════════════════
@@ -1145,6 +1213,10 @@ function _buildUnicoData(d){
     pais: d.pais, ciudad: d.ciudad,
     tipoEquipo: d.tipoEmb, cartones: d.cartones,
     cantEquipos: d.cantEquipos||1,
+    sedeRecepcion: d.sedeRecepcion||'',
+    nroCont: d.nroCont||'',
+    contenedoresUnico: d.contenedoresUnico||[],
+    modoFacturasContenedor: d.modoFacturasContenedor||'completo',
     idFiscal: d.idFiscal, nfacTesoro: d.nfacTesoro||'', estatus: d.estatus,
     viaTransporte: d.viaTransporte||'SEA',
     terminoEmb: d.terminoEmb||'CIF',
@@ -1175,6 +1247,13 @@ async function procesar(){
   if(!lastCalc||!lastCalc.cif){ toast('⚠️ Calcula primero.','red'); return; }
   var d=lastCalc;
   if(!d.nro){ if(!confirm('No hay N° de Embarque. ¿Continuar?')) return; }
+
+  // ── 2+ equipos/contenedores: preguntar si las facturas son las mismas o distintas ──
+  var _modoFact = await _preguntarFacturasPorContenedor();
+  if(_modoFact==='cancelar') return;
+  d.modoFacturasContenedor = _modoFact; // 'completo' (1 equipo), 'mismas' o 'distintas'
+  d.contenedoresUnico = (window._contenedoresUnico||[]).map(function(c){return c.num||'';});
+  d.sedeRecepcion = gv('sede-recep')||'';
 
   var btn=document.getElementById('btn-proc');
   btn.textContent='⏳ Guardando en la nube…';
@@ -1807,6 +1886,7 @@ function saveState(){
       nro:gv('nro'),idFiscal:gv('id-fiscal'),nfacTesoro:gv('nfac-tesoro'),cantEquipos:gv('cant-equipos'),desc:gv('desc'),
     viaTransporte:gv('via-transporte'),terminoEmb:gv('termino-emb'),tipoProveedor:gv('tipo-proveedor'),
       pais:gv('pais'),ciudad:gv('ciudad'),tipoEmb:gv('tipo-emb'),
+      sedeRecep:gv('sede-recep'),nroCont:gv('nro-cont'),contenedoresUnico:(window._contenedoresUnico||[]),
       cartones:gv('cartones'),fecha:gv('fecha'),estatus:gv('estatus'),
       cif:gv('cif'),arPct:gv('ar-pct'),itbms:gv('itbms-pct'),
       tasa:gv('tasa'),uso:gv('uso'),agente:gv('agente'),dmce:gv('dmce'),
@@ -1846,6 +1926,10 @@ function loadState(){
     su('hon-pct',e.honPct); su('hon-nfac',e.honNfac);
     if(e.pais){ su('pais',e.pais); fillCiudades(); setTimeout(function(){su('ciudad',e.ciudad);},80); }
     su('tipo-emb',e.tipoEmb);
+    su('sede-recep',e.sedeRecep);
+    su('nro-cont',e.nroCont);
+    if(e.contenedoresUnico&&e.contenedoresUnico.length){ window._contenedoresUnico=e.contenedoresUnico; }
+    setTimeout(_renderContenedoresUnico,90);
     if(e.corredor){
       var nf=document.getElementById('nombre-cor-field');
       if(nf) nf.style.display=e.corredor==='otro'?'block':'none';
