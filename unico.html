@@ -169,6 +169,10 @@ datalist option{background:var(--s2);color:var(--text)}
         <span style="font-size:11px;color:var(--muted)">Total Mercancía:</span>
         <span id="plant-total" style="font-family:monospace;font-size:13px;font-weight:800;color:var(--green)">$0.00</span>
       </div>
+      <div style="display:flex;justify-content:space-between;padding-top:4px">
+        <span style="font-size:11px;color:var(--muted)">Valor CIF (Mercancía + Flete + Seguro):</span>
+        <span id="plant-cif-total" style="font-family:monospace;font-size:13px;font-weight:800;color:var(--blue)">$0.00</span>
+      </div>
       <button class="btn btn-add" style="margin-top:8px;background:linear-gradient(135deg,rgba(63,185,80,.2),rgba(63,185,80,.1));border:1px solid rgba(63,185,80,.3);color:var(--green)" onclick="applyPlantilla()">✓ Aplicar CIF al formulario</button>
     </div>
   </div>
@@ -888,6 +892,101 @@ function initSB(){
   }catch(e){ console.warn('SB init:',e); }
 }
 
+// ═══════════════════════════════════════════════
+// FACTURAS DISPONIBLES — mismo módulo que index.html (_FACTDISP_MASTER)
+// Permite enlazar líneas de Flete/Seguro de la plantilla con facturas
+// de gasto ya registradas, y consumir su saldo al guardar el embarque.
+// ═══════════════════════════════════════════════
+var _FDKEY = '_FACTDISP_MASTER';
+
+async function _fdLoad(){
+  var local = [];
+  try{ local = JSON.parse(localStorage.getItem(_FDKEY)||'[]'); }catch(e){}
+  if(!_sb) return local;
+  try{
+    var res = await _sb.from('simulador_sesiones').select('datos').eq('nombre', _FDKEY).maybeSingle();
+    if(res.data && res.data.datos){
+      var cloud = JSON.parse(res.data.datos||'[]');
+      if(Array.isArray(cloud) && cloud.length >= local.length){
+        localStorage.setItem(_FDKEY, JSON.stringify(cloud));
+        return cloud;
+      }
+    }
+  }catch(e){ console.warn('factDisp pull error:', e.message); }
+  return local;
+}
+
+async function _fdSave(d){
+  try{ localStorage.setItem(_FDKEY, JSON.stringify(d)); }catch(e){}
+  if(!_sb) return;
+  try{
+    await _sb.from('simulador_sesiones').upsert({
+      nombre: _FDKEY, datos: JSON.stringify(d), updated_at: new Date().toISOString()
+    }, { onConflict: 'nombre' });
+  }catch(e){ console.warn('factDisp save error:', e.message); }
+}
+
+async function _fdConsumirParcial(numFact, montoUsado, nroEmb){
+  if(!numFact || !montoUsado) return false;
+  var data = await _fdLoad();
+  var changed = false;
+  data.forEach(function(f){
+    if((f.num||'').toUpperCase() === numFact.trim().toUpperCase()){
+      var saldoActual = (f.saldo != null ? f.saldo : f.monto) || 0;
+      var nuevoSaldo  = Math.max(0, saldoActual - montoUsado);
+      f.saldo = Math.round(nuevoSaldo * 100) / 100;
+      if(!f.usos) f.usos = [];
+      f.usos.push({ embarque: nroEmb || gv('nro') || '—', monto: montoUsado, fecha: new Date().toISOString().slice(0,10) });
+      changed = true;
+    }
+  });
+  if(changed) await _fdSave(data);
+  return changed;
+}
+
+// Buscador modal simplificado: abre lista de facturas disponibles filtrables
+// y al elegir una, rellena N° Factura + Proveedor + Monto en la línea de invLines.
+window._fdTargetLineIdx = null;
+async function _fdAbrirBuscadorLinea(lineIdx){
+  window._fdTargetLineIdx = lineIdx;
+  var data = await _fdLoad();
+  var disponibles = data.filter(function(f){
+    var s = (f.saldo != null) ? f.saldo : f.monto;
+    return (s||0) > 0;
+  });
+  var fmt2=function(n){ return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
+  var old=document.getElementById('_fdModal'); if(old) old.remove();
+  var div=document.createElement('div');
+  div.id='_fdModal';
+  div.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
+  var rowsHtml = disponibles.length ? disponibles.map(function(f,i){
+    return '<div onclick="_fdElegirFactura('+i+')" style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center" onmouseover="this.style.background=\'rgba(163,113,247,.12)\'" onmouseout="this.style.background=\'rgba(255,255,255,.04)\'">'
+      +'<div><div style="font-weight:700;color:var(--orange);font-size:12px">'+(f.num||'')+'</div>'
+      +'<div style="font-size:11px;color:var(--text)">'+(f.prov||'')+'</div>'
+      +'<div style="font-size:10px;color:var(--muted)">'+(f.tipo||'')+'</div></div>'
+      +'<div style="font-weight:700;color:var(--green);font-size:13px">'+fmt2(f.saldo!=null?f.saldo:f.monto)+'</div>'
+      +'</div>';
+  }).join('') : '<div style="text-align:center;color:var(--muted);padding:30px">Sin facturas disponibles registradas.</div>';
+  window._fdDisponiblesCache = disponibles;
+  div.innerHTML = '<div style="background:var(--s1);border:1px solid var(--border);border-radius:14px;padding:18px;max-width:420px;width:100%;max-height:70vh;overflow-y:auto">'
+    +'<div style="display:flex;justify-content:space-between;margin-bottom:12px"><div style="font-weight:700;color:var(--purple)">📂 Facturas Disponibles</div>'
+    +'<button onclick="document.getElementById(\'_fdModal\').remove()" style="background:none;border:none;color:var(--muted);font-size:16px;cursor:pointer">×</button></div>'
+    +rowsHtml+'</div>';
+  document.body.appendChild(div);
+}
+function _fdElegirFactura(i){
+  var f = window._fdDisponiblesCache[i];
+  var idx = window._fdTargetLineIdx;
+  if(f && idx != null && invLines[idx]){
+    invLines[idx].nfac = f.num||'';
+    invLines[idx].prov = f.prov||invLines[idx].prov;
+    invLines[idx]._fdLinked = true; // marca para consumo al procesar
+    renderPreview();
+    toast('✅ Vinculado a factura '+(f.num||''),'green');
+  }
+  var m=document.getElementById('_fdModal'); if(m) m.remove();
+}
+
 async function _pushToCloud(data){
   // 1. Push to parent window if available
   var sentLocal = false;
@@ -1023,6 +1122,14 @@ async function procesar(){
   if(_sEl) _sEl.value='Procesado';
 
   var data=_buildUnicoData(d);
+
+  // ── Consumir facturas disponibles vinculadas (flete/seguro con 📂) ──
+  var _fdLines = invLines.filter(function(l){
+    return (l.tipoFac==='flete'||l.tipoFac==='seguro') && l._fdLinked && l.nfac;
+  });
+  for(var _fi=0; _fi<_fdLines.length; _fi++){
+    await _fdConsumirParcial(_fdLines[_fi].nfac, _fdLines[_fi].costo, d.nro);
+  }
 
   var ok = await _pushToCloud(data);
 
@@ -1190,11 +1297,17 @@ function parseRows(rows){
   var bc=hdr.findIndex(function(h){return h.includes('BULTO')||h.includes('CAJA')||h.includes('CARTON');});
   var oc2c=hdr.findIndex(function(h){return h==='OC'||(h.includes('OC')&&!h.includes('HOMOL'))||(h.includes('ORDEN')&&h.includes('COMPRA'));});
   var pc=hdr.findIndex(function(h){return h.includes('PIEZA')||h==='PZS'||h==='PZAS';});
+  var tc=hdr.findIndex(function(h){return h==='TIPO';}); // columna TIPO explícita del Excel (MERCANCIA/SERVICIO/FLETE/SEGURO)
   if(mc<0) mc=3; if(rc<0) rc=1; if(nc<0) nc=2; if(bc<0) bc=5;
+
+  // Filas de metadatos/resumen que NO son facturas — se ignoran siempre
+  var METADATA_ROWS = /^(PAGO_REALIZADO|TOTAL|SUBTOTAL|RESUMEN|NOTA|OBSERVACI[OÓ]N)/;
 
   invLines=[];
   rows.slice(1).forEach(function(r){
     var provRaw=(r[0]||'').trim();
+    // Saltar filas de metadatos/resumen (ej: "PAGO_REALIZADO" con valor FOB en otra columna)
+    if(METADATA_ROWS.test(provRaw.toUpperCase())) return;
     var costoStr=String(r[mc]||'').replace(/[^0-9.-]/g,'');
     var costo=Math.round(parseFloat(costoStr||'0')*100)/100;
     if(!provRaw&&!costo) return;
@@ -1204,13 +1317,22 @@ function parseRows(rows){
     var bultos=parseInt(String(r[bc]||'').replace(/[^0-9]/g,''))||0;
     var piezasRaw=pc>=0?parseInt(String(r[pc]||'').replace(/[^0-9]/g,''))||0:0;
     var ocRaw=oc2c>=0?String(r[oc2c]||'').trim():'';
+    var tipoRaw=tc>=0?String(r[tc]||'').trim().toUpperCase():'';
     var line={prov:provRaw,deptCat,costo,tipoFac:'mercancia',nfac,oc:ocRaw,bultos,piezas:piezasRaw,_raw:provRaw,_deptRaw:deptRaw,_deptFixed:(deptCat!==deptRaw&&deptRaw!=='')};
-    // Auto-detección de Flete/Seguro por texto del proveedor o departamento (no se cuentan como mercancía)
+    // 1) Si el Excel trae columna TIPO explícita, usarla primero
+    if(tipoRaw){
+      if(/FLETE|FREIGHT/.test(tipoRaw)){ line.tipoFac='flete'; line.deptCat=''; }
+      else if(/SEGURO|INSURANCE|P[OÓ]LIZA/.test(tipoRaw)){ line.tipoFac='seguro'; line.deptCat=''; }
+      else if(/SERVICIO/.test(tipoRaw) && /FLETE|TRANSPORTE/.test((provRaw+' '+deptRaw).toUpperCase())){ line.tipoFac='flete'; line.deptCat=''; }
+    }
+    // 2) Auto-detección por texto del proveedor/departamento si no vino marcado por columna TIPO
     var _textoLinea=(provRaw+' '+deptRaw).toUpperCase();
-    if(/\bFLETE\b|\bFREIGHT\b|\bOCEAN\s*FREIGHT\b/.test(_textoLinea)){
-      line.tipoFac='flete'; line.deptCat='';
-    } else if(/\bSEGURO\b|\bINSURANCE\b|\bP[OÓ]LIZA\b/.test(_textoLinea)){
-      line.tipoFac='seguro'; line.deptCat='';
+    if(line.tipoFac==='mercancia'){
+      if(/\bFLETE\b|\bFREIGHT\b|\bOCEAN\s*FREIGHT\b/.test(_textoLinea)){
+        line.tipoFac='flete'; line.deptCat='';
+      } else if(/\bSEGURO\b|\bINSURANCE\b|\bP[OÓ]LIZA\b/.test(_textoLinea)){
+        line.tipoFac='seguro'; line.deptCat='';
+      }
     }
     // provMatch — solo aplica para líneas de mercancía
     if(provRaw && line.tipoFac==='mercancia'){
@@ -1276,9 +1398,12 @@ function renderPreview(){
       +' onchange="_fixProvInline(this,'+realIdx+')"></td>'
       // Depto (oculto/deshabilitado para flete/seguro)
       +deptCellHtml
-      // N° Factura
-      +'<td style="min-width:80px"><input type="text" class="inv-inp" value="'+(l.nfac||'').replace(/"/g,'&quot;')+'" placeholder="N° Fact"'
-      +' oninput="invLines['+realIdx+'].nfac=this.value"></td>'
+      // N° Factura (con botón Disponibles para Flete/Seguro)
+      +'<td style="min-width:140px"><div style="display:flex;gap:4px;align-items:center">'
+      +'<input type="text" class="inv-inp" value="'+(l.nfac||'').replace(/"/g,'&quot;')+'" placeholder="N° Fact"'
+      +' oninput="invLines['+realIdx+'].nfac=this.value;invLines['+realIdx+']._fdLinked=false" style="flex:1'+(l._fdLinked?';border-color:#3fb950':'')+'">'
+      +(isNonMerc?'<button onclick="_fdAbrirBuscadorLinea('+realIdx+')" title="'+(l._fdLinked?'✓ Vinculada — clic para cambiar':'Buscar en Facturas Disponibles')+'" style="flex-shrink:0;background:'+(l._fdLinked?'rgba(63,185,80,.18)':'rgba(210,153,34,.12)')+';border:1px solid '+(l._fdLinked?'rgba(63,185,80,.5)':'rgba(210,153,34,.35)')+';color:'+(l._fdLinked?'#3fb950':'#d29922')+';border-radius:5px;padding:4px 7px;font-size:10px;font-weight:700;cursor:pointer">'+(l._fdLinked?'✓':'📂')+'</button>':'')
+      +'</div></td>'
       // OC
       +'<td style="min-width:70px"><input type="text" class="inv-inp" value="'+(l.oc||'').replace(/"/g,'&quot;')+'" placeholder="OC"'
       +' oninput="invLines['+realIdx+'].oc=this.value"></td>'
@@ -1307,21 +1432,27 @@ function renderPreview(){
     +'</table></div>'
     +'<button class="inv-add-row" onclick="_addInvLineManual()">+ Agregar fila manualmente</button>';
 
-  document.getElementById('plant-total').textContent=fmt(total);
+  document.getElementById('plant-total').textContent=fmt(totalMerc);
+  var cifTotalEl=document.getElementById('plant-cif-total');
+  if(cifTotalEl) cifTotalEl.textContent=fmt(total);
   document.getElementById('plant-preview').style.display=(invLines.length||true)?'block':'none';
   var statusColor=noMatchCount>0?'var(--orange)':'var(--green)';
   var statusMsg=merc.length+' facturas mercancía · '+fmt(totalMerc);
   if(totalFlete>0) statusMsg+=' · 🚢 Flete '+fmt(totalFlete);
   if(totalSeguro>0) statusMsg+=' · 🛡️ Seguro '+fmt(totalSeguro);
-  statusMsg+=' · <strong>Total CIF '+fmt(total)+'</strong>';
+  statusMsg+=' · <strong>Valor CIF '+fmt(total)+'</strong>';
   if(noMatchCount>0) statusMsg+=' · ⚠ '+noMatchCount+' sin verificar';
   document.getElementById('plant-status').innerHTML='<span style="color:'+statusColor+'">'+statusMsg+'</span>';
 }
 
 function _reCalcTotal(){
   var visibles=invLines.filter(function(l){return l.tipoFac==='mercancia'||l.tipoFac==='flete'||l.tipoFac==='seguro';});
+  var merc2=visibles.filter(function(l){return l.tipoFac==='mercancia';});
+  var totalMerc2=merc2.reduce(function(s,l){return s+(l.costo||0);},0);
   var total=visibles.reduce(function(s,l){return s+(l.costo||0);},0);
-  document.getElementById('plant-total').textContent=fmt(total);
+  document.getElementById('plant-total').textContent=fmt(totalMerc2);
+  var cifTotalEl2=document.getElementById('plant-cif-total');
+  if(cifTotalEl2) cifTotalEl2.textContent=fmt(total);
   calcLive();
 }
 
@@ -1426,9 +1557,12 @@ function loadFile(input){
 }
 
 function downloadTemplate(type){
-  var header='Proveedor,Departamento,Nro.Factura,Total.Pago.Fac,OC,OC.Homologada,Bultos,Traspaso,Piezas';
+  var header='Proveedor,Tipo,Departamento,Nro.Factura,Monto_CIF_FOB,OC,Bultos,Traspaso,Piezas';
   if(type==='csv'){
-    var csv=header+'\nMARBLE ARCH HOLDING CORP.,DEPORTES,INV-001,1888.00,,,,0,0';
+    var csv=header
+      +'\nMARBLE ARCH HOLDING CORP.,MERCANCIA,DEPORTES,INV-001,1888.00,,0,0,0'
+      +'\nGENERAL CARGO PANAMA S.A.,FLETE,,GCPAI26-0000,250.00,,,,'
+      +'\nSEGURO,SEGURO,,,18.50,,,,';
     var a=document.createElement('a');
     a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
     a.download='plantilla_unico.csv'; a.click();
