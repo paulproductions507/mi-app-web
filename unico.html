@@ -791,7 +791,20 @@ function calcular(){
     extras+=monto;
   });
   var itbmsTasa = parseFloat(document.getElementById('itbms-tasa')?.value)||0;
-  var landed=R(cif+arancel+hon+tasa+uso+agente+extras); // itbmsTasa excluido del landed
+  // ── Base de costeo: Valor Mercancía PURO (sin flete ni seguro) ──
+  // El CIF (cif) incluye Flete+Seguro y SOLO sirve para Arancel/ITBMS/factor.
+  // El Seguro NUNCA costea. El Flete y Gastos Origen/Destino SÍ costean — y ya
+  // vienen sumados dentro de "agente" desde la plantilla — así que el landed
+  // debe partir de la mercancía pura, no del CIF completo (que duplicaría el
+  // flete y metería el seguro de más).
+  var _segPlantillaC = (typeof invLines!=='undefined'&&invLines) ? invLines
+    .filter(function(l){return l.tipoFac==='seguro';})
+    .reduce(function(s,l){return s+(l.costo||0);},0) : 0;
+  var _fletePlantillaC = (typeof invLines!=='undefined'&&invLines) ? invLines
+    .filter(function(l){return l.tipoFac==='flete';})
+    .reduce(function(s,l){return s+(l.costo||0);},0) : 0;
+  var mercPuraC = R(cif - _fletePlantillaC - _segPlantillaC);
+  var landed=R(mercPuraC+arancel+hon+tasa+uso+agente+extras); // itbmsTasa excluido del landed
   var factor=cif>0?((landed/cif)-1)*100:0;
   var landed_g=R(landed+itbms);
 
@@ -868,7 +881,7 @@ function calcular(){
     // Mercancía
     +'<div style="background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:8px">'
     +'<div style="padding:6px 12px;background:var(--s2);font-size:10px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.06em">Mercancía</div>'
-    +'<div style="padding:8px 12px"><div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700"><span>Valor CIF Total</span><span style="font-family:monospace;color:var(--green)">'+fmt(cif)+'</span></div></div>'
+    +'<div style="padding:8px 12px"><div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700"><span>Valor FOB / Mercancía</span><span style="font-family:monospace;color:var(--green)">'+fmt(mercPuraC)+'</span></div></div>'
     +'</div>'
     // Impuestos (Tesoro Nacional)
     +secHtml('🏛️ Impuestos — Tesoro Nacional','var(--red)',impuestos,totalImpuestos,true)
@@ -879,7 +892,7 @@ function calcular(){
     +(descRows.length?secHtml('🏷️ Notas de Crédito / Descuentos','var(--green)',descRows,totalDesc,false):'')
     // Total final
     +'<div style="background:rgba(63,185,80,.08);border:1px solid rgba(63,185,80,.3);border-radius:8px;padding:10px 14px;margin-bottom:10px">'
-    +'<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:11px;color:var(--muted)">Mercancía</span><span style="font-family:monospace;font-size:11px">'+fmt(cif)+'</span></div>'
+    +'<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:11px;color:var(--muted)">Mercancía (FOB)</span><span style="font-family:monospace;font-size:11px">'+fmt(mercPuraC)+'</span></div>'
     +'<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:11px;color:var(--red)">Impuestos (Tesoro Nac.)</span><span style="font-family:monospace;font-size:11px;color:var(--red)">'+fmt(totalImpuestos)+'</span></div>'
     +'<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:11px;color:var(--purple)">Corredor (hon.+gastos)</span><span style="font-family:monospace;font-size:11px;color:var(--purple)">'+fmt(totalCorr)+'</span></div>'
     +'<div style="display:flex;justify-content:space-between;padding-top:6px;border-top:1px solid rgba(63,185,80,.2)"><span style="font-size:14px;font-weight:800">Costo Landed Total</span><span style="font-family:monospace;font-size:18px;font-weight:800;color:var(--green)">'+fmt(landed)+'</span></div>'
