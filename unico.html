@@ -324,7 +324,7 @@ datalist option{background:var(--s2);color:var(--text)}
         <label>Gastos Origen/Destino (USD)</label>
         <input type="number" id="agente" placeholder="0.00" step="0.01" oninput="_markManual('agente');calcLive()">
         <p class="note" id="agente-fs-note" style="display:none;color:var(--blue)"></p>
-        <p class="note">Se auto-completa con el Flete de la plantilla (el Seguro nunca entra aquí). Si tienes otro gasto de origen/destino que no esté en la plantilla, agrégalo manualmente.</p>
+        <p class="note">Se auto-completa con Flete + Gastos Origen/Destino de la plantilla (el Seguro nunca entra aquí — cada categoría mantiene su propia factura/proveedor en el reporte).</p>
       </div>
     </div>
     <!-- DMCE oculto — no aplica en Escenario Único -->
@@ -616,7 +616,7 @@ function fillCiudades(){
 // CÁLCULO EN VIVO
 // ═══════════════════════════════════════════════
 function calcLive(){
-  var cif   =parseFloat(gv('cif'))||0; // Valor SIF Total — Mercancía+Flete+Seguro, SOLO para impuestos (Arancel/ITBMS)
+  var cif   =parseFloat(gv('cif'))||0; // Valor CIF Total — Mercancía+Flete+Seguro, SOLO para impuestos (Arancel/ITBMS)
   var arPct =(parseFloat(gv('ar-pct'))||0)/100;
   var itbPct=(parseFloat(gv('itbms-pct'))||7)/100;
   var honPct=(parseFloat(gv('hon-pct'))||0)/100;
@@ -625,7 +625,7 @@ function calcLive(){
   var agente=parseFloat(gv('agente'))||0; // Gastos Origen/Destino — incluye el Flete mapeado desde la plantilla
   var dmce  =parseFloat(gv('dmce'))||0;
 
-  // Auto-calculated values (sobre el SIF Total — esto SÍ incluye flete+seguro, es correcto para impuestos)
+  // Auto-calculated values (sobre el CIF Total — esto SÍ incluye flete+seguro, es correcto para impuestos)
   var arAuto      = R(cif*arPct);
   var itbAuto     = Math.ceil((cif+arAuto)*itbPct*100)/100;
   var itbTasaAuto = Math.round(tasa*itbPct*100)/100;
@@ -653,29 +653,34 @@ function calcLive(){
   });
 
   // ── Base de costeo: Valor Mercancía PURO (sin flete ni seguro) ──
-  // El SIF/CIF Total (cif) incluye Flete+Seguro y SOLO sirve para Arancel/ITBMS.
-  // El Seguro NUNCA entra al costeo. El Flete sí costea, pero vía "agente"
-  // (Gastos Origen/Destino), donde se mapea automáticamente desde la plantilla.
+  // El CIF Total (cif) incluye Flete+Seguro y SOLO sirve para Arancel/ITBMS.
+  // El Seguro NUNCA entra al costeo. El Flete y los Gastos Origen/Destino SÍ
+  // costean — cada uno mapeado por separado desde la plantilla con su propia
+  // identidad de proveedor/factura — y ambos se reflejan sumados en "agente".
   var _segPlantilla = (typeof invLines!=='undefined'&&invLines) ? invLines
     .filter(function(l){return l.tipoFac==='seguro';})
     .reduce(function(s,l){return s+(l.costo||0);},0) : 0;
   var _fletePlantilla = (typeof invLines!=='undefined'&&invLines) ? invLines
     .filter(function(l){return l.tipoFac==='flete';})
     .reduce(function(s,l){return s+(l.costo||0);},0) : 0;
-  var mercPura = R(cif - _fletePlantilla - _segPlantilla); // valor mercancía sin flete/seguro
+  var _gastosDestPlantilla = (typeof invLines!=='undefined'&&invLines) ? invLines
+    .filter(function(l){return l.tipoFac==='gastos_destino';})
+    .reduce(function(s,l){return s+(l.costo||0);},0) : 0;
+  var mercPura = R(cif - _fletePlantilla - _segPlantilla); // valor mercancía sin flete/seguro (gastos_destino nunca estuvo en el CIF)
 
   var landed=R(mercPura+arancel+hon+tasa+uso+agente+dmce+extras); // itbmsTasa excluido del landed — va a Otros Gastos
   var factor=cif>0?((landed/cif)-1)*100:0;
 
-  // ── Nota informativa de mapeo SIF/Costeo ──
+  // ── Nota informativa de mapeo CIF/Costeo ──
   var _noteEl = document.getElementById('agente-fs-note');
   if(_noteEl){
-    if(_fletePlantilla>0.009 || _segPlantilla>0.009){
+    if(_fletePlantilla>0.009 || _segPlantilla>0.009 || _gastosDestPlantilla>0.009){
       _noteEl.style.display='block';
       _noteEl.style.color='var(--blue)';
       var _parts=[];
-      if(_fletePlantilla>0.009) _parts.push('Flete '+fmt(_fletePlantilla)+' (sí costea, va en Gastos Origen/Destino)');
-      if(_segPlantilla>0.009)   _parts.push('Seguro '+fmt(_segPlantilla)+' (NO costea, solo cuenta para impuestos)');
+      if(_fletePlantilla>0.009)      _parts.push('Flete '+fmt(_fletePlantilla)+' (costea)');
+      if(_gastosDestPlantilla>0.009) _parts.push('Gastos O/D '+fmt(_gastosDestPlantilla)+' (costea)');
+      if(_segPlantilla>0.009)        _parts.push('Seguro '+fmt(_segPlantilla)+' (NO costea, solo CIF/impuestos)');
       _noteEl.textContent='ℹ️ Mapeo automático de la plantilla: '+_parts.join(' · ');
     } else {
       _noteEl.style.display='none';
@@ -1166,9 +1171,9 @@ async function procesar(){
 
   var data=_buildUnicoData(d);
 
-  // ── Consumir facturas disponibles vinculadas (flete/seguro con 📂) ──
+  // ── Consumir facturas disponibles vinculadas (flete/gastos_destino con 📂) ──
   var _fdLines = invLines.filter(function(l){
-    return (l.tipoFac==='flete'||l.tipoFac==='seguro') && l._fdLinked && l.nfac;
+    return (l.tipoFac==='flete'||l.tipoFac==='gastos_destino') && l._fdLinked && l.nfac;
   });
   for(var _fi=0; _fi<_fdLines.length; _fi++){
     await _fdConsumirParcial(_fdLines[_fi].nfac, _fdLines[_fi].costo, d.nro);
@@ -1262,16 +1267,19 @@ function buildInvLines(d){
     costo:R2(d.hon),oc:'Honorarios Corredor ('+d.honPct.toFixed(2)+'%)',
     nfac:d.honNfac,montoHomologado:null,_autoGasto:true
   });
-  // "Gastos Origen/Destino" (d.agente) puede traer DOS componentes:
-  //  1) El Flete mapeado automáticamente desde la plantilla — éste YA se registra
-  //     más abajo como su propia línea 'flete' con proveedor/factura reales,
-  //     así que NO debe duplicarse aquí.
-  //  2) Un monto adicional que el usuario haya escrito de más (gasto de
-  //     origen/destino que no vino en la plantilla) — solo esa diferencia
-  //     se registra como línea genérica 'gastos_destino' del corredor.
+  // "Gastos Origen/Destino" (d.agente) puede traer VARIOS componentes:
+  //  1) El Flete mapeado automáticamente desde la plantilla — se registra
+  //     más abajo como su propia línea 'flete' con proveedor/factura reales.
+  //  2) Los Gastos Origen/Destino mapeados desde la plantilla — se registran
+  //     más abajo como su propia línea 'gastos_destino' con proveedor/factura reales.
+  //  3) Un monto adicional que el usuario haya escrito de más (gasto que no
+  //     vino en la plantilla) — solo esa diferencia se registra aquí como
+  //     línea genérica 'gastos_destino' a nombre del corredor.
   var _fleteEnPlantilla = invLines.filter(function(l){return l.tipoFac==='flete';})
     .reduce(function(s,l){return s+(l.costo||0);},0);
-  var _agenteExtra = R2((d.agente||0) - _fleteEnPlantilla);
+  var _gastosDestEnPlantilla = invLines.filter(function(l){return l.tipoFac==='gastos_destino';})
+    .reduce(function(s,l){return s+(l.costo||0);},0);
+  var _agenteExtra = R2((d.agente||0) - _fleteEnPlantilla - _gastosDestEnPlantilla);
   if(_agenteExtra>0.001) lines.push({
     tipoFac:'gastos_destino',deptCat:'GASTOS',prov:provCor,
     costo:_agenteExtra,oc:'Gastos Origen/Destino (adicional a la plantilla)',
@@ -1296,13 +1304,19 @@ function buildInvLines(d){
       montoHomologado:null});
   });
 
-  // ── FLETE / SEGURO (de la plantilla cargada, separados de mercancía) ──
-  // Estas líneas SÍ entran en el CIF/FOB total pero NO se cuentan como mercancía
-  // en el desglose de departamentos ni en el reporte de inventario.
+  // ── FLETE / SEGURO / GASTOS ORIGEN-DESTINO (de la plantilla, separados de mercancía) ──
+  // Cada categoría guarda su propia identidad de proveedor/factura — el dashboard
+  // de Tendencias las suma por separado, sin mezclar Flete con Gastos Origen/Destino.
   invLines.filter(function(l){return l.tipoFac==='flete';}).forEach(function(l){
     lines.push({tipoFac:'flete',deptCat:'GASTOS',prov:l.prov||provCor,
       costo:l.costo,nfac:l.nfac,numFact:l.nfac,
       oc:l.oc||l.nfac||'Flete del Embarque',
+      montoHomologado:null,_autoGasto:false});
+  });
+  invLines.filter(function(l){return l.tipoFac==='gastos_destino';}).forEach(function(l){
+    lines.push({tipoFac:'gastos_destino',deptCat:'GASTOS',prov:l.prov||provCor,
+      costo:l.costo,nfac:l.nfac,numFact:l.nfac,
+      oc:l.oc||l.nfac||'Gastos Origen/Destino del Embarque',
       montoHomologado:null,_autoGasto:false});
   });
   invLines.filter(function(l){return l.tipoFac==='seguro';}).forEach(function(l){
@@ -1376,6 +1390,7 @@ function parseRows(rows){
     if(tipoRaw){
       if(/FLETE|FREIGHT/.test(tipoRaw)){ line.tipoFac='flete'; line.deptCat=''; }
       else if(/SEGURO|INSURANCE|P[OÓ]LIZA/.test(tipoRaw)){ line.tipoFac='seguro'; line.deptCat=''; }
+      else if(/GASTO.*ORIGEN|GASTO.*DESTINO|HANDLING|ALMACENAJE|INSPECCION|INSPECCIÓN/.test(tipoRaw)){ line.tipoFac='gastos_destino'; line.deptCat=''; }
       else if(/SERVICIO/.test(tipoRaw) && /FLETE|TRANSPORTE/.test((provRaw+' '+deptRaw).toUpperCase())){ line.tipoFac='flete'; line.deptCat=''; }
     }
     // 2) Auto-detección por texto del proveedor/departamento si no vino marcado por columna TIPO
@@ -1385,6 +1400,8 @@ function parseRows(rows){
         line.tipoFac='flete'; line.deptCat='';
       } else if(/\bSEGURO\b|\bINSURANCE\b|\bP[OÓ]LIZA\b/.test(_textoLinea)){
         line.tipoFac='seguro'; line.deptCat='';
+      } else if(/GASTO.*ORIGEN|GASTO.*DESTINO|\bHANDLING\b|\bALMACENAJE\b/.test(_textoLinea)){
+        line.tipoFac='gastos_destino'; line.deptCat='';
       }
     }
     // provMatch — solo aplica para líneas de mercancía
@@ -1406,15 +1423,17 @@ function parseRows(rows){
 
 function renderPreview(){
   if(typeof invLines==='undefined'||!invLines) return;
-  // Mostrar TODAS las líneas relevantes para la plantilla: mercancía, flete y seguro
-  var visibles=invLines.filter(function(l){return l.tipoFac==='mercancia'||l.tipoFac==='flete'||l.tipoFac==='seguro';});
+  // Mostrar TODAS las líneas relevantes para la plantilla: mercancía, flete, seguro y gastos origen/destino
+  var visibles=invLines.filter(function(l){return l.tipoFac==='mercancia'||l.tipoFac==='flete'||l.tipoFac==='seguro'||l.tipoFac==='gastos_destino';});
   var merc=visibles.filter(function(l){return l.tipoFac==='mercancia';});
   var fleteLines=visibles.filter(function(l){return l.tipoFac==='flete';});
   var seguroLines=visibles.filter(function(l){return l.tipoFac==='seguro';});
+  var gastosDestLines=visibles.filter(function(l){return l.tipoFac==='gastos_destino';});
   var totalMerc=merc.reduce(function(s,l){return s+(l.costo||0);},0);
   var totalFlete=fleteLines.reduce(function(s,l){return s+(l.costo||0);},0);
   var totalSeguro=seguroLines.reduce(function(s,l){return s+(l.costo||0);},0);
-  var total=totalMerc+totalFlete+totalSeguro; // este es el que se aplica al CIF/FOB del formulario
+  var totalGastosDest=gastosDestLines.reduce(function(s,l){return s+(l.costo||0);},0);
+  var total=totalMerc+totalFlete+totalSeguro; // Valor CIF Total — Gastos Origen/Destino NO entra aquí, es categoría aparte
   var noMatchCount=merc.filter(function(l){return l._noMatch;}).length;
 
   // Opciones de departamento para el select inline
@@ -1423,23 +1442,24 @@ function renderPreview(){
   var listEl=document.getElementById('prov-list');
   // Tabla editable — cada fila tiene todos los campos modificables
   var TIPO_OPTS=[
-    {val:'mercancia',lbl:'📦 Mercancía'},
-    {val:'flete',    lbl:'🚢 Flete'},
-    {val:'seguro',   lbl:'🛡️ Seguro'}
+    {val:'mercancia',     lbl:'📦 Mercancía'},
+    {val:'flete',         lbl:'🚢 Flete'},
+    {val:'seguro',        lbl:'🛡️ Seguro'},
+    {val:'gastos_destino',lbl:'📦 Gastos Origen/Destino'}
   ];
   var rows=visibles.map(function(l,i){
     var realIdx=invLines.indexOf(l);
     var provCls=l._noMatch?'warn-field':l._corregido?'ok-field':'';
     var provTitle=l._noMatch?'⚠ Proveedor no reconocido — edita para corregir':l._corregido?'✏ Corregido automáticamente':'';
-    var isNonMerc=(l.tipoFac==='flete'||l.tipoFac==='seguro');
-    var isFlete=(l.tipoFac==='flete'); // solo Flete puede vincularse a Facturas Disponibles — el Seguro NUNCA
+    var isNonMerc=(l.tipoFac==='flete'||l.tipoFac==='seguro'||l.tipoFac==='gastos_destino');
+    var isVinculable=(l.tipoFac==='flete'||l.tipoFac==='gastos_destino'); // Flete y Gastos Origen/Destino pueden vincularse a Facturas Disponibles — el Seguro NUNCA
     var deptCellHtml=isNonMerc
       ? '<td style="min-width:110px;color:var(--muted);font-size:11px;text-align:center">— no aplica —</td>'
       : '<td style="min-width:110px"><select class="inv-inp" onchange="invLines['+realIdx+'].deptCat=this.value;_reCalcTotal()">'
         +'<option value="">—</option>'+DEPT_LIST.map(function(d){return'<option value="'+d+'"'+(d===l.deptCat?' selected':'')+'>'+d+'</option>';}).join('')
         +'</select></td>';
     var tipoSelectHtml='<select class="inv-inp" style="min-width:95px;font-weight:700;'
-      +(l.tipoFac==='flete'?'color:#58a6ff':l.tipoFac==='seguro'?'color:#d29922':'color:var(--green)')+'"'
+      +(l.tipoFac==='flete'?'color:#58a6ff':l.tipoFac==='seguro'?'color:#d29922':l.tipoFac==='gastos_destino'?'color:#a371f7':'color:var(--green)')+'"'
       +' onchange="invLines['+realIdx+'].tipoFac=this.value;renderPreview();_reCalcTotal()">'
       +TIPO_OPTS.map(function(t){return '<option value="'+t.val+'"'+(t.val===l.tipoFac?' selected':'')+'>'+t.lbl+'</option>';}).join('')
       +'</select>';
@@ -1450,13 +1470,13 @@ function renderPreview(){
       +'<td style="min-width:130px"><input type="text" class="inv-inp '+provCls+'" list="prov-dl" value="'+l.prov.replace(/"/g,'&quot;')+'" title="'+provTitle+'"'
       +' oninput="invLines['+realIdx+'].prov=this.value;invLines['+realIdx+']._noMatch=false;_reCalcTotal()"'
       +' onchange="_fixProvInline(this,'+realIdx+')"></td>'
-      // Depto (oculto/deshabilitado para flete/seguro)
+      // Depto (oculto/deshabilitado para flete/seguro/gastos_destino)
       +deptCellHtml
-      // N° Factura (con botón Disponibles SOLO para Flete — el Seguro nunca se vincula a factura de gasto)
+      // N° Factura (con botón Disponibles para Flete y Gastos Origen/Destino — el Seguro nunca se vincula a factura de gasto)
       +'<td style="min-width:140px"><div style="display:flex;gap:4px;align-items:center">'
       +'<input type="text" class="inv-inp" value="'+(l.nfac||'').replace(/"/g,'&quot;')+'" placeholder="N° Fact"'
       +' oninput="invLines['+realIdx+'].nfac=this.value;invLines['+realIdx+']._fdLinked=false" style="flex:1'+(l._fdLinked?';border-color:#3fb950':'')+'">'
-      +(isFlete?'<button onclick="_fdAbrirBuscadorLinea('+realIdx+')" title="'+(l._fdLinked?'✓ Vinculada — clic para cambiar':'Buscar en Facturas Disponibles')+'" style="flex-shrink:0;background:'+(l._fdLinked?'rgba(63,185,80,.18)':'rgba(210,153,34,.12)')+';border:1px solid '+(l._fdLinked?'rgba(63,185,80,.5)':'rgba(210,153,34,.35)')+';color:'+(l._fdLinked?'#3fb950':'#d29922')+';border-radius:5px;padding:4px 7px;font-size:10px;font-weight:700;cursor:pointer">'+(l._fdLinked?'✓':'📂')+'</button>':'')
+      +(isVinculable?'<button onclick="_fdAbrirBuscadorLinea('+realIdx+')" title="'+(l._fdLinked?'✓ Vinculada — clic para cambiar':'Buscar en Facturas Disponibles')+'" style="flex-shrink:0;background:'+(l._fdLinked?'rgba(63,185,80,.18)':'rgba(210,153,34,.12)')+';border:1px solid '+(l._fdLinked?'rgba(63,185,80,.5)':'rgba(210,153,34,.35)')+';color:'+(l._fdLinked?'#3fb950':'#d29922')+';border-radius:5px;padding:4px 7px;font-size:10px;font-weight:700;cursor:pointer">'+(l._fdLinked?'✓':'📂')+'</button>':'')
       +'</div></td>'
       // OC
       +'<td style="min-width:70px"><input type="text" class="inv-inp" value="'+(l.oc||'').replace(/"/g,'&quot;')+'" placeholder="OC"'
@@ -1494,16 +1514,17 @@ function renderPreview(){
   var statusMsg=merc.length+' facturas mercancía · '+fmt(totalMerc);
   if(totalFlete>0) statusMsg+=' · 🚢 Flete '+fmt(totalFlete);
   if(totalSeguro>0) statusMsg+=' · 🛡️ Seguro '+fmt(totalSeguro);
+  if(totalGastosDest>0) statusMsg+=' · 📦 Gastos O/D '+fmt(totalGastosDest);
   statusMsg+=' · <strong>Valor CIF '+fmt(total)+'</strong>';
   if(noMatchCount>0) statusMsg+=' · ⚠ '+noMatchCount+' sin verificar';
   document.getElementById('plant-status').innerHTML='<span style="color:'+statusColor+'">'+statusMsg+'</span>';
 }
 
 function _reCalcTotal(){
-  var visibles=invLines.filter(function(l){return l.tipoFac==='mercancia'||l.tipoFac==='flete'||l.tipoFac==='seguro';});
-  var merc2=visibles.filter(function(l){return l.tipoFac==='mercancia';});
+  var visiblesCIF=invLines.filter(function(l){return l.tipoFac==='mercancia'||l.tipoFac==='flete'||l.tipoFac==='seguro';});
+  var merc2=visiblesCIF.filter(function(l){return l.tipoFac==='mercancia';});
   var totalMerc2=merc2.reduce(function(s,l){return s+(l.costo||0);},0);
-  var total=visibles.reduce(function(s,l){return s+(l.costo||0);},0);
+  var total=visiblesCIF.reduce(function(s,l){return s+(l.costo||0);},0); // CIF: solo merc+flete+seguro
   document.getElementById('plant-total').textContent=fmt(totalMerc2);
   var cifTotalEl2=document.getElementById('plant-cif-total');
   if(cifTotalEl2) cifTotalEl2.textContent=fmt(total);
@@ -1556,19 +1577,24 @@ function applyPlantilla(){
   var merc=invLines.filter(function(l){return l.tipoFac==='mercancia';});
   var fleteLines=invLines.filter(function(l){return l.tipoFac==='flete';});
   var seguroLines=invLines.filter(function(l){return l.tipoFac==='seguro';});
+  var gastosDestLines=invLines.filter(function(l){return l.tipoFac==='gastos_destino';});
   var totalMerc=merc.reduce(function(s,l){return s+(l.costo||0);},0);
   var totalFlete=fleteLines.reduce(function(s,l){return s+(l.costo||0);},0);
   var totalSeguro=seguroLines.reduce(function(s,l){return s+(l.costo||0);},0);
-  var total=totalMerc+totalFlete+totalSeguro; // Valor SIF Total — solo para impuestos (Arancel/ITBMS)
+  var totalGastosDest=gastosDestLines.reduce(function(s,l){return s+(l.costo||0);},0);
+  var total=totalMerc+totalFlete+totalSeguro; // Valor CIF Total — solo para impuestos (Arancel/ITBMS). Gastos O/D NO entra aquí.
   if(!total){ toast('⚠️ Sin mercancía en la plantilla.','red'); return; }
   sv('cif',total.toFixed(2));
-  // Mapeo automático: el Flete de la plantilla SÍ costea → va a "Gastos Origen/Destino".
-  // El Seguro NUNCA toca el costeo, solo formó parte del SIF arriba.
+  // Mapeo automático: Flete y Gastos Origen/Destino de la plantilla SÍ costean,
+  // cada uno con su propia identidad de proveedor/factura, pero ambos se reflejan
+  // sumados en el campo "Gastos Origen/Destino" del formulario (que alimenta el Landed).
+  // El Seguro NUNCA toca el costeo, solo formó parte del CIF arriba.
   var agenteEl=document.getElementById('agente');
+  var totalCosteoOD = totalFlete + totalGastosDest;
   if(agenteEl && !agenteEl._manual){
-    agenteEl.value = totalFlete>0 ? totalFlete.toFixed(2) : '';
+    agenteEl.value = totalCosteoOD>0 ? totalCosteoOD.toFixed(2) : '';
   }
-  // Tipo de mercancía por departamentos (solo mercancía — flete/seguro no llevan depto)
+  // Tipo de mercancía por departamentos (solo mercancía — flete/seguro/gastos_destino no llevan depto)
   var deptSums={};
   merc.forEach(function(l){var k=(l.deptCat||'').trim();if(k){if(!deptSums[k])deptSums[k]=0;deptSums[k]+=l.costo;}});
   var deptParts=Object.entries(deptSums).sort(function(a,b){return b[1]-a[1];})
@@ -1580,9 +1606,10 @@ function applyPlantilla(){
   var cartEl=document.getElementById('cartones');
   if(bultos>0&&!cartEl.value) cartEl.value=bultos;
   calcLive();
-  var msg='✅ '+fmt(total)+' SIF aplicado al formulario';
-  if(totalFlete>0) msg+=' · Flete '+fmt(totalFlete)+' → Gastos Origen/Destino';
-  if(totalSeguro>0) msg+=' · Seguro '+fmt(totalSeguro)+' (solo SIF, no costea)';
+  var msg='✅ '+fmt(total)+' CIF aplicado al formulario';
+  if(totalFlete>0) msg+=' · Flete '+fmt(totalFlete);
+  if(totalGastosDest>0) msg+=' · Gastos O/D '+fmt(totalGastosDest);
+  if(totalSeguro>0) msg+=' · Seguro '+fmt(totalSeguro)+' (solo CIF, no costea)';
   toast(msg,'green');
   _autoSave();
 }
@@ -1622,6 +1649,7 @@ function downloadTemplate(type){
     var csv=header
       +'\nMARBLE ARCH HOLDING CORP.,MERCANCIA,DEPORTES,INV-001,1888.00,,0,0,0'
       +'\nGENERAL CARGO PANAMA S.A.,FLETE,,GCPAI26-0000,250.00,,,,'
+      +'\nGENERAL CARGO PANAMA S.A.,GASTOS_DESTINO,,GCPAI26-0001,80.00,,,,'
       +'\nSEGURO,SEGURO,,,18.50,,,,';
     var a=document.createElement('a');
     a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
