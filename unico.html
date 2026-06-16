@@ -1135,6 +1135,22 @@ function buildInvLines(d){
       tipoProv:_tipoProv,
       montoHomologado:null});
   });
+
+  // ── FLETE / SEGURO (de la plantilla cargada, separados de mercancía) ──
+  // Estas líneas SÍ entran en el CIF/FOB total pero NO se cuentan como mercancía
+  // en el desglose de departamentos ni en el reporte de inventario.
+  invLines.filter(function(l){return l.tipoFac==='flete';}).forEach(function(l){
+    lines.push({tipoFac:'flete',deptCat:'GASTOS',prov:l.prov||provCor,
+      costo:l.costo,nfac:l.nfac,numFact:l.nfac,
+      oc:l.oc||l.nfac||'Flete del Embarque',
+      montoHomologado:null,_autoGasto:false});
+  });
+  invLines.filter(function(l){return l.tipoFac==='seguro';}).forEach(function(l){
+    lines.push({tipoFac:'seguro',deptCat:'GASTOS',prov:l.prov||provCor,
+      costo:l.costo,nfac:l.nfac,numFact:l.nfac,
+      oc:l.oc||l.nfac||'Seguro de Carga',
+      montoHomologado:null,_autoGasto:false});
+  });
   return lines;
 }
 
@@ -1189,8 +1205,15 @@ function parseRows(rows){
     var piezasRaw=pc>=0?parseInt(String(r[pc]||'').replace(/[^0-9]/g,''))||0:0;
     var ocRaw=oc2c>=0?String(r[oc2c]||'').trim():'';
     var line={prov:provRaw,deptCat,costo,tipoFac:'mercancia',nfac,oc:ocRaw,bultos,piezas:piezasRaw,_raw:provRaw,_deptRaw:deptRaw,_deptFixed:(deptCat!==deptRaw&&deptRaw!=='')};
-    // provMatch
-    if(provRaw){
+    // Auto-detección de Flete/Seguro por texto del proveedor o departamento (no se cuentan como mercancía)
+    var _textoLinea=(provRaw+' '+deptRaw).toUpperCase();
+    if(/\bFLETE\b|\bFREIGHT\b|\bOCEAN\s*FREIGHT\b/.test(_textoLinea)){
+      line.tipoFac='flete'; line.deptCat='';
+    } else if(/\bSEGURO\b|\bINSURANCE\b|\bP[OÓ]LIZA\b/.test(_textoLinea)){
+      line.tipoFac='seguro'; line.deptCat='';
+    }
+    // provMatch — solo aplica para líneas de mercancía
+    if(provRaw && line.tipoFac==='mercancia'){
       var m=provMatch(provRaw);
       if(m&&(m.exact||m.score>=0.65)){
         line._matched=true;
@@ -1208,8 +1231,15 @@ function parseRows(rows){
 
 function renderPreview(){
   if(typeof invLines==='undefined'||!invLines) return;
-  var merc=invLines.filter(function(l){return l.tipoFac==='mercancia';});
-  var total=merc.reduce(function(s,l){return s+(l.costo||0);},0);
+  // Mostrar TODAS las líneas relevantes para la plantilla: mercancía, flete y seguro
+  var visibles=invLines.filter(function(l){return l.tipoFac==='mercancia'||l.tipoFac==='flete'||l.tipoFac==='seguro';});
+  var merc=visibles.filter(function(l){return l.tipoFac==='mercancia';});
+  var fleteLines=visibles.filter(function(l){return l.tipoFac==='flete';});
+  var seguroLines=visibles.filter(function(l){return l.tipoFac==='seguro';});
+  var totalMerc=merc.reduce(function(s,l){return s+(l.costo||0);},0);
+  var totalFlete=fleteLines.reduce(function(s,l){return s+(l.costo||0);},0);
+  var totalSeguro=seguroLines.reduce(function(s,l){return s+(l.costo||0);},0);
+  var total=totalMerc+totalFlete+totalSeguro; // este es el que se aplica al CIF/FOB del formulario
   var noMatchCount=merc.filter(function(l){return l._noMatch;}).length;
 
   // Opciones de departamento para el select inline
@@ -1217,34 +1247,50 @@ function renderPreview(){
 
   var listEl=document.getElementById('prov-list');
   // Tabla editable — cada fila tiene todos los campos modificables
-  var rows=merc.map(function(l,i){
+  var TIPO_OPTS=[
+    {val:'mercancia',lbl:'📦 Mercancía'},
+    {val:'flete',    lbl:'🚢 Flete'},
+    {val:'seguro',   lbl:'🛡️ Seguro'}
+  ];
+  var rows=visibles.map(function(l,i){
     var realIdx=invLines.indexOf(l);
     var provCls=l._noMatch?'warn-field':l._corregido?'ok-field':'';
     var provTitle=l._noMatch?'⚠ Proveedor no reconocido — edita para corregir':l._corregido?'✏ Corregido automáticamente':'';
+    var isNonMerc=(l.tipoFac==='flete'||l.tipoFac==='seguro');
+    var deptCellHtml=isNonMerc
+      ? '<td style="min-width:110px;color:var(--muted);font-size:11px;text-align:center">— no aplica —</td>'
+      : '<td style="min-width:110px"><select class="inv-inp" onchange="invLines['+realIdx+'].deptCat=this.value;_reCalcTotal()">'
+        +'<option value="">—</option>'+DEPT_LIST.map(function(d){return'<option value="'+d+'"'+(d===l.deptCat?' selected':'')+'>'+d+'</option>';}).join('')
+        +'</select></td>';
+    var tipoSelectHtml='<select class="inv-inp" style="min-width:95px;font-weight:700;'
+      +(l.tipoFac==='flete'?'color:#58a6ff':l.tipoFac==='seguro'?'color:#d29922':'color:var(--green)')+'"'
+      +' onchange="invLines['+realIdx+'].tipoFac=this.value;renderPreview();_reCalcTotal()">'
+      +TIPO_OPTS.map(function(t){return '<option value="'+t.val+'"'+(t.val===l.tipoFac?' selected':'')+'>'+t.lbl+'</option>';}).join('')
+      +'</select>';
     return '<tr id="_inv_row_'+realIdx+'">'
+      // Tipo
+      +'<td style="min-width:100px">'+tipoSelectHtml+'</td>'
       // Proveedor
       +'<td style="min-width:130px"><input type="text" class="inv-inp '+provCls+'" list="prov-dl" value="'+l.prov.replace(/"/g,'&quot;')+'" title="'+provTitle+'"'
       +' oninput="invLines['+realIdx+'].prov=this.value;invLines['+realIdx+']._noMatch=false;_reCalcTotal()"'
       +' onchange="_fixProvInline(this,'+realIdx+')"></td>'
-      // Depto
-      +'<td style="min-width:110px"><select class="inv-inp" onchange="invLines['+realIdx+'].deptCat=this.value;_reCalcTotal()">'
-      +'<option value="">—</option>'+DEPT_LIST.map(function(d){return'<option value="'+d+'"'+(d===l.deptCat?' selected':'')+'>'+d+'</option>';}).join('')
-      +'</select></td>'
+      // Depto (oculto/deshabilitado para flete/seguro)
+      +deptCellHtml
       // N° Factura
       +'<td style="min-width:80px"><input type="text" class="inv-inp" value="'+(l.nfac||'').replace(/"/g,'&quot;')+'" placeholder="N° Fact"'
       +' oninput="invLines['+realIdx+'].nfac=this.value"></td>'
       // OC
       +'<td style="min-width:70px"><input type="text" class="inv-inp" value="'+(l.oc||'').replace(/"/g,'&quot;')+'" placeholder="OC"'
       +' oninput="invLines['+realIdx+'].oc=this.value"></td>'
-      // CIF
+      // CIF / Monto
       +'<td style="min-width:80px"><input type="number" class="inv-inp" style="color:var(--green);font-weight:700;text-align:right" value="'+(l.costo||0)+'" step="0.01" min="0"'
       +' oninput="invLines['+realIdx+'].costo=parseFloat(this.value)||0;_reCalcTotal()"></td>'
       // Bultos
       +'<td style="min-width:50px"><input type="number" class="inv-inp" style="text-align:center" value="'+(l.bultos||0)+'" min="0"'
-      +' oninput="invLines['+realIdx+'].bultos=parseInt(this.value)||0"></td>'
+      +' oninput="invLines['+realIdx+'].bultos=parseInt(this.value)||0"'+(isNonMerc?' disabled':'')+'></td>'
       // Piezas
       +'<td style="min-width:55px"><input type="number" class="inv-inp" style="text-align:center" value="'+(l.piezas||0)+'" min="0"'
-      +' oninput="invLines['+realIdx+'].piezas=parseInt(this.value)||0"></td>'
+      +' oninput="invLines['+realIdx+'].piezas=parseInt(this.value)||0"'+(isNonMerc?' disabled':'')+'></td>'
       // Eliminar
       +'<td style="text-align:center"><button class="inv-del-btn" onclick="_delInvLine('+realIdx+')" title="Eliminar fila">×</button></td>'
       +'</tr>';
@@ -1253,8 +1299,8 @@ function renderPreview(){
   listEl.innerHTML='<div style="overflow-x:auto">'
     +'<table class="inv-table">'
     +'<thead><tr>'
-    +'<th>Proveedor</th><th>Departamento</th><th>N° Factura</th><th>OC</th>'
-    +'<th style="text-align:right">CIF (USD)</th><th style="text-align:center">Bultos</th>'
+    +'<th>Tipo</th><th>Proveedor</th><th>Departamento</th><th>N° Factura</th><th>OC</th>'
+    +'<th style="text-align:right">Monto (USD)</th><th style="text-align:center">Bultos</th>'
     +'<th style="text-align:center">Piezas</th><th></th>'
     +'</tr></thead>'
     +'<tbody>'+rows+'</tbody>'
@@ -1264,13 +1310,17 @@ function renderPreview(){
   document.getElementById('plant-total').textContent=fmt(total);
   document.getElementById('plant-preview').style.display=(invLines.length||true)?'block':'none';
   var statusColor=noMatchCount>0?'var(--orange)':'var(--green)';
-  var statusMsg=merc.length+' facturas · '+fmt(total);
+  var statusMsg=merc.length+' facturas mercancía · '+fmt(totalMerc);
+  if(totalFlete>0) statusMsg+=' · 🚢 Flete '+fmt(totalFlete);
+  if(totalSeguro>0) statusMsg+=' · 🛡️ Seguro '+fmt(totalSeguro);
+  statusMsg+=' · <strong>Total CIF '+fmt(total)+'</strong>';
   if(noMatchCount>0) statusMsg+=' · ⚠ '+noMatchCount+' sin verificar';
   document.getElementById('plant-status').innerHTML='<span style="color:'+statusColor+'">'+statusMsg+'</span>';
 }
 
 function _reCalcTotal(){
-  var total=invLines.filter(function(l){return l.tipoFac==='mercancia';}).reduce(function(s,l){return s+(l.costo||0);},0);
+  var visibles=invLines.filter(function(l){return l.tipoFac==='mercancia'||l.tipoFac==='flete'||l.tipoFac==='seguro';});
+  var total=visibles.reduce(function(s,l){return s+(l.costo||0);},0);
   document.getElementById('plant-total').textContent=fmt(total);
   calcLive();
 }
@@ -1319,22 +1369,30 @@ function fixProv(inp,idx){
 
 function applyPlantilla(){
   var merc=invLines.filter(function(l){return l.tipoFac==='mercancia';});
-  var total=merc.reduce(function(s,l){return s+(l.costo||0);},0);
+  var fleteLines=invLines.filter(function(l){return l.tipoFac==='flete';});
+  var seguroLines=invLines.filter(function(l){return l.tipoFac==='seguro';});
+  var totalMerc=merc.reduce(function(s,l){return s+(l.costo||0);},0);
+  var totalFlete=fleteLines.reduce(function(s,l){return s+(l.costo||0);},0);
+  var totalSeguro=seguroLines.reduce(function(s,l){return s+(l.costo||0);},0);
+  var total=totalMerc+totalFlete+totalSeguro; // CIF/FOB total — incluye flete y seguro si existen
   if(!total){ toast('⚠️ Sin mercancía en la plantilla.','red'); return; }
   sv('cif',total.toFixed(2));
-  // Tipo de mercancía por departamentos
+  // Tipo de mercancía por departamentos (solo mercancía — flete/seguro no llevan depto)
   var deptSums={};
   merc.forEach(function(l){var k=(l.deptCat||'').trim();if(k){if(!deptSums[k])deptSums[k]=0;deptSums[k]+=l.costo;}});
   var deptParts=Object.entries(deptSums).sort(function(a,b){return b[1]-a[1];})
-    .map(function(x){return x[0]+' '+(total>0?(x[1]/total*100).toFixed(0):0)+'%';});
+    .map(function(x){return x[0]+' '+(totalMerc>0?(x[1]/totalMerc*100).toFixed(0):0)+'%';});
   var descEl=document.getElementById('desc');
   if(deptParts.length&&(!descEl.value||descEl.value.trim()==='')) descEl.value=deptParts.join(', ');
-  // Cartones
+  // Cartones (solo de mercancía)
   var bultos=merc.reduce(function(s,l){return s+(l.bultos||0);},0);
   var cartEl=document.getElementById('cartones');
   if(bultos>0&&!cartEl.value) cartEl.value=bultos;
   calcLive();
-  toast('✅ '+fmt(total)+' aplicado al formulario','green');
+  var msg='✅ '+fmt(total)+' aplicado al formulario';
+  if(totalFlete>0) msg+=' (incl. flete '+fmt(totalFlete)+')';
+  if(totalSeguro>0) msg+=' (incl. seguro '+fmt(totalSeguro)+')';
+  toast(msg,'green');
   _autoSave();
 }
 
