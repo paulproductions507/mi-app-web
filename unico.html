@@ -320,7 +320,12 @@ datalist option{background:var(--s2);color:var(--text)}
     </div>
     <div class="r2">
       <div class="field"><label>Uso del Sistema (USD)</label><input type="number" id="uso" value="3" step="0.01"><p class="note">$3, $6 o $9</p></div>
-      <div class="field"><label>Gastos Origen/Destino (USD)</label><input type="number" id="agente" placeholder="0.00" step="0.01"></div>
+      <div class="field">
+        <label>Gastos Origen/Destino (USD)</label>
+        <input type="number" id="agente" placeholder="0.00" step="0.01" oninput="_markManual('agente');calcLive()">
+        <p class="note" id="agente-fs-note" style="display:none;color:var(--blue)"></p>
+        <p class="note">Se auto-completa con el Flete de la plantilla (el Seguro nunca entra aquí). Si tienes otro gasto de origen/destino que no esté en la plantilla, agrégalo manualmente.</p>
+      </div>
     </div>
     <!-- DMCE oculto — no aplica en Escenario Único -->
     <input type="hidden" id="dmce" value="">
@@ -611,16 +616,16 @@ function fillCiudades(){
 // CÁLCULO EN VIVO
 // ═══════════════════════════════════════════════
 function calcLive(){
-  var cif   =parseFloat(gv('cif'))||0;
+  var cif   =parseFloat(gv('cif'))||0; // Valor SIF Total — Mercancía+Flete+Seguro, SOLO para impuestos (Arancel/ITBMS)
   var arPct =(parseFloat(gv('ar-pct'))||0)/100;
   var itbPct=(parseFloat(gv('itbms-pct'))||7)/100;
   var honPct=(parseFloat(gv('hon-pct'))||0)/100;
   var tasa  =parseFloat(gv('tasa'))||0;
   var uso   =parseFloat(gv('uso'))||0;
-  var agente=parseFloat(gv('agente'))||0;
+  var agente=parseFloat(gv('agente'))||0; // Gastos Origen/Destino — incluye el Flete mapeado desde la plantilla
   var dmce  =parseFloat(gv('dmce'))||0;
 
-  // Auto-calculated values
+  // Auto-calculated values (sobre el SIF Total — esto SÍ incluye flete+seguro, es correcto para impuestos)
   var arAuto      = R(cif*arPct);
   var itbAuto     = Math.ceil((cif+arAuto)*itbPct*100)/100;
   var itbTasaAuto = Math.round(tasa*itbPct*100)/100;
@@ -646,8 +651,36 @@ function calcLive(){
   document.querySelectorAll('.gasto-monto').forEach(function(inp){
     extras+=parseFloat(inp.value)||0;
   });
-  var landed=R(cif+arancel+hon+tasa+uso+agente+dmce+extras); // itbmsTasa excluido del landed — va a Otros Gastos
+
+  // ── Base de costeo: Valor Mercancía PURO (sin flete ni seguro) ──
+  // El SIF/CIF Total (cif) incluye Flete+Seguro y SOLO sirve para Arancel/ITBMS.
+  // El Seguro NUNCA entra al costeo. El Flete sí costea, pero vía "agente"
+  // (Gastos Origen/Destino), donde se mapea automáticamente desde la plantilla.
+  var _segPlantilla = (typeof invLines!=='undefined'&&invLines) ? invLines
+    .filter(function(l){return l.tipoFac==='seguro';})
+    .reduce(function(s,l){return s+(l.costo||0);},0) : 0;
+  var _fletePlantilla = (typeof invLines!=='undefined'&&invLines) ? invLines
+    .filter(function(l){return l.tipoFac==='flete';})
+    .reduce(function(s,l){return s+(l.costo||0);},0) : 0;
+  var mercPura = R(cif - _fletePlantilla - _segPlantilla); // valor mercancía sin flete/seguro
+
+  var landed=R(mercPura+arancel+hon+tasa+uso+agente+dmce+extras); // itbmsTasa excluido del landed — va a Otros Gastos
   var factor=cif>0?((landed/cif)-1)*100:0;
+
+  // ── Nota informativa de mapeo SIF/Costeo ──
+  var _noteEl = document.getElementById('agente-fs-note');
+  if(_noteEl){
+    if(_fletePlantilla>0.009 || _segPlantilla>0.009){
+      _noteEl.style.display='block';
+      _noteEl.style.color='var(--blue)';
+      var _parts=[];
+      if(_fletePlantilla>0.009) _parts.push('Flete '+fmt(_fletePlantilla)+' (sí costea, va en Gastos Origen/Destino)');
+      if(_segPlantilla>0.009)   _parts.push('Seguro '+fmt(_segPlantilla)+' (NO costea, solo cuenta para impuestos)');
+      _noteEl.textContent='ℹ️ Mapeo automático de la plantilla: '+_parts.join(' · ');
+    } else {
+      _noteEl.style.display='none';
+    }
+  }
 
   // Update live summary
   var sumDiv=document.getElementById('live-summary');
@@ -1219,9 +1252,19 @@ function buildInvLines(d){
     costo:R2(d.hon),oc:'Honorarios Corredor ('+d.honPct.toFixed(2)+'%)',
     nfac:d.honNfac,montoHomologado:null,_autoGasto:true
   });
-  if(d.agente>0.001) lines.push({
+  // "Gastos Origen/Destino" (d.agente) puede traer DOS componentes:
+  //  1) El Flete mapeado automáticamente desde la plantilla — éste YA se registra
+  //     más abajo como su propia línea 'flete' con proveedor/factura reales,
+  //     así que NO debe duplicarse aquí.
+  //  2) Un monto adicional que el usuario haya escrito de más (gasto de
+  //     origen/destino que no vino en la plantilla) — solo esa diferencia
+  //     se registra como línea genérica 'gastos_destino' del corredor.
+  var _fleteEnPlantilla = invLines.filter(function(l){return l.tipoFac==='flete';})
+    .reduce(function(s,l){return s+(l.costo||0);},0);
+  var _agenteExtra = R2((d.agente||0) - _fleteEnPlantilla);
+  if(_agenteExtra>0.001) lines.push({
     tipoFac:'gastos_destino',deptCat:'GASTOS',prov:provCor,
-    costo:R2(d.agente),oc:'Gastos Origen/Destino',
+    costo:_agenteExtra,oc:'Gastos Origen/Destino (adicional a la plantilla)',
     montoHomologado:null,_autoGasto:true
   });
 
@@ -1505,9 +1548,15 @@ function applyPlantilla(){
   var totalMerc=merc.reduce(function(s,l){return s+(l.costo||0);},0);
   var totalFlete=fleteLines.reduce(function(s,l){return s+(l.costo||0);},0);
   var totalSeguro=seguroLines.reduce(function(s,l){return s+(l.costo||0);},0);
-  var total=totalMerc+totalFlete+totalSeguro; // CIF/FOB total — incluye flete y seguro si existen
+  var total=totalMerc+totalFlete+totalSeguro; // Valor SIF Total — solo para impuestos (Arancel/ITBMS)
   if(!total){ toast('⚠️ Sin mercancía en la plantilla.','red'); return; }
   sv('cif',total.toFixed(2));
+  // Mapeo automático: el Flete de la plantilla SÍ costea → va a "Gastos Origen/Destino".
+  // El Seguro NUNCA toca el costeo, solo formó parte del SIF arriba.
+  var agenteEl=document.getElementById('agente');
+  if(agenteEl && !agenteEl._manual){
+    agenteEl.value = totalFlete>0 ? totalFlete.toFixed(2) : '';
+  }
   // Tipo de mercancía por departamentos (solo mercancía — flete/seguro no llevan depto)
   var deptSums={};
   merc.forEach(function(l){var k=(l.deptCat||'').trim();if(k){if(!deptSums[k])deptSums[k]=0;deptSums[k]+=l.costo;}});
@@ -1520,9 +1569,9 @@ function applyPlantilla(){
   var cartEl=document.getElementById('cartones');
   if(bultos>0&&!cartEl.value) cartEl.value=bultos;
   calcLive();
-  var msg='✅ '+fmt(total)+' aplicado al formulario';
-  if(totalFlete>0) msg+=' (incl. flete '+fmt(totalFlete)+')';
-  if(totalSeguro>0) msg+=' (incl. seguro '+fmt(totalSeguro)+')';
+  var msg='✅ '+fmt(total)+' SIF aplicado al formulario';
+  if(totalFlete>0) msg+=' · Flete '+fmt(totalFlete)+' → Gastos Origen/Destino';
+  if(totalSeguro>0) msg+=' · Seguro '+fmt(totalSeguro)+' (solo SIF, no costea)';
   toast(msg,'green');
   _autoSave();
 }
