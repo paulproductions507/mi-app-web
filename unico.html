@@ -983,9 +983,18 @@ window._fdTargetLineIdx = null;
 async function _fdAbrirBuscadorLinea(lineIdx){
   window._fdTargetLineIdx = lineIdx;
   var data = await _fdLoad();
+  // Excluir facturas ya vinculadas a OTRAS líneas de esta misma plantilla
+  // (para no usar la misma factura dos veces sin querer en el mismo embarque)
+  var nfacActual = (invLines[lineIdx]&&invLines[lineIdx].nfac||'').trim().toUpperCase();
+  var yaVinculadasEnOtrasLineas = invLines
+    .filter(function(l,i){ return i!==lineIdx && l._fdLinked && l.nfac; })
+    .map(function(l){ return l.nfac.trim().toUpperCase(); });
   var disponibles = data.filter(function(f){
     var s = (f.saldo != null) ? f.saldo : f.monto;
-    return (s||0) > 0;
+    if((s||0) <= 0) return false;
+    var numF=(f.num||'').trim().toUpperCase();
+    if(yaVinculadasEnOtrasLineas.indexOf(numF)>=0 && numF!==nfacActual) return false;
+    return true;
   });
   var fmt2=function(n){ return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
   var old=document.getElementById('_fdModal'); if(old) old.remove();
@@ -993,8 +1002,9 @@ async function _fdAbrirBuscadorLinea(lineIdx){
   div.id='_fdModal';
   div.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
   var rowsHtml = disponibles.length ? disponibles.map(function(f,i){
-    return '<div onclick="_fdElegirFactura('+i+')" style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center" onmouseover="this.style.background=\'rgba(163,113,247,.12)\'" onmouseout="this.style.background=\'rgba(255,255,255,.04)\'">'
-      +'<div><div style="font-weight:700;color:var(--orange);font-size:12px">'+(f.num||'')+'</div>'
+    var esActual = (f.num||'').trim().toUpperCase()===nfacActual && nfacActual!=='';
+    return '<div onclick="_fdElegirFactura('+i+')" style="background:'+(esActual?'rgba(63,185,80,.1)':'rgba(255,255,255,.04)')+';border:1px solid '+(esActual?'rgba(63,185,80,.4)':'var(--border)')+';border-radius:8px;padding:10px 12px;margin-bottom:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center" onmouseover="this.style.background=\'rgba(163,113,247,.12)\'" onmouseout="this.style.background=\''+(esActual?'rgba(63,185,80,.1)':'rgba(255,255,255,.04)')+'\'">'
+      +'<div><div style="font-weight:700;color:var(--orange);font-size:12px">'+(f.num||'')+(esActual?' <span style="color:#3fb950">✓ vinculada aquí</span>':'')+'</div>'
       +'<div style="font-size:11px;color:var(--text)">'+(f.prov||'')+'</div>'
       +'<div style="font-size:10px;color:var(--muted)">'+(f.tipo||'')+'</div></div>'
       +'<div style="font-weight:700;color:var(--green);font-size:13px">'+fmt2(f.saldo!=null?f.saldo:f.monto)+'</div>'
@@ -1422,6 +1432,7 @@ function renderPreview(){
     var provCls=l._noMatch?'warn-field':l._corregido?'ok-field':'';
     var provTitle=l._noMatch?'⚠ Proveedor no reconocido — edita para corregir':l._corregido?'✏ Corregido automáticamente':'';
     var isNonMerc=(l.tipoFac==='flete'||l.tipoFac==='seguro');
+    var isFlete=(l.tipoFac==='flete'); // solo Flete puede vincularse a Facturas Disponibles — el Seguro NUNCA
     var deptCellHtml=isNonMerc
       ? '<td style="min-width:110px;color:var(--muted);font-size:11px;text-align:center">— no aplica —</td>'
       : '<td style="min-width:110px"><select class="inv-inp" onchange="invLines['+realIdx+'].deptCat=this.value;_reCalcTotal()">'
@@ -1441,11 +1452,11 @@ function renderPreview(){
       +' onchange="_fixProvInline(this,'+realIdx+')"></td>'
       // Depto (oculto/deshabilitado para flete/seguro)
       +deptCellHtml
-      // N° Factura (con botón Disponibles para Flete/Seguro)
+      // N° Factura (con botón Disponibles SOLO para Flete — el Seguro nunca se vincula a factura de gasto)
       +'<td style="min-width:140px"><div style="display:flex;gap:4px;align-items:center">'
       +'<input type="text" class="inv-inp" value="'+(l.nfac||'').replace(/"/g,'&quot;')+'" placeholder="N° Fact"'
       +' oninput="invLines['+realIdx+'].nfac=this.value;invLines['+realIdx+']._fdLinked=false" style="flex:1'+(l._fdLinked?';border-color:#3fb950':'')+'">'
-      +(isNonMerc?'<button onclick="_fdAbrirBuscadorLinea('+realIdx+')" title="'+(l._fdLinked?'✓ Vinculada — clic para cambiar':'Buscar en Facturas Disponibles')+'" style="flex-shrink:0;background:'+(l._fdLinked?'rgba(63,185,80,.18)':'rgba(210,153,34,.12)')+';border:1px solid '+(l._fdLinked?'rgba(63,185,80,.5)':'rgba(210,153,34,.35)')+';color:'+(l._fdLinked?'#3fb950':'#d29922')+';border-radius:5px;padding:4px 7px;font-size:10px;font-weight:700;cursor:pointer">'+(l._fdLinked?'✓':'📂')+'</button>':'')
+      +(isFlete?'<button onclick="_fdAbrirBuscadorLinea('+realIdx+')" title="'+(l._fdLinked?'✓ Vinculada — clic para cambiar':'Buscar en Facturas Disponibles')+'" style="flex-shrink:0;background:'+(l._fdLinked?'rgba(63,185,80,.18)':'rgba(210,153,34,.12)')+';border:1px solid '+(l._fdLinked?'rgba(63,185,80,.5)':'rgba(210,153,34,.35)')+';color:'+(l._fdLinked?'#3fb950':'#d29922')+';border-radius:5px;padding:4px 7px;font-size:10px;font-weight:700;cursor:pointer">'+(l._fdLinked?'✓':'📂')+'</button>':'')
       +'</div></td>'
       // OC
       +'<td style="min-width:70px"><input type="text" class="inv-inp" value="'+(l.oc||'').replace(/"/g,'&quot;')+'" placeholder="OC"'
