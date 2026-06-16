@@ -11,7 +11,7 @@
 // Verificación automática de versión — fuerza recarga si el servidor tiene versión nueva
 (function(){
   var VER_KEY = '_app_build_zlc';
-  var VER_BUILD = '20260615-FIX16';
+  var VER_BUILD = '20260616-FIX17';
   try {
     var saved = sessionStorage.getItem(VER_KEY);
     if(saved && saved !== VER_BUILD){
@@ -13236,11 +13236,25 @@ function _showProcessingOverlay(nro, desc, cif, ahorro, landedVal, factorVal, on
       +'<div style="font-size:13px;font-weight:800;color:#a855f7;font-family:monospace">'+factorFmt+'</div></div>'
       +'</div>'
       +'<div style="display:flex;gap:10px">'
-      +'<button onclick="document.getElementById(\'_procOverlay\').remove()" style="flex:1;background:none;border:1px solid var(--border);color:var(--muted);border-radius:11px;padding:10px;font-size:12px;font-weight:600;cursor:pointer">✕ Cerrar</button>'
-      +'<button onclick="document.getElementById(\'_procOverlay\').remove();window.location.reload()" style="flex:2;background:linear-gradient(135deg,rgba(63,185,80,.25),rgba(46,160,67,.15));border:1.5px solid rgba(63,185,80,.55);color:var(--green-l);border-radius:11px;padding:10px;font-size:12px;font-weight:800;cursor:pointer">↺ Nuevo Ingreso</button>'
+      +'<button id="_procCancelBtn" onclick="document.getElementById(\'_procOverlay\').remove();if(window._procCountdownTimer)clearInterval(window._procCountdownTimer);" style="flex:1;background:none;border:1px solid var(--border);color:var(--muted);border-radius:11px;padding:10px;font-size:12px;font-weight:600;cursor:pointer">✕ Cerrar</button>'
+      +'<button id="_procNuevoBtn" onclick="document.getElementById(\'_procOverlay\').remove();window.location.reload()" style="flex:2;background:linear-gradient(135deg,rgba(63,185,80,.25),rgba(46,160,67,.15));border:1.5px solid rgba(63,185,80,.55);color:var(--green-l);border-radius:11px;padding:10px;font-size:12px;font-weight:800;cursor:pointer">↺ Nuevo Ingreso (<span id="_procCountdownNum">5</span>)</button>'
       +'</div></div>';
 
     document.body.appendChild(div);
+
+    // ── Countdown de 5 segundos: reinicia automático a Gestión Integral salvo cancelación ──
+    var _cd = 5;
+    var numEl = document.getElementById('_procCountdownNum');
+    window._procCountdownTimer = setInterval(function(){
+      _cd--;
+      if(numEl) numEl.textContent = _cd;
+      if(_cd <= 0){
+        clearInterval(window._procCountdownTimer);
+        var ov = document.getElementById('_procOverlay');
+        if(ov) ov.remove();
+        window.location.reload();
+      }
+    }, 1000);
 
     // ── Disparar el guardado en la nube automáticamente al mostrar el overlay ──
     if(typeof window._procOverlayDone === 'function'){
