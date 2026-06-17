@@ -404,6 +404,9 @@ datalist option{background:var(--s2);color:var(--text)}
 
 <!-- ══ ACCIONES PRINCIPALES ══ -->
 <div style="display:flex;gap:8px;margin-bottom:8px">
+  <button onclick="_descargarBackupManual()" style="flex:1;background:rgba(210,153,34,.1);border:1px solid rgba(210,153,34,.3);color:var(--orange,#d29922);border-radius:10px;padding:10px 8px;font-size:12px;font-weight:700;cursor:pointer" title="Descarga un archivo con todo el historial de embarques, para que lo guardes donde quieras">🗄️ Backup Manual</button>
+</div>
+<div style="display:flex;gap:8px;margin-bottom:8px">
   <button onclick="_guardarCambiosUnico()" style="flex:1;background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.3);color:var(--green);border-radius:10px;padding:10px 8px;font-size:12px;font-weight:700;cursor:pointer">💾 Guardar</button>
   <button class="btn btn-calc" onclick="calcular()" style="flex:2">⚡ Calcular Costo Único →</button>
 </div>
@@ -1009,6 +1012,42 @@ function initSB(){
       document.getElementById('cloud-badge').style.color='var(--green)';
     }
   }catch(e){ console.warn('SB init:',e); }
+}
+
+// ── Backup Manual — descarga un archivo .json con todo el historial (tendData) ──
+// Misma fuente que el backup semanal automático (_TEND_MASTER), pero a demanda
+// y entregado como archivo descargable, no solo guardado en Supabase.
+async function _descargarBackupManual(){
+  toast('⏳ Generando backup…','green');
+  if(!_sb){ initSB(); }
+  if(!_sb){ toast('⚠️ Sin conexión a la nube — no se pudo generar el backup','red'); return; }
+  try{
+    var res = await _sb.from('simulador_sesiones').select('datos').eq('nombre',_SB_MASTER).maybeSingle();
+    if(!res.data){ toast('⚠️ No hay historial guardado todavía','orange'); return; }
+    var parsed; try{ parsed = JSON.parse(res.data.datos); }catch(e){ toast('⚠️ Backup corrupto en la nube','red'); return; }
+    var tend = parsed.tendData||[];
+    if(!tend.length){ toast('⚠️ El historial está vacío','orange'); return; }
+
+    var hoy = new Date();
+    var fechaStr = hoy.getFullYear()+'-'+String(hoy.getMonth()+1).padStart(2,'0')+'-'+String(hoy.getDate()).padStart(2,'0');
+    var horaStr = String(hoy.getHours()).padStart(2,'0')+String(hoy.getMinutes()).padStart(2,'0');
+    var payload = {
+      backup_date: hoy.toISOString(),
+      count: tend.length,
+      tendData: tend,
+      deleted: parsed.deleted||[]
+    };
+    var blob = new Blob([JSON.stringify(payload,null,2)], {type:'application/json'});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'backup_simulador_'+fechaStr+'_'+horaStr+'.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast('✅ Backup descargado: '+tend.length+' embarques','green');
+  }catch(e){ console.warn('Backup manual error:',e); toast('⚠️ Error al generar el backup','red'); }
 }
 
 // ═══════════════════════════════════════════════

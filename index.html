@@ -1246,6 +1246,9 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
     <button onclick="_abrirBackupsSemanales()" style="background:none;border:none;color:var(--muted);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 8px;border-radius:8px;transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,.06)'" onmouseout="this.style.background='none'" title="Backups Semanales">
       <span style="font-size:16px">🗄️</span><span style="font-size:9px;color:var(--muted2)">Backups</span>
     </button>
+    <button onclick="_descargarBackupManual()" style="background:none;border:none;color:var(--muted);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 8px;border-radius:8px;transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,.06)'" onmouseout="this.style.background='none'" title="Descargar Backup Manual">
+      <span style="font-size:16px">⬇️🗄️</span><span style="font-size:9px;color:var(--muted2)">Backup</span>
+    </button>
     <button onclick="document.getElementById('sesion-file-input').click()" style="background:none;border:none;color:var(--muted);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 8px;border-radius:8px;transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,.06)'" onmouseout="this.style.background='none'" title="Cargar Local">
       <span style="font-size:16px">📂</span><span style="font-size:9px;color:var(--muted2)">Cargar</span>
     </button>
@@ -11946,6 +11949,35 @@ async function _autoBackupSemanal(){
   }catch(e){ console.warn('Backup semanal error:', e); }
 }
 
+// ── Backup Manual — descarga un archivo .json con todo tendData a demanda ──
+// A diferencia de _autoBackupSemanal (que solo guarda en Supabase, una vez
+// por semana), este se dispara cuando el usuario lo pide y entrega un
+// archivo real para guardar donde el usuario quiera (Descargas, Drive, etc).
+async function _descargarBackupManual(){
+  if(!tendData || !tendData.length){ _showToast('⚠️ No hay historial de embarques para respaldar.','orange',4000); return; }
+  try{
+    const hoy = new Date();
+    const fechaStr = hoy.getFullYear()+'-'+String(hoy.getMonth()+1).padStart(2,'0')+'-'+String(hoy.getDate()).padStart(2,'0');
+    const horaStr = String(hoy.getHours()).padStart(2,'0')+String(hoy.getMinutes()).padStart(2,'0');
+    const payload = {
+      backup_date: hoy.toISOString(),
+      count: tendData.length,
+      tendData: tendData,
+      deleted: Array.from(window._deletedEmbarques||[])
+    };
+    const blob = new Blob([JSON.stringify(payload,null,2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'backup_simulador_'+fechaStr+'_'+horaStr+'.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    _showToast('✅ Backup descargado: '+tendData.length+' embarques','green',4000);
+  }catch(e){ console.warn('Backup manual error:',e); _showToast('⚠️ Error al generar el backup','red',4000); }
+}
+
 // Modal para ver y restaurar backups semanales
 async function _abrirBackupsSemanales(){
   if(!_sb){ initSupabase(); await new Promise(r=>setTimeout(r,400)); }
@@ -11971,6 +12003,7 @@ async function _abrirBackupsSemanales(){
         const semana=r.nombre.replace('_BACKUP_','');
         return '<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;background:var(--bg)">'
           +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;color:var(--text)">Semana '+semana+'</div><div style="font-size:11px;color:var(--muted)">'+info+'</div></div>'
+          +'<button onclick="_descargarBackupSemanalIdx('+i+')" style="background:rgba(210,153,34,.12);border:1px solid rgba(210,153,34,.3);color:var(--orange-l);border-radius:6px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0" title="Descargar como archivo">⬇️</button>'
           +'<button onclick="_restaurarBackupSemanal('+i+')" style="background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:6px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0">♻️ Restaurar</button>'
           +'</div>';
       }).join('')
@@ -11978,6 +12011,24 @@ async function _abrirBackupsSemanales(){
   modal.onclick = () => modal.remove();
   document.body.appendChild(modal);
   window._backupsListaCache = rows;
+}
+
+// Descarga como archivo .json un backup semanal específico de la lista cacheada
+function _descargarBackupSemanalIdx(idx){
+  const rows = window._backupsListaCache;
+  if(!rows || !rows[idx]) return;
+  let parsed; try{ parsed = JSON.parse(rows[idx].datos); }catch(e){ _showToast('⚠️ Backup corrupto','red',3000); return; }
+  const semana = rows[idx].nombre.replace('_BACKUP_','');
+  const blob = new Blob([JSON.stringify(parsed,null,2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'backup_simulador_semana-'+semana+'.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  _showToast('✅ Backup de la semana '+semana+' descargado','green',3000);
 }
 
 async function _restaurarBackupSemanal(idx){
