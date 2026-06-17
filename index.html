@@ -9645,7 +9645,9 @@ function syncSC3fromSC1(){
     // Now recalc pago = FOB + Flete + Diferencia
     s2RecalcPago();
     // Also sync sc_pago proxy
-    const total = fob + fl_raw + difFobVal;
+    const fleteEnFacturaChkSync = document.getElementById('s2_flete_en_factura_sab');
+    const fleteEnFacturaSync = fleteEnFacturaChkSync ? fleteEnFacturaChkSync.checked : false;
+    const total = (fleteEnFacturaSync ? (fob + fl_raw) : fob) + difFobVal;
     const scPago2=document.getElementById('sc_pago');
     if(scPago2&&scPago2.dataset.autoSet!=='false'&&total>0){
       scPago2.value=total.toFixed(2); scPago2.dataset.autoSet='true';
@@ -9823,7 +9825,10 @@ function s2RecalcPago(){
   const fob = v('s2_fob');
   const fl  = v('s2_flete');
   const dif = v('s2_dif_fob');   // diferencia específica del bloque FOB
-  const total = fob + fl + dif;
+  const fleteEnFacturaChk = document.getElementById('s2_flete_en_factura_sab');
+  const fleteEnFactura = fleteEnFacturaChk ? fleteEnFacturaChk.checked : false;
+  const baseSinDif = fleteEnFactura ? (fob + fl) : fob;
+  const total = baseSinDif + dif;
   const pagoEl = document.getElementById('s2_pago');
   if(pagoEl && pagoEl.dataset.autoSet !== 'false'){
     pagoEl.value = total > 0 ? total.toFixed(2) : '';
@@ -9832,7 +9837,9 @@ function s2RecalcPago(){
     const note = document.getElementById('s2_pago_formula_note');
     if(note && total > 0){
       const fmt = n => '$' + n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-      note.textContent = `${fmt(fob)} + ${fmt(fl)}${dif!==0?' + '+fmt(dif):''} = ${fmt(total)} → ÷ 1.07 = ${fmt(total/1.07)}`;
+      note.textContent = fleteEnFactura
+        ? `${fmt(fob)} + ${fmt(fl)}${dif!==0?' + '+fmt(dif):''} = ${fmt(total)} → ÷ 1.07 = ${fmt(total/1.07)}`
+        : `${fmt(fob)}${dif!==0?' + '+fmt(dif):''} = ${fmt(total)} (Flete $${fl.toFixed(2)} no incluido en factura Sababa) → ÷ 1.07 = ${fmt(total/1.07)}`;
     }
   }
 }
@@ -9876,8 +9883,10 @@ function calcSab2(){
   if(isFOB){
     const fob = v('s2_fob');
     const fl  = v('s2_flete');
-    diferencia = v('s2_dif_fob'); // desde plantilla: PAGO_REALIZADO − (FOB+Flete)
-    baseLimpia = fob + fl;        // base pura heredada de Liq. Aduanal
+    diferencia = v('s2_dif_fob'); // desde plantilla: PAGO_REALIZADO − (FOB+Flete o FOB según checkbox)
+    const fleteEnFacturaChk = document.getElementById('s2_flete_en_factura_sab');
+    const fleteEnFactura = fleteEnFacturaChk ? fleteEnFacturaChk.checked : false;
+    baseLimpia = fleteEnFactura ? (fob + fl) : fob; // base pura heredada de Liq. Aduanal
     // s2_pago = base pura (sin diferencia) — la diferencia va aparte
     const pagoEl = document.getElementById('s2_pago');
     if(pagoEl && pagoEl.dataset.autoSet !== 'false'){
