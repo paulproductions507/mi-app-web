@@ -2354,6 +2354,10 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
           <div id="dif-fob-info" class="info-box">Centavos de redondeo: se suma al FOB + Flete antes de dividir ÷ 1.07 para homologar al inventario de Sababa.</div>
           <input type="number" id="s2_dif_fob" value="" placeholder="0.00" step="0.01" oninput="s2RecalcPago();calcSab2()">
         </div>
+        <div class="field" style="display:flex;align-items:center;gap:8px;margin-top:-4px">
+          <input type="checkbox" id="s2_flete_en_factura_sab" checked onchange="_onToggleFleteFacturaSab()" style="width:16px;height:16px;cursor:pointer">
+          <label for="s2_flete_en_factura_sab" style="margin:0;font-size:12px;color:var(--muted);cursor:pointer">Sababa incluye el Flete en su factura fiscal (Total Pago)</label>
+        </div>
       </div>
 
       <!-- PAGO -->
@@ -9834,6 +9838,23 @@ function s2RecalcPago(){
 }
 // Legacy alias kept for any other calls
 function s2AutoPago(){ s2RecalcPago(); }
+
+// ── Toggle: ¿Sababa incluye el Flete en su factura fiscal (PAGO_REALIZADO)? ──
+// Si SÍ (checked, default): Diferencia = PAGO_REALIZADO − (Mercancía + Flete)
+// Si NO (unchecked): Diferencia = PAGO_REALIZADO − Mercancía (el flete se factura aparte)
+// Recalcula la Diferencia ya cargada usando el PAGO_REALIZADO original guardado.
+function _onToggleFleteFacturaSab(){
+  const incluyeFlete = document.getElementById('s2_flete_en_factura_sab').checked;
+  const pagoRealOriginal = window._pagoRealizadoOriginalSab;
+  if(pagoRealOriginal === undefined || pagoRealOriginal === null) return; // nada que recalcular
+  const fob = v('s2_fob'), fl = v('s2_flete');
+  const base = incluyeFlete ? fob : (fob - fl);
+  // Nota: 'fob' aquí ya es Mercancía pura (s2_fob = totalMerc al importar plantilla)
+  const dif = Math.round((pagoRealOriginal - base) * 100) / 100;
+  const difEl = document.getElementById('s2_dif_fob');
+  if(difEl){ difEl.value = dif !== 0 ? dif.toFixed(2) : ''; difEl.dataset.autoSet='true'; }
+  s2RecalcPago(); calcSab2();
+}
 
 function calcSab2(){
   if(!sab2Tipo){ return; } // Usuario debe elegir ZL o Importación primero
@@ -24830,10 +24851,15 @@ function _motoresMapeado(rows) {
     if (s2FobEl) s2FobEl.value = totalMerc.toFixed(2);
   }
   if (pagoRealizado > 0) {
-    var baseParaDif = totalMerc - totalTrasp + fleteVal;
+    window._pagoRealizadoOriginalSab = pagoRealizado; // para recalcular si se cambia el checkbox luego
+    var incluyeFleteChk = document.getElementById('s2_flete_en_factura_sab');
+    var incluyeFlete = incluyeFleteChk ? incluyeFleteChk.checked : true;
+    var baseParaDif = incluyeFlete ? (totalMerc - totalTrasp + fleteVal) : (totalMerc - totalTrasp);
     var dif = Math.round((pagoRealizado - baseParaDif) * 100) / 100;
     setField('s1_dif_pago', dif);
+    setField('s1_dif_pago_fob', dif);
     setField('s2_dif_cif', dif);
+    setField('s2_dif_fob', dif);
     var s2Pago = document.getElementById('s2_pago');
     if (s2Pago) { s2Pago.value = (totalMerc + fleteVal).toFixed(2); s2Pago.dataset.autoSet = 'true'; }
   }
