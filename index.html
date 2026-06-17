@@ -2355,7 +2355,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
           <input type="number" id="s2_dif_fob" value="" placeholder="0.00" step="0.01" oninput="s2RecalcPago();calcSab2()">
         </div>
         <div class="field" style="display:flex;align-items:center;gap:8px;margin-top:-4px">
-          <input type="checkbox" id="s2_flete_en_factura_sab" checked onchange="_onToggleFleteFacturaSab()" style="width:16px;height:16px;cursor:pointer">
+          <input type="checkbox" id="s2_flete_en_factura_sab" onchange="_onToggleFleteFacturaSab()" style="width:16px;height:16px;cursor:pointer">
           <label for="s2_flete_en_factura_sab" style="margin:0;font-size:12px;color:var(--muted);cursor:pointer">Sababa incluye el Flete en su factura fiscal (Total Pago)</label>
         </div>
       </div>
@@ -9845,11 +9845,16 @@ function s2AutoPago(){ s2RecalcPago(); }
 // Recalcula la Diferencia ya cargada usando el PAGO_REALIZADO original guardado.
 function _onToggleFleteFacturaSab(){
   const incluyeFlete = document.getElementById('s2_flete_en_factura_sab').checked;
-  const pagoRealOriginal = window._pagoRealizadoOriginalSab;
-  if(pagoRealOriginal === undefined || pagoRealOriginal === null) return; // nada que recalcular
   const fob = v('s2_fob'), fl = v('s2_flete');
-  const base = incluyeFlete ? fob : (fob - fl);
-  // Nota: 'fob' aquí ya es Mercancía pura (s2_fob = totalMerc al importar plantilla)
+  let pagoRealOriginal = window._pagoRealizadoOriginalSab;
+  if(pagoRealOriginal === undefined || pagoRealOriginal === null){
+    // Fallback: derivar el PAGO_REALIZADO original a partir de lo que ya está en pantalla,
+    // asumiendo que la Diferencia actual se calculó con flete incluido (comportamiento previo).
+    const difActual = v('s2_dif_fob');
+    pagoRealOriginal = fob + fl + difActual;
+    window._pagoRealizadoOriginalSab = pagoRealOriginal;
+  }
+  const base = incluyeFlete ? (fob + fl) : fob;
   const dif = Math.round((pagoRealOriginal - base) * 100) / 100;
   const difEl = document.getElementById('s2_dif_fob');
   if(difEl){ difEl.value = dif !== 0 ? dif.toFixed(2) : ''; difEl.dataset.autoSet='true'; }
@@ -24853,7 +24858,7 @@ function _motoresMapeado(rows) {
   if (pagoRealizado > 0) {
     window._pagoRealizadoOriginalSab = pagoRealizado; // para recalcular si se cambia el checkbox luego
     var incluyeFleteChk = document.getElementById('s2_flete_en_factura_sab');
-    var incluyeFlete = incluyeFleteChk ? incluyeFleteChk.checked : true;
+    var incluyeFlete = incluyeFleteChk ? incluyeFleteChk.checked : false;
     var baseParaDif = incluyeFlete ? (totalMerc - totalTrasp + fleteVal) : (totalMerc - totalTrasp);
     var dif = Math.round((pagoRealizado - baseParaDif) * 100) / 100;
     setField('s1_dif_pago', dif);
