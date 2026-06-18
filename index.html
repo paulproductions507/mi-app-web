@@ -2354,11 +2354,37 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
           <div id="dif-fob-info" class="info-box">Centavos de redondeo: se suma al FOB + Flete antes de dividir ÷ 1.07 para homologar al inventario de Sababa.</div>
           <input type="number" id="s2_dif_fob" value="" placeholder="0.00" step="0.01" oninput="s2RecalcPago();calcSab2()">
         </div>
-        <div class="field" style="display:flex;align-items:center;gap:8px;margin-top:-4px">
-          <input type="checkbox" id="s2_flete_en_factura_sab" onchange="_onToggleFleteFacturaSab()" style="width:16px;height:16px;cursor:pointer">
-          <label for="s2_flete_en_factura_sab" style="margin:0;font-size:12px;color:var(--muted);cursor:pointer">Sababa incluye el Flete en su factura fiscal (Total Pago)</label>
+        <div class="field" style="margin-top:-4px">
+          <div style="display:flex;align-items:center;gap:10px;background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:8px 12px">
+            <label style="position:relative;display:inline-block;width:46px;height:24px;flex-shrink:0;cursor:pointer;margin:0">
+              <input type="checkbox" id="s2_flete_en_factura_sab" onchange="_onToggleFleteFacturaSab()" style="opacity:0;width:0;height:0">
+              <span id="sv_sn_track" style="position:absolute;inset:0;background:rgba(88,166,255,.5);border-radius:24px;transition:.2s"></span>
+              <span id="sv_sn_knob" style="position:absolute;height:18px;width:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s"></span>
+            </label>
+            <div>
+              <div id="sv_sn_label" style="font-size:12px;font-weight:700;color:var(--text)">SN — Sababa Nuevo</div>
+              <div style="font-size:10px;color:var(--muted)">SN: factura sin Flete (por defecto) · SV: factura vieja, incluye Flete en el Total Pago</div>
+            </div>
+          </div>
         </div>
       </div>
+      <script>(function(){
+        function _renderSvSn(){
+          var chk=document.getElementById('s2_flete_en_factura_sab');
+          var track=document.getElementById('sv_sn_track'), knob=document.getElementById('sv_sn_knob'), lbl=document.getElementById('sv_sn_label');
+          if(!chk||!track||!knob||!lbl) return;
+          if(chk.checked){
+            track.style.background='rgba(240,136,62,.6)'; knob.style.left='25px';
+            lbl.textContent='SV — Sababa Viejo'; lbl.style.color='var(--orange-l)';
+          } else {
+            track.style.background='rgba(88,166,255,.5)'; knob.style.left='3px';
+            lbl.textContent='SN — Sababa Nuevo'; lbl.style.color='var(--text)';
+          }
+        }
+        document.addEventListener('change', function(e){ if(e.target && e.target.id==='s2_flete_en_factura_sab') setTimeout(_renderSvSn,0); });
+        window._renderSvSn = _renderSvSn;
+        setTimeout(_renderSvSn, 300);
+      })();</script>
 
       <!-- PAGO -->
       <div class="field"><label>Total Pago Realizado (USD) <span class="info-btn" onclick="document.getElementById('pago-info').classList.toggle('open')" style="font-style:normal">i</span></label>
@@ -7135,6 +7161,7 @@ function setTermino(val,el){
   calcFOB(); calc();
 }
 function setCompar(val,el){
+  const _prevCompar = compar;
   compar=val;
   el.parentElement.querySelectorAll('.seg-btn').forEach(b=>{b.classList.remove('on','b','o');});
   el.classList.add('on','b');
@@ -7148,9 +7175,62 @@ function setCompar(val,el){
     'Escenario #3 — Facturación fiscal homologada Sababa Imports.';
   // Switch providers: SI if sababa, parent if cifexp
   _syncProvSI(val==='sababa');
+  // Si se selecciona Sababa y aún no hay un modo SN/SV decidido para este embarque, preguntar ANTES de calcular
+  if(val==='sababa' && _prevCompar!=='sababa' && typeof _preguntarModoSababa==='function'){
+    _preguntarModoSababa().then(function(){ calc(); });
+    return;
+  }
   calc();
   // Si cambiamos a CIF Express, actualizar displays del desglose honorarios
   if(val==='cifexp') setTimeout(updateCifExpDisplays, 20);
+}
+
+// ── Modal de elección: Sababa Nuevo (SN, por defecto) vs Sababa Viejo (SV) ──
+// Se muestra UNA vez por embarque, al elegir "Escenario Sababa" en el Comparativo,
+// antes de que cualquier plantilla o cálculo se procese — así todo el modal de
+// Sababa (checkbox, diferencia, comisión, master value) ya nace configurado.
+function _preguntarModoSababa(){
+  return new Promise(function(resolve){
+    const nro = document.getElementById('s1_nro_emb')?.value?.trim();
+    // Si ya hay un modo guardado para este embarque, respétalo sin preguntar de nuevo
+    if(nro){
+      try{
+        const map = JSON.parse(localStorage.getItem('_sabFleteModoPorEmbarque')||'{}');
+        if(map.hasOwnProperty(nro)){
+          const chk=document.getElementById('s2_flete_en_factura_sab');
+          if(chk){ chk.checked = !!map[nro]; if(typeof _renderSvSn==='function') _renderSvSn(); }
+          resolve(); return;
+        }
+      }catch(e){}
+    }
+    var ov=document.createElement('div');
+    ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:999999;display:flex;align-items:center;justify-content:center;padding:20px';
+    ov.innerHTML='<div style="background:var(--s1,#161b22);border:2px solid rgba(240,136,62,.3);border-radius:16px;padding:24px;max-width:380px;width:100%">'
+      +'<div style="font-size:22px;margin-bottom:10px">🤝</div>'
+      +'<div style="font-size:13px;font-weight:800;color:var(--orange-l);margin-bottom:8px">Facturación Sababa — ¿qué modo?</div>'
+      +'<div style="font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.6">Define cómo factura Sababa este embarque. Esto configura el checkbox, la Diferencia, la Comisión y el Master Value en automático.</div>'
+      +'<div style="display:flex;flex-direction:column;gap:8px">'
+      +'<button id="_msab_sn" style="background:rgba(88,166,255,.12);border:2px solid rgba(88,166,255,.4);color:var(--blue-l);border-radius:10px;padding:12px;font-size:12px;font-weight:700;cursor:pointer;text-align:left">'
+      +'<div style="font-size:13px;margin-bottom:2px">✅ SN — Sababa Nuevo <span style="font-size:10px;font-weight:400">(por defecto)</span></div>'
+      +'<div style="font-size:10px;font-weight:400;opacity:.85">Factura sin el Flete. El Flete costea aparte, sin inflar el inventario homologado.</div>'
+      +'</button>'
+      +'<button id="_msab_sv" style="background:rgba(240,136,62,.1);border:1px solid rgba(240,136,62,.3);color:var(--orange-l);border-radius:10px;padding:12px;font-size:12px;font-weight:700;cursor:pointer;text-align:left">'
+      +'<div style="font-size:13px;margin-bottom:2px">SV — Sababa Viejo</div>'
+      +'<div style="font-size:10px;font-weight:400;opacity:.85">Factura incluyendo el Flete en el Total Pago (mecanismo antiguo, embarques represados).</div>'
+      +'</button>'
+      +'</div></div>';
+    document.body.appendChild(ov);
+    function elegir(modoViejo){
+      const chk=document.getElementById('s2_flete_en_factura_sab');
+      if(chk){ chk.checked = modoViejo; }
+      if(typeof _guardarModoFacturaSab==='function') _guardarModoFacturaSab(modoViejo);
+      if(typeof _renderSvSn==='function') _renderSvSn();
+      ov.remove();
+      resolve();
+    }
+    document.getElementById('_msab_sn').onclick=function(){ elegir(false); };
+    document.getElementById('_msab_sv').onclick=function(){ elegir(true); };
+  });
 }
 function _syncProvSI(useSI){
   if(!invLines||!invLines.length) return;
@@ -24100,13 +24180,20 @@ function loadInvFile(input){
     }
 
     // ── PASO 6: Diferencia de pago ──
-    // Diferencia = TOTAL_PAGO − (Mercancía + Flete)
+    // Diferencia = TOTAL_PAGO − (Mercancía + Flete o solo Mercancía, según checkbox)
     // Positivo → pagaron de más → se SUMA al homologado
     // Negativo → pagaron de menos → se RESTA del homologado
     if(pagoRealizadoDetectado > 0){
+      if(typeof _restaurarModoFacturaSab === 'function') _restaurarModoFacturaSab(); // respeta el modo guardado de este embarque
+      const _fleteChkEl = document.getElementById('s2_flete_en_factura_sab');
+      const _incluyeFleteDif = _fleteChkEl ? _fleteChkEl.checked : false;
+      if(typeof _guardarModoFacturaSab === 'function') _guardarModoFacturaSab(_incluyeFleteDif); // fija el modo si era nuevo
+      window._pagoRealizadoOriginalSab = pagoRealizadoDetectado; // valor CRUDO, nunca se mezcla con flete
       // Para ZL: descontar traspaso de la base (no entra en factura Sababa)
       const _esZL = (typeof tipo !== 'undefined' && tipo === 'ZL');
-      const baseParaDif = totalMerc - (_esZL ? totalTraspaso : 0) + fleteDetectado;
+      const _mercSinTrasp = totalMerc - (_esZL ? totalTraspaso : 0);
+      window._mercSinTraspasoSab = _mercSinTrasp;
+      const baseParaDif = _incluyeFleteDif ? (_mercSinTrasp + fleteDetectado) : _mercSinTrasp;
       const diferencia  = Math.round((pagoRealizadoDetectado - baseParaDif)*100)/100;
 
       const difEl = document.getElementById('s1_dif_pago');
@@ -24121,7 +24208,7 @@ function loadInvFile(input){
       if(esFOB  && difSabFobEl) difSabFobEl.value = diferencia.toFixed(2);
 
       msg += '\n\nTOTAL PAGO: $'+pagoRealizadoDetectado.toFixed(2);
-      msg += '\nBase (Merc.+Flete): $'+baseParaDif.toFixed(2);
+      msg += '\nBase ('+(_incluyeFleteDif?'Merc.+Flete':'solo Mercancía')+'): $'+baseParaDif.toFixed(2);
       msg += '\nDiferencia ('+(diferencia>=0?'+':'')+diferencia.toFixed(2)+'): aplicada automáticamente.';
 
       // ── ALERTA DE DIFERENCIA SIGNIFICATIVA ──
@@ -24132,7 +24219,7 @@ function loadInvFile(input){
           var alertMsg = '⚠️ DIFERENCIA EN PLANTILLA SABABA\n\n'
             + tipo + '\n\n'
             + 'Total Pago plantilla:  $' + pagoRealizadoDetectado.toFixed(2) + '\n'
-            + 'Base (Merc.+Flete):    $' + baseParaDif.toFixed(2) + '\n'
+            + 'Base ('+(_incluyeFleteDif?'Merc.+Flete':'solo Mercancía')+'):    $' + baseParaDif.toFixed(2) + '\n'
             + 'Diferencia:            ' + signo + '$' + Math.abs(diferencia).toFixed(2) + '\n\n'
             + 'Revisa la plantilla antes de procesar.\n'
             + 'Si es correcto, el ajuste ya fue aplicado automáticamente.';
