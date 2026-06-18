@@ -2357,7 +2357,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
         <div class="field" style="margin-top:-4px">
           <div style="display:flex;align-items:center;gap:10px;background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:8px 12px">
             <label style="position:relative;display:inline-block;width:46px;height:24px;flex-shrink:0;cursor:pointer;margin:0">
-              <input type="checkbox" id="s2_flete_en_factura_sab" onchange="_onToggleFleteFacturaSab()" style="opacity:0;width:0;height:0">
+              <input type="checkbox" id="s2_flete_en_factura_sab" onchange="_syncFleteSabCheckbox(this);_onToggleFleteFacturaSab()" style="opacity:0;width:0;height:0">
               <span id="sv_sn_track" style="position:absolute;inset:0;background:rgba(88,166,255,.5);border-radius:24px;transition:.2s"></span>
               <span id="sv_sn_knob" style="position:absolute;height:18px;width:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s"></span>
             </label>
@@ -2370,16 +2370,20 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       </div>
       <script>(function(){
         function _renderSvSn(){
-          var chk=document.getElementById('s2_flete_en_factura_sab');
-          var track=document.getElementById('sv_sn_track'), knob=document.getElementById('sv_sn_knob'), lbl=document.getElementById('sv_sn_label');
-          if(!chk||!track||!knob||!lbl) return;
-          if(chk.checked){
-            track.style.background='rgba(240,136,62,.6)'; knob.style.left='25px';
-            lbl.textContent='SV — Sababa Viejo'; lbl.style.color='var(--orange-l)';
-          } else {
-            track.style.background='rgba(88,166,255,.5)'; knob.style.left='3px';
-            lbl.textContent='SN — Sababa Nuevo'; lbl.style.color='var(--text)';
-          }
+          var chks=document.querySelectorAll('#s2_flete_en_factura_sab');
+          chks.forEach(function(chk){
+            var wrap = chk.closest('div[style*="background:var(--s2)"]') || chk.parentElement.parentElement;
+            if(!wrap) return;
+            var track=wrap.querySelector('#sv_sn_track'), knob=wrap.querySelector('#sv_sn_knob'), lbl=wrap.querySelector('#sv_sn_label');
+            if(!track||!knob||!lbl) return;
+            if(chk.checked){
+              track.style.background='rgba(240,136,62,.6)'; knob.style.left='25px';
+              lbl.textContent='SV — Sababa Viejo'; lbl.style.color='var(--orange-l)';
+            } else {
+              track.style.background='rgba(88,166,255,.5)'; knob.style.left='3px';
+              lbl.textContent='SN — Sababa Nuevo'; lbl.style.color='var(--text)';
+            }
+          });
         }
         document.addEventListener('change', function(e){ if(e.target && e.target.id==='s2_flete_en_factura_sab') setTimeout(_renderSvSn,0); });
         window._renderSvSn = _renderSvSn;
@@ -6965,7 +6969,10 @@ function switchTab(id,el){
   if(el) el.classList.add('on');
   if(id==='config'){ renderConfig(); if(typeof renderDeptConfig==='function') renderDeptConfig(); _pcCargarCache(); }
   if(id==='cifexp'){ updateCifExpDisplays(); }
-  if(id==='sababa'){ _restaurarModoFacturaSab(); }
+  if(id==='sababa'){
+    if(typeof _preguntarModoSababa==='function') _preguntarModoSababa();
+    else _restaurarModoFacturaSab();
+  }
   if(id==='facturas'){ renderInvLines(); }
   // Open sidebar when entering main simulator tabs (if not already pinned)
   if(['sim','cifexp','sababa','aduanal'].indexOf(id) !== -1){
@@ -7197,8 +7204,8 @@ function _preguntarModoSababa(){
       try{
         const map = JSON.parse(localStorage.getItem('_sabFleteModoPorEmbarque')||'{}');
         if(map.hasOwnProperty(nro)){
-          const chk=document.getElementById('s2_flete_en_factura_sab');
-          if(chk){ chk.checked = !!map[nro]; if(typeof _renderSvSn==='function') _renderSvSn(); }
+          document.querySelectorAll('#s2_flete_en_factura_sab').forEach(function(chk){ chk.checked = !!map[nro]; });
+          if(typeof _renderSvSn==='function') _renderSvSn();
           resolve(); return;
         }
       }catch(e){}
@@ -7221,8 +7228,7 @@ function _preguntarModoSababa(){
       +'</div></div>';
     document.body.appendChild(ov);
     function elegir(modoViejo){
-      const chk=document.getElementById('s2_flete_en_factura_sab');
-      if(chk){ chk.checked = modoViejo; }
+      document.querySelectorAll('#s2_flete_en_factura_sab').forEach(function(chk){ chk.checked = modoViejo; });
       if(typeof _guardarModoFacturaSab==='function') _guardarModoFacturaSab(modoViejo);
       if(typeof _renderSvSn==='function') _renderSvSn();
       ov.remove();
@@ -7349,8 +7355,12 @@ function calcSab2AndShow(){
       if(!cloneEl.id) return;
       var origEl = document.getElementById(cloneEl.id);
       if(origEl && origEl !== cloneEl){
-        origEl.value = cloneEl.value;
-        if(origEl.tagName === 'SELECT') origEl.selectedIndex = cloneEl.selectedIndex;
+        if(cloneEl.type === 'checkbox' || cloneEl.type === 'radio'){
+          origEl.checked = cloneEl.checked;
+        } else {
+          origEl.value = cloneEl.value;
+          if(origEl.tagName === 'SELECT') origEl.selectedIndex = cloneEl.selectedIndex;
+        }
       }
     });
   }
@@ -9931,6 +9941,19 @@ function s2AutoPago(){ s2RecalcPago(); }
 // Si SÍ (checked, default): Diferencia = PAGO_REALIZADO − (Mercancía + Flete)
 // Si NO (unchecked): Diferencia = PAGO_REALIZADO − Mercancía (el flete se factura aparte)
 // Recalcula la Diferencia ya cargada usando el PAGO_REALIZADO original guardado.
+// Sincroniza el checkbox "Sababa incluye Flete" entre el original y el clon del
+// modal (ambos comparten id). Sin esto, clickear uno no afecta al otro, y como
+// v()/getElementById siempre resuelven al primero en el documento, el switch
+// podía "no hacer nada" si el usuario tocaba la copia que no se estaba leyendo.
+function _syncFleteSabCheckbox(srcEl){
+  try{
+    const checked = srcEl.checked;
+    document.querySelectorAll('#s2_flete_en_factura_sab').forEach(function(el){
+      if(el !== srcEl) el.checked = checked;
+    });
+  }catch(e){}
+}
+
 function _onToggleFleteFacturaSab(){
   const incluyeFlete = document.getElementById('s2_flete_en_factura_sab').checked;
   _guardarModoFacturaSab(incluyeFlete); // persiste por N° de embarque
@@ -9967,10 +9990,13 @@ function _guardarModoFacturaSab(incluyeFlete){
 function _restaurarModoFacturaSab(){
   try{
     const nro = document.getElementById('s1_nro_emb')?.value?.trim();
-    const chk = document.getElementById('s2_flete_en_factura_sab');
-    if(!nro || !chk) return;
+    const chks = document.querySelectorAll('#s2_flete_en_factura_sab');
+    if(!nro || !chks.length) return;
     const map = JSON.parse(localStorage.getItem('_sabFleteModoPorEmbarque')||'{}');
-    if(map.hasOwnProperty(nro)) chk.checked = !!map[nro];
+    if(map.hasOwnProperty(nro)){
+      chks.forEach(function(chk){ chk.checked = !!map[nro]; });
+      if(typeof _renderSvSn==='function') _renderSvSn();
+    }
   }catch(e){}
 }
 
@@ -24184,10 +24210,21 @@ function loadInvFile(input){
     // Positivo → pagaron de más → se SUMA al homologado
     // Negativo → pagaron de menos → se RESTA del homologado
     if(pagoRealizadoDetectado > 0){
-      if(typeof _restaurarModoFacturaSab === 'function') _restaurarModoFacturaSab(); // respeta el modo guardado de este embarque
+      const _nroEmbActual = document.getElementById('s1_nro_emb')?.value?.trim();
+      let _yaTeniaModo = false;
+      if(_nroEmbActual){
+        try{
+          const _map = JSON.parse(localStorage.getItem('_sabFleteModoPorEmbarque')||'{}');
+          _yaTeniaModo = _map.hasOwnProperty(_nroEmbActual);
+        }catch(e){}
+      }
+      if(typeof _restaurarModoFacturaSab === 'function') _restaurarModoFacturaSab(); // respeta el modo guardado, si existe
       const _fleteChkEl = document.getElementById('s2_flete_en_factura_sab');
       const _incluyeFleteDif = _fleteChkEl ? _fleteChkEl.checked : false;
-      if(typeof _guardarModoFacturaSab === 'function') _guardarModoFacturaSab(_incluyeFleteDif); // fija el modo si era nuevo
+      if(typeof _guardarModoFacturaSab === 'function') _guardarModoFacturaSab(_incluyeFleteDif); // fija el modo (SN por defecto si era nuevo)
+      if(!_yaTeniaModo && typeof _showToast === 'function'){
+        _showToast('🤝 Sababa: se asumió modo SN (sin Flete en factura). Cámbialo en la pestaña Sababa si este embarque es SV.', 'orange', 7000);
+      }
       window._pagoRealizadoOriginalSab = pagoRealizadoDetectado; // valor CRUDO, nunca se mezcla con flete
       // Para ZL: descontar traspaso de la base (no entra en factura Sababa)
       const _esZL = (typeof tipo !== 'undefined' && tipo === 'ZL');
@@ -25004,10 +25041,21 @@ function _motoresMapeado(rows) {
   if (pagoRealizado > 0) {
     window._pagoRealizadoOriginalSab = pagoRealizado; // valor CRUDO de la plantilla, nunca se mezcla con flete
     window._mercSinTraspasoSab = totalMerc - totalTrasp; // base de mercancía pura, para recalcular siempre desde aquí
+    var _nroEmbActual2 = document.getElementById('s1_nro_emb')?.value?.trim();
+    var _yaTeniaModo2 = false;
+    if (_nroEmbActual2) {
+      try{
+        var _map2 = JSON.parse(localStorage.getItem('_sabFleteModoPorEmbarque')||'{}');
+        _yaTeniaModo2 = _map2.hasOwnProperty(_nroEmbActual2);
+      }catch(e){}
+    }
     if (typeof _restaurarModoFacturaSab === 'function') _restaurarModoFacturaSab(); // respeta el modo guardado de este embarque
     var incluyeFleteChk = document.getElementById('s2_flete_en_factura_sab');
     var incluyeFlete = incluyeFleteChk ? incluyeFleteChk.checked : false;
     if (typeof _guardarModoFacturaSab === 'function') _guardarModoFacturaSab(incluyeFlete); // fija el modo desde el primer import si era un embarque nuevo
+    if (!_yaTeniaModo2 && typeof _showToast === 'function') {
+      _showToast('🤝 Sababa: se asumió modo SN (sin Flete en factura). Cámbialo en la pestaña Sababa si este embarque es SV.', 'orange', 7000);
+    }
     var baseParaDif = incluyeFlete ? (totalMerc - totalTrasp + fleteVal) : (totalMerc - totalTrasp);
     var dif = Math.round((pagoRealizado - baseParaDif) * 100) / 100;
     setField('s1_dif_pago', dif);
