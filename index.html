@@ -2363,7 +2363,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       <!-- PAGO -->
       <div class="field"><label>Total Pago Realizado (USD) <span class="info-btn" onclick="document.getElementById('pago-info').classList.toggle('open')" style="font-style:normal">i</span></label>
         <div id="pago-info" class="info-box">Auto-calculado: FOB + Flete + Diferencia = Base → ÷ 1.07 = Valor Homologado. Puedes editarlo manualmente si el valor real difiere.</div>
-        <input type="number" id="s2_pago" value="" step="0.01" oninput="this.dataset.autoSet='false';calcSab2()" style="border-color:rgba(88,166,255,.5);background:rgba(88,166,255,.04)">
+        <input type="number" id="s2_pago" value="" step="0.01" oninput="this.dataset.autoSet='false';_recalcDifDesdePagoManual(this.value);calcSab2()" style="border-color:rgba(88,166,255,.5);background:rgba(88,166,255,.04)">
         <p class="note" id="s2_pago_formula_note"></p>
       </div>
       <div id="s2_alert" class="alert"></div>
@@ -6939,6 +6939,7 @@ function switchTab(id,el){
   if(el) el.classList.add('on');
   if(id==='config'){ renderConfig(); if(typeof renderDeptConfig==='function') renderDeptConfig(); _pcCargarCache(); }
   if(id==='cifexp'){ updateCifExpDisplays(); }
+  if(id==='sababa'){ _restaurarModoFacturaSab(); }
   if(id==='facturas'){ renderInvLines(); }
   // Open sidebar when entering main simulator tabs (if not already pinned)
   if(['sim','cifexp','sababa','aduanal'].indexOf(id) !== -1){
@@ -9852,20 +9853,63 @@ function s2AutoPago(){ s2RecalcPago(); }
 // Recalcula la Diferencia ya cargada usando el PAGO_REALIZADO original guardado.
 function _onToggleFleteFacturaSab(){
   const incluyeFlete = document.getElementById('s2_flete_en_factura_sab').checked;
+  _guardarModoFacturaSab(incluyeFlete); // persiste por N° de embarque
   const fob = v('s2_fob'), fl = v('s2_flete');
-  let pagoRealOriginal = window._pagoRealizadoOriginalSab;
+  const pagoRealOriginal = window._pagoRealizadoOriginalSab;
+  const mercBase = (window._mercSinTraspasoSab !== undefined) ? window._mercSinTraspasoSab : fob;
   if(pagoRealOriginal === undefined || pagoRealOriginal === null){
-    // Fallback: derivar el PAGO_REALIZADO original a partir de lo que ya está en pantalla,
-    // asumiendo que la Diferencia actual se calculó con flete incluido (comportamiento previo).
-    const difActual = v('s2_dif_fob');
-    pagoRealOriginal = fob + fl + difActual;
-    window._pagoRealizadoOriginalSab = pagoRealOriginal;
+    // No hay un PAGO_REALIZADO crudo guardado (no se importó plantilla en esta sesión):
+    // no se puede recalcular la diferencia con seguridad — se avisa en vez de adivinar.
+    if(typeof toast==='function') toast('⚠️ Reimporta la plantilla para recalcular la Diferencia con este cambio.','orange',4000);
+    s2RecalcPago(); calcSab2();
+    return;
   }
-  const base = incluyeFlete ? (fob + fl) : fob;
+  const base = incluyeFlete ? (mercBase + fl) : mercBase;
   const dif = Math.round((pagoRealOriginal - base) * 100) / 100;
   const difEl = document.getElementById('s2_dif_fob');
   if(difEl){ difEl.value = dif !== 0 ? dif.toFixed(2) : ''; difEl.dataset.autoSet='true'; }
   s2RecalcPago(); calcSab2();
+}
+
+// ── Persistencia del checkbox "Sababa incluye Flete" por N° de embarque ──
+// Guarda en localStorage para que sobreviva recargas de página y cambios de
+// embarque en el selector (la pestaña en sí ya sobrevive sin esto, pero una
+// recarga completa del navegador o seleccionar otro embarque sí lo perdía).
+function _guardarModoFacturaSab(incluyeFlete){
+  try{
+    const nro = document.getElementById('s1_nro_emb')?.value?.trim();
+    if(!nro) return;
+    const map = JSON.parse(localStorage.getItem('_sabFleteModoPorEmbarque')||'{}');
+    map[nro] = incluyeFlete;
+    localStorage.setItem('_sabFleteModoPorEmbarque', JSON.stringify(map));
+  }catch(e){}
+}
+function _restaurarModoFacturaSab(){
+  try{
+    const nro = document.getElementById('s1_nro_emb')?.value?.trim();
+    const chk = document.getElementById('s2_flete_en_factura_sab');
+    if(!nro || !chk) return;
+    const map = JSON.parse(localStorage.getItem('_sabFleteModoPorEmbarque')||'{}');
+    if(map.hasOwnProperty(nro)) chk.checked = !!map[nro];
+  }catch(e){}
+}
+
+// ── Recalcula la Diferencia cuando el usuario edita "Total Pago Realizado" a mano ──
+// Trata ese valor tecleado como el PAGO_REALIZADO real y limpio (reemplaza cualquier
+// valor previo contaminado), y recalcula la Diferencia respetando el checkbox actual.
+// Así se puede corregir un embarque ya importado sin tener que reimportar el Excel.
+function _recalcDifDesdePagoManual(valStr){
+  const pagoManual = parseFloat(valStr);
+  if(isNaN(pagoManual) || pagoManual<=0) return;
+  window._pagoRealizadoOriginalSab = pagoManual; // este valor tecleado pasa a ser la fuente limpia
+  const fob = v('s2_fob'), fl = v('s2_flete');
+  if(window._mercSinTraspasoSab === undefined) window._mercSinTraspasoSab = fob;
+  const incluyeFleteChk = document.getElementById('s2_flete_en_factura_sab');
+  const incluyeFlete = incluyeFleteChk ? incluyeFleteChk.checked : false;
+  const base = incluyeFlete ? (window._mercSinTraspasoSab + fl) : window._mercSinTraspasoSab;
+  const dif = Math.round((pagoManual - base) * 100) / 100;
+  const difEl = document.getElementById('s2_dif_fob');
+  if(difEl){ difEl.value = dif !== 0 ? dif.toFixed(2) : ''; }
 }
 
 function calcSab2(){
@@ -13541,6 +13585,7 @@ function reabrirEmbarquePendiente(idx){
   setTimeout(()=>{
     if(typeof syncSC3fromSC1 === 'function') syncSC3fromSC1();
     if(typeof calc === 'function') calc();
+    if(typeof _restaurarModoFacturaSab === 'function') _restaurarModoFacturaSab();
   }, 120);
 
   // ── 9. Marcar índice para que procesarEmbarque reemplace en vez de duplicar ──
@@ -24870,9 +24915,12 @@ function _motoresMapeado(rows) {
     if (s2FobEl) s2FobEl.value = totalMerc.toFixed(2);
   }
   if (pagoRealizado > 0) {
-    window._pagoRealizadoOriginalSab = pagoRealizado; // para recalcular si se cambia el checkbox luego
+    window._pagoRealizadoOriginalSab = pagoRealizado; // valor CRUDO de la plantilla, nunca se mezcla con flete
+    window._mercSinTraspasoSab = totalMerc - totalTrasp; // base de mercancía pura, para recalcular siempre desde aquí
+    if (typeof _restaurarModoFacturaSab === 'function') _restaurarModoFacturaSab(); // respeta el modo guardado de este embarque
     var incluyeFleteChk = document.getElementById('s2_flete_en_factura_sab');
     var incluyeFlete = incluyeFleteChk ? incluyeFleteChk.checked : false;
+    if (typeof _guardarModoFacturaSab === 'function') _guardarModoFacturaSab(incluyeFlete); // fija el modo desde el primer import si era un embarque nuevo
     var baseParaDif = incluyeFlete ? (totalMerc - totalTrasp + fleteVal) : (totalMerc - totalTrasp);
     var dif = Math.round((pagoRealizado - baseParaDif) * 100) / 100;
     setField('s1_dif_pago', dif);
