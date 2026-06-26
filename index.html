@@ -7238,9 +7238,15 @@ function setCompar(val,el){
     'Escenario #3 — Facturación fiscal homologada Sababa Imports.';
   // Switch providers: SI if sababa, parent if cifexp
   _syncProvSI(val==='sababa');
-  // Si se selecciona Sababa y aún no hay un modo SN/SV decidido para este embarque, preguntar ANTES de calcular
-  if(val==='sababa' && _prevCompar!=='sababa' && typeof _preguntarModoSababa==='function'){
-    _preguntarModoSababa().then(function(){ calc(); });
+  // Si se selecciona Sababa, ofrecer (re)configurar el modo SN/SV:
+  // - si se viene de otro escenario y no hay modo guardado, _preguntarModoSababa pregunta una vez
+  // - si ya se estaba en Sababa y se presiona el botón de nuevo, se reabre el modal para corregir
+  if(val==='sababa' && typeof _preguntarModoSababa==='function'){
+    if(_prevCompar!=='sababa'){
+      _preguntarModoSababa().then(function(){ calc(); });
+    } else if(typeof _reabrirModoSababa==='function'){
+      _reabrirModoSababa();
+    }
     return;
   }
   calc();
@@ -9634,6 +9640,7 @@ function _autoFillGastosProveedores(){
     return l;
   });
   invLines = [...mercLines, ...userGastos, ...G];
+  window.invLines = invLines;
   // Restaurar facturas guardadas
   invLines.forEach(function(l){
     const key = (l.prov||'')+'|'+(l.tipoFac||'')+'|'+(l.oc||'');
@@ -10163,16 +10170,11 @@ function calcSab2(){
   const comEl = document.getElementById('s2_comision_display');
   let comision;
   const comIsActive = comEl && document.activeElement === comEl;
+  // Si el usuario editó la Comisión manualmente, se respeta siempre (sin límite de
+  // centavos) — el Master Value, calculado más abajo, absorbe la diferencia para
+  // que el Costo Landed total de Sababa siga igualando al Escenario Regular.
   if(window.s2_comisionEditada && window._comManualValue !== undefined && !isNaN(window._comManualValue)){
-    const initDiff = Math.abs(window._comManualValue - comisionAuto);
-    if(comIsActive || initDiff <= 0.05){
-      comision = window._comManualValue;
-    } else {
-      // Diferencia grande Y campo inactivo: resetear
-      comision = comisionAuto;
-      window.s2_comisionEditada = false;
-      window._comManualValue = undefined;
-    }
+    comision = window._comManualValue;
   } else {
     comision = comisionAuto;
   }
@@ -10199,21 +10201,15 @@ function calcSab2(){
 
   // ── MASTER VALUE: usar window._mvManualValue si el usuario editó ──
   // Igual que comisión, el valor se guarda en global para sobrevivir re-renders.
+  // Se respeta siempre el valor manual (sin límite de centavos). Si el usuario
+  // edita Comisión y/o Master Value, el Costo Landed final puede dejar de
+  // coincidir exactamente con Esc.#1 — eso se señala más abajo con una alerta,
+  // en vez de resetear la edición del usuario en silencio.
   const mvInput = document.getElementById('s2_mv_display');
   const mvIsActive = mvInput && document.activeElement === mvInput;
   let mv_used;
   if(window._mvUserEdited && window._mvManualValue !== undefined && !isNaN(window._mvManualValue)){
-    // Si el campo está activo, siempre respetar lo que teclea el usuario
-    // Solo resetear si el campo NO está activo y la diferencia es grande
-    const initDiff = Math.abs(window._mvManualValue - mv_auto);
-    if(mvIsActive || initDiff <= 0.05){
-      mv_used = window._mvManualValue;
-    } else {
-      // Diferencia grande Y campo inactivo: resetear
-      mv_used = mv_auto;
-      window._mvUserEdited = false;
-      window._mvManualValue = undefined;
-    }
+    mv_used = window._mvManualValue;
   } else {
     mv_used = mv_auto;
   }
@@ -10263,11 +10259,13 @@ function calcSab2(){
           <div class="cif-row tot"><span class="lbl">= Base Ajustada (Total Pago Sababa)</span><span style="color:var(--orange-l)">${fmt(baseAjust)}</span></div>
         </div>
         ${esc1L>0
-          ?`<div class="itbms-note" style="margin-top:10px">
+          ?`<div class="itbms-note" style="margin-top:10px${Math.abs(landed-esc1L)>=0.02?';background:rgba(240,136,62,.08);border-color:rgba(240,136,62,.35)':''}">
               🎯 <strong>Landed#1 Esc.#1:</strong> ${fmt(esc1L)}
-              &nbsp;·&nbsp; <strong>MV calculado:</strong> ${fmt(mv_auto)}
-              &nbsp;·&nbsp; <span style="color:${Math.abs(landed-esc1L)<0.02?'var(--green-l)':'var(--orange-l)'}">
-                ${Math.abs(landed-esc1L)<0.02?'✓ Landed#1 Sababa = Esc.#1':'⚠ Diferencia: '+fmt(landed-esc1L)}
+              &nbsp;·&nbsp; <strong>MV ${window._mvUserEdited?'manual':'calculado'}:</strong> ${fmt(mv)}
+              &nbsp;·&nbsp; <span style="color:${Math.abs(landed-esc1L)<0.02?'var(--green-l)':'var(--orange-l)'};font-weight:${Math.abs(landed-esc1L)<0.02?'400':'700'}">
+                ${Math.abs(landed-esc1L)<0.02
+                  ? '✓ Landed#1 Sababa = Esc.#1'
+                  : '⚠ Costo Landed Sababa NO coincide con Esc.#1 — diferencia: '+fmt(landed-esc1L)+(window.s2_comisionEditada&&window._mvUserEdited?' (Comisión y Master Value editados a la vez — ajusta uno de los dos para que vuelvan a calzar)':'')}
               </span>
             </div>`
           :`<div class="itbms-note" style="margin-top:10px;border-color:rgba(210,153,34,.3);color:var(--orange-l)">
@@ -13972,6 +13970,7 @@ function _clearFormSilent(){
   if(res) res.innerHTML='<div class="ph"><div class="ph-icon">📊</div><div class="ph-txt">Presiona Calcular para ver el dashboard.</div></div>';
   // Clear invLines
   invLines=[];
+  window.invLines=[];
   renderInvLines();
   // Reset globals
   window._lastCIF=0; window._lastAhorroNeto=0; window._lastSnap=null; window._sc1_landed1=0;
@@ -23301,6 +23300,7 @@ async function cargarSesionNubeIdx(idx){
       });
     }
     invLines = restored;
+    window.invLines = invLines;
     renderInvLines();
   }
 
@@ -23966,6 +23966,7 @@ function _unicoAplicarPlantilla(){
   if(existingMerc.length===0){
     // Solo si invLines está vacío — no pisar lo que ya tienen
     invLines = [...(window._unicoInvLines.map(l=>({...l, _fromUnico:true})))];
+    window.invLines = invLines;
     renderInvLines();
     calcInvTotals();
   }
@@ -24514,6 +24515,7 @@ let _wizStep=0;
 function clearInvLines(){
   if(!confirm('¿Limpiar todas las facturas?')) return;
   invLines=[];
+  window.invLines=[];
   renderInvLines();
 }
 // Populate datalist once on first render
@@ -25696,6 +25698,7 @@ function _motoresMapeado(rows) {
 
   // ── 3. Actualizar invLines (solo mercancía + servicios del usuario) ──
   invLines = mercLines;
+  window.invLines = invLines; // mantener sincronizada la referencia global para Mapear Piezas y otros lectores
 
   // ── 4. Llenar campos del formulario ──
   function setField(id, val) {
@@ -27674,7 +27677,10 @@ function _actualizarSummaryImpuestos(){
     var total=arPagoAjustado+itbmsAr+tasa+itbmsTasa+uso;
     if(lbl) lbl.textContent='AR '+ar+'% · ITBMS '+itbms+'% · Total Aduana '+fmt2(total);
     var sv=function(id,v){var el=document.getElementById(id);if(el)el.value=v.toFixed(2);};
-    sv('_imp_ar_pago_vis',arPago);
+    // "Pago Arancelario (auto)" debe reflejar siempre el monto EFECTIVO a pagar —
+    // ya con la Diferencia aplicada — para que coincida con "Pago Ajustado" y con
+    // el resto de fórmulas (ITBMS, Total) que ya usan arPagoAjustado.
+    sv('_imp_ar_pago_vis',arPagoAjustado);
     sv('_imp_itbms_ar_vis',itbmsAr);
     sv('_imp_itbms_tasa_vis',itbmsTasa);
     // Ajustado display
