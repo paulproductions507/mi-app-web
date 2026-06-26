@@ -9616,13 +9616,18 @@ function _autoFillGastosProveedores(){
     }
   }
 
-  // ── Reconstruir invLines — preservar facturas ya guardadas ──
-  // Guardar mapa de facturas guardadas antes de reconstruir
+  // ── Reconstruir invLines — preservar facturas ya guardadas DE MANERA PERMANENTE ──
+  // Guardar mapa de facturas guardadas antes de reconstruir (clave + línea completa,
+  // no solo el número, para poder reinsertarla si esta ronda de cálculo no la regenera).
   const _savedFacts = {};
   invLines.forEach(function(l){
-    if(l._factSaved && l.numFact){
+    // Se preserva tanto lo formalmente guardado (_factSaved) como lo que el
+    // usuario ya escribió en el campo aunque no haya presionado 💾 todavía —
+    // en ambos casos es un dato que el usuario ya ingresó y no debe perderse
+    // solo porque se recalculó el dashboard.
+    if(l.numFact && String(l.numFact).trim()){
       const key = (l.prov||'')+'|'+(l.tipoFac||'')+'|'+(l.oc||'');
-      _savedFacts[key] = {numFact:l.numFact, nfac:l.nfac, _factSaved:true};
+      _savedFacts[key] = Object.assign({}, l);
     }
   });
   // ── REGLA S.I. CORREGIDA: basada en montoHomologado/ocHomologada, NO en tipo ZL/EXT ──
@@ -9640,16 +9645,27 @@ function _autoFillGastosProveedores(){
     return l;
   });
   invLines = [...mercLines, ...userGastos, ...G];
-  window.invLines = invLines;
-  // Restaurar facturas guardadas
+  // Restaurar facturas guardadas en las líneas que SÍ se regeneraron este ciclo
+  const _matchedKeys = {};
   invLines.forEach(function(l){
     const key = (l.prov||'')+'|'+(l.tipoFac||'')+'|'+(l.oc||'');
     if(_savedFacts[key]){
       l.numFact = _savedFacts[key].numFact;
       l.nfac    = _savedFacts[key].nfac;
       l._factSaved = true;
+      _matchedKeys[key] = true;
     }
   });
+  // Si una línea con factura guardada NO se regeneró este ciclo (ej. Comisión o
+  // Master Value momentáneamente en $0 mientras el usuario edita el formulario),
+  // se reinserta tal cual para no perder el número de factura ya confirmado por
+  // el usuario. Permanece hasta que el usuario la elimine manualmente (✏️ + ×).
+  Object.keys(_savedFacts).forEach(function(key){
+    if(!_matchedKeys[key]){
+      invLines.push(_savedFacts[key]);
+    }
+  });
+  window.invLines = invLines;
   renderInvLines();
 
   if(G.length > 0){
