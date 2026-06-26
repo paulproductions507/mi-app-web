@@ -2373,10 +2373,11 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
               <span id="sv_sn_track" style="position:absolute;inset:0;background:rgba(88,166,255,.5);border-radius:24px;transition:.2s"></span>
               <span id="sv_sn_knob" style="position:absolute;height:18px;width:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s"></span>
             </label>
-            <div>
+            <div style="flex:1">
               <div id="sv_sn_label" style="font-size:12px;font-weight:700;color:var(--text)">SN — Sababa Nuevo</div>
               <div style="font-size:10px;color:var(--muted)">SN: factura sin Flete (por defecto) · SV: factura vieja, incluye Flete en el Total Pago</div>
             </div>
+            <button type="button" onclick="if(typeof _reabrirModoSababa==='function')_reabrirModoSababa()" title="Volver a elegir el modo de facturación Sababa" style="flex-shrink:0;background:rgba(240,136,62,.12);border:1px solid rgba(240,136,62,.35);color:var(--orange-l);border-radius:7px;padding:5px 9px;font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap">⚙️ Cambiar modo</button>
           </div>
         </div>
       </div>
@@ -7251,20 +7252,10 @@ function setCompar(val,el){
 // Se muestra UNA vez por embarque, al elegir "Escenario Sababa" en el Comparativo,
 // antes de que cualquier plantilla o cálculo se procese — así todo el modal de
 // Sababa (checkbox, diferencia, comisión, master value) ya nace configurado.
-function _preguntarModoSababa(){
+// El usuario también puede reabrirlo en cualquier momento con el botón
+// "⚙️ Cambiar modo" (ver _reabrirModoSababa) para corregir una elección previa.
+function _mostrarModalModoSababa(){
   return new Promise(function(resolve){
-    const nro = document.getElementById('s1_nro_emb')?.value?.trim();
-    // Si ya hay un modo guardado para este embarque, respétalo sin preguntar de nuevo
-    if(nro){
-      try{
-        const map = JSON.parse(localStorage.getItem('_sabFleteModoPorEmbarque')||'{}');
-        if(map.hasOwnProperty(nro)){
-          document.querySelectorAll('#s2_flete_en_factura_sab').forEach(function(chk){ chk.checked = !!map[nro]; });
-          if(typeof _renderSvSn==='function') _renderSvSn();
-          resolve(); return;
-        }
-      }catch(e){}
-    }
     var ov=document.createElement('div');
     ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:999999;display:flex;align-items:center;justify-content:center;padding:20px';
     ov.innerHTML='<div style="background:var(--s1,#161b22);border:2px solid rgba(240,136,62,.3);border-radius:16px;padding:24px;max-width:380px;width:100%">'
@@ -7292,6 +7283,28 @@ function _preguntarModoSababa(){
     document.getElementById('_msab_sn').onclick=function(){ elegir(false); };
     document.getElementById('_msab_sv').onclick=function(){ elegir(true); };
   });
+}
+function _preguntarModoSababa(){
+  return new Promise(function(resolve){
+    const nro = document.getElementById('s1_nro_emb')?.value?.trim();
+    // Si ya hay un modo guardado para este embarque, respétalo sin preguntar de nuevo
+    if(nro){
+      try{
+        const map = JSON.parse(localStorage.getItem('_sabFleteModoPorEmbarque')||'{}');
+        if(map.hasOwnProperty(nro)){
+          document.querySelectorAll('#s2_flete_en_factura_sab').forEach(function(chk){ chk.checked = !!map[nro]; });
+          if(typeof _renderSvSn==='function') _renderSvSn();
+          resolve(); return;
+        }
+      }catch(e){}
+    }
+    _mostrarModalModoSababa().then(resolve);
+  });
+}
+// Reabre el modal a propósito (botón "⚙️ Cambiar modo"), sin importar si ya
+// existe un modo guardado para este embarque — permite corregir una elección previa.
+function _reabrirModoSababa(){
+  _mostrarModalModoSababa().then(function(){ if(typeof calc==='function') calc(); });
 }
 function _syncProvSI(useSI){
   if(!invLines||!invLines.length) return;
@@ -15940,8 +15953,8 @@ async function _plntAbrirBuscador(){
   var arr=await _plntLoad();
   var ov=document.createElement('div');
   ov.className='_plnt_buscador_overlay';
-  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:99999;display:flex;align-items:flex-end;justify-content:center;padding:0';
-  var html='<div style="background:var(--s1,#161b22);border-top:2px solid rgba(34,197,94,.3);border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:680px;max-height:80vh;overflow-y:auto;font-family:\'IBM Plex Sans\',sans-serif">'
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto';
+  var html='<div style="background:var(--s1,#161b22);border:2px solid rgba(34,197,94,.3);border-radius:16px;padding:20px;width:100%;max-width:680px;max-height:80vh;overflow-y:auto;font-family:\'IBM Plex Sans\',sans-serif">'
     +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">'
       +'<div style="font-size:15px;font-weight:800;color:#22c55e">🔍 Buscar Plantilla</div>'
       +'<button onclick="this.closest(\'._plnt_buscador_overlay\').remove()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer">✕</button>'
@@ -27669,9 +27682,6 @@ function _actualizarSummaryImpuestos(){
     if(adjEl) adjEl.value=arPagoAjustado.toFixed(2);
     var pctAdjEl=document.getElementById('_imp_ar_pct_ajustado');
     if(pctAdjEl) pctAdjEl.textContent=ajuste!==0?(arPctAjustado.toFixed(6)+'%'):'—';
-    // Sincronizar campo s1_ar para trazabilidad del % efectivo pagado
-    var arEl=document.getElementById('s1_ar');
-    if(arEl && ajuste!==0 && cif>0) arEl.value=arPctAjustado.toFixed(4);
     var totEl=document.getElementById('_imp_total_vis'); if(totEl) totEl.textContent=fmt2(total);
     // Update CIF ref display
     var cifEl=document.getElementById('_imp_cif_ref');
