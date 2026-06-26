@@ -15535,7 +15535,7 @@ function _fdMostrarDialogoUso(input, lineIdx, f){
   // Estado local de rubros a asignar
   window._fdRubrosAsignar = [{rubro: tipoInicial, monto: montoInicial, lineIdx: lineIdx}];
 
-  var _RUBRO_LABELS = {liquidacion:'🏛️ Liquidación / Pago Arancelario',itbms:'🧾 ITBMS',tasa:'💵 Tasa / Uso del Sistema',honorarios:'💼 Honorarios / Comisión',acarreo:'🚛 Acarreo / Transporte',flete:'🚢 Flete Internacional',uso_sistema:'💻 Uso del Sistema',seguro:'🛡️ Seguro de Carga',almacenaje:'🏪 Almacenaje',inspeccion:'🔍 Inspección',dmce:'📝 DMCE',otros:'📋 Otros Gastos'};
+  var _RUBRO_LABELS = {liquidacion:'🏛️ Liquidación / Pago Arancelario',itbms:'🧾 ITBMS',tasa:'💵 Tasa / Uso del Sistema',honorarios:'💼 Honorarios / Comisión',acarreo:'🚛 Acarreo / Transporte',gastos_destino:'📦 Gasto Origen/Destino',flete:'🚢 Flete Internacional',uso_sistema:'💻 Uso del Sistema',seguro:'🛡️ Seguro de Carga',almacenaje:'🏪 Almacenaje',inspeccion:'🔍 Inspección',dmce:'📝 DMCE',otros:'📋 Otros Gastos'};
   var rubrosOpts = Object.entries(_RUBRO_LABELS).map(function(e){ return '<option value="'+e[0]+'">'+e[1]+'</option>'; }).join('');
 
   function _renderRubroRows(){
@@ -15847,6 +15847,7 @@ function _plntFiltrar(q){
 // ── Subir plantilla nueva ──
 function _plntSubirNueva(){
   var ov=document.createElement('div');
+  ov.className='_plnt_subir_overlay';
   ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
   ov.innerHTML='<div style="background:var(--s1,#161b22);border:2px solid rgba(34,197,94,.3);border-radius:16px;padding:24px;max-width:400px;width:100%;font-family:\'IBM Plex Sans\',sans-serif">'
     +'<div style="font-size:20px;margin-bottom:8px">📁</div>'
@@ -15860,7 +15861,7 @@ function _plntSubirNueva(){
     +'<input id="_plnt_file_inp" type="file" accept=".xlsx,.xls,.csv" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:8px;color:var(--text);font-size:12px;box-sizing:border-box;margin-bottom:16px">'
     +'<div style="display:flex;gap:8px">'
       +'<button id="_plnt_sub_ok" style="flex:1;background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.4);color:#22c55e;border-radius:10px;padding:11px;font-size:13px;font-weight:700;cursor:pointer">⬆️ Guardar</button>'
-      +'<button onclick="this.closest(\'div[style*=position:fixed]\').remove()" style="flex:1;background:none;border:1px solid var(--border);color:var(--muted);border-radius:10px;padding:11px;font-size:12px;cursor:pointer">Cancelar</button>'
+      +'<button onclick="this.closest(\'._plnt_subir_overlay\').remove()" style="flex:1;background:none;border:1px solid var(--border);color:var(--muted);border-radius:10px;padding:11px;font-size:12px;cursor:pointer">Cancelar</button>'
     +'</div>'
   +'</div>';
   document.body.appendChild(ov);
@@ -15938,11 +15939,12 @@ async function _plntEliminar(id){
 async function _plntAbrirBuscador(){
   var arr=await _plntLoad();
   var ov=document.createElement('div');
+  ov.className='_plnt_buscador_overlay';
   ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:99999;display:flex;align-items:flex-end;justify-content:center;padding:0';
   var html='<div style="background:var(--s1,#161b22);border-top:2px solid rgba(34,197,94,.3);border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:680px;max-height:80vh;overflow-y:auto;font-family:\'IBM Plex Sans\',sans-serif">'
     +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">'
       +'<div style="font-size:15px;font-weight:800;color:#22c55e">🔍 Buscar Plantilla</div>'
-      +'<button onclick="this.closest(\'div[style*=position:fixed]\').remove()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer">✕</button>'
+      +'<button onclick="this.closest(\'._plnt_buscador_overlay\').remove()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer">✕</button>'
     +'</div>'
     +'<input id="_plnt_buscar_modal" type="text" placeholder="Nombre de la plantilla..." autofocus oninput="_plntFiltrarModal(this.value)" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:10px 14px;color:var(--text);font-size:13px;box-sizing:border-box;margin-bottom:14px">'
     +'<div id="_plnt_modal_lista" style="display:flex;flex-direction:column;gap:8px">';
@@ -15954,7 +15956,7 @@ async function _plntAbrirBuscador(){
       html+='<div class="_plnt_modal_row" data-nombre="'+(p.nombre||'').toLowerCase()+'" '
         +'style="background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:border-color .15s" '
         +'onmouseover="this.style.borderColor=\'rgba(34,197,94,.5)\'" onmouseout="this.style.borderColor=\'var(--border)\'"'
-        +'onclick="_plntAplicar(\''+p.id+'\',this.closest(\'div[style*=position:fixed]\'))">'
+        +'onclick="_plntAplicar(\''+p.id+'\',this.closest(\'._plnt_buscador_overlay\'))">'
         +'<div style="font-size:22px;flex-shrink:0">📄</div>'
         +'<div style="flex:1;min-width:0">'
           +'<div style="font-size:13px;font-weight:700;color:var(--text)">'+esc2(p.nombre)+'</div>'
