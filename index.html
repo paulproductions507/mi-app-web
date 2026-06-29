@@ -8110,7 +8110,7 @@ function showSplashNav(){
     || (d.esc||'').toLowerCase().includes('único') || (d.esc||'').toLowerCase().includes('unico')
     || (d.snap && d.snap.sc1 && !d.snap.sc2 && !d.snap.sc3));
   const _nonUnico=tendData.filter(d=>!_isUnicoD(d));
-  const totalAhorro=_nonUnico.reduce((s,d)=>s+(d.ahorro||0),0);
+  const totalAhorro=_calcAhorroTotalGlobal();
   // Mes actual — compras de mercancía
   const _now=new Date(); const _curY=_now.getFullYear(); const _curM=_now.getMonth();
   const _mesRaw=tendData.filter(d=>{ if(!d.fecha&&!d.date) return false; const fd=new Date(d.fecha||d.date); return fd.getFullYear()===_curY&&fd.getMonth()===_curM; });
@@ -8269,6 +8269,14 @@ function iniciarApp(tab){
       document.querySelectorAll('.tab-pane').forEach(function(p){ p.classList.remove('on'); });
       var simPane = document.getElementById('tab-sim'); if(simPane) simPane.classList.add('on');
       document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('on'); if(t.textContent.trim().includes('Simulador')) t.classList.add('on'); });
+      // ── Mostrar selector de embarques en proceso, solo la primera vez en esta sesión ──
+      // Lista los embarques pendiente/parcial/reabierto para que el usuario elija
+      // continuar uno existente o empezar uno nuevo, en vez de tener que ir a buscarlo
+      // manualmente en Tendencias.
+      if(!window._embPickerMostrado && typeof _mostrarSelectorEmbarquesEnProceso==='function'){
+        window._embPickerMostrado = true;
+        setTimeout(_mostrarSelectorEmbarquesEnProceso, 300);
+      }
       return;
     }
 
@@ -12112,11 +12120,39 @@ function _corregirAhorroNegativoSababa(d){
   return true;
 }
 
+// ── Ahorro Total — fuente única de verdad para todos los chips "Ahorro Total" ──
+// Antes existían 3 cálculos distintos en distintos puntos del código (splash al
+// cargar, al borrar un embarque, al sincronizar con la nube), algunos sin excluir
+// Único y sin deduplicar por N° de embarque — eso producía cifras distintas para
+// la misma etiqueta "Ahorro Total" según cuál de los tres se hubiera ejecutado
+// más recientemente. Esta función es ahora la única fuente para ese número.
+function _calcAhorroTotalGlobal(){
+  const _isUnicoD = d => !!(d.modoUnico || d.tipoEsc==='unico'
+    || (d.esc||'').toLowerCase().includes('único') || (d.esc||'').toLowerCase().includes('unico')
+    || (d.snap && d.snap.sc1 && !d.snap.sc2 && !d.snap.sc3));
+  // Deduplicar por N° de embarque (igual criterio que _getFilteredTendData) —
+  // si un embarque quedó registrado más de una vez, solo cuenta el más reciente.
+  const _dedupMap = new Map();
+  (tendData||[]).forEach(d=>{
+    const nro = (d.nro||'').trim().toUpperCase();
+    if(nro && !nro.startsWith('_')){
+      const ex = _dedupMap.get(nro);
+      if(!ex || (d.ts||0) > (ex.ts||0)) _dedupMap.set(nro, d);
+    } else {
+      _dedupMap.set('_ts_'+(d.ts||d.id||Math.random()), d);
+    }
+  });
+  return Array.from(_dedupMap.values())
+    .filter(d=>!_isUnicoD(d))
+    .reduce((s,d)=>s+(d.ahorro||0),0);
+}
+
 function loadTendData(){
   // Primero intentar localStorage (fallback robusto cuando Supabase no conecta)
   try {
     var local = localStorage.getItem('_tendData_v2');
     if(local){ tendData = JSON.parse(local) || [];
+      window.tendData = tendData; // mantener sincronizada la referencia global desde el arranque
       tendData.forEach(d => { if(!d._gastosMigrados) _migrarGastosDesdeSnap(d); });
       tendData.forEach(d => { _corregirItbmsCifExpress(d); });
       tendData.forEach(d => { _corregirLandedUnico(d); });
@@ -12129,6 +12165,7 @@ function loadTendData(){
       return; }
   } catch(e){}
   tendData = [];
+  window.tendData = tendData;
   // El pull de Supabase en window.onload lo llenará si conecta.
 }
 
@@ -12548,6 +12585,7 @@ async function _pullTendFromCloud(){
     });
     cloudTend = Array.from(dedupMap.values());
     tendData = cloudTend;
+    window.tendData = tendData; // mantener sincronizada la referencia global tras el pull
 
     // 4. Correcciones y migraciones en memoria
     _corregirEmbarque('22035', 'Sababa');
@@ -13840,6 +13878,51 @@ document.addEventListener('DOMContentLoaded', function(){
   });
 });
 
+// ── Selector de embarques en proceso al entrar al Simulador ──
+// Lista los embarques pendiente/parcial/reabierto (los que el usuario dejó a medio
+// costear) para elegir continuar uno o empezar uno nuevo, sin tener que ir a buscarlo
+// manualmente en Tendencias. Se muestra una sola vez por carga de página.
+function _mostrarSelectorEmbarquesEnProceso(){
+  var enProceso = (tendData||[])
+    .map(function(d,idx){ return {d:d, idx:idx}; })
+    .filter(function(o){ return o.d && (o.d.status==='pendiente' || o.d.status==='parcial' || o.d.status==='reabierto'); });
+  if(!enProceso.length) return; // nada en proceso — no interrumpir, ir directo al simulador
+
+  var fmt=function(n){ return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
+  var statusBadge=function(st){
+    if(st==='pendiente') return '<span style="background:rgba(210,153,34,.15);border:1px solid rgba(210,153,34,.4);color:var(--orange-l);border-radius:4px;padding:1px 6px;font-size:9px;font-weight:700">🟡 PENDIENTE</span>';
+    if(st==='parcial')   return '<span style="background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.4);color:var(--blue-l);border-radius:4px;padding:1px 6px;font-size:9px;font-weight:700">🚢 PARCIAL</span>';
+    return '<span style="background:rgba(139,148,158,.15);border:1px solid rgba(139,148,158,.4);color:var(--muted);border-radius:4px;padding:1px 6px;font-size:9px;font-weight:700">↻ REABIERTO</span>';
+  };
+
+  var ov=document.createElement('div');
+  ov.id='_embPickerOverlay';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:99998;display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto';
+  var html='<div style="background:var(--s1,#161b22);border:2px solid rgba(210,153,34,.3);border-radius:16px;padding:20px;width:100%;max-width:600px;max-height:80vh;overflow-y:auto;font-family:\'IBM Plex Sans\',sans-serif">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'
+      +'<div style="font-size:15px;font-weight:800;color:var(--orange-l)">🟡 Embarques en proceso</div>'
+      +'<button onclick="document.getElementById(\'_embPickerOverlay\').remove()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer">✕</button>'
+    +'</div>'
+    +'<div style="font-size:11px;color:var(--muted);margin-bottom:14px">Tienes '+enProceso.length+' embarque'+(enProceso.length!==1?'s':'')+' sin terminar de costear. Elige uno para continuar, o cierra esta ventana para empezar uno nuevo.</div>'
+    +'<div style="display:flex;flex-direction:column;gap:8px">'
+    +enProceso.map(function(o){
+      var d=o.d;
+      return '<div style="background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:12px">'
+        +'<div style="font-size:22px;flex-shrink:0">📦</div>'
+        +'<div style="flex:1;min-width:0">'
+          +'<div style="font-size:13px;font-weight:700;color:var(--text)">Embarque '+esc2(d.nro||'—')+' &nbsp;'+statusBadge(d.status)+'</div>'
+          +'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+esc2(d.desc||'')+' · '+esc2(d.fecha||'')+' · '+fmt(d.cif)+'</div>'
+        +'</div>'
+        +'<button onclick="document.getElementById(\'_embPickerOverlay\').remove();reabrirEmbarquePendiente('+o.idx+')" style="flex-shrink:0;background:var(--orange-l);border:none;color:#1a1500;border-radius:8px;padding:8px 14px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">Continuar →</button>'
+      +'</div>';
+    }).join('')
+    +'</div>'
+    +'<button onclick="document.getElementById(\'_embPickerOverlay\').remove()" style="margin-top:14px;width:100%;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.35);color:var(--green-l);border-radius:10px;padding:10px;font-size:12px;font-weight:700;cursor:pointer">➕ Empezar un embarque nuevo</button>'
+    +'</div>';
+  ov.innerHTML=html;
+  document.body.appendChild(ov);
+}
+
 function reabrirEmbarquePendiente(idx){
   const d = tendData[idx];
   if(!d) return;
@@ -14548,7 +14631,7 @@ function deleteTend(idx){
   renderTopProvs();
   updateCmpNroList();
   // Update splash KPIs instantly
-  const totalAhorro=tendData.reduce((s,d)=>s+(d.ahorro||0),0);
+  const totalAhorro=_calcAhorroTotalGlobal();
   const totalCIF=tendData.reduce((s,d)=>s+(d.cif||0),0);
   const totalFact=tendData.reduce((s,d)=>s+(d.snap?.invLines||d.invLines||[]).filter(l=>(l.tipoFac||"mercancia")==="mercancia").length,0);
   const skA=document.getElementById('sk-ahorro'); if(skA) skA.textContent=totalAhorro>0?('$'+Number(totalAhorro).toLocaleString('en-US',{minimumFractionDigits:2})):'—';
@@ -16020,7 +16103,7 @@ async function _plntAbrirBuscador(){
   var arr=await _plntLoad();
   // ── Determinar qué "usos" siguen vivos: el embarque de ese uso debe existir en tendData ──
   // Si el embarque fue eliminado, ese uso ya no cuenta — la plantilla vuelve a estar disponible.
-  var nrosVivos = new Set((window.tendData||[]).filter(function(d){return d.nro;}).map(function(d){return String(d.nro).trim().toUpperCase();}));
+  var nrosVivos = new Set((typeof tendData!=='undefined' ? tendData : (window.tendData||[])).filter(function(d){return d.nro;}).map(function(d){return String(d.nro).trim().toUpperCase();}));
   function usosVivos(p){
     return (p.usos||[]).filter(function(u){
       var n=(u.embarque||'').trim().toUpperCase();
@@ -19635,9 +19718,14 @@ function _renderDeptChart(all){
       var pzBadge  = p.piezas>0 ? '<span style="color:#8b949e;font-size:9px">🔢 '+Number(p.piezas).toLocaleString()+' pzas</span>' : '';
       var single = p.items.length===1 ? p.items[0] : null;
       var ocBadge = single && single.oc ? '<span style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:#58a6ff;border-radius:3px;padding:0 4px;font-size:9px;font-weight:600">OC: '+single.oc+'</span>' : '';
+      // Contar EMBARQUES únicos (no facturas): varias facturas de un mismo proveedor
+      // pueden venir dentro de un mismo N° de embarque, y eso debe contar como 1
+      // embarque, no como N facturas. Se muestra además cuántas facturas lo componen.
+      var nroSetDept = new Set(p.items.map(function(it){ return (it.nro||'').toString().trim(); }).filter(Boolean));
+      var nEmbDept = nroSetDept.size || p.items.length;
       var embInfo = single
         ? (single.nro ? '<span style="color:#8b949e;font-size:9px">Emb. '+single.nro+'</span>' : '')
-        : '<span style="background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:#3fb950;border-radius:3px;padding:0 5px;font-size:9px;font-weight:700">'+p.items.length+' embarques · toca para ver</span>';
+        : '<span style="background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:#3fb950;border-radius:3px;padding:0 5px;font-size:9px;font-weight:700">'+nEmbDept+' embarque'+(nEmbDept!==1?'s':'')+' · '+p.items.length+' factura'+(p.items.length!==1?'s':'')+' · toca para ver</span>';
       var clickFn = single
         ? (single.nro ? 'window._abrirPorNro(\''+single.nro+'\')' : (single.dIdx>=0 ? 'abrirFacturasEmbarque('+single.dIdx+')' : ''))
         : '_deptAbrirEmbarquesProveedor(\''+dkey.replace(/'/g,"\\'")+'\',\''+p.prov.replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;')+'\')';
@@ -19815,7 +19903,11 @@ window._deptAbrirEmbarquesProveedor = function(dkey, provName){
     +'<div style="font-size:14px;font-weight:700;color:var(--text);line-height:1.4">🏭 '+provName.replace(/</g,'&lt;')+'</div>'
     +'<button onclick="document.getElementById(\'_deptProvEmbModal\').remove()" style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;flex-shrink:0;line-height:1">×</button>'
     +'</div>'
-    +'<div style="font-size:11px;color:var(--muted);margin-bottom:12px">'+items.length+' embarque'+(items.length!==1?'s':'')+' · Total '+fmt2(total)+' — toca uno para ver su detalle</div>'
+    +'<div style="font-size:11px;color:var(--muted);margin-bottom:12px">'+(function(){
+        var nroSet=new Set(items.map(function(p){return (p.nro||'').toString().trim();}).filter(Boolean));
+        var nE=nroSet.size||items.length;
+        return nE+' embarque'+(nE!==1?'s':'')+' · '+items.length+' factura'+(items.length!==1?'s':'');
+      })()+' · Total '+fmt2(total)+' — toca uno para ver su detalle</div>'
     + items.map(function(p){
         return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 4px;border-bottom:1px solid rgba(48,54,61,.3);cursor:pointer" onclick="document.getElementById(\'_deptProvEmbModal\').remove();'+(p.nro?('window._abrirPorNro(\''+p.nro+'\')'):(p.dIdx>=0?('abrirFacturasEmbarque('+p.dIdx+')'):''))+'">'
           +'<div><div style="font-size:12px;font-weight:700;color:var(--orange-l)">'+(p.nro||'—')+'</div>'
@@ -21766,6 +21858,15 @@ function renderResumenRapido(){
 
 function _top10Toggle(btn){ var wrap=btn; while(wrap&&wrap.getAttribute("id")!=="top-provs-wrap")wrap=wrap.parentElement; var list=wrap?wrap.querySelector("#_top10-list"):null; if(!list)return; var o=list.style.display==="none"; list.style.display=o?"block":"none"; btn.textContent=o?"▲ ocultar":"▼ ver lista"; }
 
+// Alterna entre el valor abreviado ($268.0k) y el valor exacto en dólares
+// ($268,012.45) al tocar/hacer click sobre un monto del Top 10 Proveedores.
+function _toggleMontoExacto(el, val){
+  if(!el) return;
+  const mostrandoExacto = el.dataset.mostrandoExacto === '1';
+  el.textContent = mostrandoExacto ? el.dataset.abrev : el.dataset.exacto;
+  el.dataset.mostrandoExacto = mostrandoExacto ? '0' : '1';
+}
+
 function renderTopProvs(mode, deptFilter){
   mode = mode || window._top10Mode || 'global';
   window._top10Mode = mode;
@@ -21927,7 +22028,7 @@ function renderTopProvs(mode, deptFilter){
           '<button id="_top10-toggle" onclick="_top10Toggle(this)" style="background:none;border:none;color:var(--muted);font-size:10px;cursor:pointer;padding:0">▲ ocultar</button>' +
         '</div>' +
       '</div>' +
-      '<div style="font-family:\'IBM Plex Mono\',monospace;font-size:26px;font-weight:900;color:var(--text)">'+fK(totalAll)+'</div>' +
+      '<div onclick="_toggleMontoExacto(this,'+totalAll+')" title="Toca para ver el valor exacto" style="cursor:pointer;font-family:\'IBM Plex Mono\',monospace;font-size:26px;font-weight:900;color:var(--text)" data-abrev="'+esc2(fK(totalAll))+'" data-exacto="'+esc2(f(totalAll))+'" data-mostrando-exacto="0">'+fK(totalAll)+'</div>' +
       '<div style="font-size:10px;color:var(--muted);margin-top:2px">valor total · top '+sorted.length+' proveedores</div>' +
     '</div>' +
     '<div id="_top10-list">' +
@@ -21945,7 +22046,7 @@ function renderTopProvs(mode, deptFilter){
           '</div>'+
           '<div style="display:flex;align-items:center;gap:10px;flex-shrink:0;margin-left:10px">'+
           '<span style="font-size:11px;color:var(--muted);font-weight:600">'+pctTotal+'%</span>'+
-          '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:13px;font-weight:700;color:var(--text)">'+fK(p.total)+'</span>'+
+          '<span onclick="_toggleMontoExacto(this,'+p.total+')" title="Toca para ver el valor exacto" style="cursor:pointer;font-family:\'IBM Plex Mono\',monospace;font-size:13px;font-weight:700;color:var(--text)" data-abrev="'+esc2(fK(p.total))+'" data-exacto="'+esc2(f(p.total))+'" data-mostrando-exacto="0">'+fK(p.total)+'</span>'+
           '</div></div>';
       }).join('')
     ) +
@@ -26233,7 +26334,7 @@ window.onload=function(){
     const embNrosUnicos = new Set(tendData.map(d=>(d.nro||'').trim().toUpperCase()).filter(Boolean));
     const totalEmbUnicos = embNrosUnicos.size || tendData.length;
     const skE=document.getElementById('sk-embarques'); if(skE) skE.textContent=totalEmbUnicos||'0';
-    const totalAhorro=tendData.reduce((s,d)=>s+(d.ahorro||0),0);
+    const totalAhorro=_calcAhorroTotalGlobal();
     const totalCIF=tendData.reduce((s,d)=>s+(d.cif||0),0);
     const skA=document.getElementById('sk-ahorro');  if(skA) skA.textContent=fmtK(totalAhorro);
     const skC=document.getElementById('sk-cif');     if(skC) skC.textContent=fmtK(totalCIF);
