@@ -1019,7 +1019,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
         <div style="font-size:12px;font-weight:700;color:#fbbf24">Proveedores</div>
         <div style="font-size:10px;color:var(--muted)">Facturas del embarque</div>
       </button>
-      <button onclick="window.open('cuadro-importacion-estadistico-2025.html','_blank')"
+      <button onclick="window.open('cuadro-importacion-estadistico-2025-2.html','_blank')"
         style="background:linear-gradient(135deg,rgba(248,209,34,.12),rgba(248,209,34,.05));border:1px solid rgba(248,209,34,.3);border-radius:14px;padding:12px;text-align:left;cursor:pointer;transition:transform .15s,box-shadow .15s;display:flex;flex-direction:column;gap:3px"
         onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(248,209,34,.2)'"
         onmouseout="this.style.transform='';this.style.boxShadow=''">
@@ -1147,7 +1147,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       <div class="nav-icon" style="background:rgba(210,153,34,.1)">📈</div>
       <div><div class="nav-label">Tendencias</div><div class="nav-sub">Historial y top proveedores</div></div>
     </div>
-    <div class="sidebar-nav-item" onclick="closeSidebar();window.open('cuadro-importacion-estadistico-2025.html','_blank')" style="border:1px solid rgba(248,209,34,.3)">
+    <div class="sidebar-nav-item" onclick="closeSidebar();window.open('cuadro-importacion-estadistico-2025-2.html','_blank')" style="border:1px solid rgba(248,209,34,.3)">
       <div class="nav-icon" style="background:rgba(248,209,34,.1)">🗃️</div>
       <div><div class="nav-label" style="color:#f8d122">Cuadro Importación Estadístico</div><div class="nav-sub">Equipos, puertos, departamentos 2025</div></div>
     </div>
@@ -2412,13 +2412,27 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       <div id="s2_alert" class="alert"></div>
 
       <div class="sep-lbl">Comisión + Proveedores</div>
+      <div class="field" style="margin-top:-4px;margin-bottom:10px">
+        <label>Base para la Comisión
+          <span class="info-btn" onclick="document.getElementById('sab-com-base-info').classList.toggle('open')" title="Info criterio">i</span>
+        </label>
+        <div id="sab-com-base-info" class="info-box">
+          Algunos embarques de Sababa cobran su 10% sobre el <strong>Total Pago real</strong> (incluye la Diferencia de factura),
+          mientras que en otros el acuerdo es sobre el <strong>Valor Mercancía puro</strong> (sin la Diferencia).
+          Esa diferencia de criterio es la que suele generar descuadres de pocos centavos. Elige el que aplique a este embarque.
+        </div>
+        <select id="s2_com_criterio" onchange="calcSab2()" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:12px">
+          <option value="pago" selected>Total Pago + Flete × % (incluye Diferencia)</option>
+          <option value="mercancia">Valor Mercancía + Flete × % (sin Diferencia)</option>
+        </select>
+      </div>
       <div class="r2">
         <div class="field">
           <label>Comisión Sababa %
             <span class="info-btn" onclick="document.getElementById('sab-com-info').classList.toggle('open')" title="Info comisión">i</span>
           </label>
           <div id="sab-com-info" class="info-box">
-            <strong>Comisión Sababa:</strong> Se calcula como Total Pago × Factor%.<br>
+            <strong>Comisión Sababa:</strong> Se calcula como Base (según criterio elegido arriba) × Factor%.<br>
             El factor sugerido es 10%. Incluye ITBMS internamente.<br>
             <strong>Base FOB+Flete:</strong> Comisión sobre (FOB + Flete + Diferencia).<br>
             <strong>Base CIF:</strong> Comisión sobre (CIF − Traspaso + Diferencia).
@@ -8579,7 +8593,12 @@ function calc(){
       const _sc3Exento  = window._sab2Exento || v('s2_exento') || 0;
       const _sc3Gravado = Math.max(0, sc3_mercHomol - _sc3Exento);
       sc3_itbmsHomol   = Math.round(_sc3Gravado * itbPct * 100) / 100;
-      const comisionAuto = sc3_baseAjustada * sc3_comPct;  // CORRECTO: baseAjust × % (no pagFinal)
+      // Criterio de base para la Comisión, elegido por el usuario en el formulario
+      // Sababa: 'pago' = Total Pago real (incluye Diferencia) · 'mercancia' = Valor
+      // Mercancía puro (montoBase, sin Diferencia). Mismo criterio que calcSab2().
+      const _sc3ComCriterio = (document.getElementById('sc_com_criterio')||{}).value || 'pago';
+      const _sc3BaseCom = _sc3ComCriterio==='mercancia' ? montoBase : sc3_baseAjustada;
+      const comisionAuto = _sc3BaseCom * sc3_comPct;
       const comisionEl = document.getElementById('sc_comision_display');
       if(compar==='sababa'){
         if(!window.sc_comisionEditada && comisionEl) comisionEl.value = comisionAuto.toFixed(2);
@@ -9809,6 +9828,7 @@ function syncSC3fromSC1(){
   syncPair('s2_fob','sc_fob'); syncPair('s2_flete','sc_flete');
   syncPair('s2_trasp','sc_trasp'); syncPair('s2_pago','sc_pago');
   syncPair('s2_com','sc_com'); syncPair('s2_flete_sab','sc_flete_sab');
+  syncPair('s2_com_criterio','sc_com_criterio');
   syncPair('s2_agente','sc_origen_sab');
 
   // 2. Map values to SC3
@@ -10176,12 +10196,18 @@ function calcSab2(){
   }
   const fleteStd = v('s2_flete_sab') || fleteMain;
 
-  // ── COMISIÓN: 10% × (Total Factura Sababa + Flete) — acuerdo comercial: ──
+  // ── COMISIÓN: 10% × Base × criterio elegido por el usuario ──
+  // Algunos embarques de Sababa cobran el 10% sobre el Total Pago real (incluye la
+  // Diferencia de factura), otros sobre el Valor Mercancía puro (sin Diferencia).
+  // Ese desajuste de criterio es la causa típica de descuadres de pocos centavos —
+  // por eso el usuario elige explícitamente cuál aplica a este embarque.
+  const comCriterio = (document.getElementById('s2_com_criterio')||{}).value || 'pago';
+  const baseComisionSinFlete = comCriterio==='mercancia' ? baseLimpia : baseAjust;
   // la comisión de Sababa SIEMPRE incluye el Flete, sin importar si su factura
   // fiscal lo excluye o no (eso solo afecta la homologación/inventario).
   // Si el Flete ya estaba dentro de baseAjust (checkbox marcado), no se vuelve a sumar.
   const fleteParaComision = (isFOB && !fleteEnFactura) ? v('s2_flete') : 0;
-  const baseComision = baseAjust + fleteParaComision;
+  const baseComision = baseComisionSinFlete + fleteParaComision;
   const comisionAuto = Math.round(baseComision * comPct * 100) / 100;
   const comEl = document.getElementById('s2_comision_display');
   let comision;
@@ -11804,6 +11830,7 @@ ${'<'}/script>
   <input type="number" id="sc_fob" value="0">
   <input type="number" id="sc_flete" value="0">
   <input type="number" id="sc_com" value="10">
+  <input type="text" id="sc_com_criterio" value="pago">
   <input type="number" id="sc_pago" value="0">
   <input type="number" id="sc_flete_sab" value="0">
   <input type="text" id="sc_origen_sab" value="">
@@ -13576,6 +13603,30 @@ async function procesarEmbarque(){
   renderTend();
   renderTopProvs();
   updateCmpNroList();
+  // ── Registrar el uso real de plantillas: recién ahora que el embarque quedó
+  // efectivamente procesado y guardado, las plantillas aplicadas en esta sesión
+  // pasan de "disponibles" a "historial" (ligadas a este número de embarque).
+  if(nro && window._plntAplicadasEnSesion && window._plntAplicadasEnSesion.length && typeof _plntLoad==='function'){
+    (async function(){
+      try{
+        var arrP = await _plntLoad();
+        var cambiado = false;
+        window._plntAplicadasEnSesion.forEach(function(pid){
+          var p = arrP.find(function(x){ return x.id===pid; });
+          if(!p) return;
+          p.usos = p.usos||[];
+          // Evitar duplicar el mismo embarque si se reprocesa el mismo embarque varias veces
+          var yaRegistrado = p.usos.some(function(u){ return (u.embarque||'').trim().toUpperCase()===nro.toUpperCase(); });
+          if(!yaRegistrado){
+            p.usos.push({embarque:nro, fecha:new Date().toISOString()});
+            cambiado = true;
+          }
+        });
+        if(cambiado) await _plntSave(arrP);
+      }catch(e){ console.warn('Error registrando uso de plantilla:', e); }
+    })();
+  }
+  window._plntAplicadasEnSesion = [];
 
   // Save to cloud — wait for it, then reload
   const _nroGuardar = nro || ('EMB-'+Date.now());
@@ -13987,6 +14038,7 @@ function _clearFormSilent(){
   // Clear invLines
   invLines=[];
   window.invLines=[];
+  window._plntAplicadasEnSesion=[];
   renderInvLines();
   // Reset globals
   window._lastCIF=0; window._lastAhorroNeto=0; window._lastSnap=null; window._sc1_landed1=0;
@@ -15966,6 +16018,18 @@ async function _plntEliminar(id){
 // ── Buscador de plantillas (desde el botón 🔍 en Proveedores) ──
 async function _plntAbrirBuscador(){
   var arr=await _plntLoad();
+  // ── Determinar qué "usos" siguen vivos: el embarque de ese uso debe existir en tendData ──
+  // Si el embarque fue eliminado, ese uso ya no cuenta — la plantilla vuelve a estar disponible.
+  var nrosVivos = new Set((window.tendData||[]).filter(function(d){return d.nro;}).map(function(d){return String(d.nro).trim().toUpperCase();}));
+  function usosVivos(p){
+    return (p.usos||[]).filter(function(u){
+      var n=(u.embarque||'').trim().toUpperCase();
+      return n && n!=='—' && nrosVivos.has(n);
+    });
+  }
+  var disponibles = arr.filter(function(p){ return usosVivos(p).length===0; });
+  var historial    = arr.filter(function(p){ return usosVivos(p).length>0; });
+
   var ov=document.createElement('div');
   ov.className='_plnt_buscador_overlay';
   ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto';
@@ -15980,19 +16044,41 @@ async function _plntAbrirBuscador(){
   if(!arr.length){
     html+='<div style="text-align:center;padding:40px;color:var(--muted)">No hay plantillas guardadas aún.<br><button onclick="document.getElementById(\'_plnt_modal\').remove();iniciarApp(\'plantillas\')" style="margin-top:12px;background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.4);color:#22c55e;border-radius:8px;padding:8px 16px;font-size:12px;cursor:pointer">📁 Ir a Plantillas</button></div>';
   } else {
-    arr.slice().sort(function(a,b){return new Date(b.fecha)-new Date(a.fecha);}).forEach(function(p){
-      html+='<div class="_plnt_modal_row" data-nombre="'+(p.nombre||'').toLowerCase()+'" '
-        +'style="background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:border-color .15s" '
-        +'onmouseover="this.style.borderColor=\'rgba(34,197,94,.5)\'" onmouseout="this.style.borderColor=\'var(--border)\'"'
-        +'onclick="_plntAplicar(\''+p.id+'\',this.closest(\'._plnt_buscador_overlay\'))">'
-        +'<div style="font-size:22px;flex-shrink:0">📄</div>'
-        +'<div style="flex:1;min-width:0">'
-          +'<div style="font-size:13px;font-weight:700;color:var(--text)">'+esc2(p.nombre)+'</div>'
-          +'<div style="font-size:11px;color:var(--muted)">👤 '+esc2(p.usuario||'—')+'  ·  📅 '+new Date(p.fecha).toLocaleDateString('es-PA',{day:'2-digit',month:'short',year:'numeric'})+(p.usos&&p.usos.length?'  ·  ✅ Usada '+p.usos.length+'x':'')+'</div>'
-        +'</div>'
-        +'<div style="font-size:11px;font-weight:700;color:#22c55e;flex-shrink:0">Aplicar →</div>'
-      +'</div>';
-    });
+    if(disponibles.length===0){
+      html+='<div style="text-align:center;padding:24px;color:var(--muted);font-size:12px">No hay plantillas disponibles — todas están en uso por un embarque procesado.</div>';
+    } else {
+      html+=disponibles.slice().sort(function(a,b){return new Date(b.fecha)-new Date(a.fecha);}).map(function(p){
+        return '<div class="_plnt_modal_row" data-nombre="'+(p.nombre||'').toLowerCase()+'" '
+          +'style="background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:border-color .15s" '
+          +'onmouseover="this.style.borderColor=\'rgba(34,197,94,.5)\'" onmouseout="this.style.borderColor=\'var(--border)\'"'
+          +'onclick="_plntAplicar(\''+p.id+'\',this.closest(\'._plnt_buscador_overlay\'),this)">'
+          +'<div style="font-size:22px;flex-shrink:0">📄</div>'
+          +'<div style="flex:1;min-width:0">'
+            +'<div style="font-size:13px;font-weight:700;color:var(--text)">'+esc2(p.nombre)+'</div>'
+            +'<div style="font-size:11px;color:var(--muted)">👤 '+esc2(p.usuario||'—')+'  ·  📅 '+new Date(p.fecha).toLocaleDateString('es-PA',{day:'2-digit',month:'short',year:'numeric'})+(p.usos&&p.usos.length?'  ·  📜 Usada antes '+p.usos.length+'x (embarque'+(p.usos.length!==1?'s':'')+' eliminado)':'')+'</div>'
+          +'</div>'
+          +'<div style="font-size:11px;font-weight:700;color:#22c55e;flex-shrink:0">Aplicar →</div>'
+        +'</div>';
+      }).join('');
+    }
+    if(historial.length){
+      html+='<div style="margin-top:18px;margin-bottom:4px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">📜 Historial — en uso por un embarque procesado</div>'
+        +historial.slice().sort(function(a,b){return new Date(b.fecha)-new Date(a.fecha);}).map(function(p){
+          var uv=usosVivos(p);
+          var usosHtml=uv.map(function(u){
+            return '<div style="font-size:9px;color:var(--muted);line-height:1.6">📦 Embarque <strong style="color:var(--text)">'+esc2(u.embarque)+'</strong>'+(u.fecha?' — '+new Date(u.fecha).toLocaleDateString('es-PA',{day:'2-digit',month:'short',year:'numeric'}):'')+'</div>';
+          }).join('');
+          return '<div class="_plnt_modal_row" data-nombre="'+(p.nombre||'').toLowerCase()+'" '
+            +'style="background:var(--s2);opacity:.65;border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:12px">'
+            +'<div style="font-size:22px;flex-shrink:0">🔒</div>'
+            +'<div style="flex:1;min-width:0">'
+              +'<div style="font-size:13px;font-weight:700;color:var(--text)">'+esc2(p.nombre)+'</div>'
+              +'<div style="font-size:11px;color:var(--muted);margin-bottom:3px">👤 '+esc2(p.usuario||'—')+'  ·  📅 '+new Date(p.fecha).toLocaleDateString('es-PA',{day:'2-digit',month:'short',year:'numeric'})+'  ·  usada '+uv.length+'x en total</div>'
+              +usosHtml
+            +'</div>'
+          +'</div>';
+        }).join('');
+    }
   }
   html+='</div></div>';
   ov.innerHTML=html;
@@ -16007,15 +16093,23 @@ function _plntFiltrarModal(q){
 }
 
 // ── Aplicar plantilla: reconstruir el archivo y lanzarlo como si el usuario lo cargó manualmente ──
-async function _plntAplicar(id, ovEl){
-  var arr=await _plntLoad();
-  var p=arr.find(function(x){return x.id===id;});
-  if(!p||!p.datos){ _showToast('⚠️ Plantilla no encontrada','orange',3000); return; }
-  // Cerrar el modal del buscador
-  if(ovEl) ovEl.remove();
-  _showToast('⏳ Cargando plantilla "'+p.nombre+'"…','green',2000);
-  // Reconstruir el File object desde base64
+async function _plntAplicar(id, ovEl, btnEl){
+  // Evitar doble ejecución por doble-click o clicks mientras la carga está en curso
+  // (causaba filas de mercancía duplicadas y contadores de "usos" inflados)
+  if(window._plntAplicandoId){
+    _showToast('⏳ Ya se está aplicando una plantilla, espera…','orange',2000);
+    return;
+  }
+  window._plntAplicandoId = id;
+  if(btnEl){ btnEl.disabled = true; btnEl.style.opacity='.5'; btnEl.style.pointerEvents='none'; }
   try{
+    var arr=await _plntLoad();
+    var p=arr.find(function(x){return x.id===id;});
+    if(!p||!p.datos){ _showToast('⚠️ Plantilla no encontrada','orange',3000); return; }
+    // Cerrar el modal del buscador
+    if(ovEl) ovEl.remove();
+    _showToast('⏳ Cargando plantilla "'+p.nombre+'"…','green',2000);
+    // Reconstruir el File object desde base64
     var byteStr=atob(p.datos);
     var ab=new ArrayBuffer(byteStr.length);
     var ia=new Uint8Array(ab);
@@ -16030,15 +16124,19 @@ async function _plntAplicar(id, ovEl){
     inp.files=dt.files;
     // Disparar el mismo handler que usa el botón manual
     _cargarArchivo(inp);
-    // Registrar uso
-    p.usos=p.usos||[];
-    var nroActivo=(document.getElementById('s1_nro_emb')||{}).value||'—';
-    p.usos.push({embarque:nroActivo,fecha:new Date().toISOString()});
-    await _plntSave(arr);
+    // NO registrar el uso aquí — aplicar una plantilla no es lo mismo que procesar
+    // el embarque. El uso (y por tanto, que deje de estar "disponible") se registra
+    // recién cuando procesarEmbarque() guarda el embarque de verdad en tendData.
+    // Aquí solo recordamos qué plantilla(s) se aplicaron en esta sesión de formulario.
+    window._plntAplicadasEnSesion = window._plntAplicadasEnSesion || [];
+    if(window._plntAplicadasEnSesion.indexOf(p.id)===-1) window._plntAplicadasEnSesion.push(p.id);
     _showToast('✅ Plantilla "'+p.nombre+'" aplicada','green',3000);
   }catch(e){
     console.warn('Plantilla apply error:',e);
     _showToast('⚠️ Error al aplicar la plantilla: '+e.message,'red',4000);
+  }finally{
+    window._plntAplicandoId = null;
+    if(btnEl){ btnEl.disabled = false; btnEl.style.opacity=''; btnEl.style.pointerEvents=''; }
   }
 }
 
@@ -25711,6 +25809,43 @@ function _motoresMapeado(rows) {
       totalTrasp += trasp;
     }
   });
+
+  // ── 2.5 Deduplicar filas idénticas ──
+  // Si la plantilla/Excel trae la MISMA línea repetida (proveedor + monto + OC +
+  // piezas + bultos todos iguales), se conserva solo una copia. Esto aplica tanto
+  // a mercancía como a proveedores de servicio (flete, honorarios, gastos, etc.) —
+  // evita que un archivo con filas duplicadas infle el CIF o los gastos del embarque.
+  (function dedupMercLines(){
+    var vistos = {};
+    var dedupCount = 0;
+    var out = [];
+    mercLines.forEach(function(l){
+      var key = [
+        (l.prov||'').trim().toUpperCase(),
+        (l.tipoFac||'').trim().toUpperCase(),
+        (l.costo||0).toFixed(2),
+        (l.oc||'').trim().toUpperCase(),
+        (l.piezas||0),
+        (l.bultos||0),
+        (l.nfac||'').trim().toUpperCase()
+      ].join('|');
+      if(vistos[key]){
+        dedupCount++;
+        return; // descartar duplicado exacto
+      }
+      vistos[key] = true;
+      out.push(l);
+    });
+    if(dedupCount>0){
+      mercLines = out;
+      // Recalcular totales de mercancía sin las filas duplicadas descartadas
+      totalMerc = 0; totalBultos = 0; totalTrasp = 0;
+      mercLines.forEach(function(l){
+        if(l.tipoFac==='mercancia'){ totalMerc+=(l.costo||0); totalBultos+=(l.bultos||0); totalTrasp+=(l.traspaso||0); }
+      });
+      if(typeof _showToast==='function') _showToast('⚠️ '+dedupCount+' fila(s) duplicada(s) detectada(s) en la plantilla — se descartaron','orange',4500);
+    }
+  })();
 
   // ── 3. Actualizar invLines (solo mercancía + servicios del usuario) ──
   invLines = mercLines;
