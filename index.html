@@ -25921,15 +25921,25 @@ function _motoresMapeado(rows) {
     var dedupCount = 0;
     var out = [];
     mercLines.forEach(function(l){
-      var key = [
-        (l.prov||'').trim().toUpperCase(),
-        (l.tipoFac||'').trim().toUpperCase(),
-        (l.costo||0).toFixed(2),
-        (l.oc||'').trim().toUpperCase(),
-        (l.piezas||0),
-        (l.bultos||0),
-        (l.nfac||'').trim().toUpperCase()
-      ].join('|');
+      var nfacKey = (l.nfac||'').trim().toUpperCase();
+      var costoKey = (l.costo||0).toFixed(2);
+      var key;
+      if (nfacKey) {
+        // REGLA DE ORO: mismo N° de factura + mismo monto = duplicado, sin importar
+        // si piezas, bultos, OC u otros campos vienen incompletos en una de las filas.
+        key = nfacKey + '|' + costoKey;
+      } else {
+        // Sin número de factura no podemos usar esa regla con seguridad — usamos
+        // criterio amplio (todos los campos) solo como respaldo en este caso.
+        key = [
+          (l.prov||'').trim().toUpperCase(),
+          (l.tipoFac||'').trim().toUpperCase(),
+          costoKey,
+          (l.oc||'').trim().toUpperCase(),
+          (l.piezas||0),
+          (l.bultos||0)
+        ].join('|');
+      }
       if(vistos[key]){
         dedupCount++;
         return; // descartar duplicado exacto
