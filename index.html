@@ -1543,7 +1543,10 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
               <input type="number" id="_imp_ar_ajustado" readonly style="width:100%;background:var(--bg);border:1px solid rgba(63,185,80,.25);border-radius:6px;padding:6px 8px;color:var(--green-l);font-size:12px;font-weight:700;font-family:'IBM Plex Mono',monospace">
             </div>
           </div>
-          <div style="margin-top:5px;font-size:9px;color:var(--muted)">% DAI ajustado: <strong id="_imp_ar_pct_ajustado" style="color:var(--orange-l)">—</strong></div>
+          <div style="margin-top:5px;font-size:9px;color:var(--muted);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span>% DAI ajustado: <strong id="_imp_ar_pct_ajustado" style="color:var(--orange-l)">—</strong></span>
+            <button type="button" onclick="_aplicarDaiAjustado()" style="background:rgba(240,136,62,.12);border:1px solid rgba(240,136,62,.3);color:var(--orange-l);border-radius:5px;padding:2px 8px;font-size:9px;font-weight:700;cursor:pointer">⬇️ Aplicar a Arancel DAI %</button>
+          </div>
         </div>
         <div class="r2" style="margin-bottom:10px">
           <div class="field" style="margin-bottom:0">
@@ -23222,7 +23225,8 @@ function renderInvLines(){
   const gastoLines = invLines.filter(l=>l.tipoFac && l.tipoFac!=='mercancia');
 
   // ── Render mercancía lines — aplicar a TODOS los contenedores (original + clone) ──
-  const mercHTML = mercLines.map((l,mi)=>{
+  const mercCountHTML = mercLines.length ? '<div style="font-size:11px;color:var(--green-l);font-weight:700;margin-bottom:8px">📦 '+mercLines.length+' factura'+(mercLines.length===1?'':'s')+' de mercancía</div>' : '';
+  const mercHTML = mercCountHTML + (mercLines.map((l,mi)=>{
       const i = invLines.indexOf(l); // real index in invLines
       const m=l._match||null;
       let provBorder='var(--border)';
@@ -23245,7 +23249,7 @@ function renderInvLines(){
       return '<div data-prov="'+(l.prov||'')+'" data-dept="'+(l.deptCat||'')+'" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px">'
         +'<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;padding-bottom:7px;border-bottom:1px solid rgba(48,54,61,.4)">'
         +'<span style="font-size:14px">📦</span>'
-        +'<span style="flex:1;font-size:12px;font-weight:700;color:var(--text)">Mercancía</span>'
+        +'<span style="flex:1;font-size:12px;font-weight:700;color:var(--text)">Mercancía #'+(mi+1)+'</span>'
         +'</div>'
         +'<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">'
         +'<select onchange="invLines['+i+'].deptCat=this.value;calcInvTotals()" style="flex:1;background:var(--s2);border:1px solid rgba(63,185,80,.3);border-radius:6px;padding:8px 10px;color:var(--text);font-size:13px;font-weight:600;min-width:0"><option value="">— Departamento —</option>'+deptOpts+'</select>'
@@ -23276,7 +23280,7 @@ function renderInvLines(){
         +(typeof _getContenedorSelect==='function'?'<div style="width:100%;margin-top:4px">'+_getContenedorSelect(i,l._contenedor)+'</div>':'')
         +'</div>'
         +'</div>';
-    }).join('') || '<div style="text-align:center;padding:16px;color:var(--muted);font-size:11px">Sin facturas de mercancía. Agrega o carga una plantilla.</div>';
+    }).join('') || '<div style="text-align:center;padding:16px;color:var(--muted);font-size:11px">Sin facturas de mercancía. Agrega o carga una plantilla.</div>');
 
   // Aplicar HTML a TODOS los contenedores inv-lines visibles
   containers.forEach(function(container){ container.innerHTML = mercHTML; });
@@ -24988,6 +24992,29 @@ function loadInvFile(input){
       }
       if(provRaw||costo>0) invLines.push(line);
     });
+
+    // ── Deduplicar por N° de factura + monto (REGLA DE ORO) ──
+    // Si el archivo trae la misma factura repetida (celdas combinadas, copy-paste,
+    // filas pegadas dos veces), se conserva solo una copia.
+    (function _dedupLoadInvFile(){
+      var vistos = {};
+      var dedupCount = 0;
+      var out = [];
+      invLines.forEach(function(l){
+        var nfacKey = (l.nfac||l.numFact||'').trim().toUpperCase();
+        var costoKey = (l.costo||0).toFixed(2);
+        var key = nfacKey ? (nfacKey+'|'+costoKey) : (
+          (l.prov||'').trim().toUpperCase()+'|'+(l.tipoFac||'').trim().toUpperCase()+'|'+costoKey+'|'+(l.oc||'').trim().toUpperCase()+'|'+(l.piezas||0)+'|'+(l.bultos||0)
+        );
+        if(vistos[key]){ dedupCount++; return; }
+        vistos[key] = true;
+        out.push(l);
+      });
+      if(dedupCount>0){
+        invLines = out;
+        if(typeof _showToast==='function') _showToast('⚠️ '+dedupCount+' fila(s) duplicada(s) detectada(s) en el archivo — se descartaron','orange',4500);
+      }
+    })();
 
     renderInvLines();
     calcInvTotals(); // forzar actualización inmediata del total visible
@@ -27911,6 +27938,22 @@ function _guardarModalImpuestos(){
   calc(); _actualizarSummaryImpuestos(); _cerrarModalImpuestos();
   if(typeof _showToast==='function') _showToast('✅ Impuestos guardados','green',2000);
 }
+// Copia el % DAI ajustado (ya calculado con la Diferencia) directamente al campo
+// "Arancel DAI %", y limpia la Diferencia para que el Pago Arancelario quede fijo
+// con el % exacto — tal como lo hace Alexander manualmente hoy.
+function _aplicarDaiAjustado(){
+  if(window._lastDaiPctAjustado===null || window._lastDaiPctAjustado===undefined){
+    if(typeof _showToast==='function') _showToast('⚠️ Ingresa primero una Diferencia (USD) para calcular el % ajustado','orange',3000);
+    return;
+  }
+  var arEl=document.getElementById('s1_ar');
+  var ajEl=document.getElementById('s1_ar_ajuste');
+  if(arEl) arEl.value=window._lastDaiPctAjustado.toFixed(6);
+  if(ajEl) ajEl.value=0;
+  calc();
+  _actualizarSummaryImpuestos();
+  if(typeof _showToast==='function') _showToast('✅ Arancel DAI actualizado al '+window._lastDaiPctAjustado.toFixed(4)+'%','green',2500);
+}
 function _actualizarSummaryImpuestos(){
   var ar=parseFloat(document.getElementById('s1_ar')?.value||10);
   var itbms=parseFloat(document.getElementById('s1_itbms')?.value||7);
@@ -27950,6 +27993,7 @@ function _actualizarSummaryImpuestos(){
     if(adjEl) adjEl.value=arPagoAjustado.toFixed(2);
     var pctAdjEl=document.getElementById('_imp_ar_pct_ajustado');
     if(pctAdjEl) pctAdjEl.textContent=ajuste!==0?(arPctAjustado.toFixed(6)+'%'):'—';
+    window._lastDaiPctAjustado = ajuste!==0 ? arPctAjustado : null;
     var totEl=document.getElementById('_imp_total_vis'); if(totEl) totEl.textContent=fmt2(total);
     // Update CIF ref display
     var cifEl=document.getElementById('_imp_cif_ref');
