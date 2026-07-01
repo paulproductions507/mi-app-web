@@ -8509,14 +8509,22 @@ function calc(){
   (function(){
     const sdR=(id,v)=>{const el=document.getElementById(id);if(el)el.value=(v||0).toFixed(2);};
     const sdF=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v!=null?Number(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'';};
-    // Valor Mercancía filtrado por tipo proveedor
+    // Valor Mercancía: usar suma de facturas de mercancía en invLines (excluye seguro/flete)
+    // Si no hay invLines, usar sc1_base (CIF o FOB según término)
     var _filtro = window._filtroTipo || 'global';
-    var _vmBase = sc1_base; // default: global
-    if(_filtro !== 'global' && window.invLines && window.invLines.length){
-      var _filteredCosto = window.invLines
-        .filter(function(l){ return l.tipoProvMap === _filtro || (l.tipo && l.tipo === _filtro); })
-        .reduce(function(s,l){ return s+(l.costo||0); }, 0);
-      _vmBase = _filteredCosto || sc1_base;
+    var _vmBase;
+    var _mercLinesOnly = (window.invLines||[]).filter(function(l){ return (l.tipoFac||'mercancia')==='mercancia'; });
+    if(_mercLinesOnly.length > 0){
+      if(_filtro !== 'global'){
+        var _filteredCosto = _mercLinesOnly
+          .filter(function(l){ return l.tipoProvMap === _filtro || (l.tipo && l.tipo === _filtro); })
+          .reduce(function(s,l){ return s+(l.costo||0); }, 0);
+        _vmBase = _filteredCosto || _mercLinesOnly.reduce(function(s,l){return s+(l.costo||0);},0);
+      } else {
+        _vmBase = _mercLinesOnly.reduce(function(s,l){return s+(l.costo||0);},0);
+      }
+    } else {
+      _vmBase = sc1_base; // fallback si no hay invLines cargadas
     }
     sdF('disp_valor_merc',   _vmBase);
     sdF('disp_costo_no_merc', sc1_noMerc);
@@ -18278,10 +18286,11 @@ function _calcCostoInventario(d){
     // ITBMS separado para mostrar en desglose — NO duplicar en costoNM
     var itbmsReal=allLines.filter(function(l){return l.tipoFac==='itbms';})
       .reduce(function(a,l){return a+(l.costo||0);},0);
-    // costoNM = todo lo que NO es mercancía NI ITBMS (evita doble conteo en desglose)
+    // costoNM = todo lo que NO es mercancía NI ITBMS NI seguro (el seguro es solo para
+    // cálculo de arancel DAI, no es un gasto real en el inventario)
     var gastoReal=allLines.reduce(function(a,l){
       var t=l.tipoFac||'mercancia';
-      return (t==='mercancia'||t==='itbms') ? a : a+(l.costo||0);
+      return (t==='mercancia'||t==='itbms'||t==='seguro') ? a : a+(l.costo||0);
     },0);
     var costoInvReal=mercInv+gastoReal+itbmsReal;
     // Para Sababa no-Local (liquidación ZL): sc3 puede tener el noMerc si sc1 está vacío
@@ -19633,6 +19642,9 @@ function _renderDeptChart(all){
           provName = provName.replace(/^S\.I\s*[-–]\s*/i,'').trim();
         }
       }
+      // Respetar tipoProv de la línea (Escenario Único guarda IMP/ZL por línea, nunca a nivel embarque)
+      var _tlr = (l.tipoProv||l.tipoProveedor||'').toString().toUpperCase();
+      var _tipoLinea = _tlr==='IMP' ? 'IMP' : (_tlr==='ZL' ? 'ZL' : tipoEmbNorm);
       byDept[k].provs.push({
         prov: provName,
         oc:   l.oc||'',
@@ -19640,7 +19652,7 @@ function _renderDeptChart(all){
         costo: l.costo||0,
         montoHomologado: l.montoHomologado||0,
         piezas: l.piezas||0,
-        tipo: tipoEmbNorm,
+        tipo: _tipoLinea,
         nro:  d.nro||'',
         dIdx: dIdx
       });
@@ -23206,6 +23218,25 @@ function initFormScroll(){
 
 
 function renderInvLines(){
+  // ── DEDUP DEFENSIVO: eliminar duplicados antes de renderizar, sin importar origen ──
+  // Misma regla de oro: si hay N° de factura → key = nfac + monto.
+  // Si no hay nfac → key = prov + tipoFac + monto + OC.
+  // Esto es la última línea de defensa, cubre plantillas, CSV, carga manual y
+  // cualquier otra ruta que haya metido filas duplicadas en invLines.
+  (function _dedupInvLines(){
+    var seen = {};
+    invLines = invLines.filter(function(l){
+      var nfacK = (l.nfac||l.numFact||'').replace(/\s/g,'').toUpperCase();
+      var costoK = (+(l.costo)||0).toFixed(2);
+      var k = nfacK
+        ? (nfacK+'|'+costoK)
+        : ((l.prov||'').trim().toUpperCase()+'|'+(l.tipoFac||'mercancia')+'|'+costoK+'|'+(l.oc||'').trim().toUpperCase());
+      if(seen[k]) return false;
+      seen[k] = true;
+      return true;
+    });
+    window.invLines = invLines;
+  })();
   // Renderizar en TODOS los contenedores visibles (original + modal clone)
   const allContainers     = Array.from(document.querySelectorAll('[id="inv-lines"]'));
   const allGastosContainers = Array.from(document.querySelectorAll('[id="inv-gastos-lines"]'));
@@ -24937,8 +24968,10 @@ function loadInvFile(input){
       // Sin columna TIPO (plantilla antigua) — detectar por nombre de proveedor o rubro
       if(!tipoRaw){
         const rubroUp = rubroRaw.toUpperCase();
-        if(provUp.startsWith('ETERNITY')||provUp.startsWith('FLETE')||provUp.startsWith('SEGURO')){
+        if(provUp.startsWith('ETERNITY')||provUp.startsWith('FLETE')){
           tipoFac = 'flete';
+        } else if(provUp.startsWith('SEGURO')){
+          tipoFac = 'seguro'; // Solo para cálculo CIF/impuestos — NO entra en costo no mercancía
         } else if(rubroUp.includes('DESTINO')||rubroUp.includes('ORIGEN')||rubroUp.includes('GASTO')){
           tipoFac = 'gastos_destino'; deptCat = 'GASTOS';
         }
@@ -24997,19 +25030,17 @@ function loadInvFile(input){
     // Si el archivo trae la misma factura repetida (celdas combinadas, copy-paste,
     // filas pegadas dos veces), se conserva solo una copia.
     (function _dedupLoadInvFile(){
-      var vistosNfac = {};
-      var vistosFull = {};
+      var vistos = {};
       var dedupCount = 0;
       var out = [];
       invLines.forEach(function(l){
         var nfacKey = (l.nfac||l.numFact||'').trim().toUpperCase();
         var costoKey = (l.costo||0).toFixed(2);
-        var fullKey = (l.prov||'').trim().toUpperCase()+'|'+(l.tipoFac||'').trim().toUpperCase()+'|'+(l.deptCat||'').trim().toUpperCase()+'|'+costoKey+'|'+(l.oc||'').trim().toUpperCase()+'|'+(l.piezas||0)+'|'+(l.bultos||0);
-        var nfacComboKey = nfacKey ? (nfacKey+'|'+costoKey) : null;
-        var isDup = vistosFull[fullKey] || (nfacComboKey && vistosNfac[nfacComboKey]);
-        if(isDup){ dedupCount++; return; }
-        vistosFull[fullKey] = true;
-        if(nfacComboKey) vistosNfac[nfacComboKey] = true;
+        var key = nfacKey ? (nfacKey+'|'+costoKey) : (
+          (l.prov||'').trim().toUpperCase()+'|'+(l.tipoFac||'').trim().toUpperCase()+'|'+costoKey+'|'+(l.oc||'').trim().toUpperCase()+'|'+(l.piezas||0)+'|'+(l.bultos||0)
+        );
+        if(vistos[key]){ dedupCount++; return; }
+        vistos[key] = true;
         out.push(l);
       });
       if(dedupCount>0){
@@ -25078,6 +25109,10 @@ function loadInvFile(input){
     // Si el flete vino como línea de servicio (tipoFac=flete), tomarlo de ahí
     if(!fleteDetectado){
       fleteDetectado = invLines.filter(l=>l.tipoFac==='flete').reduce((s,l)=>s+(l.costo||0),0);
+    }
+    // Seguro: solo referencia para CIF/impuestos, nunca entra a costo no mercancía
+    if(!seguroDetectado){
+      seguroDetectado = invLines.filter(l=>l.tipoFac==='seguro').reduce((s,l)=>s+(l.costo||0),0);
     }
 
     let msg = invLines.length + ' facturas cargadas.';
@@ -25946,37 +25981,34 @@ function _motoresMapeado(rows) {
   // a mercancía como a proveedores de servicio (flete, honorarios, gastos, etc.) —
   // evita que un archivo con filas duplicadas infle el CIF o los gastos del embarque.
   (function dedupMercLines(){
-    var vistosNfac = {};
-    var vistosFull = {};
+    var vistos = {};
     var dedupCount = 0;
     var out = [];
     mercLines.forEach(function(l){
       var nfacKey = (l.nfac||'').trim().toUpperCase();
       var costoKey = (l.costo||0).toFixed(2);
-      // Clave amplia: misma fila completa (proveedor + dept + monto + OC + piezas + bultos).
-      // Se revisa SIEMPRE, sin importar si hay N° de factura o no — esto es lo que
-      // detecta filas repetidas dentro de UNA misma plantilla (p.ej. celdas pegadas
-      // dos veces, o exportaciones que arrastran la misma fila varias veces).
-      var fullKey = [
-        (l.prov||'').trim().toUpperCase(),
-        (l.tipoFac||'').trim().toUpperCase(),
-        (l.deptCat||'').trim().toUpperCase(),
-        costoKey,
-        (l.oc||'').trim().toUpperCase(),
-        (l.piezas||0),
-        (l.bultos||0)
-      ].join('|');
-      // Clave por N° de factura + monto (REGLA DE ORO): mismo N° de factura + mismo
-      // monto = duplicado, sin importar si piezas, bultos, OC u otros campos vienen
-      // incompletos en una de las filas.
-      var nfacComboKey = nfacKey ? (nfacKey + '|' + costoKey) : null;
-      var isDup = vistosFull[fullKey] || (nfacComboKey && vistosNfac[nfacComboKey]);
-      if(isDup){
-        dedupCount++;
-        return; // descartar duplicado
+      var key;
+      if (nfacKey) {
+        // REGLA DE ORO: mismo N° de factura + mismo monto = duplicado, sin importar
+        // si piezas, bultos, OC u otros campos vienen incompletos en una de las filas.
+        key = nfacKey + '|' + costoKey;
+      } else {
+        // Sin número de factura no podemos usar esa regla con seguridad — usamos
+        // criterio amplio (todos los campos) solo como respaldo en este caso.
+        key = [
+          (l.prov||'').trim().toUpperCase(),
+          (l.tipoFac||'').trim().toUpperCase(),
+          costoKey,
+          (l.oc||'').trim().toUpperCase(),
+          (l.piezas||0),
+          (l.bultos||0)
+        ].join('|');
       }
-      vistosFull[fullKey] = true;
-      if(nfacComboKey) vistosNfac[nfacComboKey] = true;
+      if(vistos[key]){
+        dedupCount++;
+        return; // descartar duplicado exacto
+      }
+      vistos[key] = true;
       out.push(l);
     });
     if(dedupCount>0){
