@@ -12308,15 +12308,68 @@ async function _rescatarEmbarqueCloud(nro){
 }
 window._rescatar = _rescatarEmbarqueCloud;
 
-// Push a Supabase — siempre reemplaza el maestro con el estado actual de tendData
+// ══════════════════════════════════════════════════════════════
+// Push a Supabase — MERGE seguro, NO sobreescritura ciega.
+// ── FIX CRÍTICO (jul-2026): la versión anterior reemplazaba el
+//    registro maestro completo con el tendData en memoria de ESTE
+//    dispositivo. Con 2-3 usuarios procesando embarques al mismo
+//    tiempo, cada guardado pisaba por completo lo que el otro
+//    dispositivo acababa de subir (el último en guardar "ganaba" y
+//    borraba los embarques del resto) — así es como se perdían/no
+//    subían embarques procesados aunque en el celular se vieran bien.
+//    Ahora: 1) se trae el maestro actual de la nube, 2) se fusiona
+//    por N° de embarque (gana el más reciente por ts, y se excluye
+//    todo lo que esté en la lista negra de eliminados), 3) recién
+//    ahí se sube. Así ningún dispositivo puede borrar el trabajo de
+//    otro por una simple carrera de guardados.
+// ══════════════════════════════════════════════════════════════
 async function _syncTendToCloud(){
-  if(!_sb) return;
+  if(!_sb) { _marcarSyncPendiente(); return; }
   try {
+    // 1. Traer el maestro actual de la nube (puede tener embarques
+    //    de otro dispositivo que este todavía no tiene en memoria).
+    let cloudTend = [];
+    let cloudDeleted = [];
+    try{
+      const {data: cur} = await _sb.from('simulador_sesiones')
+        .select('datos').eq('nombre', _TEND_MASTER_KEY).maybeSingle();
+      if(cur && cur.datos){
+        const p = JSON.parse(cur.datos);
+        cloudTend    = Array.isArray(p.tendData) ? p.tendData : [];
+        cloudDeleted = Array.isArray(p.deleted)  ? p.deleted  : [];
+      }
+    }catch(e){ /* si falla la lectura, se sigue con cloudTend=[] y se fusiona igual */ }
+
+    // 2. Lista negra unificada: local ∪ nube (por si otro dispositivo
+    //    eliminó algo que este todavía no sabe).
+    const deletedSet = new Set(Array.from(window._deletedEmbarques||[]).map(String));
+    cloudDeleted.forEach(k => deletedSet.add(String(k)));
+    window._deletedEmbarques = deletedSet;
+
+    // 3. Fusionar por N° de embarque — gana el registro con ts más
+    //    reciente; nunca se pierde un embarque que este dispositivo
+    //    no tenía porque lo procesó otro usuario.
+    const merged = new Map();
+    const keyOf = d => d.nro ? String(d.nro).trim().toUpperCase() : ('_ts_'+(d.ts||Math.random()));
+    cloudTend.forEach(d=>{
+      if(!d) return;
+      if(deletedSet.has(String(d.nro||'')) || deletedSet.has(String(d.ts||''))) return; // respeta eliminados
+      merged.set(keyOf(d), d);
+    });
+    (tendData||[]).forEach(d=>{
+      if(!d) return;
+      if(deletedSet.has(String(d.nro||'')) || deletedSet.has(String(d.ts||''))) return;
+      const k = keyOf(d);
+      const existing = merged.get(k);
+      if(!existing || (d.ts||0) >= (existing.ts||0)) merged.set(k, d); // local reciente gana
+    });
+    const mergedArr = Array.from(merged.values());
+
     const payload = {
       nombre: _TEND_MASTER_KEY,
       datos: JSON.stringify({
-        tendData:   tendData||[],
-        deleted:    Array.from(window._deletedEmbarques||[]),  // lista negra permanente
+        tendData:   mergedArr,
+        deleted:    Array.from(deletedSet),  // lista negra permanente
         updated_at: new Date().toISOString()
       }),
       updated_at: new Date().toISOString()
@@ -12325,13 +12378,86 @@ async function _syncTendToCloud(){
     if(_r && _r.error){
       console.error('Cloud sync error:', _r.error);
       if(typeof _showToast==='function') _showToast('⚠️ No se pudo sincronizar con la nube: '+(_r.error.message||'error desconocido'),'red',6000);
+      _marcarSyncPendiente();
       throw _r.error;
     }
+    // Si la fusión trajo embarques que este dispositivo no tenía (de otro
+    // usuario), incorporarlos también en memoria para que se vean aquí.
+    if(mergedArr.length !== (tendData||[]).length){
+      tendData = mergedArr;
+      window.tendData = tendData;
+      try { localStorage.setItem('_tendData_v2', JSON.stringify(tendData)); } catch(e){}
+      if(typeof renderTend==='function') renderTend();
+    }
+    _limpiarSyncPendiente();
   } catch(e){
     console.error('Cloud sync error:', e);
     if(typeof _showToast==='function') _showToast('⚠️ No se pudo sincronizar con la nube: '+(e.message||e),'red',6000);
+    _marcarSyncPendiente();
     throw e;
   }
+}
+
+// ── Cola de reintento — si un guardado a la nube falla (sin red,
+//    Supabase caído, dispositivo sin _sb aún) se marca como pendiente
+//    y se reintenta solo, sin que el usuario tenga que darse cuenta
+//    ni volver a procesar nada. ──
+window._syncPendiente = false;
+function _marcarSyncPendiente(){
+  window._syncPendiente = true;
+  try{ localStorage.setItem('_syncPendienteFlag','1'); }catch(e){}
+  var b = document.getElementById('cloud-status-badge');
+  if(b){ b.textContent='⚠️ Pendiente de nube'; b.style.color='#f0883e'; }
+  _asegurarReintentoSync();
+}
+function _limpiarSyncPendiente(){
+  window._syncPendiente = false;
+  try{ localStorage.removeItem('_syncPendienteFlag'); }catch(e){}
+}
+// ── Cola de borrados individuales pendientes (nros que no se pudieron
+//    borrar de simulador_sesiones porque _sb no estaba listo o falló). ──
+function _encolarBorradoPendiente(nro){
+  try{
+    var lista = JSON.parse(localStorage.getItem('_borradosPendientes')||'[]');
+    if(!lista.includes(nro)) lista.push(nro);
+    localStorage.setItem('_borradosPendientes', JSON.stringify(lista));
+  }catch(e){}
+  _marcarSyncPendiente();
+}
+async function _procesarBorradosPendientes(){
+  if(!_sb) return;
+  var lista = [];
+  try{ lista = JSON.parse(localStorage.getItem('_borradosPendientes')||'[]'); }catch(e){}
+  if(!lista.length) return;
+  var restantes = [];
+  for(const nro of lista){
+    try{
+      const _r = await _sb.from('simulador_sesiones').delete().eq('nombre', nro);
+      if(_r && _r.error) restantes.push(nro);
+    }catch(e){ restantes.push(nro); }
+  }
+  try{ localStorage.setItem('_borradosPendientes', JSON.stringify(restantes)); }catch(e){}
+}
+function _asegurarReintentoSync(){
+  if(window._syncRetryTimer) return;
+  window._syncRetryTimer = setInterval(function(){
+    var hayBorradosPendientes = false;
+    try{ hayBorradosPendientes = (JSON.parse(localStorage.getItem('_borradosPendientes')||'[]').length>0); }catch(e){}
+    if(!window._syncPendiente && !hayBorradosPendientes){ clearInterval(window._syncRetryTimer); window._syncRetryTimer=null; return; }
+    if(!_sb && typeof initSupabase==='function') initSupabase();
+    if(_sb){
+      if(typeof _syncTendToCloud==='function') _syncTendToCloud().catch(function(){});
+      if(typeof _procesarBorradosPendientes==='function') _procesarBorradosPendientes().catch(function(){});
+    }
+  }, 15000);
+}
+if(typeof window!=='undefined'){
+  window.addEventListener('online', function(){
+    if(window._syncPendiente || (localStorage.getItem('_syncPendienteFlag')==='1')){
+      if(!_sb && typeof initSupabase==='function') initSupabase();
+      if(_sb && typeof _syncTendToCloud==='function') _syncTendToCloud().catch(function(){});
+    }
+  });
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -12580,8 +12706,14 @@ async function _pullTendFromCloud(){
     });
 
     if(localOnly.length > 0){
-      console.log(`☁️ ${localOnly.length} embarque(s) locales recientes → preservando hasta sync`);
+      console.log(`☁️ ${localOnly.length} embarque(s) locales recientes → preservando y re-subiendo a la nube`);
       cloudTend = [...cloudTend, ...localOnly];
+      // ── FIX: antes solo se "preservaban" en memoria pero nunca se
+      //    volvían a empujar a la nube — por eso embarques procesados
+      //    bien en el celular nunca llegaban a Supabase ni a otros
+      //    dispositivos. Ahora se fuerza un push (con el merge seguro
+      //    de _syncTendToCloud) apenas se detectan. ──
+      sesionesNuevas = sesionesNuevas || localOnly.length;
     }
 
     // Reemplazar tendData con la versión fusionada
@@ -14629,11 +14761,17 @@ function deleteTend(idx){
     // ── Borrar también la sesión individual en Supabase (simulador_sesiones) ──
     // Sin esto, el registro queda "huérfano" en la nube con datos viejos y puede
     // resurgir en una sincronización posterior.
-    if(window._sb && d.nro){
+    if(d.nro){
       const _nroDel = String(d.nro);
-      _sb.from('simulador_sesiones').delete().eq('nombre', _nroDel).then(function(_r){
-        if(_r && _r.error) console.error('Error borrando sesión individual '+_nroDel+':', _r.error);
-      });
+      if(window._sb){
+        _sb.from('simulador_sesiones').delete().eq('nombre', _nroDel).then(function(_r){
+          if(_r && _r.error){ console.error('Error borrando sesión individual '+_nroDel+':', _r.error); _encolarBorradoPendiente(_nroDel); }
+        }).catch(function(){ _encolarBorradoPendiente(_nroDel); });
+      } else {
+        // Sin conexión a Supabase en este momento — encolar para reintentar
+        // apenas se restablezca (ver _asegurarReintentoSync).
+        _encolarBorradoPendiente(_nroDel);
+      }
     }
   }
   tendData.splice(idx,1);
@@ -26337,6 +26475,13 @@ function _mapearPiezas(input) {
 
 window.onload=function(){
   initSupabase();
+  // Si quedaron sincronizaciones o borrados pendientes de una sesión
+  // anterior (la app se cerró antes de que la nube confirmara), reintentar.
+  try{
+    var _pendFlag = localStorage.getItem('_syncPendienteFlag')==='1';
+    var _pendBorr = JSON.parse(localStorage.getItem('_borradosPendientes')||'[]').length>0;
+    if(_pendFlag || _pendBorr){ window._syncPendiente = true; setTimeout(function(){ _asegurarReintentoSync(); }, 1500); }
+  }catch(e){}
   // Restore chart orient
   const savedOrient = localStorage.getItem('_simChartOrient') || 'horizontal';
   _chartOrient = savedOrient;
