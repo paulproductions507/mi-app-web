@@ -12340,10 +12340,23 @@ async function _syncTendToCloud(){
       }
     }catch(e){ /* si falla la lectura, se sigue con cloudTend=[] y se fusiona igual */ }
 
+    // ── FIX CRÍTICO #2 (jul-2026): un embarque que se eliminó y luego se
+    //    volvió a procesar quedaba bloqueado PARA SIEMPRE. La versión
+    //    anterior unía ciegamente la lista negra local con la de la nube,
+    //    así que aunque el procesar quitara el N° de la lista negra local,
+    //    esta función lo volvía a agregar desde la copia (desactualizada)
+    //    que aún estaba en la nube — el embarque nunca podía "resucitar".
+    //    Ahora: si el N° está VIVO ahora mismo en tendData (el usuario lo
+    //    acaba de procesar/reprocesar), NUNCA se re-agrega a la lista
+    //    negra, y su tombstone se borra también en la nube. ──
+    const nrosVivosLocal = new Set();
+    (tendData||[]).forEach(d=>{ if(d && d.nro) nrosVivosLocal.add(String(d.nro).trim().toUpperCase()); });
+
     // 2. Lista negra unificada: local ∪ nube (por si otro dispositivo
-    //    eliminó algo que este todavía no sabe).
+    //    eliminó algo que este todavía no sabe) — salvo lo que este
+    //    dispositivo tiene vivo en tendData ahora mismo.
     const deletedSet = new Set(Array.from(window._deletedEmbarques||[]).map(String));
-    cloudDeleted.forEach(k => deletedSet.add(String(k)));
+    cloudDeleted.forEach(k => { if(!nrosVivosLocal.has(String(k).trim().toUpperCase())) deletedSet.add(String(k)); });
     window._deletedEmbarques = deletedSet;
 
     // 3. Fusionar por N° de embarque — gana el registro con ts más
@@ -12358,7 +12371,9 @@ async function _syncTendToCloud(){
     });
     (tendData||[]).forEach(d=>{
       if(!d) return;
-      if(deletedSet.has(String(d.nro||'')) || deletedSet.has(String(d.ts||''))) return;
+      // tendData local es la fuente viva de este dispositivo — nunca se
+      // filtra aquí por deletedSet: si está en memoria es porque el
+      // usuario lo quiere activo (recién procesado/reprocesado).
       const k = keyOf(d);
       const existing = merged.get(k);
       if(!existing || (d.ts||0) >= (existing.ts||0)) merged.set(k, d); // local reciente gana
@@ -12620,15 +12635,22 @@ async function _pullTendFromCloud(){
       .maybeSingle();
 
     let cloudTend = [];
+    // ── Mismo fix que en _syncTendToCloud: si un N° está vivo AHORA en el
+    //    tendData local (recién procesado/reprocesado en este dispositivo),
+    //    nunca se re-agrega a la lista negra por una entrada vieja en la
+    //    nube, o quedaría bloqueado para siempre. ──
+    const nrosVivosLocal = new Set();
+    (window.tendData||[]).forEach(d=>{ if(d && d.nro) nrosVivosLocal.add(String(d.nro).trim().toUpperCase()); });
     let deletedSet = new Set(window._deletedEmbarques || []);
 
     if(!masterErr && masterData){
       try {
         const parsed = JSON.parse(masterData.datos||'{}');
         cloudTend = Array.isArray(parsed.tendData) ? parsed.tendData : [];
-        // Restaurar la lista negra guardada en el maestro
+        // Restaurar la lista negra guardada en el maestro — salvo lo que
+        // este dispositivo tiene vivo en tendData ahora mismo.
         if(Array.isArray(parsed.deleted)){
-          parsed.deleted.forEach(k => deletedSet.add(String(k)));
+          parsed.deleted.forEach(k => { if(!nrosVivosLocal.has(String(k).trim().toUpperCase())) deletedSet.add(String(k)); });
         }
         window._deletedEmbarques = deletedSet;
       } catch(e){ cloudTend = []; }
