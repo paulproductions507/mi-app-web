@@ -13204,13 +13204,20 @@ function _limpiarFiltrosTend(){
 
 
 // ══════════════════════════════════════════════════════════════
-//  FILTROS PERSISTENTES — Supabase (simulador_sesiones)
-//  Clave: '_TEND_FILTROS' · misma tabla que los embarques
-//  localStorage solo como cache de arranque rapido
+//  FILTROS DE BÚSQUEDA — 100% LOCALES por dispositivo (localStorage)
+//  ── FIX (jul-2026): antes se guardaban también en Supabase bajo una
+//     sola clave compartida ('_TEND_FILTROS'), así que el filtro que
+//     un usuario escribía (ej. buscar "22089") se le aplicaba
+//     automáticamente a CUALQUIER otro dispositivo que abriera
+//     Tendencias — moviéndole la búsqueda a alguien que estaba
+//     revisando otra cosa. Los filtros son navegación personal, no
+//     datos de negocio: cada dispositivo debe manejar los suyos, sin
+//     pisarle la búsqueda a nadie más. Ya no se lee ni se escribe en
+//     la nube para esto — solo localStorage de este navegador.
 // ══════════════════════════════════════════════════════════════
 var _TEND_FILTROS_KEY = '_TEND_FILTROS';
 
-async function _saveFiltrosTend(){
+function _saveFiltrosTend(){
   var filtros = {
     desde:  _tfVal('tf_desde'),  hasta:  _tfVal('tf_hasta'),
     tipo:   _tfVal('tf_tipo'),   prov:   _tfVal('tf_proveedor'),
@@ -13220,27 +13227,11 @@ async function _saveFiltrosTend(){
   var hayFiltro = !!(filtros.desde||filtros.hasta||filtros.tipo||filtros.prov||filtros.buscar||filtros.origen);
   try{ localStorage.setItem(_TEND_FILTROS_KEY, JSON.stringify(filtros)); }catch(e){}
   _actualizarIndicadorFiltro(hayFiltro);
-  if(!window._sb) return;
-  try{
-    await window._sb.from('simulador_sesiones').upsert(
-      { nombre: _TEND_FILTROS_KEY, datos: JSON.stringify(filtros), updated_at: new Date().toISOString() },
-      { onConflict: 'nombre' }
-    );
-  }catch(e){ console.warn('filtros sync error:', e.message); }
 }
 
-async function _loadFiltrosTend(){
+function _loadFiltrosTend(){
   var filtros = null;
-  if(window._sb){
-    try{
-      var r = await window._sb.from('simulador_sesiones')
-        .select('datos').eq('nombre', _TEND_FILTROS_KEY).maybeSingle();
-      if(!r.error && r.data && r.data.datos) filtros = JSON.parse(r.data.datos);
-    }catch(e){}
-  }
-  if(!filtros){
-    try{ var raw=localStorage.getItem(_TEND_FILTROS_KEY); if(raw) filtros=JSON.parse(raw); }catch(e){}
-  }
+  try{ var raw=localStorage.getItem(_TEND_FILTROS_KEY); if(raw) filtros=JSON.parse(raw); }catch(e){}
   if(!filtros) return false;
   if(filtros.desde)  _tfSet('tf_desde',  filtros.desde);
   const _hoyPA = new Date(new Date().getTime()-5*60*60*1000).toISOString().slice(0,10);
@@ -13260,7 +13251,7 @@ function _actualizarIndicadorFiltro(activo){
   });
 }
 
-async function _limpiarFiltrosTend_Cloud(){
+function _limpiarFiltrosTend_Cloud(){
   ['tf_desde','tf_hasta','tf_tipo','tf_proveedor','tf_buscar','tf_origen'].forEach(function(id){ _tfSet(id,''); });
   document.querySelectorAll('[id="tf_origen_pais"]').forEach(function(sel){ sel.value=''; });
   var container = document.getElementById('tab-modal-body') || document;
@@ -13270,17 +13261,10 @@ async function _limpiarFiltrosTend_Cloud(){
   });
   _actualizarIndicadorFiltro(false);
   try{ localStorage.removeItem(_TEND_FILTROS_KEY); }catch(e){}
-  if(window._sb){
-    try{
-      await window._sb.from('simulador_sesiones').upsert(
-        { nombre: _TEND_FILTROS_KEY, datos: JSON.stringify({desde:'',hasta:'',tipo:'',prov:'',buscar:'',origen:''}), updated_at: new Date().toISOString() },
-        { onConflict: 'nombre' }
-      );
-    }catch(e){}
-  }
   _applyTendFilters();
   if(typeof _showToast==='function') _showToast('\u2705 Filtros restablecidos', 'green', 2000);
 }
+
 
 
 function autoFillTend(){
@@ -16160,6 +16144,7 @@ async function _plntRender(modal){
           +'<div style="font-size:10px;color:var(--muted);font-family:monospace">'+esc2(p.archivo||'')+'</div>'
         +'</div>'
         +'<div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">'
+          +'<button onclick="_plntMarcarUsada(\''+p.id+'\')" style="background:rgba(240,136,62,.1);border:1px solid rgba(240,136,62,.3);color:#f0883e;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer" title="Vincular manualmente a un embarque ya procesado">🔗 Marcar usada</button>'
           +'<button onclick="_plntDescargar(\''+p.id+'\')" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:8px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer">⬇️ Descargar</button>'
           +'<button onclick="_plntEliminar(\''+p.id+'\')" style="background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.25);color:var(--red-l);border-radius:8px;padding:6px 10px;font-size:11px;cursor:pointer">🗑️</button>'
         +'</div>'
@@ -16268,6 +16253,34 @@ async function _plntEliminar(id){
   var m=document.getElementById('_plnt_modal');
   if(m) _plntRender(m);
 }
+
+// ── Marcar plantilla como ya usada manualmente ──
+// Para plantillas aplicadas ANTES de que existiera el registro
+// automático de uso (o aplicadas por una vía que no lo registró):
+// el usuario indica el N° de embarque y la plantilla pasa a
+// "historial" / deja de aparecer como disponible, igual que si el
+// sistema la hubiera marcado sola al procesar.
+async function _plntMarcarUsada(id){
+  var nro = prompt('¿En qué N° de embarque se usó esta plantilla?\n\nSe marcará como usada y dejará de aparecer como disponible.');
+  if(nro===null) return;
+  nro = (nro||'').trim();
+  if(!nro){ _showToast('⚠️ Escribe un N° de embarque válido','orange',3000); return; }
+  var arr = await _plntLoad();
+  var p = arr.find(function(x){ return x.id===id; });
+  if(!p){ _showToast('⚠️ Plantilla no encontrada','orange',3000); return; }
+  p.usos = p.usos||[];
+  var yaRegistrado = p.usos.some(function(u){ return (u.embarque||'').trim().toUpperCase()===nro.toUpperCase(); });
+  if(!yaRegistrado){
+    p.usos.push({embarque:nro, fecha:new Date().toISOString(), manual:true});
+    await _plntSave(arr);
+    _showToast('✅ Plantilla vinculada al embarque '+nro,'green',3000);
+  } else {
+    _showToast('ℹ️ Ya estaba vinculada a ese embarque','orange',2500);
+  }
+  var m=document.getElementById('_plnt_modal');
+  if(m) _plntRender(m);
+}
+
 
 // ── Buscador de plantillas (desde el botón 🔍 en Proveedores) ──
 async function _plntAbrirBuscador(){
@@ -18491,27 +18504,19 @@ function renderDashboardKPIs(data){
   // Siempre usar el filtro activo — los KPIs reflejan el período seleccionado
   const all = _getFilteredTendData();
 
-  // Recover/correct ahorro from snap using fórmula correcta del comparativo 4 Criterios
-  let _kpiFixed=false;
-  all.forEach(d=>{
-    if(!d.snap) return;
-    const s1=d.snap.sc1||{}, s2=d.snap.sc2||{}, s3=d.snap.sc3||{};
-    const isSab=(d.esc||'').toLowerCase().includes('sababa')||(d.esc||'').toLowerCase().includes('sab');
-    const isCif=(d.esc||'').toLowerCase().includes('cif');
-    const isUnico=(d.esc||'').toLowerCase().includes('único')||(d.esc||'').toLowerCase().includes('unico');
-    if(isUnico) return;
-    if(isSab && s3.comision>0){
-      const _s1d=(s1.arancel||0)+(s1.itbms||0)+(s1.hon||0)+(s1.tasa||0)+(s1.form1||0)+(s1.itbmsTasaFinal||0)+(s1.flete||0)+(s1.acarreo||0)+(s1.dmce||0)+(s1.agente||0);
-      const _ih=s3.itbmsHomol||0;
-      const _s3d=_ih+(s3.flete||0)+(s3.gastos||0)+(s3.comision-_ih);
-      const _ah=Math.round((_s1d-_s3d)*100)/100;
-      if(Math.abs((d.ahorro||0)-_ah)>1){d.ahorro=_ah;_kpiFixed=true;}
-      else if(!d.ahorro&&_ah>0){d.ahorro=_ah;_kpiFixed=true;}
-    } else if(isCif&&(!d.ahorro||d.ahorro===0)&&(s2.ahorroNeto||0)>0){
-      d.ahorro=s2.ahorroNeto;_kpiFixed=true;
-    }
-  });
-  if(_kpiFixed) saveTendData();
+  // ══════════════════════════════════════════════════════════════
+  // ── FIX (jul-2026): el KPI "Ahorro Total" tenía su propia lógica
+  //    que RECALCULABA el ahorro de embarques Sababa usando el costo
+  //    homologado (sc3) en vez del valor guardado, y encima lo
+  //    SOBREESCRIBÍA en tendData y lo volvía a subir a Supabase con
+  //    solo abrir el Dashboard — corrompiendo en silencio el ahorro
+  //    correcto que ya estaba en Historial de Embarques. El ahorro
+  //    del desembolso siempre debe basarse en el costo ORIGINAL
+  //    (el mismo valor que ya se guardó al procesar el embarque,
+  //    visible en Historial), nunca en el homologado. Ahora el KPI
+  //    simplemente suma el mismo campo d.ahorro que usa Historial —
+  //    sin recalcular nada ni volver a guardar nada. ──
+  // ══════════════════════════════════════════════════════════════
   const totalAhorro=all.reduce((s,d)=>s+(d.ahorro||0),0);
   // ── Valor Mercancía ──
   // Original  = suma de líneas de factura de mercancía (valor CIF/FOB real del proveedor)
