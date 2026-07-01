@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Corregir Fecha de Embarque</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#0d1117;color:#e6edf3;font-family:'IBM Plex Sans',system-ui,sans-serif;padding:20px;min-height:100vh}
+  .card{max-width:420px;margin:20px auto;background:#161b22;border:1px solid #30363d;border-radius:16px;padding:24px}
+  h1{font-size:16px;margin:0 0 4px}
+  .sub{font-size:12px;color:#8b949e;margin-bottom:20px;line-height:1.5}
+  label{display:block;font-size:11px;color:#8b949e;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;margin-top:16px}
+  input{width:100%;background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:10px 12px;color:#e6edf3;font-size:14px;font-family:'IBM Plex Mono',monospace}
+  button{width:100%;margin-top:22px;background:linear-gradient(135deg,#3fb950,#2ea043);border:none;border-radius:10px;padding:13px;font-size:14px;font-weight:700;color:#fff;cursor:pointer}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .msg{margin-top:16px;padding:12px 14px;border-radius:10px;font-size:12px;line-height:1.5;display:none}
+  .msg.ok{display:block;background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.3);color:#3fb950}
+  .msg.err{display:block;background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.3);color:#f85149}
+  .msg.info{display:block;background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:#58a6ff}
+  .found{font-size:12px;color:#8b949e;margin-top:14px;padding:10px 12px;background:#0d1117;border-radius:8px;border:1px solid #30363d;display:none}
+</style>
+</head>
+<body>
+<div class="card">
+  <a href="index.html" style="display:inline-block;font-size:11px;color:#8b949e;text-decoration:none;margin-bottom:14px">← Volver a la App Principal</a>
+  <h1>📅 Corregir Fecha de Embarque</h1>
+  <div class="sub">Herramienta aislada — solo cambia el campo de fecha del embarque indicado directamente en Supabase. No abre el editor, no toca la plantilla ni ningún otro campo.</div>
+
+  <label>N° de Embarque</label>
+  <input id="nro" type="text" value="22089">
+
+  <label>Fecha correcta</label>
+  <input id="fecha" type="date" value="2026-06-11">
+
+  <button id="btnBuscar">🔍 Buscar embarque</button>
+  <div id="found" class="found"></div>
+  <button id="btnGuardar" style="display:none">✅ Corregir fecha y guardar en la nube</button>
+
+  <div id="msg" class="msg"></div>
+</div>
+
+<script>
+const SB_URL = 'https://kgrunsunahooitmqzaaq.supabase.co';
+const SB_KEY = 'sb_publishable_pRDW1CDvw8iKlSy8oTz5uA_v0GA4GkA';
+const MASTER_KEY = '_TEND_MASTER';
+const sb = supabase.createClient(SB_URL, SB_KEY);
+
+const $ = id => document.getElementById(id);
+function showMsg(text, type){
+  const m = $('msg');
+  m.className = 'msg ' + type;
+  m.textContent = text;
+}
+
+let _cache = { master: null, idx: -1 };
+
+$('btnBuscar').onclick = async function(){
+  const nro = $('nro').value.trim();
+  if(!nro){ showMsg('Escribe un N° de embarque.', 'err'); return; }
+  $('btnBuscar').disabled = true;
+  $('btnBuscar').textContent = '⏳ Buscando...';
+  $('found').style.display = 'none';
+  $('btnGuardar').style.display = 'none';
+  showMsg('', '');
+  try{
+    const { data, error } = await sb.from('simulador_sesiones')
+      .select('datos').eq('nombre', MASTER_KEY).maybeSingle();
+    if(error) throw error;
+    if(!data || !data.datos) throw new Error('No se encontró el registro maestro en Supabase.');
+    const parsed = JSON.parse(data.datos);
+    const tendData = Array.isArray(parsed.tendData) ? parsed.tendData : [];
+    const idx = tendData.findIndex(d => d && d.nro && String(d.nro).trim().toUpperCase() === nro.toUpperCase());
+    if(idx === -1){
+      showMsg('No se encontró el embarque "' + nro + '" en el maestro de Supabase.', 'err');
+      _cache = { master: null, idx: -1 };
+      return;
+    }
+    _cache = { master: parsed, idx };
+    const d = tendData[idx];
+    $('found').style.display = 'block';
+    $('found').innerHTML = '📦 Encontrado: <strong>' + (d.nro||'') + '</strong> — ' + (d.desc||'Embarque') +
+      '<br>Fecha actual: <strong>' + (d.fecha || d.snap?.fecha || '—') + '</strong>' +
+      '<br>Ahorro registrado: <strong>$' + (Number(d.ahorro||0)).toLocaleString('en-US',{minimumFractionDigits:2}) + '</strong> (no se toca)';
+    $('btnGuardar').style.display = 'block';
+    showMsg('Embarque encontrado. Revisa los datos y confirma el cambio.', 'info');
+  }catch(e){
+    showMsg('Error: ' + e.message, 'err');
+  }finally{
+    $('btnBuscar').disabled = false;
+    $('btnBuscar').textContent = '🔍 Buscar embarque';
+  }
+};
+
+$('btnGuardar').onclick = async function(){
+  const nuevaFecha = $('fecha').value;
+  if(!nuevaFecha){ showMsg('Selecciona una fecha válida.', 'err'); return; }
+  if(_cache.idx === -1 || !_cache.master){ showMsg('Primero busca el embarque.', 'err'); return; }
+  $('btnGuardar').disabled = true;
+  $('btnGuardar').textContent = '⏳ Guardando...';
+  try{
+    // Re-leer el maestro justo antes de escribir, para no pisar cambios
+    // recientes de otro dispositivo (mismo criterio de seguridad que la app).
+    const { data, error } = await sb.from('simulador_sesiones')
+      .select('datos').eq('nombre', MASTER_KEY).maybeSingle();
+    if(error) throw error;
+    const parsed = JSON.parse(data.datos);
+    const tendData = Array.isArray(parsed.tendData) ? parsed.tendData : [];
+    const nro = $('nro').value.trim();
+    const idx = tendData.findIndex(d => d && d.nro && String(d.nro).trim().toUpperCase() === nro.toUpperCase());
+    if(idx === -1) throw new Error('El embarque ya no está en el maestro (¿fue eliminado?).');
+
+    // ── Único cambio: la fecha. Todo lo demás del registro queda intacto. ──
+    tendData[idx].fecha = nuevaFecha;
+    if(tendData[idx].snap) tendData[idx].snap.fecha = nuevaFecha;
+    tendData[idx].fechaDoc = nuevaFecha;
+
+    const payload = {
+      nombre: MASTER_KEY,
+      datos: JSON.stringify({
+        tendData: tendData,
+        deleted: parsed.deleted || [],
+        updated_at: new Date().toISOString()
+      }),
+      updated_at: new Date().toISOString()
+    };
+    const { error: upErr } = await sb.from('simulador_sesiones').upsert(payload, { onConflict: 'nombre' });
+    if(upErr) throw upErr;
+
+    showMsg('✅ Fecha del embarque ' + nro + ' corregida a ' + nuevaFecha + '. Ya quedó en Supabase — la próxima vez que abras la app (o toques "☁️ Sincronizar Nube") la verás en el mes correcto.', 'ok');
+    $('btnGuardar').style.display = 'none';
+    $('found').style.display = 'none';
+  }catch(e){
+    showMsg('Error al guardar: ' + e.message, 'err');
+  }finally{
+    $('btnGuardar').disabled = false;
+    $('btnGuardar').textContent = '✅ Corregir fecha y guardar en la nube';
+  }
+};
+</script>
+</body>
+</html>
