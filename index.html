@@ -12279,6 +12279,14 @@ function _corregirRubroUI(idx){
   var ov = document.createElement('div');
   ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:999999;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto';
   var rubroOpts = Object.entries(_RUBRO_LABELS_FIX).map(function(e){ return '<option value="'+e[0]+'">'+e[1]+'</option>'; }).join('');
+  var tipoActual = d.tipo || '';
+
+  var tipoZLHtml = '<div style="background:var(--bg);border:1px solid rgba(45,212,191,.3);border-radius:10px;padding:12px;margin-bottom:14px">'
+    +'<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:8px">Régimen Aduanero</div>'
+    +'<div style="display:flex;gap:8px">'
+      +'<button id="_fix_tipo_zl" type="button" style="flex:1;padding:9px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid '+(tipoActual==='ZL'?'#2dd4bf':'var(--border)')+';background:'+(tipoActual==='ZL'?'rgba(45,212,191,.15)':'var(--s2)')+';color:'+(tipoActual==='ZL'?'#2dd4bf':'var(--muted)')+'">📦 Zona Libre</button>'
+      +'<button id="_fix_tipo_ext" type="button" style="flex:1;padding:9px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid '+(tipoActual==='EXT'?'#58a6ff':'var(--border)')+';background:'+(tipoActual==='EXT'?'rgba(88,166,255,.15)':'var(--s2)')+';color:'+(tipoActual==='EXT'?'#58a6ff':'var(--muted)')+'">🚢 Importación</button>'
+    +'</div></div>';
 
   var filasHtml = !lineas.length
     ? '<div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">Este embarque no tiene facturas de servicio registradas.</div>'
@@ -12298,12 +12306,25 @@ function _corregirRubroUI(idx){
   ov.innerHTML = '<div style="background:var(--s1);border:1px solid var(--border);border-radius:16px;padding:22px;max-width:420px;width:100%;max-height:82vh;overflow-y:auto">'
     +'<div style="font-size:13px;font-weight:800;color:var(--text);margin-bottom:4px">🏷️ Corregir Rubro de Facturas</div>'
     +'<div style="font-size:11px;color:var(--muted);margin-bottom:14px">Embarque: <strong style="color:var(--orange-l)">'+d.nro+'</strong> — solo cambia la clasificación del rubro; no toca montos, plantilla ni mercancía.</div>'
+    +tipoZLHtml
     +filasHtml
     +'<div style="display:flex;gap:10px;margin-top:8px">'
     +'<button id="_fix_rubro_cancel" style="flex:1;background:none;border:1px solid var(--border);color:var(--muted);border-radius:10px;padding:10px;font-size:12px;cursor:pointer">Cancelar</button>'
     +'<button id="_fix_rubro_ok" style="flex:2;background:linear-gradient(135deg,rgba(99,179,237,.25),rgba(99,179,237,.12));border:1.5px solid rgba(99,179,237,.5);color:#63b3ed;border-radius:10px;padding:10px;font-size:12px;font-weight:800;cursor:pointer">🏷️ Guardar Cambios</button>'
     +'</div></div>';
   document.body.appendChild(ov);
+  var _nuevoTipoZL = tipoActual;
+  var btnZL = ov.querySelector('#_fix_tipo_zl'), btnExt = ov.querySelector('#_fix_tipo_ext');
+  function _pintarTipoBtns(){
+    btnZL.style.borderColor = _nuevoTipoZL==='ZL' ? '#2dd4bf' : 'var(--border)';
+    btnZL.style.background  = _nuevoTipoZL==='ZL' ? 'rgba(45,212,191,.15)' : 'var(--s2)';
+    btnZL.style.color       = _nuevoTipoZL==='ZL' ? '#2dd4bf' : 'var(--muted)';
+    btnExt.style.borderColor= _nuevoTipoZL==='EXT'? '#58a6ff' : 'var(--border)';
+    btnExt.style.background = _nuevoTipoZL==='EXT'? 'rgba(88,166,255,.15)' : 'var(--s2)';
+    btnExt.style.color      = _nuevoTipoZL==='EXT'? '#58a6ff' : 'var(--muted)';
+  }
+  btnZL.onclick  = function(){ _nuevoTipoZL='ZL';  _pintarTipoBtns(); };
+  btnExt.onclick = function(){ _nuevoTipoZL='EXT'; _pintarTipoBtns(); };
   ov.querySelector('#_fix_rubro_cancel').onclick = function(){ ov.remove(); };
   ov.addEventListener('click', function(e){ if(e.target===ov) ov.remove(); });
   ov.querySelector('#_fix_rubro_ok').onclick = function(){
@@ -12316,10 +12337,14 @@ function _corregirRubroUI(idx){
         cambios++;
       }
     });
+    if(_nuevoTipoZL && _nuevoTipoZL !== tipoActual){
+      d.tipo = _nuevoTipoZL; // ← corrige Zona Libre / Importación para el Informe Financiero
+      cambios++;
+    }
     ov.remove();
     if(cambios===0){ if(typeof _showToast==='function') _showToast('ℹ️ No hubo cambios','orange',2500); return; }
     saveTendData();
-    if(typeof _showToast==='function') _showToast('✅ '+cambios+' factura(s) reclasificada(s) — guardado en la nube','green',3500);
+    if(typeof _showToast==='function') _showToast('✅ '+cambios+' cambio(s) guardado(s) en la nube','green',3500);
     if(typeof renderTendencias==='function') renderTendencias();
     else if(typeof _renderTend==='function') _renderTend();
     if(typeof renderDashboardKPIs==='function') renderDashboardKPIs();
@@ -13823,6 +13848,18 @@ async function procesarEmbarque(){
     l.arPct = l.arPct || _siPct;
     return l;
   });
+  // ── FIX CRÍTICO (jul-2026): 'document.getElementById('s1_tipo')' apuntaba
+  //    a un campo que NO EXISTE en el formulario (el selector real es un
+  //    seg-btn que llama a setTipo()/setSab2Tipo(), guardando el valor en
+  //    las variables globales 'tipo'/'sab2Tipo', no en un <select>). Por
+  //    eso SIEMPRE devolvía vacío, y el reporte financiero terminaba
+  //    adivinando Zona Libre vs Importación por el texto del país de
+  //    origen (que no tiene nada que ver con el régimen aduanero) — así
+  //    es como liquidaciones de Zona Libre terminaban contadas como
+  //    Importación. Ahora se toma el valor real elegido por el usuario. ──
+  const _tipoZLReal = (compar==='sababa' && typeof sab2Tipo!=='undefined' && sab2Tipo)
+    ? sab2Tipo
+    : ((typeof tipo!=='undefined' && tipo) ? tipo : (typeof sab2Tipo!=='undefined' ? sab2Tipo : '')) || '';
   const snap={
     nro: nro||`SIN-NRO-${Date.now()}`, desc, fecha,
     // ── Ahorro: _ahorroTotal4C es la fuente única de verdad ──
@@ -13860,13 +13897,23 @@ async function procesarEmbarque(){
     noDmceAcarreo: window._noDmceAcarreo || false,
     noHonorarios: window._noHonorarios || false,
     honManual: (typeof window._honManual === 'number' && window._honManual > 0) ? window._honManual : null,
+    // ── FIX CRÍTICO (jul-2026): 'document.getElementById('s1_tipo')' apuntaba
+    //    a un campo que NO EXISTE en el formulario (el selector real es un
+    //    seg-btn que llama a setTipo()/setSab2Tipo(), guardando el valor en
+    //    las variables globales 'tipo'/'sab2Tipo', no en un <select>). Por
+    //    eso SIEMPRE devolvía vacío, y el reporte financiero terminaba
+    //    adivinando Zona Libre vs Importación por el texto del país de
+    //    origen (que no tiene nada que ver con el régimen aduanero) — así
+    //    es como liquidaciones de Zona Libre terminaban contadas como
+    //    Importación. Ahora se toma el valor real elegido por el usuario. ──
     tramiteTipo: (()=>{
       const lines = invLines||[];
       const hasSI = lines.some(l=> l.prov && (l.prov.startsWith('S.I') || l.prov.startsWith('S.I -')));
-      const tipo = document.getElementById('s1_tipo')?.value||'';
+      const tipo = _tipoZLReal;
       if(tipo==='ZL') return 'Local';
       return hasSI ? 'Local' : 'Liquidación';
     })(),
+    tipo: _tipoZLReal, // ── usado por el Informe Financiero para clasificar Zona Libre vs Importación ──
     contenedor: document.getElementById('s1_notas')?.value?.match(/cont[^,\n]*/i)?.[0]||'',
     lugarRecep: document.getElementById('s1_lugar_recep')?.value || '',
     gastoComp: parseFloat(document.getElementById('s1_gasto_comp')?.value)||0,
