@@ -22111,6 +22111,29 @@ function renderResumenRapido(){
         ${badge('Importación',liq_imp.length,'rgba(168,85,247,.1)',liquidacion.length,A_liq_imp.inv,A_liq.inv)}
         ${sumi_liq.length>0?badge('Suministros 🔧',sumi_liq.length,'rgba(250,204,21,.15)',liquidacion.length,A_sumi_liq.inv,A_liq.inv):''}
       </div>
+      ${(function(){
+        // ── Desglose por corredor dentro de Liquidación (Landed Total) ──
+        const _liqSab = liquidacion.filter(d=>classify(d).isSababa);
+        const _liqCif = liquidacion.filter(d=>classify(d).isCIF && !classify(d).isSababa);
+        const _liqOtro = liquidacion.filter(d=>!classify(d).isSababa && !classify(d).isCIF);
+        const _A_liqSab = agg(_liqSab), _A_liqCif = agg(_liqCif), _A_liqOtro = agg(_liqOtro);
+        const _tarjeta = (lbl,n,landed,color,bg)=>`
+          <div style="flex:1;min-width:130px;background:${bg};border:1px solid ${color}40;border-radius:10px;padding:10px 12px">
+            <div style="font-size:9px;font-weight:700;color:${color};text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">${lbl}</div>
+            <div style="display:flex;align-items:baseline;gap:6px">
+              <span style="font-size:18px;font-weight:800;color:${color}">${n}</span>
+              <span style="font-size:9px;color:var(--muted)">liquidación${n===1?'':'es'}</span>
+            </div>
+            <div style="font-size:11px;font-family:'IBM Plex Mono',monospace;font-weight:700;color:var(--text);margin-top:2px">${fmtA(landed)} <span style="font-size:8px;color:var(--muted);font-weight:400">Landed</span></div>
+          </div>`;
+        if(!_liqSab.length && !_liqCif.length && !_liqOtro.length) return '';
+        return `<div style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:2px 0 8px">🏢 Por Corredor</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+          ${_liqSab.length ? _tarjeta('Sababa Imports',_liqSab.length,_A_liqSab.l1,'#a371f7','rgba(163,113,247,.08)') : ''}
+          ${_liqCif.length ? _tarjeta('CIF Express',_liqCif.length,_A_liqCif.l1,'#58a6ff','rgba(88,166,255,.08)') : ''}
+          ${_liqOtro.length ? _tarjeta('Otro',_liqOtro.length,_A_liqOtro.l1,'var(--muted)','rgba(139,148,158,.08)') : ''}
+        </div>`;
+      })()}
       ${colHdr()}
       ${row('Valor Mercancía Original', fmtA(A_liq_zl.merc), fmtA(A_liq_imp.merc),false,'',A_liq_zl.merc,A_liq_imp.merc)}
       ${row('Costo No Mercancía',       fmtA(A_liq_zl.nm),   fmtA(A_liq_imp.nm),false,'',A_liq_zl.nm,A_liq_imp.nm)}
