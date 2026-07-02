@@ -18142,6 +18142,14 @@ function _exjsDownload(wb,nombre){
 // CSV — formato europeo (punto y coma, coma decimal)
 function _informeExportCSV(){
   const {all,liquidacion,local,liq_zl,liq_imp,loc_zl,loc_imp,liq_sab,liq_cif,loc_sab,A,factPct,fecha,fmtN}=_informeGetData();
+  // ── FIX (jul-2026): antes se ponía el conteo TOTAL de cada corredor en la
+  //    columna "Zona Libre" con un placeholder "—" en Importación, sin
+  //    calcular el desglose real — por eso el Excel decía "CIF Express: 4
+  //    Zona Libre" cuando en realidad las 4 eran de Importación. Ahora se
+  //    filtra cada corredor por su régimen real (mismo criterio que usan
+  //    liq_zl/liq_imp), coincidiendo con lo que muestran los KPIs. ──
+  const liq_sab_zl = liq_sab.filter(d=>liq_zl.includes(d)), liq_sab_imp = liq_sab.filter(d=>liq_imp.includes(d));
+  const liq_cif_zl = liq_cif.filter(d=>liq_zl.includes(d)), liq_cif_imp = liq_cif.filter(d=>liq_imp.includes(d));
   const f=n=>fmtN(n,','); // decimal comma (European)
   const sep=';';
   const rows=[
@@ -18152,8 +18160,8 @@ function _informeExportCSV(){
     ['Concepto','Zona Libre','Importación','Total'],
     ['Total Embarques (Liquidación)',liq_zl.length,liq_imp.length,liquidacion.length],
     ['Total Embarques (Local)',loc_zl.length,loc_imp.length,local.length],
-    ['Trámites Sababa Import',liq_sab.length,'—',liq_sab.length],
-    ['Trámites CIF Express',liq_cif.length,'—',liq_cif.length],
+    ['Trámites Sababa Import',liq_sab_zl.length,liq_sab_imp.length,liq_sab.length],
+    ['Trámites CIF Express',liq_cif_zl.length,liq_cif_imp.length,liq_cif.length],
     [],
     ['EMBARQUES DE LIQUIDACIÓN'],
     ['Concepto','Zona Libre','Importación'],
@@ -18190,6 +18198,12 @@ function _informeExportCSV(){
 function _informeExportXLSX(){
   _exjsLoad(function(){
     var {all,liquidacion,local,liq_zl,liq_imp,loc_zl,loc_imp,liq_sab,liq_cif,loc_sab,A,factPct,fecha}=_informeGetData();
+    // ── FIX (jul-2026): ver nota en _informeExportCSV — el Excel ponía el
+    //    conteo total de cada corredor en la columna Zona Libre con "—" en
+    //    Importación, sin calcular el desglose real. ──
+    var liq_sab_zl = liq_sab.filter(function(d){return liq_zl.includes(d);}), liq_sab_imp = liq_sab.filter(function(d){return liq_imp.includes(d);});
+    var liq_cif_zl = liq_cif.filter(function(d){return liq_zl.includes(d);}), liq_cif_imp = liq_cif.filter(function(d){return liq_imp.includes(d);});
+    var loc_sab_zl = loc_sab.filter(function(d){return loc_zl.includes(d);}), loc_sab_imp = loc_sab.filter(function(d){return loc_imp.includes(d);});
     var wb=new ExcelJS.Workbook();
     wb.creator='Gestión Integral ZLC Panamá';
     var fecha2=new Date().toISOString().slice(0,10);
@@ -18209,8 +18223,8 @@ function _informeExportXLSX(){
 
     var rows=[
       ['EMBARQUES DE LIQUIDACIÓN','','',''],
-      ['  Trámites Sababa Import',liq_sab.length,'—',liq_sab.length],
-      ['  Trámites CIF Express',liq_cif.length,'—',liq_cif.length],
+      ['  Trámites Sababa Import',liq_sab_zl.length,liq_sab_imp.length,liq_sab.length],
+      ['  Trámites CIF Express',liq_cif_zl.length,liq_cif_imp.length,liq_cif.length],
       ['  Por Origen',liq_zl.length,liq_imp.length,liquidacion.length],
       ['  Valor Mercancía Original',A.liq_zl.mercOrig,A.liq_imp.mercOrig,A.liq_zl.mercOrig+A.liq_imp.mercOrig],
       ['  Costo No Mercancía',A.liq_zl.costoNM,A.liq_imp.costoNM,A.liq_zl.costoNM+A.liq_imp.costoNM],
@@ -18218,7 +18232,7 @@ function _informeExportXLSX(){
       ['  Landed Total',A.liq_zl.l1,A.liq_imp.l1,A.liq_zl.l1+A.liq_imp.l1],
       [null],
       ['EMBARQUES LOCALES','','',''],
-      ['  Trámites Sababa Import',loc_sab.length,0,loc_sab.length],
+      ['  Trámites Sababa Import',loc_sab_zl.length,loc_sab_imp.length,loc_sab.length],
       ['  Por Origen',loc_zl.length,loc_imp.length,local.length],
       ['  Valor Mercancía Homologado',A.loc_zl.mercInv,A.loc_imp.mercInv,A.loc_zl.mercInv+A.loc_imp.mercInv],
       ['  Costo No Mercancía',A.loc_zl.costoNM,A.loc_imp.costoNM,A.loc_zl.costoNM+A.loc_imp.costoNM],
@@ -18296,6 +18310,10 @@ function _informeExportXLSX(){
 // PDF — usa window.print() con estilos de impresión
 function _informeExportPDF(){
   const {all,liquidacion,local,liq_zl,liq_imp,loc_zl,loc_imp,liq_sab,liq_cif,loc_sab,A,factPct,fecha}=_informeGetData();
+  // ── FIX (jul-2026): ver nota en _informeExportCSV — desglose real por régimen ──
+  const liq_sab_zl2 = liq_sab.filter(d=>liq_zl.includes(d)), liq_sab_imp2 = liq_sab.filter(d=>liq_imp.includes(d));
+  const liq_cif_zl2 = liq_cif.filter(d=>liq_zl.includes(d)), liq_cif_imp2 = liq_cif.filter(d=>liq_imp.includes(d));
+  const loc_sab_zl2 = loc_sab.filter(d=>loc_zl.includes(d)), loc_sab_imp2 = loc_sab.filter(d=>loc_imp.includes(d));
   const f=n=>'$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
   const tbl=(titulo,rows)=>`
     <h3 style="color:#1a1a2e;border-bottom:2px solid #1a1a2e;padding-bottom:4px;margin:16px 0 8px">${titulo}</h3>
@@ -18321,8 +18339,8 @@ function _informeExportPDF(){
       <p style="margin:0;color:#666">${all.length} embarques · Liquidación: ${liquidacion.length} · Local: ${local.length}</p>
     </div>
     ${tbl('Embarques de Liquidación',[
-      ['Trámites Sababa Import',liq_sab.length,'—'],
-      ['Trámites CIF Express',liq_cif.length,'—'],
+      ['Trámites Sababa Import',liq_sab_zl2.length,liq_sab_imp2.length],
+      ['Trámites CIF Express',liq_cif_zl2.length,liq_cif_imp2.length],
       ['Embarques Zona Libre / Importación',liq_zl.length,liq_imp.length],
       ['Valor Mercancía Original',f(A.liq_zl.mercOrig),f(A.liq_imp.mercOrig)],
       ['Costo No Mercancía',f(A.liq_zl.costoNM),f(A.liq_imp.costoNM)],
@@ -18330,7 +18348,7 @@ function _informeExportPDF(){
       ['Landed Total',f(A.liq_zl.l1),f(A.liq_imp.l1),true],
     ])}
     ${tbl('Embarques Locales',[
-      ['Trámites Sababa Import',loc_sab.length,0],
+      ['Trámites Sababa Import',loc_sab_zl2.length,loc_sab_imp2.length],
       ['Trámites CIF Express',0,0],
       ['Embarques Zona Libre / Importación',loc_zl.length,loc_imp.length],
       ['Valor Mercancía Homologado',f(A.loc_zl.mercInv),f(A.loc_imp.mercInv)],
