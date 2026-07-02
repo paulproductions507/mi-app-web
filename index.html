@@ -12259,6 +12259,73 @@ function _corregirFechaUI(idx){
   };
 }
 
+// ══════════════════════════════════════════════════════════════
+//  CORREGIR RUBRO — reclasificar el tipo de una factura de servicio
+//  ya procesada (ej: heredó "Liquidación" y debía ser "Gastos Origen
+//  y Destino"), SIN reabrir el editor completo ni tocar la plantilla,
+//  la mercancía, ni ningún otro campo del embarque.
+// ══════════════════════════════════════════════════════════════
+var _RUBRO_LABELS_FIX = {
+  liquidacion:'🏛️ Liquidación / Pago Arancelario', itbms:'🧾 ITBMS', tasa:'💵 Tasa / Uso del Sistema',
+  honorarios:'💼 Honorarios / Comisión', acarreo:'🚛 Acarreo / Transporte', gastos_destino:'📦 Gastos Origen / Destino',
+  flete:'🚢 Flete Internacional', flete_sababa:'🔗 Flete Sababa (reconciliación)', uso_sistema:'💻 Uso del Sistema',
+  seguro:'🛡️ Seguro de Carga', almacenaje:'🏪 Almacenaje', inspeccion:'🔍 Inspección', dmce:'📝 DMCE', gastos:'📋 Otros Gastos', otros:'📋 Otros Gastos'
+};
+
+function _corregirRubroUI(idx){
+  var d = tendData[idx];
+  if(!d){ alert('Embarque no encontrado.'); return; }
+  var lineas = (d.invLines||[]).filter(function(l){ return l && l.tipoFac && l.tipoFac!=='mercancia'; });
+  var ov = document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:999999;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto';
+  var rubroOpts = Object.entries(_RUBRO_LABELS_FIX).map(function(e){ return '<option value="'+e[0]+'">'+e[1]+'</option>'; }).join('');
+
+  var filasHtml = !lineas.length
+    ? '<div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">Este embarque no tiene facturas de servicio registradas.</div>'
+    : lineas.map(function(l){
+        var realIdx = d.invLines.indexOf(l);
+        var sel = rubroOpts.replace('value="'+(l.tipoFac||'')+'"','value="'+(l.tipoFac||'')+'" selected');
+        return '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px">'
+          +'<div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:6px">'
+            +'<div style="font-size:12px;font-weight:700;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(l.prov||'—')+'</div>'
+            +'<div style="font-size:12px;font-weight:800;color:var(--orange-l);font-family:monospace;flex-shrink:0">$'+Number(l.costo||0).toLocaleString('en-US',{minimumFractionDigits:2})+'</div>'
+          +'</div>'
+          +'<div style="font-size:10px;color:var(--muted);margin-bottom:6px">Factura: '+(l.numFact||l.nfac||'—')+'</div>'
+          +'<select data-idx="'+realIdx+'" class="_fix_rubro_sel" style="width:100%;background:var(--s2);border:1px solid rgba(240,136,62,.3);border-radius:7px;padding:7px 9px;color:var(--text);font-size:12px">'+sel+'</select>'
+        +'</div>';
+      }).join('');
+
+  ov.innerHTML = '<div style="background:var(--s1);border:1px solid var(--border);border-radius:16px;padding:22px;max-width:420px;width:100%;max-height:82vh;overflow-y:auto">'
+    +'<div style="font-size:13px;font-weight:800;color:var(--text);margin-bottom:4px">🏷️ Corregir Rubro de Facturas</div>'
+    +'<div style="font-size:11px;color:var(--muted);margin-bottom:14px">Embarque: <strong style="color:var(--orange-l)">'+d.nro+'</strong> — solo cambia la clasificación del rubro; no toca montos, plantilla ni mercancía.</div>'
+    +filasHtml
+    +'<div style="display:flex;gap:10px;margin-top:8px">'
+    +'<button id="_fix_rubro_cancel" style="flex:1;background:none;border:1px solid var(--border);color:var(--muted);border-radius:10px;padding:10px;font-size:12px;cursor:pointer">Cancelar</button>'
+    +'<button id="_fix_rubro_ok" style="flex:2;background:linear-gradient(135deg,rgba(99,179,237,.25),rgba(99,179,237,.12));border:1.5px solid rgba(99,179,237,.5);color:#63b3ed;border-radius:10px;padding:10px;font-size:12px;font-weight:800;cursor:pointer">🏷️ Guardar Cambios</button>'
+    +'</div></div>';
+  document.body.appendChild(ov);
+  ov.querySelector('#_fix_rubro_cancel').onclick = function(){ ov.remove(); };
+  ov.addEventListener('click', function(e){ if(e.target===ov) ov.remove(); });
+  ov.querySelector('#_fix_rubro_ok').onclick = function(){
+    var cambios = 0;
+    ov.querySelectorAll('._fix_rubro_sel').forEach(function(sel){
+      var i = parseInt(sel.dataset.idx,10);
+      var nuevo = sel.value;
+      if(d.invLines[i] && d.invLines[i].tipoFac !== nuevo){
+        d.invLines[i].tipoFac = nuevo;
+        cambios++;
+      }
+    });
+    ov.remove();
+    if(cambios===0){ if(typeof _showToast==='function') _showToast('ℹ️ No hubo cambios','orange',2500); return; }
+    saveTendData();
+    if(typeof _showToast==='function') _showToast('✅ '+cambios+' factura(s) reclasificada(s) — guardado en la nube','green',3500);
+    if(typeof renderTendencias==='function') renderTendencias();
+    else if(typeof _renderTend==='function') _renderTend();
+    if(typeof renderDashboardKPIs==='function') renderDashboardKPIs();
+  };
+}
+
 // Rescatar embarque perdido directamente desde Supabase
 async function _rescatarEmbarqueCloud(nro){
   if(!window._sb){ alert('Sin conexión a Supabase.'); return; }
@@ -12687,17 +12754,29 @@ async function _pullTendFromCloud(){
           const registros = d.tendData && d.tendData.length ? d.tendData : [];
           // También intentar reconstruir desde los campos del snap
           if(d.snap || d.nro){
+            // ── Fecha de negocio real: SOLO d.snap?.fecha (si el snap la trae) o
+            //    d.fecha si de verdad es una fecha simple (YYYY-MM-DD), nunca un
+            //    timestamp completo con hora — eso es metadata de autoguardado,
+            //    no la fecha que el usuario eligió al procesar. Mejor dejarla
+            //    vacía (se puede corregir manualmente) que rellenarla mal. ──
+            var _fechaCruda = d.snap?.fecha || d.fecha || '';
+            var _fechaNegocio = (typeof _fechaCruda === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(_fechaCruda)) ? _fechaCruda : '';
             const recSnap = {
               nro: d.nro || '',
               desc: d.desc || '',
-              fecha: d.fecha || (d.snap?.fecha) || row.updated_at?.slice(0,10) || '',
+              fecha: _fechaNegocio,
               ahorro: d.snap?.ahorroNeto || 0,
               cif: d.snap?.cif || 0,
               esc: d.snap?.esc || (d.compar==='cifexp'?'CIF Express':'Sababa'),
               ts: d.snap?.ts || new Date(row.updated_at||Date.now()).getTime(),
               snap: d.snap || null,
               invLines: d.invLines || [],
-              status: 'completo'
+              status: 'completo',
+              // ── Marca de baja prioridad: esta reconstrucción viene de la sesión
+              //    "cruda" de autoguardado, no del maestro. Nunca puede desplazar
+              //    a un registro ya procesado — solo se usa si el embarque no
+              //    existe de ninguna otra forma. ──
+              _fromSessionFallback: true
             };
             registros.push(recSnap);
           }
@@ -12752,15 +12831,32 @@ async function _pullTendFromCloud(){
 
     // Reemplazar tendData con la versión fusionada
     // ── DEDUPLICAR por nro (priorizar el más reciente por ts) ──
+    // ── FIX (jul-2026): un registro reconstruido de autoguardado
+    //    (_fromSessionFallback) NUNCA debe desplazar a un registro real
+    //    ya procesado, sin importar qué ts tenga — su ts no es confiable
+    //    (refleja edición, no la fecha de negocio elegida al procesar).
+    //    Solo gana por ts cuando AMBOS candidatos son del mismo tipo. ──
     const dedupMap = new Map();
     cloudTend.forEach(rec => {
       const key = rec.nro ? rec.nro.trim().toUpperCase() : ('_ts_'+(rec.ts||Math.random()));
       const existing = dedupMap.get(key);
-      if(!existing || (rec.ts||0) > (existing.ts||0)){
+      if(!existing){
         dedupMap.set(key, rec);
+      } else {
+        const existingIsFallback = !!existing._fromSessionFallback;
+        const recIsFallback = !!rec._fromSessionFallback;
+        if(existingIsFallback && !recIsFallback){
+          dedupMap.set(key, rec); // real reemplaza a fallback, siempre
+        } else if(!existingIsFallback && recIsFallback){
+          // conservar el real — el fallback nunca gana aunque su ts sea mayor
+        } else if((rec.ts||0) > (existing.ts||0)){
+          dedupMap.set(key, rec);
+        }
       }
     });
     cloudTend = Array.from(dedupMap.values());
+    // Limpiar el flag temporal — ya cumplió su propósito para este dedup
+    cloudTend.forEach(rec => { if(rec._fromSessionFallback) delete rec._fromSessionFallback; });
     tendData = cloudTend;
     window.tendData = tendData; // mantener sincronizada la referencia global tras el pull
 
@@ -15176,6 +15272,7 @@ function renderTend(){
         <div style="display:flex;gap:4px;align-items:center">
           <button class="btn-reabrir" onclick="event.stopPropagation();reabrirEmbarquePendiente(${idx})" style="${isPend?'':'background:rgba(88,166,255,.1);border-color:rgba(88,166,255,.3);color:var(--blue-l)'}">✏️ ${isPend?'Reabrir':'Editar'}</button>
           <button onclick="event.stopPropagation();_corregirFechaUI(${idx})" title="Corregir fecha del embarque" style="background:rgba(248,209,34,.1);border:1px solid rgba(248,209,34,.3);color:#f8d122;border-radius:5px;padding:2px 6px;font-size:10px;cursor:pointer;height:22px">📅</button>
+          <button onclick="event.stopPropagation();_corregirRubroUI(${idx})" title="Corregir rubro de facturas de servicio" style="background:rgba(99,179,237,.1);border:1px solid rgba(99,179,237,.3);color:#63b3ed;border-radius:5px;padding:2px 6px;font-size:10px;cursor:pointer;height:22px">🏷️</button>
           <button class="del-btn" onclick="event.stopPropagation();deleteTend(${idx})" style="font-size:10px;padding:2px 6px;height:22px;flex-shrink:0">×</button>
         </div>
       </div>`;
@@ -15360,6 +15457,7 @@ function renderTend(){
           <div style="display:flex;gap:4px;align-items:center">
             <button class="btn-reabrir" onclick="event.stopPropagation();reabrirEmbarquePendiente(${idx})" style="${isPend?'':'background:rgba(88,166,255,.1);border-color:rgba(88,166,255,.3);color:var(--blue-l)'}">✏️ ${isPend?'Reabrir':'Editar'}</button>
             <button onclick="event.stopPropagation();_corregirFechaUI(${idx})" title="Corregir fecha del embarque" style="background:rgba(248,209,34,.1);border:1px solid rgba(248,209,34,.3);color:#f8d122;border-radius:5px;padding:2px 6px;font-size:10px;cursor:pointer;height:22px">📅</button>
+          <button onclick="event.stopPropagation();_corregirRubroUI(${idx})" title="Corregir rubro de facturas de servicio" style="background:rgba(99,179,237,.1);border:1px solid rgba(99,179,237,.3);color:#63b3ed;border-radius:5px;padding:2px 6px;font-size:10px;cursor:pointer;height:22px">🏷️</button>
             <button class="del-btn" onclick="event.stopPropagation();deleteTend(${idx})" style="font-size:10px;padding:2px 6px;height:22px;flex-shrink:0">×</button>
           </div>
         </div>`;
@@ -16124,6 +16222,17 @@ async function iniciarModuloPlantillas(){
 async function _plntRender(modal){
   var arr=await _plntLoad();
   var fmt=function(d){return new Date(d).toLocaleDateString('es-PA',{day:'2-digit',month:'short',year:'numeric'});};
+  // ── Misma lógica que el buscador: un uso solo cuenta si el embarque sigue vivo en tendData ──
+  var nrosVivos = new Set((typeof tendData!=='undefined' ? tendData : (window.tendData||[])).filter(function(d){return d.nro;}).map(function(d){return String(d.nro).trim().toUpperCase();}));
+  function usosVivos(p){
+    return (p.usos||[]).filter(function(u){
+      var n=(u.embarque||'').trim().toUpperCase();
+      return n && n!=='—' && nrosVivos.has(n);
+    });
+  }
+  var disponibles = arr.filter(function(p){ return usosVivos(p).length===0; });
+  var historialArr = arr.filter(function(p){ return usosVivos(p).length>0; });
+
   var html='<div style="max-width:820px;margin:0 auto">'
     +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;gap:12px;flex-wrap:wrap">'
       +'<div>'
@@ -16136,7 +16245,28 @@ async function _plntRender(modal){
         +'<button onclick="document.getElementById(\'_plnt_modal\').remove()" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:10px;padding:10px 16px;font-size:13px;cursor:pointer">✕ Cerrar</button>'
       +'</div>'
     +'</div>'
-    +'<input id="_plnt_buscar" type="text" placeholder="🔍 Buscar por nombre..." oninput="_plntFiltrar(this.value)" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:10px 14px;color:var(--text);font-size:13px;margin-bottom:16px;box-sizing:border-box">';
+    +'<input id="_plnt_buscar" type="text" placeholder="🔍 Buscar por nombre..." oninput="_plntFiltrar(this.value)" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:10px 14px;color:var(--text);font-size:13px;margin-bottom:16px;box-sizing:border-box">'
+    +'<div style="display:flex;gap:6px;margin-bottom:16px;border-bottom:1px solid var(--border)">'
+      +'<button id="_plnt_lib_tab_disp_btn" onclick="_plntSwitchTabLib(\'disp\')" style="flex:1;background:none;border:none;border-bottom:2px solid #22c55e;color:#22c55e;font-size:12px;font-weight:700;padding:9px 4px;cursor:pointer">📄 Disponibles ('+disponibles.length+')</button>'
+      +'<button id="_plnt_lib_tab_hist_btn" onclick="_plntSwitchTabLib(\'hist\')" style="flex:1;background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);font-size:12px;font-weight:700;padding:9px 4px;cursor:pointer">🔒 Historial ('+historialArr.length+')</button>'
+    +'</div>';
+
+  function filaPlantilla(p, locked){
+    var usos=p.usos&&p.usos.length?'Usada en '+p.usos.length+' embarque(s) · Último: '+p.usos[p.usos.length-1].embarque:'Sin usos registrados';
+    return '<div class="_plnt_row" data-nombre="'+(p.nombre||'').toLowerCase()+'" style="background:var(--s1);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:flex-start;gap:12px'+(locked?';opacity:.65':'')+'">'
+      +'<div style="font-size:28px;flex-shrink:0">'+(locked?'🔒':'📄')+'</div>'
+      +'<div style="flex:1;min-width:0">'
+        +'<div style="font-weight:700;font-size:14px;color:var(--text);margin-bottom:2px">'+esc2(p.nombre)+'</div>'
+        +'<div style="font-size:11px;color:var(--muted);margin-bottom:6px">👤 '+esc2(p.usuario||'—')+'  ·  📅 '+fmt(p.fecha)+'  ·  📊 '+usos+'</div>'
+        +'<div style="font-size:10px;color:var(--muted);font-family:monospace">'+esc2(p.archivo||'')+'</div>'
+      +'</div>'
+      +'<div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">'
+        +'<button onclick="_plntMarcarUsada(\''+p.id+'\')" style="background:rgba(240,136,62,.1);border:1px solid rgba(240,136,62,.3);color:#f0883e;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer" title="Vincular manualmente a un embarque ya procesado">🔗 Marcar usada</button>'
+        +'<button onclick="_plntDescargar(\''+p.id+'\')" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:8px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer">⬇️ Descargar</button>'
+        +'<button onclick="_plntEliminar(\''+p.id+'\')" style="background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.25);color:var(--red-l);border-radius:8px;padding:6px 10px;font-size:11px;cursor:pointer">🗑️</button>'
+      +'</div>'
+    +'</div>';
+  }
 
   if(!arr.length){
     html+='<div style="text-align:center;padding:60px 20px;color:var(--muted)">'
@@ -16145,27 +16275,38 @@ async function _plntRender(modal){
       +'<div style="font-size:12px;margin-top:6px">Sube la primera plantilla Excel con el botón de arriba</div>'
     +'</div>';
   } else {
-    html+='<div id="_plnt_lista">';
-    arr.slice().sort(function(a,b){return new Date(b.fecha)-new Date(a.fecha);}).forEach(function(p){
-      var usos=p.usos&&p.usos.length?'Usada en '+p.usos.length+' embarque(s) · Último: '+p.usos[p.usos.length-1].embarque:'Sin usos registrados';
-      html+='<div class="_plnt_row" data-nombre="'+(p.nombre||'').toLowerCase()+'" style="background:var(--s1);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:flex-start;gap:12px">'
-        +'<div style="font-size:28px;flex-shrink:0">📄</div>'
-        +'<div style="flex:1;min-width:0">'
-          +'<div style="font-weight:700;font-size:14px;color:var(--text);margin-bottom:2px">'+esc2(p.nombre)+'</div>'
-          +'<div style="font-size:11px;color:var(--muted);margin-bottom:6px">👤 '+esc2(p.usuario||'—')+'  ·  📅 '+fmt(p.fecha)+'  ·  📊 '+usos+'</div>'
-          +'<div style="font-size:10px;color:var(--muted);font-family:monospace">'+esc2(p.archivo||'')+'</div>'
-        +'</div>'
-        +'<div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">'
-          +'<button onclick="_plntMarcarUsada(\''+p.id+'\')" style="background:rgba(240,136,62,.1);border:1px solid rgba(240,136,62,.3);color:#f0883e;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer" title="Vincular manualmente a un embarque ya procesado">🔗 Marcar usada</button>'
-          +'<button onclick="_plntDescargar(\''+p.id+'\')" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:8px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer">⬇️ Descargar</button>'
-          +'<button onclick="_plntEliminar(\''+p.id+'\')" style="background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.25);color:var(--red-l);border-radius:8px;padding:6px 10px;font-size:11px;cursor:pointer">🗑️</button>'
-        +'</div>'
-      +'</div>';
-    });
+    html+='<div id="_plnt_lista_disp">';
+    if(!disponibles.length){
+      html+='<div style="text-align:center;padding:30px 20px;color:var(--muted);font-size:12px">No hay plantillas disponibles — todas están en uso. Revisa la pestaña Historial.</div>';
+    } else {
+      disponibles.slice().sort(function(a,b){return new Date(b.fecha)-new Date(a.fecha);}).forEach(function(p){ html+=filaPlantilla(p,false); });
+    }
+    html+='</div>';
+    html+='<div id="_plnt_lista_hist" style="display:none">';
+    if(!historialArr.length){
+      html+='<div style="text-align:center;padding:30px 20px;color:var(--muted);font-size:12px">Todavía no hay plantillas marcadas como usadas.</div>';
+    } else {
+      historialArr.slice().sort(function(a,b){return new Date(b.fecha)-new Date(a.fecha);}).forEach(function(p){ html+=filaPlantilla(p,true); });
+    }
     html+='</div>';
   }
   html+='</div>';
   modal.innerHTML=html;
+}
+
+function _plntSwitchTabLib(tab){
+  var dispList=document.getElementById('_plnt_lista_disp'), histList=document.getElementById('_plnt_lista_hist');
+  var dispBtn=document.getElementById('_plnt_lib_tab_disp_btn'), histBtn=document.getElementById('_plnt_lib_tab_hist_btn');
+  if(!dispList||!histList) return;
+  if(tab==='disp'){
+    dispList.style.display=''; histList.style.display='none';
+    dispBtn.style.borderBottomColor='#22c55e'; dispBtn.style.color='#22c55e';
+    histBtn.style.borderBottomColor='transparent'; histBtn.style.color='var(--muted)';
+  } else {
+    dispList.style.display='none'; histList.style.display='';
+    histBtn.style.borderBottomColor='#22c55e'; histBtn.style.color='#22c55e';
+    dispBtn.style.borderBottomColor='transparent'; dispBtn.style.color='var(--muted)';
+  }
 }
 
 function _plntFiltrar(q){
@@ -16318,51 +16459,72 @@ async function _plntAbrirBuscador(){
       +'<button onclick="this.closest(\'._plnt_buscador_overlay\').remove()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer">✕</button>'
     +'</div>'
     +'<input id="_plnt_buscar_modal" type="text" placeholder="Nombre de la plantilla..." autofocus oninput="_plntFiltrarModal(this.value)" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:10px 14px;color:var(--text);font-size:13px;box-sizing:border-box;margin-bottom:14px">'
-    +'<div id="_plnt_modal_lista" style="display:flex;flex-direction:column;gap:8px">';
+    +'<div style="display:flex;gap:6px;margin-bottom:14px;border-bottom:1px solid var(--border)">'
+      +'<button id="_plnt_tab_disp_btn" onclick="_plntSwitchTabModal(\'disp\')" style="flex:1;background:none;border:none;border-bottom:2px solid #22c55e;color:#22c55e;font-size:12px;font-weight:700;padding:8px 4px;cursor:pointer">📄 Disponibles ('+disponibles.length+')</button>'
+      +'<button id="_plnt_tab_hist_btn" onclick="_plntSwitchTabModal(\'hist\')" style="flex:1;background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);font-size:12px;font-weight:700;padding:8px 4px;cursor:pointer">🔒 Historial ('+historial.length+')</button>'
+    +'</div>'
+    +'<div id="_plnt_modal_lista_disp" style="display:flex;flex-direction:column;gap:8px">';
 
   if(!arr.length){
     html+='<div style="text-align:center;padding:40px;color:var(--muted)">No hay plantillas guardadas aún.<br><button onclick="document.getElementById(\'_plnt_modal\').remove();iniciarApp(\'plantillas\')" style="margin-top:12px;background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.4);color:#22c55e;border-radius:8px;padding:8px 16px;font-size:12px;cursor:pointer">📁 Ir a Plantillas</button></div>';
+  } else if(disponibles.length===0){
+    html+='<div style="text-align:center;padding:24px;color:var(--muted);font-size:12px">No hay plantillas disponibles — todas están en uso por un embarque procesado. Revisa la pestaña Historial.</div>';
   } else {
-    if(disponibles.length===0){
-      html+='<div style="text-align:center;padding:24px;color:var(--muted);font-size:12px">No hay plantillas disponibles — todas están en uso por un embarque procesado.</div>';
-    } else {
-      html+=disponibles.slice().sort(function(a,b){return new Date(b.fecha)-new Date(a.fecha);}).map(function(p){
-        return '<div class="_plnt_modal_row" data-nombre="'+(p.nombre||'').toLowerCase()+'" '
-          +'style="background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:border-color .15s" '
-          +'onmouseover="this.style.borderColor=\'rgba(34,197,94,.5)\'" onmouseout="this.style.borderColor=\'var(--border)\'"'
-          +'onclick="_plntAplicar(\''+p.id+'\',this.closest(\'._plnt_buscador_overlay\'),this)">'
-          +'<div style="font-size:22px;flex-shrink:0">📄</div>'
-          +'<div style="flex:1;min-width:0">'
-            +'<div style="font-size:13px;font-weight:700;color:var(--text)">'+esc2(p.nombre)+'</div>'
-            +'<div style="font-size:11px;color:var(--muted)">👤 '+esc2(p.usuario||'—')+'  ·  📅 '+new Date(p.fecha).toLocaleDateString('es-PA',{day:'2-digit',month:'short',year:'numeric'})+(p.usos&&p.usos.length?'  ·  📜 Usada antes '+p.usos.length+'x (embarque'+(p.usos.length!==1?'s':'')+' eliminado)':'')+'</div>'
-          +'</div>'
-          +'<div style="font-size:11px;font-weight:700;color:#22c55e;flex-shrink:0">Aplicar →</div>'
-        +'</div>';
-      }).join('');
-    }
-    if(historial.length){
-      html+='<div style="margin-top:18px;margin-bottom:4px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">📜 Historial — en uso por un embarque procesado</div>'
-        +historial.slice().sort(function(a,b){return new Date(b.fecha)-new Date(a.fecha);}).map(function(p){
-          var uv=usosVivos(p);
-          var usosHtml=uv.map(function(u){
-            return '<div style="font-size:9px;color:var(--muted);line-height:1.6">📦 Embarque <strong style="color:var(--text)">'+esc2(u.embarque)+'</strong>'+(u.fecha?' — '+new Date(u.fecha).toLocaleDateString('es-PA',{day:'2-digit',month:'short',year:'numeric'}):'')+'</div>';
-          }).join('');
-          return '<div class="_plnt_modal_row" data-nombre="'+(p.nombre||'').toLowerCase()+'" '
-            +'style="background:var(--s2);opacity:.65;border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:12px">'
-            +'<div style="font-size:22px;flex-shrink:0">🔒</div>'
-            +'<div style="flex:1;min-width:0">'
-              +'<div style="font-size:13px;font-weight:700;color:var(--text)">'+esc2(p.nombre)+'</div>'
-              +'<div style="font-size:11px;color:var(--muted);margin-bottom:3px">👤 '+esc2(p.usuario||'—')+'  ·  📅 '+new Date(p.fecha).toLocaleDateString('es-PA',{day:'2-digit',month:'short',year:'numeric'})+'  ·  usada '+uv.length+'x en total</div>'
-              +usosHtml
-            +'</div>'
-          +'</div>';
-        }).join('');
-    }
+    html+=disponibles.slice().sort(function(a,b){return new Date(b.fecha)-new Date(a.fecha);}).map(function(p){
+      return '<div class="_plnt_modal_row" data-nombre="'+(p.nombre||'').toLowerCase()+'" '
+        +'style="background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:border-color .15s" '
+        +'onmouseover="this.style.borderColor=\'rgba(34,197,94,.5)\'" onmouseout="this.style.borderColor=\'var(--border)\'"'
+        +'onclick="_plntAplicar(\''+p.id+'\',this.closest(\'._plnt_buscador_overlay\'),this)">'
+        +'<div style="font-size:22px;flex-shrink:0">📄</div>'
+        +'<div style="flex:1;min-width:0">'
+          +'<div style="font-size:13px;font-weight:700;color:var(--text)">'+esc2(p.nombre)+'</div>'
+          +'<div style="font-size:11px;color:var(--muted)">👤 '+esc2(p.usuario||'—')+'  ·  📅 '+new Date(p.fecha).toLocaleDateString('es-PA',{day:'2-digit',month:'short',year:'numeric'})+(p.usos&&p.usos.length?'  ·  📜 Usada antes '+p.usos.length+'x (embarque'+(p.usos.length!==1?'s':'')+' eliminado)':'')+'</div>'
+        +'</div>'
+        +'<div style="font-size:11px;font-weight:700;color:#22c55e;flex-shrink:0">Aplicar →</div>'
+      +'</div>';
+    }).join('');
   }
+  html+='</div>'
+    +'<div id="_plnt_modal_lista_hist" style="display:none;flex-direction:column;gap:8px">';
+  if(!historial.length){
+    html+='<div style="text-align:center;padding:24px;color:var(--muted);font-size:12px">Todavía no hay plantillas marcadas como usadas.</div>';
+  } else {
+    html+=historial.slice().sort(function(a,b){return new Date(b.fecha)-new Date(a.fecha);}).map(function(p){
+      var uv=usosVivos(p);
+      var usosHtml=uv.map(function(u){
+        return '<div style="font-size:9px;color:var(--muted);line-height:1.6">📦 Embarque <strong style="color:var(--text)">'+esc2(u.embarque)+'</strong>'+(u.fecha?' — '+new Date(u.fecha).toLocaleDateString('es-PA',{day:'2-digit',month:'short',year:'numeric'}):'')+'</div>';
+      }).join('');
+      return '<div class="_plnt_modal_row" data-nombre="'+(p.nombre||'').toLowerCase()+'" '
+        +'style="background:var(--s2);opacity:.65;border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:12px">'
+        +'<div style="font-size:22px;flex-shrink:0">🔒</div>'
+        +'<div style="flex:1;min-width:0">'
+          +'<div style="font-size:13px;font-weight:700;color:var(--text)">'+esc2(p.nombre)+'</div>'
+          +'<div style="font-size:11px;color:var(--muted);margin-bottom:3px">👤 '+esc2(p.usuario||'—')+'  ·  📅 '+new Date(p.fecha).toLocaleDateString('es-PA',{day:'2-digit',month:'short',year:'numeric'})+'  ·  usada '+uv.length+'x en total</div>'
+          +usosHtml
+        +'</div>'
+      +'</div>';
+    }).join('');
+  }
+  html+='</div>';
   html+='</div></div>';
   ov.innerHTML=html;
   document.body.appendChild(ov);
   setTimeout(function(){ var el=document.getElementById('_plnt_buscar_modal'); if(el) el.focus(); },100);
+}
+
+function _plntSwitchTabModal(tab){
+  var dispList=document.getElementById('_plnt_modal_lista_disp'), histList=document.getElementById('_plnt_modal_lista_hist');
+  var dispBtn=document.getElementById('_plnt_tab_disp_btn'), histBtn=document.getElementById('_plnt_tab_hist_btn');
+  if(!dispList||!histList) return;
+  if(tab==='disp'){
+    dispList.style.display='flex'; histList.style.display='none';
+    dispBtn.style.borderBottomColor='#22c55e'; dispBtn.style.color='#22c55e';
+    histBtn.style.borderBottomColor='transparent'; histBtn.style.color='var(--muted)';
+  } else {
+    dispList.style.display='none'; histList.style.display='flex';
+    histBtn.style.borderBottomColor='#22c55e'; histBtn.style.color='#22c55e';
+    dispBtn.style.borderBottomColor='transparent'; dispBtn.style.color='var(--muted)';
+  }
 }
 
 function _plntFiltrarModal(q){
@@ -17826,6 +17988,7 @@ function _informeGetData(){
   const all = _getFilteredTendData();
   const fmtN = (n,sep) => Number(n||0).toFixed(2).replace('.',sep||'.');
 
+  const _sinAcentos = s => String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   const classify = d => {
     const esc=(d.esc||'').toLowerCase(), sc3=d.snap&&d.snap.sc3||{};
     const isLocal=esc.includes('sababa')&&(sc3.mercHomol||0)>0&&(sc3.comision||0)>0;
@@ -17833,7 +17996,11 @@ function _informeGetData(){
     const tipoSnap=((d.snap&&d.snap.tipo)||d.tipo||'').toUpperCase();
     if(tipoSnap==='EXT'||tipoSnap==='IMP') return {isLocal,isSababa,isCIF,isZL:false};
     if(tipoSnap==='ZL')                    return {isLocal,isSababa,isCIF,isZL:true};
-    const origen=(d.snap&&d.snap.campos&&d.snap.campos.s1_pais_origen||d.pais||'').toLowerCase();
+    // ── FIX (jul-2026): 'Panamá' (con tilde) nunca coincidía con 'panama' —
+    //    esto hacía que TODOS los embarques de Zona Libre cuyo origen se
+    //    guardó como "Panamá" (con acento) cayeran por error en el conteo
+    //    de Importación. Se normalizan acentos antes de comparar. ──
+    const origen=_sinAcentos((d.snap&&d.snap.campos&&d.snap.campos.s1_pais_origen||d.pais||'')).toLowerCase();
     const isZL=origen.includes('zona libre')||origen.includes('panama')||origen.includes('zlc');
     return {isLocal,isSababa,isCIF,isZL};
   };
@@ -21538,7 +21705,10 @@ function renderResumenRapido(){
       return { isLocal, isSababa, isCIF, isZL: true };
     }
     // Fallback: search in text fields
-    const origen = (d.pais||d.origen||d.snap&&d.snap.campos&&d.snap.campos.s1_pais_origen||'').toLowerCase();
+    // ── FIX (jul-2026): normalizar acentos — 'Panamá' nunca coincidía con
+    //    'panama', desclasificando embarques de Zona Libre como Importación. ──
+    const _sa = s => String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+    const origen = _sa(d.pais||d.origen||d.snap&&d.snap.campos&&d.snap.campos.s1_pais_origen||'').toLowerCase();
     const isZL = origen.includes('zona libre')||origen.includes('panama')||origen.includes('zlc')||
                  (d.snap&&d.snap.campos&&(d.snap.campos.s1_pais_origen||'').toLowerCase().includes('zona libre'))||
                  (d.esc||'').toLowerCase().includes('zona libre');
@@ -22898,6 +23068,35 @@ async function procesarUnico(){
     if(!confirm('⚠️ No hay N° de Embarque. ¿Continuar sin número?')) return;
   }
 
+  // ── Modal de fecha (mismo comportamiento que el flujo principal) ──
+  // ── FIX (jul-2026): este flujo (Escenario Único) usaba el campo
+  //    unico_fecha directo y, si venía vacío, caía en silencio a la
+  //    fecha de HOY sin avisar ni preguntar — por eso embarques
+  //    procesados en otro mes terminaban agrupados en "Julio". Ahora
+  //    se pregunta siempre, igual que en el flujo principal. ──
+  let fechaUnico = document.getElementById('unico_fecha')?.value || new Date().toISOString().slice(0,10);
+  fechaUnico = await new Promise(function(resolve){
+    const ov = document.createElement('div');
+    ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:999999;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px)';
+    ov.innerHTML=
+      '<div style="background:var(--s1);border:1px solid var(--border);border-radius:16px;padding:24px;max-width:340px;width:100%;box-shadow:0 24px 64px rgba(0,0,0,.5)">'
+      +'<div style="font-size:15px;font-weight:800;color:var(--text);margin-bottom:6px">📅 Fecha del Embarque</div>'
+      +'<div style="font-size:11px;color:var(--muted);margin-bottom:14px">Puedes cambiarla para registrar embarques históricos.</div>'
+      +'<input type="date" id="_proc_fecha_inp_unico" value="'+fechaUnico+'" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:14px;font-family:\'IBM Plex Mono\',monospace;margin-bottom:16px">'
+      +'<div style="display:flex;gap:10px">'
+      +'<button id="_proc_fecha_cancel_unico" style="flex:1;background:none;border:1px solid var(--border);color:var(--muted);border-radius:10px;padding:10px;font-size:12px;font-weight:600;cursor:pointer">← Cancelar</button>'
+      +'<button id="_proc_fecha_ok_unico" style="flex:2;background:linear-gradient(135deg,rgba(63,185,80,.2),rgba(46,160,67,.15));border:1px solid rgba(63,185,80,.45);color:var(--green-l);border-radius:10px;padding:10px;font-size:13px;font-weight:800;cursor:pointer">✅ Procesar</button>'
+      +'</div></div>';
+    document.body.appendChild(ov);
+    document.getElementById('_proc_fecha_ok_unico').onclick=function(){
+      var v=document.getElementById('_proc_fecha_inp_unico').value;
+      ov.remove(); resolve(v||new Date().toISOString().slice(0,10));
+    };
+    document.getElementById('_proc_fecha_cancel_unico').onclick=function(){ ov.remove(); resolve(null); };
+  });
+  if(fechaUnico===null) return; // usuario canceló
+  ud.fecha = fechaUnico;
+
   // Build invLines from the unico gastos for historial compatibility
   const unicoInvLines = [];
   const R = n=>Math.round(n*100)/100;
@@ -22978,6 +23177,31 @@ async function procesarUnico(){
   if(!_sb){ initSupabase(); await new Promise(r=>setTimeout(r,600)); }
   try{ await _syncTendToCloud(); }catch(e){ console.warn('syncTend:',e); }
   try{ await autoGuardarSupabase(nro || ('UNICO-'+Date.now())); }catch(e){ console.error('autoGuardarSupabase (unico):',e); }
+
+  // ── FIX (jul-2026): el registro automático de uso de plantillas solo
+  //    existía en el flujo principal (Calcular Costo) — el flujo de
+  //    Escenario Único nunca marcaba las plantillas aplicadas como
+  //    "usadas", así que quedaban disponibles para siempre y había que
+  //    marcarlas a mano. Mismo comportamiento que el flujo principal. ──
+  if(nro && window._plntAplicadasEnSesion && window._plntAplicadasEnSesion.length && typeof _plntLoad==='function'){
+    try{
+      var arrP = await _plntLoad();
+      var cambiado = false;
+      window._plntAplicadasEnSesion.forEach(function(pid){
+        var p = arrP.find(function(x){ return x.id===pid; });
+        if(!p) return;
+        p.usos = p.usos||[];
+        var yaRegistrado = p.usos.some(function(u){ return (u.embarque||'').trim().toUpperCase()===nro.toUpperCase(); });
+        if(!yaRegistrado){
+          p.usos.push({embarque:nro, fecha:new Date().toISOString()});
+          cambiado = true;
+        }
+      });
+      if(cambiado) await _plntSave(arrP);
+    }catch(e){ console.warn('Error registrando uso de plantilla (único):', e); }
+  }
+  window._plntAplicadasEnSesion = [];
+
   if(typeof renderTend==='function') renderTend();
   if(typeof renderTopProvs==='function') renderTopProvs();
   if(typeof renderDashboardKPIs==='function') renderDashboardKPIs();
@@ -23394,6 +23618,27 @@ function initFormScroll(){
 }
 
 
+// ── Reclasificar una línea "Flete Sababa" → "Gastos Origen/Destino" ──
+// Para cuando el costeo ya está listo y se decide que esa línea de
+// reconciliación NO debe declararse como flete a Sababa, sino contarse
+// como gasto origen/destino normal en las estadísticas del embarque.
+function _reclasificarFleteSababa(idx){
+  var l = invLines[idx];
+  if(!l || l.tipoFac !== 'flete_sababa'){ if(typeof _showToast==='function') _showToast('⚠️ Esta línea ya no es "Flete Sababa"','orange',2500); return; }
+  var monto = l.costo||0;
+  if(!confirm('¿Reclasificar esta línea ($'+monto.toFixed(2)+') de "Flete Sababa" a "Gastos Origen/Destino"?\n\nSe restará del flete declarado a Sababa (comisión) y pasará a contar como Gastos Origen/Destino en las estadísticas.')) return;
+  l.tipoFac = 'gastos_destino';
+  ['sc_flete_sab','s2_flete_sab'].forEach(function(id){
+    var el = document.getElementById(id);
+    if(el){ var v = parseFloat(el.value)||0; el.value = Math.max(0, v - monto).toFixed(2); }
+  });
+  if(typeof renderInvLines==='function') renderInvLines();
+  if(typeof calcInvTotals==='function') calcInvTotals();
+  if(typeof calc==='function') calc();
+  if(typeof calcSab2==='function') calcSab2();
+  if(typeof _showToast==='function') _showToast('🔄 Línea reclasificada a Gastos Origen/Destino — se ajustó el flete declarado a Sababa','green',4000);
+}
+
 function renderInvLines(){
   // ── DEDUP DEFENSIVO: eliminar duplicados antes de renderizar, sin importar origen ──
   // Misma regla de oro: si hay N° de factura → key = nfac + monto.
@@ -23495,9 +23740,9 @@ function renderInvLines(){
 
   // ── Render gastos de servicio — aplicar a TODOS los contenedores ──
   const fmt=n=>'$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-  const tipoColors={liquidacion:'rgba(248,81,73,.15)',itbms:'rgba(88,166,255,.15)',tasa:'rgba(210,153,34,.15)',flete:'rgba(240,136,62,.15)',acarreo:'rgba(210,153,34,.15)',gastos_destino:'rgba(99,179,237,.15)',honorarios:'rgba(168,85,247,.15)',uso_sistema:'rgba(63,185,80,.15)',seguro:'rgba(88,166,255,.1)',almacenaje:'rgba(240,136,62,.1)',inspeccion:'rgba(248,81,73,.1)',dmce:'rgba(139,148,158,.15)',gastos:'rgba(139,148,158,.15)',otros:'rgba(139,148,158,.15)'};
-  const tipoIcons={liquidacion:'🏛️',itbms:'🧾',tasa:'💵',flete:'🚢',acarreo:'🚛',gastos_destino:'📦',honorarios:'💼',uso_sistema:'💻',seguro:'🛡️',almacenaje:'🏪',inspeccion:'🔍',dmce:'📝',gastos:'📋',otros:'📋'};
-  const tipoLabels={liquidacion:'Liquidación / Pago Arancelario',itbms:'ITBMS',tasa:'Tasa / Uso del Sistema',flete:'Flete Internacional',acarreo:'Acarreo / Transporte',gastos_destino:'Gastos Destino / Origen',honorarios:'Honorarios / Comisión',uso_sistema:'Uso del Sistema (SIGA/SICE)',seguro:'Seguro de Carga',almacenaje:'Almacenaje',inspeccion:'Inspección / Reconocimiento',dmce:'DMCE',gastos:'Otros Gastos',otros:'Otros Gastos'};
+  const tipoColors={liquidacion:'rgba(248,81,73,.15)',itbms:'rgba(88,166,255,.15)',tasa:'rgba(210,153,34,.15)',flete:'rgba(240,136,62,.15)',flete_sababa:'rgba(163,113,247,.15)',acarreo:'rgba(210,153,34,.15)',gastos_destino:'rgba(99,179,237,.15)',honorarios:'rgba(168,85,247,.15)',uso_sistema:'rgba(63,185,80,.15)',seguro:'rgba(88,166,255,.1)',almacenaje:'rgba(240,136,62,.1)',inspeccion:'rgba(248,81,73,.1)',dmce:'rgba(139,148,158,.15)',gastos:'rgba(139,148,158,.15)',otros:'rgba(139,148,158,.15)'};
+  const tipoIcons={liquidacion:'🏛️',itbms:'🧾',tasa:'💵',flete:'🚢',flete_sababa:'🔗',acarreo:'🚛',gastos_destino:'📦',honorarios:'💼',uso_sistema:'💻',seguro:'🛡️',almacenaje:'🏪',inspeccion:'🔍',dmce:'📝',gastos:'📋',otros:'📋'};
+  const tipoLabels={liquidacion:'Liquidación / Pago Arancelario',itbms:'ITBMS',tasa:'Tasa / Uso del Sistema',flete:'Flete Internacional',flete_sababa:'Flete Sababa (reconciliación)',acarreo:'Acarreo / Transporte',gastos_destino:'Gastos Destino / Origen',honorarios:'Honorarios / Comisión',uso_sistema:'Uso del Sistema (SIGA/SICE)',seguro:'Seguro de Carga',almacenaje:'Almacenaje',inspeccion:'Inspección / Reconocimiento',dmce:'DMCE',gastos:'Otros Gastos',otros:'Otros Gastos'};
   let gastosHTML;
   if(!gastoLines.length){
     gastosHTML = '<div style="text-align:center;padding:12px;color:var(--muted);font-size:11px">Calcula un embarque para ver los gastos de servicio auto-mapeados.</div>';
@@ -23515,6 +23760,7 @@ function renderInvLines(){
           +'<span style="font-size:13px">'+tfIcon+'</span>'
           +'<span style="flex:1;font-size:12px;font-weight:700;color:var(--orange-l)">'+tfLabel+'</span>'
           +(isAuto?'<span style="font-size:9px;background:rgba(240,136,62,.15);border:1px solid rgba(240,136,62,.3);color:var(--orange-l);border-radius:4px;padding:1px 6px">AUTO</span>':'')
+          +(tf==='flete_sababa'?'<button onclick="_reclasificarFleteSababa('+i+')" title="Pasar esta línea a Gastos Origen/Destino — resta del flete declarado a Sababa" style="background:rgba(99,179,237,.12);border:1px solid rgba(99,179,237,.35);color:#63b3ed;border-radius:5px;padding:2px 8px;font-size:10px;font-weight:700;cursor:pointer;flex-shrink:0">🔄 A Gastos Origen/Destino</button>':'')
           +'<button onclick="removeInvLine('+i+')" style="background:rgba(218,54,51,.1);border:1px solid rgba(218,54,51,.2);color:var(--red-l);border-radius:5px;width:24px;height:24px;cursor:pointer;font-size:12px;flex-shrink:0">×</button>'
           +'</div>'
           // Proveedor — editable con autocomplete igual que mercancía
@@ -23846,6 +24092,7 @@ function _abrirSelectorRubro(callback){
     {val:'honorarios',  lbl:'💼 Honorarios / Comisión'},
     {val:'acarreo',     lbl:'🚛 Acarreo / Transporte'},
     {val:'flete',       lbl:'🚢 Flete Internacional'},
+    {val:'flete_sababa',lbl:'🔗 Flete Sababa (reconciliación)'},
     {val:'uso_sistema', lbl:'💻 Uso del Sistema (SIGA/SICE)'},
     {val:'seguro',      lbl:'🛡️ Seguro de Carga'},
     {val:'almacenaje',  lbl:'🏪 Almacenaje / Bodegaje'},
@@ -24766,7 +25013,15 @@ async function autoGuardarSupabase(nombre){
       if(el) campos[id] = el.value;
     });
     const datos={
-      version:'3.5.7.4', fecha:new Date().toISOString(),
+      // ── FIX CRÍTICO (jul-2026): este campo se llamaba 'fecha' y guardaba
+      //    la hora exacta del AUTOGUARDADO (no la fecha de negocio que el
+      //    usuario elige en el modal al procesar). Como este documento se
+      //    reescribe cada vez que se toca el formulario, ese 'fecha' seguía
+      //    cambiando a "ahora" — y si la lógica de reconciliación en la nube
+      //    llegaba a leerlo, terminaba pisando la fecha correcta del
+      //    embarque con la de "ahora mismo". Se renombra para que sea
+      //    imposible confundirlo con la fecha del embarque. ──
+      version:'3.5.7.4', _autosaveTs:new Date().toISOString(),
       tipo, termino, compar, exon,
       sabTipo: typeof sabTipo !== 'undefined' ? sabTipo : 'ZL',
       sab2Tipo: typeof sab2Tipo !== 'undefined' ? sab2Tipo : 'ZL',
@@ -26053,10 +26308,13 @@ function _motoresMapeado(rows) {
   var totalBultos = 0;
   var totalTrasp  = 0;
   var fleteVal    = 0;
+  var fleteSababaVal = 0; // ── Reconciliación declarada a Sababa, separada del flete real (no va a estadísticas de Flete) ──
   var gastosOrigen = 0;
   var pagoRealizado = 0;
   var _rubroMap = {
     'flete':'flete','flete internacional':'flete',
+    'flete sababa':'flete_sababa','flete_sababa':'flete_sababa','flete sabana':'flete_sababa',
+    'sababa flete':'flete_sababa','flete sab':'flete_sababa','flete-sababa':'flete_sababa',
     'gastos_origen':'gastos_destino','gastos_destino':'gastos_destino',
     'gastos origen':'gastos_destino','gastos destino':'gastos_destino',
     'gastos_de_origen':'gastos_destino','gastos_de_destino':'gastos_destino',
@@ -26100,6 +26358,7 @@ function _motoresMapeado(rows) {
     }
 
     if (tipoFac === 'flete') { fleteVal += monto; }
+    else if (tipoFac === 'flete_sababa') { fleteSababaVal += monto; }
     else if (tipoFac === 'gastos_destino') { gastosOrigen += monto; }
 
     var deptCat = (tipoFac === 'mercancia') ? rubro.toUpperCase() : 'GASTOS';
@@ -26217,8 +26476,16 @@ function _motoresMapeado(rows) {
   if (fleteVal > 0) {
     setField('s1_flete_fob', fleteVal);
     setField('s2_flete', fleteVal);
+  }
+  // ── Flete declarado a Sababa (para su comisión 10%) = flete real + reconciliación
+  //    "Flete Sababa" — el real solo alimenta estadísticas (Flete Internacional);
+  //    la reconciliación NUNCA toca s1_flete_fob/s2_flete, solo el campo que Sababa ve. ──
+  if (fleteVal > 0 || fleteSababaVal > 0) {
+    var totalDeclaradoSab = fleteVal + fleteSababaVal;
     var sc3Fl = document.getElementById('sc_flete_sab');
-    if (sc3Fl) sc3Fl.value = fleteVal.toFixed(2);
+    if (sc3Fl) sc3Fl.value = totalDeclaradoSab.toFixed(2);
+    var s2FlSab = document.getElementById('s2_flete_sab');
+    if (s2FlSab) s2FlSab.value = totalDeclaradoSab.toFixed(2);
   }
   if (gastosOrigen > 0) {
     setField('s1_agente', gastosOrigen);
