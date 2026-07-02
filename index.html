@@ -12218,10 +12218,19 @@ async function _corregirFechaEmbarque(nro, nuevaFecha){
     return (d.nro||'').toString().trim() === nro.toString().trim();
   });
   if(!found.length){ alert('Embarque '+nro+' no encontrado en memoria.'); return false; }
+  // ── FIX CRÍTICO (jul-2026): antes esta corrección NO actualizaba 'ts'.
+  //    Como la fusión con la nube decide "quién gana" comparando ts, una
+  //    copia vieja en otra pestaña/dispositivo (con el ts original, fecha
+  //    incorrecta) podía empatar o superar a esta corrección en la próxima
+  //    sincronización automática y revertirla en silencio — por eso la
+  //    fecha "se volvía a cambiar sola" cada cierto tiempo. Ahora la
+  //    corrección manual siempre queda con el ts más alto, así que
+  //    siempre gana cualquier fusión futura. ──
   found.forEach(function(d){
     d.fecha = nuevaFecha;
     if(d.snap) d.snap.fecha = nuevaFecha;
     d.fechaDoc = nuevaFecha;
+    d.ts = Date.now();
   });
   saveTendData();
   if(typeof _showToast==='function') _showToast('✅ Fecha de embarque '+nro+' corregida a '+nuevaFecha,'green',3000);
@@ -12266,10 +12275,14 @@ function _corregirFechaUI(idx){
 //  la mercancía, ni ningún otro campo del embarque.
 // ══════════════════════════════════════════════════════════════
 var _RUBRO_LABELS_FIX = {
-  liquidacion:'🏛️ Liquidación / Pago Arancelario', itbms:'🧾 ITBMS', tasa:'💵 Tasa / Uso del Sistema',
+  liquidacion:'🏛️ Liquidación / Pago Arancelario', itbms:'🧾 ITBMS', tasa:'💵 Tasa Aduana',
   honorarios:'💼 Honorarios / Comisión', acarreo:'🚛 Acarreo / Transporte', gastos_destino:'📦 Gastos Origen / Destino',
-  flete:'🚢 Flete Internacional', flete_sababa:'🔗 Flete Sababa (reconciliación)', uso_sistema:'💻 Uso del Sistema',
-  seguro:'🛡️ Seguro de Carga', almacenaje:'🏪 Almacenaje', inspeccion:'🔍 Inspección', dmce:'📝 DMCE', gastos:'📋 Otros Gastos', otros:'📋 Otros Gastos'
+  flete:'🚢 Flete Internacional', flete_sababa:'🔗 Flete Sababa (reconciliación)', uso_sistema:'💻 Uso del Sistema (SIGA/SICE)',
+  seguro:'🛡️ Seguro de Carga', almacenaje:'🏪 Almacenaje', inspeccion:'🔍 Inspección / Reconocimiento', dmce:'📝 DMCE',
+  nota_credito:'🧾➖ Nota de Crédito', nota_debito:'🧾➕ Nota de Débito', ajuste:'⚖️ Ajuste de Valor',
+  descuento:'🏷️ Descuento', demora:'⏱️ Demora / Detention', multa:'⚠️ Multa / Recargo',
+  manejo:'📦 Manejo de Carga (Handling)', combustible:'⛽ Recargo Combustible (BAF)', documentacion:'📄 Documentación',
+  gastos:'📋 Otros Gastos', otros:'📋 Otros Gastos'
 };
 
 function _corregirRubroUI(idx){
@@ -12286,6 +12299,22 @@ function _corregirRubroUI(idx){
     +'<div style="display:flex;gap:8px">'
       +'<button id="_fix_tipo_zl" type="button" style="flex:1;padding:9px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid '+(tipoActual==='ZL'?'#2dd4bf':'var(--border)')+';background:'+(tipoActual==='ZL'?'rgba(45,212,191,.15)':'var(--s2)')+';color:'+(tipoActual==='ZL'?'#2dd4bf':'var(--muted)')+'">📦 Zona Libre</button>'
       +'<button id="_fix_tipo_ext" type="button" style="flex:1;padding:9px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid '+(tipoActual==='EXT'?'#58a6ff':'var(--border)')+';background:'+(tipoActual==='EXT'?'rgba(88,166,255,.15)':'var(--s2)')+';color:'+(tipoActual==='EXT'?'#58a6ff':'var(--muted)')+'">🚢 Importación</button>'
+    +'</div></div>';
+
+  // ── Vía de Transporte — LAND / SEA / AIR ──
+  // Muchos embarques quedaban etiquetados "SEA" (barco) por defecto aunque
+  // fueran terrestres — ahora se puede corregir aquí mismo, junto al régimen.
+  var viaActual = d.viaTransporte || 'SEA';
+  var _viaBtn = function(val,ico,lbl,color){
+    var on = viaActual===val;
+    return '<button data-via="'+val+'" type="button" class="_fix_via_btn" style="flex:1;padding:9px 4px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;border:1.5px solid '+(on?color:'var(--border)')+';background:'+(on?color+'26':'var(--s2)')+';color:'+(on?color:'var(--muted)')+'">'+ico+' '+lbl+'</button>';
+  };
+  var viaHtml = '<div style="background:var(--bg);border:1px solid rgba(240,136,62,.3);border-radius:10px;padding:12px;margin-bottom:14px">'
+    +'<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:8px">Vía de Transporte</div>'
+    +'<div style="display:flex;gap:8px">'
+      + _viaBtn('LAND','🚛','Terrestre','#f0883e')
+      + _viaBtn('SEA','🚢','Marítimo','#58a6ff')
+      + _viaBtn('AIR','✈️','Aéreo','#a371f7')
     +'</div></div>';
 
   var filasHtml = !lineas.length
@@ -12307,6 +12336,7 @@ function _corregirRubroUI(idx){
     +'<div style="font-size:13px;font-weight:800;color:var(--text);margin-bottom:4px">🏷️ Corregir Rubro de Facturas</div>'
     +'<div style="font-size:11px;color:var(--muted);margin-bottom:14px">Embarque: <strong style="color:var(--orange-l)">'+d.nro+'</strong> — solo cambia la clasificación del rubro; no toca montos, plantilla ni mercancía.</div>'
     +tipoZLHtml
+    +viaHtml
     +filasHtml
     +'<div style="display:flex;gap:10px;margin-top:8px">'
     +'<button id="_fix_rubro_cancel" style="flex:1;background:none;border:1px solid var(--border);color:var(--muted);border-radius:10px;padding:10px;font-size:12px;cursor:pointer">Cancelar</button>'
@@ -12325,6 +12355,18 @@ function _corregirRubroUI(idx){
   }
   btnZL.onclick  = function(){ _nuevoTipoZL='ZL';  _pintarTipoBtns(); };
   btnExt.onclick = function(){ _nuevoTipoZL='EXT'; _pintarTipoBtns(); };
+  var _nuevaVia = viaActual;
+  var _viaBtns = Array.from(ov.querySelectorAll('._fix_via_btn'));
+  var _viaColors = {LAND:'#f0883e', SEA:'#58a6ff', AIR:'#a371f7'};
+  function _pintarViaBtns(){
+    _viaBtns.forEach(function(b){
+      var v = b.dataset.via, on = v===_nuevaVia, c = _viaColors[v];
+      b.style.borderColor = on ? c : 'var(--border)';
+      b.style.background  = on ? c+'26' : 'var(--s2)';
+      b.style.color       = on ? c : 'var(--muted)';
+    });
+  }
+  _viaBtns.forEach(function(b){ b.onclick = function(){ _nuevaVia = b.dataset.via; _pintarViaBtns(); }; });
   ov.querySelector('#_fix_rubro_cancel').onclick = function(){ ov.remove(); };
   ov.addEventListener('click', function(e){ if(e.target===ov) ov.remove(); });
   ov.querySelector('#_fix_rubro_ok').onclick = function(){
@@ -12341,8 +12383,15 @@ function _corregirRubroUI(idx){
       d.tipo = _nuevoTipoZL; // ← corrige Zona Libre / Importación para el Informe Financiero
       cambios++;
     }
+    if(_nuevaVia && _nuevaVia !== viaActual){
+      d.viaTransporte = _nuevaVia; // ← corrige LAND/SEA/AIR
+      cambios++;
+    }
     ov.remove();
     if(cambios===0){ if(typeof _showToast==='function') _showToast('ℹ️ No hubo cambios','orange',2500); return; }
+    // ── Bumpear ts: sin esto, una copia vieja en otra pestaña/dispositivo
+    //    podría revertir esta corrección en la próxima sincronización. ──
+    d.ts = Date.now();
     saveTendData();
     if(typeof _showToast==='function') _showToast('✅ '+cambios+' cambio(s) guardado(s) en la nube','green',3500);
     if(typeof renderTendencias==='function') renderTendencias();
@@ -18056,6 +18105,18 @@ function _informeGetData(){
     const sc1=d.snap&&d.snap.sc1||{},sc2=d.snap&&d.snap.sc2||{},sc3=d.snap&&d.snap.sc3||{};
     const esc=(d.esc||'').toLowerCase(),cl=classify(d);
     const isCIF=esc.includes('cif');
+    // ── FIX (jul-2026): mismo problema que en _calcCostoInventario — los
+    //    embarques de Escenario Único no tienen sc1.base/sc2/sc3, solo
+    //    sc1.cif/landed/itbms/noMerc. Sin esto, salían en $0 en el Excel
+    //    y el Informe Financiero aunque el KPI sí los calculara bien. ──
+    const isUnicoRec = !!(d.modoUnico || d.tipoEsc==='unico' || esc.includes('único') || esc.includes('unico'));
+    if(isUnicoRec){
+      const uCif=sc1.cif||d.cif||0, uLanded=sc1.landed||0;
+      const uItbms=(sc1.itbms||0)+(sc1.itbmsTasa||0);
+      const uNoMerc=(sc1.noMerc!=null)?sc1.noMerc:Math.max(0,uLanded-uCif);
+      const uL1=uLanded||(uCif+uNoMerc);
+      return {mercOrig:uCif,mercHomol:0,mercInv:uCif,costoNM:uNoMerc,itbms:uItbms,l1:uL1,inv:uL1};
+    }
     const lines=(d.snap&&d.snap.invLines||d.invLines||[]).filter(l=>(l.tipoFac||'mercancia')==='mercancia');
     const mercOrig=lines.reduce((a,l)=>a+(l.costo||0),0)||sc1.base||d.cif||0;
     const mercHomol=(sc3.mercHomol||0)>0?sc3.mercHomol:0;
@@ -18691,6 +18752,33 @@ function _calcCostoInventario(d){
   var isSab=esc.includes('sababa');
   var isCIF=esc.includes('cif');
   var isLocal=isSab&&(sc3.mercHomol||0)>0&&(sc3.comision||0)>0;
+
+  // ══════════════════════════════════════════════════════════════
+  // ── FIX CRÍTICO (jul-2026): los embarques de Escenario Único no
+  //    guardan sus datos financieros en sc1.base/sc2/sc3 como el flujo
+  //    principal — solo tienen sc1.cif, sc1.landed, sc1.arancel,
+  //    sc1.itbms, sc1.noMerc (los únicos campos que procesarUnico()
+  //    realmente llena). Antes, si sus invLines no traían una línea
+  //    'mercancia' reconocible, TODO el cálculo caía en $0 — Mercancía,
+  //    Landed, ITBMS, Costo No Mercancía — aunque el KPI de arriba (que
+  //    usa otra fórmula) sí mostrara el valor correcto. Esto afectaba
+  //    el Informe Financiero, el Excel exportado, y el widget Zona
+  //    Libre/Importación por igual. Ahora se usa directamente lo que
+  //    procesarUnico() sí garantiza guardar. ──
+  // ══════════════════════════════════════════════════════════════
+  var isUnicoRec = !!(d.modoUnico || d.tipoEsc==='unico' || esc.includes('único') || esc.includes('unico'));
+  if(isUnicoRec){
+    var uCif    = sc1.cif    || d.cif || 0;
+    var uLanded = sc1.landed || 0;
+    var uItbms  = (sc1.itbms||0) + (sc1.itbmsTasa||0);
+    var uNoMerc = (sc1.noMerc!=null) ? sc1.noMerc : Math.max(0, uLanded - uCif);
+    var uLandedFinal = uLanded || (uCif + uNoMerc);
+    return {mercOrig:uCif, mercHomol:0, mercInv:uCif,
+            costoNM:uNoMerc, itbms:uItbms,
+            costoInv:uLandedFinal,
+            landed1:uLandedFinal,
+            landedG:uLandedFinal};
+  }
 
   var allLines=((d.snap&&d.snap.invLines)||d.invLines||[]);
   var mercLines=allLines.filter(function(l){return (l.tipoFac||'mercancia')==='mercancia';});
@@ -24198,7 +24286,7 @@ function _abrirSelectorRubro(callback){
   var rubros = window._RUBROS_GASTO || [
     {val:'liquidacion', lbl:'🏛️ Liquidación / Pago Arancelario'},
     {val:'itbms',       lbl:'🧾 ITBMS'},
-    {val:'tasa',        lbl:'💵 Tasa / Uso del Sistema'},
+    {val:'tasa',        lbl:'💵 Tasa Aduana'},
     {val:'honorarios',  lbl:'💼 Honorarios / Comisión'},
     {val:'acarreo',     lbl:'🚛 Acarreo / Transporte'},
     {val:'flete',       lbl:'🚢 Flete Internacional'},
@@ -24208,6 +24296,15 @@ function _abrirSelectorRubro(callback){
     {val:'almacenaje',  lbl:'🏪 Almacenaje / Bodegaje'},
     {val:'inspeccion',  lbl:'🔍 Inspección / Reconocimiento'},
     {val:'dmce',        lbl:'📝 DMCE'},
+    {val:'nota_credito',lbl:'🧾➖ Nota de Crédito'},
+    {val:'nota_debito', lbl:'🧾➕ Nota de Débito'},
+    {val:'ajuste',      lbl:'⚖️ Ajuste de Valor'},
+    {val:'descuento',   lbl:'🏷️ Descuento'},
+    {val:'demora',      lbl:'⏱️ Demora / Detention'},
+    {val:'multa',       lbl:'⚠️ Multa / Recargo'},
+    {val:'manejo',      lbl:'📦 Manejo de Carga (Handling)'},
+    {val:'combustible', lbl:'⛽ Recargo Combustible (BAF)'},
+    {val:'documentacion',lbl:'📄 Documentación'},
     {val:'otros',       lbl:'📋 Otros Gastos'},
   ];
   var modal = document.createElement('div');
