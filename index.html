@@ -12317,6 +12317,30 @@ function _corregirRubroUI(idx){
       + _viaBtn('AIR','✈️','Aéreo','#a371f7')
     +'</div></div>';
 
+  // ── Restaurar Valores Financieros — para embarques cuyos datos internos
+  //    (invLines/snap) quedaron vacíos y por eso calculan $0 en todos
+  //    lados (Informe Financiero, Excel, KPIs de Zona Libre/Importación).
+  //    Aquí se pueden escribir los valores correctos directamente
+  //    (los que ya tengas en tu propio registro/Excel) sin reprocesar
+  //    el embarque completo. ──
+  var finActual = _calcCostoInventario(d);
+  var finRota = (finActual.landed1||0)===0 && (finActual.mercOrig||0)===0;
+  var finHtml = '<div style="background:'+(finRota?'rgba(248,81,73,.06)':'var(--bg)')+';border:1px solid '+(finRota?'rgba(248,81,73,.35)':'rgba(139,148,158,.25)')+';border-radius:10px;padding:12px;margin-bottom:14px">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
+      +'<div style="font-size:11px;font-weight:700;color:'+(finRota?'#f85149':'var(--muted)')+';text-transform:uppercase">'+(finRota?'⚠️ Valores en $0 — Restaurar':'💰 Valores Financieros')+'</div>'
+      +'<button id="_fix_fin_toggle" type="button" style="background:none;border:none;color:var(--muted);font-size:11px;cursor:pointer;text-decoration:underline">'+(finRota?'abrir':'editar')+'</button>'
+    +'</div>'
+    +'<div id="_fix_fin_body" style="display:'+(finRota?'block':'none')+'">'
+      +'<div style="font-size:10px;color:var(--muted);margin-bottom:8px">Escribe los valores correctos (los que ya tienes registrados aparte). Esto no toca la plantilla ni las facturas — solo fuerza estos totales en el Informe Financiero, KPIs y Excel.</div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+        +'<div><label style="font-size:9px;color:var(--muted)">Mercancía Original</label><input id="_fix_fin_merc" type="number" step="0.01" value="'+(finActual.mercOrig||0).toFixed(2)+'" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text);font-size:12px;box-sizing:border-box"></div>'
+        +'<div><label style="font-size:9px;color:var(--muted)">Costo No Mercancía</label><input id="_fix_fin_nm" type="number" step="0.01" value="'+(finActual.costoNM||0).toFixed(2)+'" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text);font-size:12px;box-sizing:border-box"></div>'
+        +'<div><label style="font-size:9px;color:var(--muted)">ITBMS</label><input id="_fix_fin_itbms" type="number" step="0.01" value="'+(finActual.itbms||0).toFixed(2)+'" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text);font-size:12px;box-sizing:border-box"></div>'
+        +'<div><label style="font-size:9px;color:var(--muted)">Landed Total</label><input id="_fix_fin_landed" type="number" step="0.01" value="'+(finActual.landed1||0).toFixed(2)+'" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text);font-size:12px;box-sizing:border-box"></div>'
+      +'</div>'
+    +'</div>'
+  +'</div>';
+
   var filasHtml = !lineas.length
     ? '<div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">Este embarque no tiene facturas de servicio registradas.</div>'
     : lineas.map(function(l){
@@ -12337,6 +12361,7 @@ function _corregirRubroUI(idx){
     +'<div style="font-size:11px;color:var(--muted);margin-bottom:14px">Embarque: <strong style="color:var(--orange-l)">'+d.nro+'</strong> — solo cambia la clasificación del rubro; no toca montos, plantilla ni mercancía.</div>'
     +tipoZLHtml
     +viaHtml
+    +finHtml
     +filasHtml
     +'<div style="display:flex;gap:10px;margin-top:8px">'
     +'<button id="_fix_rubro_cancel" style="flex:1;background:none;border:1px solid var(--border);color:var(--muted);border-radius:10px;padding:10px;font-size:12px;cursor:pointer">Cancelar</button>'
@@ -12367,6 +12392,12 @@ function _corregirRubroUI(idx){
     });
   }
   _viaBtns.forEach(function(b){ b.onclick = function(){ _nuevaVia = b.dataset.via; _pintarViaBtns(); }; });
+  var _finToggleBtn = ov.querySelector('#_fix_fin_toggle'), _finBody = ov.querySelector('#_fix_fin_body');
+  if(_finToggleBtn) _finToggleBtn.onclick = function(){
+    var abierto = _finBody.style.display==='block';
+    _finBody.style.display = abierto ? 'none' : 'block';
+    _finToggleBtn.textContent = abierto ? 'editar' : 'cerrar';
+  };
   ov.querySelector('#_fix_rubro_cancel').onclick = function(){ ov.remove(); };
   ov.addEventListener('click', function(e){ if(e.target===ov) ov.remove(); });
   ov.querySelector('#_fix_rubro_ok').onclick = function(){
@@ -12386,6 +12417,18 @@ function _corregirRubroUI(idx){
     if(_nuevaVia && _nuevaVia !== viaActual){
       d.viaTransporte = _nuevaVia; // ← corrige LAND/SEA/AIR
       cambios++;
+    }
+    // ── Restaurar valores financieros manualmente, si el panel está abierto ──
+    if(_finBody && _finBody.style.display==='block'){
+      var _fm = parseFloat(document.getElementById('_fix_fin_merc').value)||0;
+      var _fn = parseFloat(document.getElementById('_fix_fin_nm').value)||0;
+      var _fi = parseFloat(document.getElementById('_fix_fin_itbms').value)||0;
+      var _fl = parseFloat(document.getElementById('_fix_fin_landed').value)||0;
+      var _huboDatos = (_fm>0||_fn>0||_fi>0||_fl>0);
+      if(_huboDatos){
+        d._overrideFin = {mercOrig:_fm, costoNM:_fn, itbms:_fi, landed:_fl};
+        cambios++;
+      }
     }
     ov.remove();
     if(cambios===0){ if(typeof _showToast==='function') _showToast('ℹ️ No hubo cambios','orange',2500); return; }
@@ -18102,6 +18145,11 @@ function _informeGetData(){
   };
 
   const getF = d => {
+    // ── Override manual — ver _calcCostoInventario ──
+    if(d._overrideFin){
+      var ov=d._overrideFin;
+      return {mercOrig:ov.mercOrig||0,mercHomol:0,mercInv:ov.mercOrig||0,costoNM:ov.costoNM||0,itbms:ov.itbms||0,l1:ov.landed||0,inv:ov.landed||0};
+    }
     const sc1=d.snap&&d.snap.sc1||{},sc2=d.snap&&d.snap.sc2||{},sc3=d.snap&&d.snap.sc3||{};
     const esc=(d.esc||'').toLowerCase(),cl=classify(d);
     const isCIF=esc.includes('cif');
@@ -18745,6 +18793,16 @@ function _setDeptVista(modo, btn){
 //  - costoInv  = mercInv + costoNM + itbms
 // ══════════════════════════════════════════════════════════════
 function _calcCostoInventario(d){
+  // ── Override manual — ver herramienta 🏷️ "Restaurar valores". Si el
+  //    usuario restauró a mano los valores financieros de un registro
+  //    dañado (invLines/snap vacíos), esos valores mandan siempre,
+  //    sin importar qué diga el resto de la lógica de cálculo. ──
+  if(d._overrideFin){
+    var ov=d._overrideFin;
+    return {mercOrig:ov.mercOrig||0, mercHomol:0, mercInv:ov.mercOrig||0,
+            costoNM:ov.costoNM||0, itbms:ov.itbms||0,
+            costoInv:ov.landed||0, landed1:ov.landed||0, landedG:ov.landed||0};
+  }
   var sc1=(d.snap&&d.snap.sc1)||{};
   var sc2=(d.snap&&d.snap.sc2)||{};
   var sc3=(d.snap&&d.snap.sc3)||{};
@@ -20224,9 +20282,24 @@ function _renderDeptChart(all){
     var provRows = ordenG.map(function(key){
       var p = grupos[key];
       var pct = totalProv>0 ? (p.costo/totalProv*100).toFixed(1)+'%' : '—';
-      var tipoBadge = p.tipo==='IMP'
-        ? '<span style="background:rgba(240,136,62,.15);border:1px solid rgba(240,136,62,.4);color:#f08632;border-radius:3px;padding:0 5px;font-size:9px;font-weight:700">🚢 IMP</span>'
-        : '<span style="background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.4);color:#58a6ff;border-radius:3px;padding:0 5px;font-size:9px;font-weight:700">🚛 ZL</span>';
+      // ── FIX (jul-2026): antes se tomaba p.tipo de la PRIMERA factura del
+      //    grupo nada más, así que un proveedor con embarques tanto en Zona
+      //    Libre como en Importación (ej. Compañía Suramericana de Comercio)
+      //    solo mostraba UNA etiqueta, escondiendo la otra mitad de su
+      //    actividad. Ahora se revisan TODAS sus facturas y, si el proveedor
+      //    opera en ambos regímenes, se muestran las dos etiquetas juntas. ──
+      var _tiposProv = new Set(p.items.map(function(it){ return it.tipo==='IMP'?'IMP':'ZL'; }));
+      var tipoBadge;
+      if(_tiposProv.size>1){
+        tipoBadge = '<span style="display:inline-flex;gap:3px">'
+          +'<span style="background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.4);color:#58a6ff;border-radius:3px;padding:0 5px;font-size:9px;font-weight:700">🚛 ZL</span>'
+          +'<span style="background:rgba(240,136,62,.15);border:1px solid rgba(240,136,62,.4);color:#f08632;border-radius:3px;padding:0 5px;font-size:9px;font-weight:700">🚢 IMP</span>'
+        +'</span>';
+      } else {
+        tipoBadge = p.tipo==='IMP'
+          ? '<span style="background:rgba(240,136,62,.15);border:1px solid rgba(240,136,62,.4);color:#f08632;border-radius:3px;padding:0 5px;font-size:9px;font-weight:700">🚢 IMP</span>'
+          : '<span style="background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.4);color:#58a6ff;border-radius:3px;padding:0 5px;font-size:9px;font-weight:700">🚛 ZL</span>';
+      }
       var pzBadge  = p.piezas>0 ? '<span style="color:#8b949e;font-size:9px">🔢 '+Number(p.piezas).toLocaleString()+' pzas</span>' : '';
       var single = p.items.length===1 ? p.items[0] : null;
       var ocBadge = single && single.oc ? '<span style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:#58a6ff;border-radius:3px;padding:0 4px;font-size:9px;font-weight:600">OC: '+single.oc+'</span>' : '';
