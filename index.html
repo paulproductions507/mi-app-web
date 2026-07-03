@@ -12278,11 +12278,13 @@ var _RUBRO_LABELS_FIX = {
   liquidacion:'🏛️ Liquidación / Pago Arancelario', itbms:'🧾 ITBMS', tasa:'💵 Tasa Aduana',
   honorarios:'💼 Honorarios / Comisión', acarreo:'🚛 Acarreo / Transporte', gastos_destino:'📦 Gastos Origen / Destino',
   flete:'🚢 Flete Internacional', flete_sababa:'🔗 Flete Sababa (reconciliación)', uso_sistema:'💻 Uso del Sistema (SIGA/SICE)',
-  seguro:'🛡️ Seguro de Carga', almacenaje:'🏪 Almacenaje', inspeccion:'🔍 Inspección / Reconocimiento', dmce:'📝 DMCE',
+  seguro:'🛡️ Seguro de Carga', almacenaje:'🏪 Almacenaje', inspeccion:'🔍 Inspección / Reconocimiento',
+  dmce_entrada:'📥 DMCE Entrada', dmce_salida:'📤 DMCE Salida', dmce:'📝 DMCE (genérico)',
+  formulario:'📝 Formulario (Form-1)', corredor:'🤝 Corredor (Comisión)',
   nota_credito:'🧾➖ Nota de Crédito', nota_debito:'🧾➕ Nota de Débito', ajuste:'⚖️ Ajuste de Valor',
   descuento:'🏷️ Descuento', demora:'⏱️ Demora / Detention', multa:'⚠️ Multa / Recargo',
   manejo:'📦 Manejo de Carga (Handling)', combustible:'⛽ Recargo Combustible (BAF)', documentacion:'📄 Documentación',
-  gastos:'📋 Otros Gastos', otros:'📋 Otros Gastos'
+  otros:'📋 Otros Gastos'
 };
 
 function _corregirRubroUI(idx){
@@ -18913,6 +18915,8 @@ function renderDashboardKPIs(data){
   // Homologado = SOLO sc3.mercHomol de embarques Sababa genuinamente homologados
   //              (registros sin sc3 real se EXCLUYEN del homologado — no se mezclan)
   const totalCIF = all.reduce((s,d)=>{
+    // ── Respeta el override manual (herramienta 🏷️ "Restaurar valores") ──
+    if(d._overrideFin) return s + (d._overrideFin.mercOrig||0);
     const lines = d.snap?.invLines || d.invLines || [];
     const mercSum = lines.filter(l=>(l.tipoFac||'mercancia')==='mercancia').reduce((a,l)=>a+(l.costo||0),0);
     // Use invoice lines sum if available; fallback to sc1.base; last resort d.cif
@@ -24368,7 +24372,10 @@ function _abrirSelectorRubro(callback){
     {val:'seguro',      lbl:'🛡️ Seguro de Carga'},
     {val:'almacenaje',  lbl:'🏪 Almacenaje / Bodegaje'},
     {val:'inspeccion',  lbl:'🔍 Inspección / Reconocimiento'},
-    {val:'dmce',        lbl:'📝 DMCE'},
+    {val:'dmce_entrada',lbl:'📥 DMCE Entrada'},
+    {val:'dmce_salida', lbl:'📤 DMCE Salida'},
+    {val:'formulario',  lbl:'📝 Formulario (Form-1)'},
+    {val:'corredor',    lbl:'🤝 Corredor (Comisión)'},
     {val:'nota_credito',lbl:'🧾➖ Nota de Crédito'},
     {val:'nota_debito', lbl:'🧾➕ Nota de Débito'},
     {val:'ajuste',      lbl:'⚖️ Ajuste de Valor'},
