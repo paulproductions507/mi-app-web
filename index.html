@@ -2878,6 +2878,8 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
         <span style="font-size:11px;font-weight:700;color:var(--text)">Historial de Embarques Procesados</span>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
+        <button id="_hist_edit_toggle" onclick="event.stopPropagation();window._histEditMode=!window._histEditMode;this.style.background=window._histEditMode?'rgba(240,136,62,.2)':'none';this.style.color=window._histEditMode?'#f0883e':'var(--muted)';this.textContent=window._histEditMode?'✏️ Editando':'✏️ Editar';if(typeof renderTend==='function')renderTend();"
+          style="background:none;border:1px solid rgba(240,136,62,.35);color:var(--muted);border-radius:5px;padding:2px 10px;font-size:10px;font-weight:700;cursor:pointer">✏️ Editar</button>
         <button onclick="event.stopPropagation();if(confirm('¿Limpiar todo el historial?')){tendData=[];window._deletedEmbarques=new Set();saveTendData();renderTend();renderTopProvs();updateCmpNroList();_showToast('🗑 Historial limpiado','red',2000);}"
           style="background:none;border:1px solid rgba(218,54,51,.3);color:var(--red-l);border-radius:5px;padding:2px 8px;font-size:10px;cursor:pointer">🗑</button>
         <span class="hist-chev" style="font-size:11px;color:var(--muted)">▶</span>
@@ -12278,7 +12280,7 @@ var _RUBRO_LABELS_FIX = {
   liquidacion:'🏛️ Liquidación / Pago Arancelario', itbms:'🧾 ITBMS', tasa:'💵 Tasa Aduana',
   honorarios:'💼 Honorarios / Comisión', acarreo:'🚛 Acarreo / Transporte', gastos_destino:'📦 Gastos Origen / Destino',
   flete:'🚢 Flete Internacional', flete_sababa:'🔗 Flete Sababa (reconciliación)', uso_sistema:'💻 Uso del Sistema (SIGA/SICE)',
-  seguro:'🛡️ Seguro de Carga', almacenaje:'🏪 Almacenaje', inspeccion:'🔍 Inspección / Reconocimiento',
+  seguro:'🛡️ Seguro (informativo)', almacenaje:'🏪 Almacenaje', inspeccion:'🔍 Inspección / Reconocimiento',
   dmce_entrada:'📥 DMCE Entrada', dmce_salida:'📤 DMCE Salida', dmce:'📝 DMCE (genérico)',
   formulario:'📝 Formulario (Form-1)', corredor:'🤝 Corredor (Comisión)',
   nota_credito:'🧾➖ Nota de Crédito', nota_debito:'🧾➕ Nota de Débito', ajuste:'⚖️ Ajuste de Valor',
@@ -12351,13 +12353,19 @@ function _corregirRubroUI(idx){
       +'<select data-idx="'+realIdx+'" class="_fix_rubro_sel" style="width:100%;background:var(--s2);border:1px solid rgba(240,136,62,.3);border-radius:7px;padding:7px 9px;color:var(--text);font-size:12px">'+sel+'</select>'
     +'</div>';
   }
+  var rubroOptsMerc = '<option value="mercancia">📦 Mercancía (correcto)</option>' + rubroOpts;
   function _lineaMercHtml(l,realIdx){
-    return '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px">'
-      +'<div style="display:flex;justify-content:space-between;gap:8px;align-items:center">'
+    var tipoAct = l.tipoFac || 'mercancia';
+    var selMerc = rubroOptsMerc.replace('value="'+tipoAct+'"','value="'+tipoAct+'" selected');
+    var esRara = tipoAct !== 'mercancia';
+    return '<div style="background:var(--bg);border:1px solid '+(esRara?'rgba(248,81,73,.4)':'var(--border)')+';border-radius:10px;padding:10px 12px;margin-bottom:8px">'
+      +(esRara?'<div style="font-size:9px;color:#f85149;font-weight:700;margin-bottom:6px">⚠️ Esta línea NO es mercancía — reclasifícala abajo</div>':'')
+      +'<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:6px">'
         +'<div style="font-size:12px;font-weight:700;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(l.prov||l.desc||'Mercancía')+'</div>'
         +'<input type="number" step="0.01" data-monto-idx="'+realIdx+'" class="_fix_monto_merc" value="'+Number(l.costo||0).toFixed(2)+'" style="width:110px;text-align:right;background:var(--s2);border:1px solid rgba(88,166,255,.4);border-radius:6px;padding:5px 7px;color:var(--blue-l);font-family:monospace;font-size:12px;font-weight:800">'
       +'</div>'
-      +'<div style="font-size:10px;color:var(--muted);margin-top:4px">Factura: '+(l.numFact||l.nfac||'—')+'</div>'
+      +'<div style="font-size:10px;color:var(--muted);margin-bottom:6px">Factura: '+(l.numFact||l.nfac||'—')+'</div>'
+      +'<select data-idx="'+realIdx+'" class="_fix_tipo_merc_sel" style="width:100%;background:var(--s2);border:1px solid '+(esRara?'rgba(248,81,73,.4)':'rgba(88,166,255,.3)')+';border-radius:7px;padding:7px 9px;color:var(--text);font-size:12px">'+selMerc+'</select>'
     +'</div>';
   }
 
@@ -12433,16 +12441,31 @@ function _corregirRubroUI(idx){
   };
 
   // ── Recalcular Mercancía/Costo No Mercancía sumando los montos editados ──
-  function _sumarMontos(sel){
-    var t=0; ov.querySelectorAll(sel).forEach(function(inp){ t += parseFloat(inp.value)||0; });
+  function _sumarMontos(sel, excluirSeguro){
+    var t=0;
+    ov.querySelectorAll(sel).forEach(function(inp){
+      if(excluirSeguro){
+        var i = inp.dataset.montoIdx;
+        var rSel = ov.querySelector('._fix_rubro_sel[data-idx="'+i+'"]');
+        if(rSel && rSel.value==='seguro') return;
+      }
+      t += parseFloat(inp.value)||0;
+    });
     return t;
   }
   var _btnRecalc = ov.querySelector('#_fix_fin_recalc');
   if(_btnRecalc) _btnRecalc.onclick = function(){
-    var nuevoMerc = _sumarMontos('._fix_monto_merc');
-    var nuevoNM   = _sumarMontos('._fix_monto_gasto');
+    var nuevoMerc = 0, extraNM = 0;
+    ov.querySelectorAll('._fix_monto_merc').forEach(function(inp){
+      var i = inp.dataset.montoIdx;
+      var sel = ov.querySelector('._fix_tipo_merc_sel[data-idx="'+i+'"]');
+      var tipo = sel ? sel.value : 'mercancia';
+      var monto = parseFloat(inp.value)||0;
+      if(tipo==='mercancia') nuevoMerc += monto; else if(tipo!=='seguro') extraNM += monto;
+    });
+    var nuevoNM = _sumarMontos('._fix_monto_gasto', true) + extraNM;
     if(nuevoMerc>0) document.getElementById('_fix_fin_merc').value = nuevoMerc.toFixed(2);
-    if(nuevoNM>0)   document.getElementById('_fix_fin_nm').value   = nuevoNM.toFixed(2);
+    document.getElementById('_fix_fin_nm').value = nuevoNM.toFixed(2);
     var itbms = parseFloat(document.getElementById('_fix_fin_itbms').value)||0;
     document.getElementById('_fix_fin_landed').value = (nuevoMerc+nuevoNM+itbms).toFixed(2);
     if(_finBody.style.display!=='block'){ _finBody.style.display='block'; _finToggleBtn.textContent='cerrar'; }
@@ -12457,6 +12480,16 @@ function _corregirRubroUI(idx){
       var i = parseInt(sel.dataset.idx,10);
       var nuevo = sel.value;
       if(d.invLines[i] && d.invLines[i].tipoFac !== nuevo){
+        d.invLines[i].tipoFac = nuevo;
+        cambios++;
+      }
+    });
+    // ── Reclasificar líneas de la pestaña Mercancía (ej. seguro/flete que
+    //    quedaron mal etiquetados y estaban inflando el valor mercancía) ──
+    ov.querySelectorAll('._fix_tipo_merc_sel').forEach(function(sel){
+      var i = parseInt(sel.dataset.idx,10);
+      var nuevo = sel.value;
+      if(d.invLines[i] && (d.invLines[i].tipoFac||'mercancia') !== nuevo){
         d.invLines[i].tipoFac = nuevo;
         cambios++;
       }
@@ -15473,12 +15506,12 @@ function renderTend(){
 </div></div>
         <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:${d._requiereReproceso?'var(--orange-l)':'var(--green-l)'};font-weight:700;white-space:nowrap">${d._requiereReproceso?'⚠ Reprocesar':window._fmtMoney(_ahorroDisplay)}</div>
         <div style="font-size:11px;color:var(--orange-l);white-space:nowrap">${d._requiereReproceso?'':pct}</div>
-        <div style="display:flex;gap:4px;align-items:center">
+        <div style="display:flex;gap:4px;align-items:center">${!window._histEditMode ? '' : `
           <button class="btn-reabrir" onclick="event.stopPropagation();reabrirEmbarquePendiente(${idx})" style="${isPend?'':'background:rgba(88,166,255,.1);border-color:rgba(88,166,255,.3);color:var(--blue-l)'}">✏️ ${isPend?'Reabrir':'Editar'}</button>
           <button onclick="event.stopPropagation();_corregirFechaUI(${idx})" title="Corregir fecha del embarque" style="background:rgba(248,209,34,.1);border:1px solid rgba(248,209,34,.3);color:#f8d122;border-radius:5px;padding:2px 6px;font-size:10px;cursor:pointer;height:22px">📅</button>
           <button onclick="event.stopPropagation();_corregirRubroUI(${idx})" title="Corregir rubro de facturas de servicio" style="background:rgba(99,179,237,.1);border:1px solid rgba(99,179,237,.3);color:#63b3ed;border-radius:5px;padding:2px 6px;font-size:10px;cursor:pointer;height:22px">🏷️</button>
           <button class="del-btn" onclick="event.stopPropagation();deleteTend(${idx})" style="font-size:10px;padding:2px 6px;height:22px;flex-shrink:0">×</button>
-        </div>
+        `}</div>
       </div>`;
     }).join('');
     _getEl('tend-hist').innerHTML=rows2||'<div style="text-align:center;padding:24px;color:var(--muted)">Sin registros.</div>';
@@ -15658,12 +15691,12 @@ function renderTend(){
           </div>
           <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--green-l);font-weight:700;white-space:nowrap">${window._fmtMoney(d.ahorro)}</div>
           <div style="font-size:11px;color:var(--orange-l);white-space:nowrap">${pct}</div>
-          <div style="display:flex;gap:4px;align-items:center">
+          <div style="display:flex;gap:4px;align-items:center">${!window._histEditMode ? '' : `
             <button class="btn-reabrir" onclick="event.stopPropagation();reabrirEmbarquePendiente(${idx})" style="${isPend?'':'background:rgba(88,166,255,.1);border-color:rgba(88,166,255,.3);color:var(--blue-l)'}">✏️ ${isPend?'Reabrir':'Editar'}</button>
             <button onclick="event.stopPropagation();_corregirFechaUI(${idx})" title="Corregir fecha del embarque" style="background:rgba(248,209,34,.1);border:1px solid rgba(248,209,34,.3);color:#f8d122;border-radius:5px;padding:2px 6px;font-size:10px;cursor:pointer;height:22px">📅</button>
           <button onclick="event.stopPropagation();_corregirRubroUI(${idx})" title="Corregir rubro de facturas de servicio" style="background:rgba(99,179,237,.1);border:1px solid rgba(99,179,237,.3);color:#63b3ed;border-radius:5px;padding:2px 6px;font-size:10px;cursor:pointer;height:22px">🏷️</button>
             <button class="del-btn" onclick="event.stopPropagation();deleteTend(${idx})" style="font-size:10px;padding:2px 6px;height:22px;flex-shrink:0">×</button>
-          </div>
+          `}</div>
         </div>`;
       });
 
@@ -24432,7 +24465,7 @@ function _abrirSelectorRubro(callback){
     {val:'flete',       lbl:'🚢 Flete Internacional'},
     {val:'flete_sababa',lbl:'🔗 Flete Sababa (reconciliación)'},
     {val:'uso_sistema', lbl:'💻 Uso del Sistema (SIGA/SICE)'},
-    {val:'seguro',      lbl:'🛡️ Seguro de Carga'},
+    {val:'seguro',      lbl:'🛡️ Seguro (informativo)'},
     {val:'almacenaje',  lbl:'🏪 Almacenaje / Bodegaje'},
     {val:'inspeccion',  lbl:'🔍 Inspección / Reconocimiento'},
     {val:'dmce_entrada',lbl:'📥 DMCE Entrada'},
