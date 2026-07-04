@@ -12333,9 +12333,12 @@ function _corregirRubroUI(idx){
       +'<div style="font-size:10px;color:var(--muted);margin-bottom:8px">Se recalculan solos al editar montos en Gastos/Mercancía abajo — o escríbelos aquí directo.</div>'
       +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
         +'<div><label style="font-size:9px;color:var(--muted)">Mercancía Original</label><input id="_fix_fin_merc" type="number" step="0.01" value="'+(finActual.mercOrig||0).toFixed(2)+'" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text);font-size:12px;box-sizing:border-box"></div>'
+        +'<div><label style="font-size:9px;color:#a371f7">Valor Homologado (si aplica)</label><input id="_fix_fin_homol" type="number" step="0.01" value="'+(finActual.mercHomol||0).toFixed(2)+'" placeholder="0.00 = no homologado" style="width:100%;background:var(--s2);border:1px solid rgba(163,113,247,.4);border-radius:6px;padding:6px 8px;color:#a371f7;font-size:12px;box-sizing:border-box"></div>'
+        +'<div style="grid-column:1/-1;background:rgba(163,113,247,.08);border:1px solid rgba(163,113,247,.3);border-radius:6px;padding:6px 8px;display:flex;justify-content:space-between;align-items:center"><label style="font-size:9px;color:#a371f7;font-weight:700">🧮 Costo Mercancía Inventario</label><span id="_fix_fin_mercinv" style="font-family:monospace;font-size:13px;font-weight:800;color:#a371f7">'+((finActual.mercHomol||0)>0?(finActual.mercHomol||0):(finActual.mercOrig||0)).toFixed(2)+'</span></div>'
         +'<div><label style="font-size:9px;color:var(--muted)">Costo No Mercancía</label><input id="_fix_fin_nm" type="number" step="0.01" value="'+(finActual.costoNM||0).toFixed(2)+'" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text);font-size:12px;box-sizing:border-box"></div>'
         +'<div><label style="font-size:9px;color:var(--muted)">ITBMS</label><input id="_fix_fin_itbms" type="number" step="0.01" value="'+(finActual.itbms||0).toFixed(2)+'" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text);font-size:12px;box-sizing:border-box"></div>'
         +'<div><label style="font-size:9px;color:var(--muted)">Landed Total</label><input id="_fix_fin_landed" type="number" step="0.01" value="'+(finActual.landed1||0).toFixed(2)+'" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text);font-size:12px;box-sizing:border-box"></div>'
+        +'<div style="grid-column:1/-1;background:rgba(240,136,62,.08);border:1px solid rgba(240,136,62,.3);border-radius:6px;padding:6px 8px;display:flex;justify-content:space-between;align-items:center"><label style="font-size:9px;color:var(--orange-l);font-weight:700">📦 Costo Inventario (Merc.Inv+NoMerc+ITBMS)</label><span id="_fix_fin_costoinv" style="font-family:monospace;font-size:13px;font-weight:800;color:var(--orange-l)">'+(((finActual.mercHomol||0)>0?(finActual.mercHomol||0):(finActual.mercOrig||0))+(finActual.costoNM||0)+(finActual.itbms||0)).toFixed(2)+'</span></div>'
         +'<div style="grid-column:1/-1;border-top:1px dashed var(--border);padding-top:8px;margin-top:2px"><label style="font-size:9px;color:#3fb950;font-weight:700">💵 Ahorro del Embarque</label><input id="_fix_fin_ahorro" type="number" step="0.01" value="'+ahorroActual.toFixed(2)+'" style="width:100%;background:var(--s2);border:1px solid rgba(63,185,80,.35);border-radius:6px;padding:6px 8px;color:#3fb950;font-size:13px;font-weight:700;box-sizing:border-box"></div>'
       +'</div>'
       +'<button id="_fix_fin_recalc" type="button" style="margin-top:10px;width:100%;background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.3);color:#3fb950;border-radius:8px;padding:8px;font-size:11px;font-weight:700;cursor:pointer">🔄 Recalcular Mercancía/Costo No Mercancía desde las líneas de abajo</button>'
@@ -12439,6 +12442,24 @@ function _corregirRubroUI(idx){
     _finBody.style.display = abierto ? 'none' : 'block';
     _finToggleBtn.textContent = abierto ? 'editar' : 'cerrar';
   };
+  // ── Costo Inventario en vivo = Mercancía + Costo No Mercancía + ITBMS
+  //    (se actualiza al teclear en cualquiera de esos 3 campos, para que
+  //    coincida siempre con la card "Costo Inventario" de Tendencias) ──
+  (function(){
+    var _mI=document.getElementById('_fix_fin_merc'), _nI=document.getElementById('_fix_fin_nm'),
+        _iI=document.getElementById('_fix_fin_itbms'), _oS=document.getElementById('_fix_fin_costoinv'),
+        _hI=document.getElementById('_fix_fin_homol'), _miS=document.getElementById('_fix_fin_mercinv');
+    if(!_mI||!_nI||!_iI||!_oS) return;
+    function _upd(){
+      var _homol=parseFloat(_hI&&_hI.value)||0;
+      var _mercOr=parseFloat(_mI.value)||0;
+      var _mercInv=_homol>0?_homol:_mercOr;
+      if(_miS) _miS.textContent=_mercInv.toFixed(2);
+      var v=_mercInv+(parseFloat(_nI.value)||0)+(parseFloat(_iI.value)||0);
+      _oS.textContent=v.toFixed(2);
+    }
+    [_mI,_nI,_iI,_hI].forEach(function(inp){ if(inp) inp.addEventListener('input',_upd); });
+  })();
 
   // ── Recalcular Mercancía/Costo No Mercancía sumando los montos editados ──
   // Suma montos del selector dado. excluirNoMerc=true → salta 'seguro' (solo para CIF)
@@ -12480,8 +12501,20 @@ function _corregirRubroUI(idx){
     // Landed Costeable = Mercancía + No Mercancía (SIN ITBMS — el ITBMS es fiscal, no costeable)
     // Costo Inventario = Landed + ITBMS → se calcula en _calcCostoInventario al leer el override
     document.getElementById('_fix_fin_landed').value = (nuevoMerc+nuevoNM).toFixed(2);
+    var _ciSpan = document.getElementById('_fix_fin_costoinv');
+    var _miSpan = document.getElementById('_fix_fin_mercinv');
+    var _homolInp = document.getElementById('_fix_fin_homol');
+    if(_ciSpan){
+      var _ciITBMS = parseFloat(document.getElementById('_fix_fin_itbms').value)||0;
+      var _ciMerc = parseFloat(document.getElementById('_fix_fin_merc').value)||0;
+      var _ciNM = parseFloat(document.getElementById('_fix_fin_nm').value)||0;
+      var _ciHomol = parseFloat(_homolInp&&_homolInp.value)||0;
+      var _ciMercInv = _ciHomol>0?_ciHomol:_ciMerc;
+      if(_miSpan) _miSpan.textContent = _ciMercInv.toFixed(2);
+      _ciSpan.textContent = (_ciMercInv+_ciNM+_ciITBMS).toFixed(2);
+    }
     if(_finBody.style.display!=='block'){ _finBody.style.display='block'; _finToggleBtn.textContent='cerrar'; }
-    if(typeof _showToast==='function') _showToast('🔄 Recalculado — Landed='+(nuevoMerc+nuevoNM).toFixed(2)+' · ITBMS='+((nuevoITBMS>0?nuevoITBMS:parseFloat(document.getElementById('_fix_fin_itbms').value)||0)).toFixed(2),'green',3500);
+    if(typeof _showToast==='function') _showToast('🔄 Recalculado — Landed='+(nuevoMerc+nuevoNM).toFixed(2)+' · ITBMS='+((nuevoITBMS>0?nuevoITBMS:parseFloat(document.getElementById('_fix_fin_itbms').value)||0)).toFixed(2)+' · No olvides pulsar "Recalcular y Guardar" para que quede guardado en la nube','green',4500);
   };
 
   ov.querySelector('#_fix_rubro_cancel').onclick = function(){ ov.remove(); };
@@ -12526,13 +12559,16 @@ function _corregirRubroUI(idx){
     // ── Valores financieros + ahorro, si el panel está abierto ──
     if(_finBody && _finBody.style.display==='block'){
       var _fm = parseFloat(document.getElementById('_fix_fin_merc').value)||0;
+      var _fh = parseFloat((document.getElementById('_fix_fin_homol')||{}).value)||0;
       var _fn = parseFloat(document.getElementById('_fix_fin_nm').value)||0;
       var _fi = parseFloat(document.getElementById('_fix_fin_itbms').value)||0;
       var _fl = parseFloat(document.getElementById('_fix_fin_landed').value)||0;
       var _fa = parseFloat(document.getElementById('_fix_fin_ahorro').value)||0;
       var _huboDatos = (_fm>0||_fn>0||_fi>0||_fl>0);
       if(_huboDatos){
-        d._overrideFin = {mercOrig:_fm, costoNM:_fn, itbms:_fi, landed:_fl};
+        // mercInv: Valor Homologado si aplica (Sababa Local), si no el mismo valor original
+        // (Liquidación/ZL/IMP sin transformación) — así no se pierde la trazabilidad.
+        d._overrideFin = {mercOrig:_fm, mercHomol:_fh, costoNM:_fn, itbms:_fi, landed:_fl};
         cambios++;
       }
       if(_fa !== ahorroActual){
@@ -12545,6 +12581,10 @@ function _corregirRubroUI(idx){
     // ── Bumpear ts: sin esto, una copia vieja en otra pestaña/dispositivo
     //    podría revertir esta corrección en la próxima sincronización. ──
     d.ts = Date.now();
+    // ── Esta corrección manual se vuelve el nuevo "histórico de referencia":
+    //    la próxima vez que se detecte una diferencia, se compara contra ESTE
+    //    valor recién corregido, no contra el original roto. ──
+    if(typeof _setHistBaseline==='function') _setHistBaseline(d, true);
     saveTendData();
     if(typeof _showToast==='function') _showToast('✅ '+cambios+' cambio(s) recalculado(s) y guardado(s) en la nube','green',3500);
     if(typeof renderTendencias==='function') renderTendencias();
@@ -14143,6 +14183,8 @@ async function procesarEmbarque(){
     tendData.push(snap);
   }
   window._pendienteUpdateIdx = -1;
+  // ── Foto inicial de Costo Inventario para detectar futuras diferencias ──
+  if(typeof _setHistBaseline==='function') _setHistBaseline(snap);
   saveTendData();
   renderTend();
   renderTopProvs();
@@ -15566,10 +15608,12 @@ function renderTend(){
       const isUnicoRow = !!(d.modoUnico||d.tipoEsc==='unico'||(d.esc||'').toLowerCase().includes('único')||(d.esc||'').toLowerCase().includes('unico'));
       const nroColor = isUnicoRow ? '#f97316' : 'var(--orange-l)';
       const unicoBadge = isUnicoRow ? '<span style="background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.4);border-radius:3px;padding:0 4px;font-size:8px;font-weight:800;color:#f97316">🔒 ÚNICO</span>' : '';
+      const _difMonto = typeof _getDiferencia==='function' ? _getDiferencia(d) : 0;
+      const difBadge = _difMonto ? `<span title="El Costo Inventario actual difiere del histórico guardado al procesar — revisa con 🏷️" style="background:rgba(248,81,73,.15);border:1px solid rgba(248,81,73,.4);border-radius:3px;padding:0 4px;font-size:8px;font-weight:800;color:#f85149;cursor:help">⚠️ Dif: ${_difMonto>0?'+':''}${window._fmtMoney(_difMonto)}</span>` : '';
       const _rowYm = (d.fecha||'').slice(0,7);
       const _mesEditable = !(window._mesesBloqueados||new Set()).has(_rowYm);
       return `<div style="display:grid;grid-template-columns:auto 1fr auto auto auto;gap:8px;align-items:center;padding:9px 14px;border-bottom:1px solid rgba(48,54,61,.4);cursor:pointer;transition:background .15s${(isPend||isParcial)?';border-left:3px solid '+(isPend?'var(--orange-l)':'var(--blue-l)'):''}" onclick="if(event.target.classList.contains('del-btn')||event.target.classList.contains('btn-reabrir')){return;}abrirModuloComparativo_idx(${idx})" onmouseover="this.style.background='rgba(255,255,255,.03)'" onmouseout="this.style.background=''">
-        <div style="font-size:10px;font-weight:700;color:${nroColor};white-space:nowrap">${d.nro||'—'} ${unicoBadge}</div>
+        <div style="font-size:10px;font-weight:700;color:${nroColor};white-space:nowrap">${d.nro||'—'} ${unicoBadge} ${difBadge}</div>
         <div><div style="font-size:12px;font-weight:500;color:var(--text)">${d.desc}${isPend?'&nbsp;<span class="badge-pendiente">🟡 PENDIENTE</span>':''}${d.status==='parcial'?'&nbsp;<span style="background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:3px;padding:1px 5px;font-size:9px;font-weight:700">🚢 PARCIAL</span>':''}</div><div style="font-size:10px;color:var(--muted);display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-top:2px">${d.fecha} · ${d.esc||''}&nbsp;<span style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:var(--blue-l)">${viaIco} ${viaLabel}</span>${d.tramiteTipo?`<span style="background:${tramiteBg};border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:${tramiteColor}">${d.tramiteTipo}</span>`:''}${d.lugarRecep?`<span style="background:rgba(45,212,191,.1);border:1px solid rgba(45,212,191,.25);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:#2dd4bf">🏭 ${d.lugarRecep}</span>`:''}
 </div></div>
         <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:${d._requiereReproceso?'var(--orange-l)':'var(--green-l)'};font-weight:700;white-space:nowrap">${d._requiereReproceso?'⚠ Reprocesar':window._fmtMoney(_ahorroDisplay)}</div>
@@ -15754,8 +15798,10 @@ function renderTend(){
         const isPend=d.status==='pendiente';
         const viaIco=d.viaTransporte==='AIR'?'✈️':d.viaTransporte==='LAND'?'🚛':'🚢';
         const _mesEditable = !_bloqueado;
+        const _difMonto2 = typeof _getDiferencia==='function' ? _getDiferencia(d) : 0;
+        const difBadge2 = _difMonto2 ? `<span title="El Costo Inventario actual difiere del histórico guardado al procesar — revisa con 🏷️" style="background:rgba(248,81,73,.15);border:1px solid rgba(248,81,73,.4);border-radius:3px;padding:0 4px;font-size:8px;font-weight:800;color:#f85149;cursor:help">⚠️ Dif: ${_difMonto2>0?'+':''}${window._fmtMoney(_difMonto2)}</span>` : '';
         histHtml+=`<div style="display:grid;grid-template-columns:auto 1fr auto auto auto;gap:8px;align-items:center;padding:9px 14px 9px 42px;border-top:1px solid rgba(48,54,61,.3);cursor:pointer;transition:background .15s${isPend?';border-left:3px solid var(--orange-l)':''}" onclick="if(event.target.classList.contains('del-btn')||event.target.classList.contains('btn-reabrir')){return;}abrirModuloComparativo_idx(${idx})" onmouseover="this.style.background='rgba(255,255,255,.03)'" onmouseout="this.style.background=''">
-          <div style="font-size:10px;font-weight:700;color:var(--orange-l);white-space:nowrap">${d.nro||'—'}</div>
+          <div style="font-size:10px;font-weight:700;color:var(--orange-l);white-space:nowrap">${d.nro||'—'} ${difBadge2}</div>
           <div>
             <div style="font-size:12px;font-weight:500;color:var(--text)">${d.desc}${isPend?'&nbsp;<span class="badge-pendiente">🟡 PENDIENTE</span>':''}</div>
             <div style="font-size:10px;color:var(--muted);display:flex;gap:5px;align-items:center;margin-top:2px">${d.fecha} · ${d.esc||''} <span style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:var(--blue-l)">${viaIco} ${d.viaTransporte||'SEA'}</span></div>
@@ -18317,7 +18363,8 @@ function _informeGetData(){
     // ── Override manual — ver _calcCostoInventario ──
     if(d._overrideFin){
       var ov=d._overrideFin;
-      return {mercOrig:ov.mercOrig||0,mercHomol:0,mercInv:ov.mercOrig||0,costoNM:ov.costoNM||0,itbms:ov.itbms||0,l1:ov.landed||0,inv:ov.landed||0};
+      var _ovH=ov.mercHomol||0, _ovMI=_ovH>0?_ovH:(ov.mercOrig||0);
+      return {mercOrig:ov.mercOrig||0,mercHomol:_ovH,mercInv:_ovMI,costoNM:ov.costoNM||0,itbms:ov.itbms||0,l1:ov.landed||0,inv:_ovMI+(ov.costoNM||0)+(ov.itbms||0)};
     }
     const sc1=d.snap&&d.snap.sc1||{},sc2=d.snap&&d.snap.sc2||{},sc3=d.snap&&d.snap.sc3||{};
     const esc=(d.esc||'').toLowerCase(),cl=classify(d);
@@ -18332,7 +18379,9 @@ function _informeGetData(){
       const uItbms=(sc1.itbms||0)+(sc1.itbmsTasa||0);
       const uNoMerc=(sc1.noMerc!=null)?sc1.noMerc:Math.max(0,uLanded-uCif);
       const uL1=uLanded||(uCif+uNoMerc);
-      return {mercOrig:uCif,mercHomol:0,mercInv:uCif,costoNM:uNoMerc,itbms:uItbms,l1:uL1,inv:uL1};
+      // FIX (jul-2026): inv (Costo Inventario) debe incluir ITBMS — antes se
+      // igualaba a uL1, dejando el ITBMS fuera del Informe Financiero/cierre.
+      return {mercOrig:uCif,mercHomol:0,mercInv:uCif,costoNM:uNoMerc,itbms:uItbms,l1:uL1,inv:uL1+uItbms};
     }
     const lines=(d.snap&&d.snap.invLines||d.invLines||[]).filter(l=>(l.tipoFac||'mercancia')==='mercancia');
     const mercOrig=lines.reduce((a,l)=>a+(l.costo||0),0)||sc1.base||d.cif||0;
@@ -18961,6 +19010,31 @@ function _setDeptVista(modo, btn){
 //  - itbms     = ITBMS del embarque procesado (no del simulador)
 //  - costoInv  = mercInv + costoNM + itbms
 // ══════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
+// ── Histórico de referencia (baseline) + detección de Diferencia ──
+// Cada embarque guarda, la primera vez que se procesa, una "foto" de
+// su Costo Inventario (_histBase). Si luego —por sincronización, edición
+// de líneas, etc.— el valor calculado cambia sin que el usuario haya
+// pasado por 🏷️ Corregir Embarque, se detecta un desfase silencioso.
+// Cuando el usuario SÍ corrige y guarda desde Corregir Embarque, el
+// baseline se actualiza al valor recién corregido (force=true), para
+// que la próxima comparación sea contra el dato ya validado.
+// ══════════════════════════════════════════════════════════════
+function _setHistBaseline(d, force){
+  if(!d) return;
+  if(d._histBase && !force) return;
+  var f = _calcCostoInventario(d);
+  d._histBase = {mercOrig:f.mercOrig||0, mercInv:f.mercInv||0, costoNM:f.costoNM||0, itbms:f.itbms||0, costoInv:f.costoInv||0, ts:Date.now()};
+}
+// Devuelve 0 si no hay diferencia relevante, o el monto (actual - baseline) si excede 1 centavo.
+function _getDiferencia(d){
+  if(!d || !d._histBase) return 0;
+  var actual = _calcCostoInventario(d).costoInv||0;
+  var base = d._histBase.costoInv||0;
+  var diff = Math.round((actual-base)*100)/100;
+  return Math.abs(diff)>0.01 ? diff : 0;
+}
+
 function _calcCostoInventario(d){
   // ── Override manual — ver herramienta 🏷️ "Restaurar valores". Si el
   //    usuario restauró a mano los valores financieros de un registro
@@ -18969,12 +19043,16 @@ function _calcCostoInventario(d){
   if(d._overrideFin){
     var ov=d._overrideFin;
     // landed = Landed Costeable (Merc + NoMerc, sin ITBMS)
-    // costoInv = Costo Inventario = Landed Costeable + ITBMS
+    // mercInv = Valor Homologado si aplica (Sababa Local); si no, el mismo valor original
+    //          (Liquidación/ZL/IMP sin transformación) — mantiene la trazabilidad.
+    // costoInv = Costo Inventario = Merc.Inv + Costo No Mercancía + ITBMS
     var _ovLanded = ov.landed||0;
     var _ovItbms  = ov.itbms||0;
-    return {mercOrig:ov.mercOrig||0, mercHomol:0, mercInv:ov.mercOrig||0,
+    var _ovHomol  = ov.mercHomol||0;
+    var _ovMercInv = _ovHomol>0 ? _ovHomol : (ov.mercOrig||0);
+    return {mercOrig:ov.mercOrig||0, mercHomol:_ovHomol, mercInv:_ovMercInv,
             costoNM:ov.costoNM||0, itbms:_ovItbms,
-            costoInv:_ovLanded+_ovItbms, landed1:_ovLanded, landedG:_ovLanded};
+            costoInv:_ovMercInv+(ov.costoNM||0)+_ovItbms, landed1:_ovLanded, landedG:_ovLanded};
   }
   var sc1=(d.snap&&d.snap.sc1)||{};
   var sc2=(d.snap&&d.snap.sc2)||{};
@@ -19006,7 +19084,7 @@ function _calcCostoInventario(d){
     var uLandedFinal = uLanded || (uCif + uNoMerc);
     return {mercOrig:uCif, mercHomol:0, mercInv:uCif,
             costoNM:uNoMerc, itbms:uItbms,
-            costoInv:uLandedFinal,
+            costoInv:uLandedFinal+uItbms, // FIX: Costo Inventario debe incluir ITBMS (antes se igualaba a landed1, dejando el ITBMS fuera)
             landed1:uLandedFinal,
             landedG:uLandedFinal};
   }
@@ -23618,6 +23696,8 @@ async function procesarUnico(){
   } else {
     tendData.push(snap);
   }
+  // ── Foto inicial de Costo Inventario para detectar futuras diferencias ──
+  if(typeof _setHistBaseline==='function') _setHistBaseline(snap);
 
   // Save directo a nube — await garantiza escritura
   if(!_sb){ initSupabase(); await new Promise(r=>setTimeout(r,600)); }
