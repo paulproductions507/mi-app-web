@@ -12322,7 +12322,7 @@ function _corregirRubroUI(idx){
   var ov = document.createElement('div');
   ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:999999;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto';
   var rubroOpts = Object.entries(_RUBRO_LABELS_FIX).map(function(e){ return '<option value="'+e[0]+'">'+e[1]+'</option>'; }).join('');
-  var tipoActual = d.tipo || '';
+  var tipoActual = d.tipo || (d.snap&&d.snap.tipo) || d.tipoProveedor || '';
 
   var tipoZLHtml = '<div style="background:var(--bg);border:1px solid rgba(45,212,191,.3);border-radius:10px;padding:12px;margin-bottom:14px">'
     +'<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:8px">Régimen Aduanero</div>'
@@ -12573,40 +12573,38 @@ function _corregirRubroUI(idx){
         cambios++;
       }
     });
-    // ── Régimen y Vía: SIEMPRE guardar la selección del usuario, sin importar
-    //    si difiere del valor previo. Embarques Único/Sababa guardan el régimen
-    //    en campos distintos — actualizamos los tres para máxima compatibilidad. ──
+    // ── Régimen: SIEMPRE guardar, sin importar si cambió o no ──
     if(_nuevoTipoZL){
       d.tipo = _nuevoTipoZL;
       d.tipoProveedor = (_nuevoTipoZL==='EXT'||_nuevoTipoZL==='IMP') ? 'IMP' : 'ZL';
-      if(d.snap){ d.snap.tipo = _nuevoTipoZL; }
+      if(d.snap){ d.snap.tipo = _nuevoTipoZL; d.snap.tipoProveedor = d.tipoProveedor; }
       if(d.invLines) d.invLines.forEach(function(l){
         if(l && l.tipoFac==='mercancia') l.tipoProv = d.tipoProveedor;
       });
       cambios++;
     }
+    // ── Vía de transporte: SIEMPRE guardar ──
     if(_nuevaVia){
       d.viaTransporte = _nuevaVia;
       if(d.snap) d.snap.viaTransporte = _nuevaVia;
       cambios++;
     }
-    // ── Valores financieros + ahorro, si el panel está abierto ──
+    // ── Ahorro: guardar SIEMPRE (panel abierto o cerrado) ──
+    var _faGlobal = parseFloat((document.getElementById('_fix_fin_ahorro')||{}).value);
+    if(!isNaN(_faGlobal) && _faGlobal !== ahorroActual){
+      d.ahorro = _faGlobal;
+      cambios++;
+    }
+    // ── Valores financieros: guardar si el panel está abierto ──
     if(_finBody && _finBody.style.display==='block'){
       var _fm = parseFloat(document.getElementById('_fix_fin_merc').value)||0;
       var _fh = parseFloat((document.getElementById('_fix_fin_homol')||{}).value)||0;
       var _fn = parseFloat(document.getElementById('_fix_fin_nm').value)||0;
       var _fi = parseFloat(document.getElementById('_fix_fin_itbms').value)||0;
       var _fl = parseFloat(document.getElementById('_fix_fin_landed').value)||0;
-      var _fa = parseFloat(document.getElementById('_fix_fin_ahorro').value)||0;
       var _huboDatos = (_fm>0||_fn>0||_fi>0||_fl>0);
       if(_huboDatos){
-        // mercInv: Valor Homologado si aplica (Sababa Local), si no el mismo valor original
-        // (Liquidación/ZL/IMP sin transformación) — así no se pierde la trazabilidad.
         d._overrideFin = {mercOrig:_fm, mercHomol:_fh, costoNM:_fn, itbms:_fi, landed:_fl};
-        cambios++;
-      }
-      if(_fa !== ahorroActual){
-        d.ahorro = _fa; // ← ahorro editable directo, se ve tal cual en Historial y KPIs
         cambios++;
       }
     }
