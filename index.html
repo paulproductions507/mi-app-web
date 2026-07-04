@@ -8135,9 +8135,13 @@ function showSplashNav(){
   const _mesDedup=new Map();
   _mesRaw.forEach(d=>{ const k=(d.nro||'').trim().toUpperCase()||('_ts_'+(d.ts||Math.random())); const ex=_mesDedup.get(k); if(!ex||(d.ts||0)>(ex.ts||0)) _mesDedup.set(k,d); });
   const _mesData=Array.from(_mesDedup.values());
-  const totalMesMerc=_mesData.reduce((s,d)=>{ const lines=(d.snap?.invLines||d.invLines||[]); return s+lines.filter(l=>(l.tipoFac||'mercancia')==='mercancia').reduce((a,l)=>a+(l.costo||0),0); },0);
+  const totalMesMerc=_mesData.reduce((s,d)=>{
+    if(d._overrideFin) return s+(d._overrideFin.mercOrig||0);
+    const lines=(d.snap?.invLines||d.invLines||[]); return s+lines.filter(l=>(l.tipoFac||'mercancia')==='mercancia').reduce((a,l)=>a+(l.costo||0),0);
+  },0);
   // Costo Landed por tipo de embarque
   const totalLanded=_mesData.reduce((s,d)=>{
+    if(d._overrideFin) return s+(d._overrideFin.landed||0);
     const isSab=(d.esc||'').toLowerCase().includes('sababa');
     const isUnicoD=(d.modoUnico||d.tipoEsc==='unico');
     const sn=d.snap||{};
@@ -8171,6 +8175,13 @@ function showSplashNav(){
   //   - Otros escenarios (CIF Express, Único, etc.): costo original CIF/FOB
   //   + Costo No Mercancía de todos los embarques del mes
   const costoInventario = _mesData.reduce((s,d) => {
+    // ── Respeta la corrección manual (herramienta 🏷️) — sin esto, un
+    //    embarque Sababa corregido a mano seguía mostrando el valor
+    //    homologado viejo aquí, aunque ya estuviera bien guardado. ──
+    if(d._overrideFin){
+      var _ov=d._overrideFin;
+      return s + (_ov.mercOrig||0) + (_ov.costoNM||0);
+    }
     const isSabD = (d.esc||'').toLowerCase().includes('sababa');
     const sn = d.snap||{};
     const lines = (sn.invLines || d.invLines || []);
@@ -8334,6 +8345,10 @@ function iniciarApp(tab){
         'config':'⚙️ Configuración','histprovs':'🏭 Historial de Proveedores','factdisp':'🗂️ Facturas Disponibles'
       };
       openTabModal(tab, _labels[tab] || tab);
+      if(tab==='tendencias'){
+        // ── Restaurar el mes/rango preferido de este dispositivo (localStorage) ──
+        setTimeout(function(){ if(typeof _loadFiltrosTend==='function') _loadFiltrosTend(); }, 250);
+      }
     }
   }, 200);
 }
@@ -12290,6 +12305,7 @@ var _RUBRO_LABELS_FIX = {
   honorarios:'💼 Honorarios / Comisión', acarreo:'🚛 Acarreo / Transporte', gastos_destino:'📦 Gastos Origen / Destino',
   flete:'🚢 Flete Internacional', flete_sababa:'🔗 Flete Sababa (reconciliación)', uso_sistema:'💻 Uso del Sistema (SIGA/SICE)',
   seguro:'🛡️ Seguro (informativo)', almacenaje:'🏪 Almacenaje', inspeccion:'🔍 Inspección / Reconocimiento',
+  otro_no_gravado:'💰 Otro Costo No Gravado (Master Value)',
   dmce_entrada:'📥 DMCE Entrada', dmce_salida:'📤 DMCE Salida', dmce:'📝 DMCE (genérico)',
   formulario:'📝 Formulario (Form-1)', corredor:'🤝 Corredor (Comisión)',
   nota_credito:'🧾➖ Nota de Crédito', nota_debito:'🧾➕ Nota de Débito', ajuste:'⚖️ Ajuste de Valor',
@@ -13626,15 +13642,27 @@ function _loadFiltrosTend(){
   var filtros = null;
   try{ var raw=localStorage.getItem(_TEND_FILTROS_KEY); if(raw) filtros=JSON.parse(raw); }catch(e){}
   if(!filtros) return false;
+  // ── FIX: antes esto forzaba 'hasta' a nunca ser antes de hoy, así que
+  //    si guardabas un mes pasado (ej. junio) como preferido, la próxima
+  //    sesión lo pisaba solo con la fecha de hoy — por eso siempre volvía
+  //    a julio aunque hubieras elegido junio. Ahora se respeta tal cual
+  //    lo que el usuario guardó, sin importar si es pasado. ──
   if(filtros.desde)  _tfSet('tf_desde',  filtros.desde);
-  const _hoyPA = new Date(new Date().getTime()-5*60*60*1000).toISOString().slice(0,10);
-  if(filtros.hasta)  _tfSet('tf_hasta',  filtros.hasta < _hoyPA ? _hoyPA : filtros.hasta);
+  if(filtros.hasta)  _tfSet('tf_hasta',  filtros.hasta);
   if(filtros.tipo)   _tfSet('tf_tipo',   filtros.tipo);
   if(filtros.prov)   _tfSet('tf_proveedor', filtros.prov);
   if(filtros.buscar) _tfSet('tf_buscar', filtros.buscar);
   if(filtros.origen) _tfSet('tf_origen', filtros.origen);
   var hayFiltro = !!(filtros.desde||filtros.hasta||filtros.tipo||filtros.prov||filtros.buscar||filtros.origen);
   _actualizarIndicadorFiltro(hayFiltro);
+  // Sin esto, los campos quedaban con el valor correcto pero la vista
+  // seguía mostrando los datos del rango anterior hasta tocar algo.
+  if(hayFiltro && typeof renderTend==='function'){
+    renderTend();
+    if(typeof renderDashboardKPIs==='function') renderDashboardKPIs();
+    if(typeof renderTopProvs==='function') renderTopProvs();
+    if(typeof _updateTendSubtitle==='function') _updateTendSubtitle();
+  }
   return hayFiltro;
 }
 
@@ -24672,6 +24700,7 @@ function _abrirSelectorRubro(callback){
     {val:'flete_sababa',lbl:'🔗 Flete Sababa (reconciliación)'},
     {val:'uso_sistema', lbl:'💻 Uso del Sistema (SIGA/SICE)'},
     {val:'seguro',      lbl:'🛡️ Seguro (informativo)'},
+    {val:'otro_no_gravado', lbl:'💰 Otro Costo No Gravado (Master Value)'},
     {val:'almacenaje',  lbl:'🏪 Almacenaje / Bodegaje'},
     {val:'inspeccion',  lbl:'🔍 Inspección / Reconocimiento'},
     {val:'dmce_entrada',lbl:'📥 DMCE Entrada'},
@@ -27509,12 +27538,16 @@ window.onload=function(){
     const totalFacServ=facServUnicoConNum.size+facServSinNum;
     // ── Landed y Costo Inventario: mostrar el mayor de los dos ──
     const totalLanded=tendData.reduce((s,d)=>{
+      if(d._overrideFin) return s+(d._overrideFin.landed||0);
       const snap=d.snap||{};
       const isSab=(d.esc||'').toLowerCase().includes('sababa');
       const landedVal=isSab?(snap.sc3?.landedG||snap.sc3?.landed1||0):(snap.sc1?.landedG||snap.sc1?.landed1||0);
       return s+(landedVal||0);
     },0);
-    const totalHomolInv=tendData.reduce((s,d)=>(d.snap?.sc3?.mercHomol||0)>0&&(d.snap?.sc3?.comision||0)>0?s+(d.snap.sc3.mercHomol||0):s,0);
+    const totalHomolInv=tendData.reduce((s,d)=>{
+      if(d._overrideFin) return s+(d._overrideFin.mercOrig||0);
+      return ((d.snap?.sc3?.mercHomol||0)>0&&(d.snap?.sc3?.comision||0)>0)?s+(d.snap.sc3.mercHomol||0):s;
+    },0);
     const skLanded=document.getElementById('sk-landed'); if(skLanded) skLanded.textContent=fmtK(totalLanded)||'—';
     // Mostrar solo el mayor entre Landed y Costo Inventario (homologado)
     const skCostoInvEl=document.getElementById('sk-costo-inv');
