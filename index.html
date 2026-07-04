@@ -15114,6 +15114,11 @@ function registrarAhorro(){
   ['tend_nro','tend_desc','tend_ahorro','tend_cif'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
 }
 function deleteTend(idx){
+  const d0 = tendData[idx];
+  if(d0 && (window._mesesBloqueados||new Set()).has((d0.fecha||'').slice(0,7))){
+    alert('🔒 Este mes está cerrado con candado. Ábrelo primero desde el encabezado del mes en Historial para poder eliminar embarques.');
+    return;
+  }
   if(!confirm('¿Eliminar este registro?')) return;
   const d = tendData[idx];
   if(d){
@@ -15321,6 +15326,55 @@ function _fixImportacionTipo(){
   return fixed;
 }
 
+// ══════════════════════════════════════════════════════════════
+//  CANDADO POR MES — protege embarques ya cuadrados de ediciones
+//  accidentales o de sincronizaciones futuras. Una vez cerrado un
+//  mes, sus embarques no muestran ningún botón de edición hasta que
+//  alguien lo vuelva a abrir explícitamente (con confirmación).
+// ══════════════════════════════════════════════════════════════
+window._mesesBloqueados = window._mesesBloqueados || new Set();
+var _MESES_BLOQ_KEY = '_MESES_BLOQUEADOS';
+
+function _guardarMesesBloqueados(){
+  var arr = Array.from(window._mesesBloqueados);
+  try{ localStorage.setItem(_MESES_BLOQ_KEY, JSON.stringify(arr)); }catch(e){}
+  if(window._sb){
+    window._sb.from('simulador_sesiones').upsert(
+      { nombre: _MESES_BLOQ_KEY, datos: JSON.stringify({meses:arr}), updated_at: new Date().toISOString() },
+      { onConflict: 'nombre' }
+    ).then(function(r){ if(r && r.error) console.warn('meses bloqueados sync:', r.error.message); });
+  }
+}
+
+async function _cargarMesesBloqueados(){
+  var meses = [];
+  if(window._sb){
+    try{
+      var r = await window._sb.from('simulador_sesiones').select('datos').eq('nombre', _MESES_BLOQ_KEY).maybeSingle();
+      if(!r.error && r.data && r.data.datos){ meses = JSON.parse(r.data.datos).meses||[]; }
+    }catch(e){}
+  }
+  if(!meses.length){
+    try{ var raw=localStorage.getItem(_MESES_BLOQ_KEY); if(raw) meses=JSON.parse(raw)||[]; }catch(e){}
+  }
+  window._mesesBloqueados = new Set(meses);
+}
+
+function _toggleCandadoMes(ym){
+  var yaBloqueado = window._mesesBloqueados.has(ym);
+  if(yaBloqueado){
+    if(!confirm('🔓 Este mes está cerrado. ¿Reabrirlo para poder editarlo de nuevo?')) return;
+    window._mesesBloqueados.delete(ym);
+    if(typeof _showToast==='function') _showToast('🔓 Mes reabierto — ya se puede editar','orange',3000);
+  } else {
+    if(!confirm('🔒 ¿Cerrar este mes? Ningún embarque de este mes podrá editarse, corregirse ni eliminarse hasta que lo reabras.')) return;
+    window._mesesBloqueados.add(ym);
+    if(typeof _showToast==='function') _showToast('🔒 Mes cerrado y protegido','green',3000);
+  }
+  _guardarMesesBloqueados();
+  if(typeof renderTend==='function') renderTend();
+}
+
 function renderTend(){
   _populateYearFilter();
   const filteredData = _getFilteredTendData();
@@ -15512,13 +15566,15 @@ function renderTend(){
       const isUnicoRow = !!(d.modoUnico||d.tipoEsc==='unico'||(d.esc||'').toLowerCase().includes('único')||(d.esc||'').toLowerCase().includes('unico'));
       const nroColor = isUnicoRow ? '#f97316' : 'var(--orange-l)';
       const unicoBadge = isUnicoRow ? '<span style="background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.4);border-radius:3px;padding:0 4px;font-size:8px;font-weight:800;color:#f97316">🔒 ÚNICO</span>' : '';
+      const _rowYm = (d.fecha||'').slice(0,7);
+      const _mesEditable = !(window._mesesBloqueados||new Set()).has(_rowYm);
       return `<div style="display:grid;grid-template-columns:auto 1fr auto auto auto;gap:8px;align-items:center;padding:9px 14px;border-bottom:1px solid rgba(48,54,61,.4);cursor:pointer;transition:background .15s${(isPend||isParcial)?';border-left:3px solid '+(isPend?'var(--orange-l)':'var(--blue-l)'):''}" onclick="if(event.target.classList.contains('del-btn')||event.target.classList.contains('btn-reabrir')){return;}abrirModuloComparativo_idx(${idx})" onmouseover="this.style.background='rgba(255,255,255,.03)'" onmouseout="this.style.background=''">
         <div style="font-size:10px;font-weight:700;color:${nroColor};white-space:nowrap">${d.nro||'—'} ${unicoBadge}</div>
         <div><div style="font-size:12px;font-weight:500;color:var(--text)">${d.desc}${isPend?'&nbsp;<span class="badge-pendiente">🟡 PENDIENTE</span>':''}${d.status==='parcial'?'&nbsp;<span style="background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:3px;padding:1px 5px;font-size:9px;font-weight:700">🚢 PARCIAL</span>':''}</div><div style="font-size:10px;color:var(--muted);display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-top:2px">${d.fecha} · ${d.esc||''}&nbsp;<span style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:var(--blue-l)">${viaIco} ${viaLabel}</span>${d.tramiteTipo?`<span style="background:${tramiteBg};border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:${tramiteColor}">${d.tramiteTipo}</span>`:''}${d.lugarRecep?`<span style="background:rgba(45,212,191,.1);border:1px solid rgba(45,212,191,.25);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:#2dd4bf">🏭 ${d.lugarRecep}</span>`:''}
 </div></div>
         <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:${d._requiereReproceso?'var(--orange-l)':'var(--green-l)'};font-weight:700;white-space:nowrap">${d._requiereReproceso?'⚠ Reprocesar':window._fmtMoney(_ahorroDisplay)}</div>
         <div style="font-size:11px;color:var(--orange-l);white-space:nowrap">${d._requiereReproceso?'':pct}</div>
-        <div style="display:flex;gap:4px;align-items:center">${!window._histEditMode ? '' : `
+        <div style="display:flex;gap:4px;align-items:center">${!window._histEditMode || !_mesEditable ? '' : `
           <button class="btn-reabrir" onclick="event.stopPropagation();reabrirEmbarquePendiente(${idx})" style="${isPend?'':'background:rgba(88,166,255,.1);border-color:rgba(88,166,255,.3);color:var(--blue-l)'}">✏️ ${isPend?'Reabrir':'Editar'}</button>
           <button onclick="event.stopPropagation();_corregirFechaUI(${idx})" title="Corregir fecha del embarque" style="background:rgba(248,209,34,.1);border:1px solid rgba(248,209,34,.3);color:#f8d122;border-radius:5px;padding:2px 6px;font-size:10px;cursor:pointer;height:22px">📅</button>
           <button onclick="event.stopPropagation();_corregirRubroUI(${idx})" title="Corregir rubro de facturas de servicio" style="background:rgba(99,179,237,.1);border:1px solid rgba(99,179,237,.3);color:#63b3ed;border-radius:5px;padding:2px 6px;font-size:10px;cursor:pointer;height:22px">🏷️</button>
@@ -15678,14 +15734,16 @@ function renderTend(){
       const moTotal=entries.reduce((s,{d})=>s+(d.ahorro||0),0);
       const isCurrentMonth=(ym===currentYM);
       const moId='tend-mo-'+ym.replace('-','_');
+      const _bloqueado = (window._mesesBloqueados||new Set()).has(ym);
       histHtml+=`
         <div style="border-top:1px solid var(--border)">
-          <div id="${moId}-hd" onclick="_hfToggleMes2(this)" style="display:flex;justify-content:space-between;align-items:center;padding:8px 14px 8px 28px;background:rgba(255,255,255,.02);cursor:pointer;user-select:none">
+          <div id="${moId}-hd" onclick="_hfToggleMes2(this)" style="display:flex;justify-content:space-between;align-items:center;padding:8px 14px 8px 28px;background:${_bloqueado?'rgba(63,185,80,.04)':'rgba(255,255,255,.02)'};cursor:pointer;user-select:none">
             <div style="display:flex;align-items:center;gap:8px">
               <span id="${moId}-chev" style="font-size:9px;color:var(--muted)">${isCurrentMonth?'▼':'▶'}</span>
               <span style="font-size:12px;font-weight:600;color:var(--text)">${moName}</span>
               ${isCurrentMonth?'<span style="background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green-l);font-size:9px;font-weight:700;padding:1px 6px;border-radius:8px">ACTUAL</span>':''}
               <span style="font-size:10px;color:var(--muted)">${entries.length} embarque${entries.length!==1?'s':''}</span>
+              <button onclick="event.stopPropagation();_toggleCandadoMes('${ym}')" title="${_bloqueado?'Mes cerrado — clic para reabrir':'Mes abierto — clic para cerrar y proteger'}" style="background:${_bloqueado?'rgba(63,185,80,.15)':'none'};border:1px solid ${_bloqueado?'rgba(63,185,80,.4)':'var(--border)'};color:${_bloqueado?'var(--green-l)':'var(--muted)'};border-radius:6px;padding:1px 7px;font-size:11px;cursor:pointer">${_bloqueado?'🔒':'🔓'}</button>
             </div>
             <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:var(--green-l)">${window._fmtMoney(moTotal)}</span>
           </div>
@@ -15695,6 +15753,7 @@ function renderTend(){
         const pct=d.cif>0?(d.ahorro/d.cif*100).toFixed(2)+'%':'—';
         const isPend=d.status==='pendiente';
         const viaIco=d.viaTransporte==='AIR'?'✈️':d.viaTransporte==='LAND'?'🚛':'🚢';
+        const _mesEditable = !_bloqueado;
         histHtml+=`<div style="display:grid;grid-template-columns:auto 1fr auto auto auto;gap:8px;align-items:center;padding:9px 14px 9px 42px;border-top:1px solid rgba(48,54,61,.3);cursor:pointer;transition:background .15s${isPend?';border-left:3px solid var(--orange-l)':''}" onclick="if(event.target.classList.contains('del-btn')||event.target.classList.contains('btn-reabrir')){return;}abrirModuloComparativo_idx(${idx})" onmouseover="this.style.background='rgba(255,255,255,.03)'" onmouseout="this.style.background=''">
           <div style="font-size:10px;font-weight:700;color:var(--orange-l);white-space:nowrap">${d.nro||'—'}</div>
           <div>
@@ -15703,7 +15762,7 @@ function renderTend(){
           </div>
           <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--green-l);font-weight:700;white-space:nowrap">${window._fmtMoney(d.ahorro)}</div>
           <div style="font-size:11px;color:var(--orange-l);white-space:nowrap">${pct}</div>
-          <div style="display:flex;gap:4px;align-items:center">${!window._histEditMode ? '' : `
+          <div style="display:flex;gap:4px;align-items:center">${!window._histEditMode || !_mesEditable ? '' : `
             <button class="btn-reabrir" onclick="event.stopPropagation();reabrirEmbarquePendiente(${idx})" style="${isPend?'':'background:rgba(88,166,255,.1);border-color:rgba(88,166,255,.3);color:var(--blue-l)'}">✏️ ${isPend?'Reabrir':'Editar'}</button>
             <button onclick="event.stopPropagation();_corregirFechaUI(${idx})" title="Corregir fecha del embarque" style="background:rgba(248,209,34,.1);border:1px solid rgba(248,209,34,.3);color:#f8d122;border-radius:5px;padding:2px 6px;font-size:10px;cursor:pointer;height:22px">📅</button>
           <button onclick="event.stopPropagation();_corregirRubroUI(${idx})" title="Corregir rubro de facturas de servicio" style="background:rgba(99,179,237,.1);border:1px solid rgba(99,179,237,.3);color:#63b3ed;border-radius:5px;padding:2px 6px;font-size:10px;cursor:pointer;height:22px">🏷️</button>
@@ -27203,6 +27262,7 @@ function _mapearPiezas(input) {
 
 window.onload=function(){
   initSupabase();
+  setTimeout(function(){ if(typeof _cargarMesesBloqueados==='function') _cargarMesesBloqueados().then(function(){ if(typeof renderTend==='function') renderTend(); }); }, 800);
   // Si quedaron sincronizaciones o borrados pendientes de una sesión
   // anterior (la app se cerró antes de que la nube confirmara), reintentar.
   try{
