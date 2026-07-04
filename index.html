@@ -12291,6 +12291,7 @@ function _corregirRubroUI(idx){
   var d = tendData[idx];
   if(!d){ alert('Embarque no encontrado.'); return; }
   var lineas = (d.invLines||[]).filter(function(l){ return l && l.tipoFac && l.tipoFac!=='mercancia'; });
+  var lineasMerc = (d.invLines||[]).filter(function(l){ return l && (!l.tipoFac || l.tipoFac==='mercancia'); });
   var ov = document.createElement('div');
   ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:999999;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto';
   var rubroOpts = Object.entries(_RUBRO_LABELS_FIX).map(function(e){ return '<option value="'+e[0]+'">'+e[1]+'</option>'; }).join('');
@@ -12304,8 +12305,6 @@ function _corregirRubroUI(idx){
     +'</div></div>';
 
   // ── Vía de Transporte — LAND / SEA / AIR ──
-  // Muchos embarques quedaban etiquetados "SEA" (barco) por defecto aunque
-  // fueran terrestres — ahora se puede corregir aquí mismo, junto al régimen.
   var viaActual = d.viaTransporte || 'SEA';
   var _viaBtn = function(val,ico,lbl,color){
     var on = viaActual===val;
@@ -12319,13 +12318,9 @@ function _corregirRubroUI(idx){
       + _viaBtn('AIR','✈️','Aéreo','#a371f7')
     +'</div></div>';
 
-  // ── Restaurar Valores Financieros — para embarques cuyos datos internos
-  //    (invLines/snap) quedaron vacíos y por eso calculan $0 en todos
-  //    lados (Informe Financiero, Excel, KPIs de Zona Libre/Importación).
-  //    Aquí se pueden escribir los valores correctos directamente
-  //    (los que ya tengas en tu propio registro/Excel) sin reprocesar
-  //    el embarque completo. ──
+  // ── Valores Financieros + Ahorro (manual/recalculado) ──
   var finActual = _calcCostoInventario(d);
+  var ahorroActual = d.ahorro||0;
   var finRota = (finActual.landed1||0)===0 && (finActual.mercOrig||0)===0;
   var finHtml = '<div style="background:'+(finRota?'rgba(248,81,73,.06)':'var(--bg)')+';border:1px solid '+(finRota?'rgba(248,81,73,.35)':'rgba(139,148,158,.25)')+';border-radius:10px;padding:12px;margin-bottom:14px">'
     +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
@@ -12333,43 +12328,79 @@ function _corregirRubroUI(idx){
       +'<button id="_fix_fin_toggle" type="button" style="background:none;border:none;color:var(--muted);font-size:11px;cursor:pointer;text-decoration:underline">'+(finRota?'abrir':'editar')+'</button>'
     +'</div>'
     +'<div id="_fix_fin_body" style="display:'+(finRota?'block':'none')+'">'
-      +'<div style="font-size:10px;color:var(--muted);margin-bottom:8px">Escribe los valores correctos (los que ya tienes registrados aparte). Esto no toca la plantilla ni las facturas — solo fuerza estos totales en el Informe Financiero, KPIs y Excel.</div>'
+      +'<div style="font-size:10px;color:var(--muted);margin-bottom:8px">Se recalculan solos al editar montos en Gastos/Mercancía abajo — o escríbelos aquí directo.</div>'
       +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
         +'<div><label style="font-size:9px;color:var(--muted)">Mercancía Original</label><input id="_fix_fin_merc" type="number" step="0.01" value="'+(finActual.mercOrig||0).toFixed(2)+'" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text);font-size:12px;box-sizing:border-box"></div>'
         +'<div><label style="font-size:9px;color:var(--muted)">Costo No Mercancía</label><input id="_fix_fin_nm" type="number" step="0.01" value="'+(finActual.costoNM||0).toFixed(2)+'" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text);font-size:12px;box-sizing:border-box"></div>'
         +'<div><label style="font-size:9px;color:var(--muted)">ITBMS</label><input id="_fix_fin_itbms" type="number" step="0.01" value="'+(finActual.itbms||0).toFixed(2)+'" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text);font-size:12px;box-sizing:border-box"></div>'
         +'<div><label style="font-size:9px;color:var(--muted)">Landed Total</label><input id="_fix_fin_landed" type="number" step="0.01" value="'+(finActual.landed1||0).toFixed(2)+'" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text);font-size:12px;box-sizing:border-box"></div>'
+        +'<div style="grid-column:1/-1;border-top:1px dashed var(--border);padding-top:8px;margin-top:2px"><label style="font-size:9px;color:#3fb950;font-weight:700">💵 Ahorro del Embarque</label><input id="_fix_fin_ahorro" type="number" step="0.01" value="'+ahorroActual.toFixed(2)+'" style="width:100%;background:var(--s2);border:1px solid rgba(63,185,80,.35);border-radius:6px;padding:6px 8px;color:#3fb950;font-size:13px;font-weight:700;box-sizing:border-box"></div>'
       +'</div>'
+      +'<button id="_fix_fin_recalc" type="button" style="margin-top:10px;width:100%;background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.3);color:#3fb950;border-radius:8px;padding:8px;font-size:11px;font-weight:700;cursor:pointer">🔄 Recalcular Mercancía/Costo No Mercancía desde las líneas de abajo</button>'
     +'</div>'
   +'</div>';
 
+  function _lineaGastoHtml(l,realIdx){
+    var sel = rubroOpts.replace('value="'+(l.tipoFac||'')+'"','value="'+(l.tipoFac||'')+'" selected');
+    return '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px">'
+      +'<div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:6px;align-items:center">'
+        +'<div style="font-size:12px;font-weight:700;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(l.prov||'—')+'</div>'
+        +'<input type="number" step="0.01" data-monto-idx="'+realIdx+'" class="_fix_monto_gasto" value="'+Number(l.costo||0).toFixed(2)+'" style="width:100px;text-align:right;background:var(--s2);border:1px solid rgba(240,136,62,.4);border-radius:6px;padding:5px 7px;color:var(--orange-l);font-family:monospace;font-size:12px;font-weight:800">'
+      +'</div>'
+      +'<div style="font-size:10px;color:var(--muted);margin-bottom:6px">Factura: '+(l.numFact||l.nfac||'—')+'</div>'
+      +'<select data-idx="'+realIdx+'" class="_fix_rubro_sel" style="width:100%;background:var(--s2);border:1px solid rgba(240,136,62,.3);border-radius:7px;padding:7px 9px;color:var(--text);font-size:12px">'+sel+'</select>'
+    +'</div>';
+  }
+  function _lineaMercHtml(l,realIdx){
+    return '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px">'
+      +'<div style="display:flex;justify-content:space-between;gap:8px;align-items:center">'
+        +'<div style="font-size:12px;font-weight:700;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(l.prov||l.desc||'Mercancía')+'</div>'
+        +'<input type="number" step="0.01" data-monto-idx="'+realIdx+'" class="_fix_monto_merc" value="'+Number(l.costo||0).toFixed(2)+'" style="width:110px;text-align:right;background:var(--s2);border:1px solid rgba(88,166,255,.4);border-radius:6px;padding:5px 7px;color:var(--blue-l);font-family:monospace;font-size:12px;font-weight:800">'
+      +'</div>'
+      +'<div style="font-size:10px;color:var(--muted);margin-top:4px">Factura: '+(l.numFact||l.nfac||'—')+'</div>'
+    +'</div>';
+  }
+
   var filasHtml = !lineas.length
     ? '<div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">Este embarque no tiene facturas de servicio registradas.</div>'
-    : lineas.map(function(l){
-        var realIdx = d.invLines.indexOf(l);
-        var sel = rubroOpts.replace('value="'+(l.tipoFac||'')+'"','value="'+(l.tipoFac||'')+'" selected');
-        return '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px">'
-          +'<div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:6px">'
-            +'<div style="font-size:12px;font-weight:700;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(l.prov||'—')+'</div>'
-            +'<div style="font-size:12px;font-weight:800;color:var(--orange-l);font-family:monospace;flex-shrink:0">$'+Number(l.costo||0).toLocaleString('en-US',{minimumFractionDigits:2})+'</div>'
-          +'</div>'
-          +'<div style="font-size:10px;color:var(--muted);margin-bottom:6px">Factura: '+(l.numFact||l.nfac||'—')+'</div>'
-          +'<select data-idx="'+realIdx+'" class="_fix_rubro_sel" style="width:100%;background:var(--s2);border:1px solid rgba(240,136,62,.3);border-radius:7px;padding:7px 9px;color:var(--text);font-size:12px">'+sel+'</select>'
-        +'</div>';
-      }).join('');
+    : lineas.map(function(l){ return _lineaGastoHtml(l, d.invLines.indexOf(l)); }).join('');
+
+  var filasMercHtml = !lineasMerc.length
+    ? '<div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">Este embarque no tiene líneas de mercancía registradas.</div>'
+    : lineasMerc.map(function(l){ return _lineaMercHtml(l, d.invLines.indexOf(l)); }).join('');
 
   ov.innerHTML = '<div style="background:var(--s1);border:1px solid var(--border);border-radius:16px;padding:22px;max-width:420px;width:100%;max-height:82vh;overflow-y:auto">'
-    +'<div style="font-size:13px;font-weight:800;color:var(--text);margin-bottom:4px">🏷️ Corregir Rubro de Facturas</div>'
-    +'<div style="font-size:11px;color:var(--muted);margin-bottom:14px">Embarque: <strong style="color:var(--orange-l)">'+d.nro+'</strong> — solo cambia la clasificación del rubro; no toca montos, plantilla ni mercancía.</div>'
+    +'<div style="font-size:13px;font-weight:800;color:var(--text);margin-bottom:4px">🏷️ Corregir Embarque</div>'
+    +'<div style="font-size:11px;color:var(--muted);margin-bottom:14px">Embarque: <strong style="color:var(--orange-l)">'+d.nro+'</strong> — edita montos, rubro, régimen y ahorro. Todo se recalcula y guarda en la nube.</div>'
     +tipoZLHtml
     +viaHtml
     +finHtml
-    +filasHtml
+    +'<div style="display:flex;gap:6px;margin-bottom:12px;border-bottom:1px solid var(--border)">'
+      +'<button id="_fix_tab_gastos" type="button" style="flex:1;background:none;border:none;border-bottom:2px solid #f0883e;color:#f0883e;font-size:12px;font-weight:700;padding:8px 4px;cursor:pointer">🧾 Gastos ('+lineas.length+')</button>'
+      +'<button id="_fix_tab_merc" type="button" style="flex:1;background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);font-size:12px;font-weight:700;padding:8px 4px;cursor:pointer">📦 Mercancía ('+lineasMerc.length+')</button>'
+    +'</div>'
+    +'<div id="_fix_panel_gastos">'+filasHtml+'</div>'
+    +'<div id="_fix_panel_merc" style="display:none">'+filasMercHtml+'</div>'
     +'<div style="display:flex;gap:10px;margin-top:8px">'
     +'<button id="_fix_rubro_cancel" style="flex:1;background:none;border:1px solid var(--border);color:var(--muted);border-radius:10px;padding:10px;font-size:12px;cursor:pointer">Cancelar</button>'
-    +'<button id="_fix_rubro_ok" style="flex:2;background:linear-gradient(135deg,rgba(99,179,237,.25),rgba(99,179,237,.12));border:1.5px solid rgba(99,179,237,.5);color:#63b3ed;border-radius:10px;padding:10px;font-size:12px;font-weight:800;cursor:pointer">🏷️ Guardar Cambios</button>'
+    +'<button id="_fix_rubro_ok" style="flex:2;background:linear-gradient(135deg,rgba(99,179,237,.25),rgba(99,179,237,.12));border:1.5px solid rgba(99,179,237,.5);color:#63b3ed;border-radius:10px;padding:10px;font-size:12px;font-weight:800;cursor:pointer">🏷️ Recalcular y Guardar</button>'
     +'</div></div>';
   document.body.appendChild(ov);
+
+  // Tabs
+  var tabG = ov.querySelector('#_fix_tab_gastos'), tabM = ov.querySelector('#_fix_tab_merc');
+  var panG = ov.querySelector('#_fix_panel_gastos'), panM = ov.querySelector('#_fix_panel_merc');
+  tabG.onclick = function(){
+    panG.style.display=''; panM.style.display='none';
+    tabG.style.borderBottomColor='#f0883e'; tabG.style.color='#f0883e';
+    tabM.style.borderBottomColor='transparent'; tabM.style.color='var(--muted)';
+  };
+  tabM.onclick = function(){
+    panM.style.display=''; panG.style.display='none';
+    tabM.style.borderBottomColor='#58a6ff'; tabM.style.color='#58a6ff';
+    tabG.style.borderBottomColor='transparent'; tabG.style.color='var(--muted)';
+  };
+
   var _nuevoTipoZL = tipoActual;
   var btnZL = ov.querySelector('#_fix_tipo_zl'), btnExt = ov.querySelector('#_fix_tipo_ext');
   function _pintarTipoBtns(){
@@ -12400,6 +12431,24 @@ function _corregirRubroUI(idx){
     _finBody.style.display = abierto ? 'none' : 'block';
     _finToggleBtn.textContent = abierto ? 'editar' : 'cerrar';
   };
+
+  // ── Recalcular Mercancía/Costo No Mercancía sumando los montos editados ──
+  function _sumarMontos(sel){
+    var t=0; ov.querySelectorAll(sel).forEach(function(inp){ t += parseFloat(inp.value)||0; });
+    return t;
+  }
+  var _btnRecalc = ov.querySelector('#_fix_fin_recalc');
+  if(_btnRecalc) _btnRecalc.onclick = function(){
+    var nuevoMerc = _sumarMontos('._fix_monto_merc');
+    var nuevoNM   = _sumarMontos('._fix_monto_gasto');
+    if(nuevoMerc>0) document.getElementById('_fix_fin_merc').value = nuevoMerc.toFixed(2);
+    if(nuevoNM>0)   document.getElementById('_fix_fin_nm').value   = nuevoNM.toFixed(2);
+    var itbms = parseFloat(document.getElementById('_fix_fin_itbms').value)||0;
+    document.getElementById('_fix_fin_landed').value = (nuevoMerc+nuevoNM+itbms).toFixed(2);
+    if(_finBody.style.display!=='block'){ _finBody.style.display='block'; _finToggleBtn.textContent='cerrar'; }
+    if(typeof _showToast==='function') _showToast('🔄 Mercancía/No Mercancía/Landed recalculados','green',2500);
+  };
+
   ov.querySelector('#_fix_rubro_cancel').onclick = function(){ ov.remove(); };
   ov.addEventListener('click', function(e){ if(e.target===ov) ov.remove(); });
   ov.querySelector('#_fix_rubro_ok').onclick = function(){
@@ -12412,6 +12461,15 @@ function _corregirRubroUI(idx){
         cambios++;
       }
     });
+    // ── Aplicar montos editados de gastos y mercancía a las líneas reales ──
+    ov.querySelectorAll('._fix_monto_gasto, ._fix_monto_merc').forEach(function(inp){
+      var i = parseInt(inp.dataset.montoIdx,10);
+      var nuevoMonto = parseFloat(inp.value)||0;
+      if(d.invLines[i] && Number(d.invLines[i].costo||0).toFixed(2) !== nuevoMonto.toFixed(2)){
+        d.invLines[i].costo = nuevoMonto;
+        cambios++;
+      }
+    });
     if(_nuevoTipoZL && _nuevoTipoZL !== tipoActual){
       d.tipo = _nuevoTipoZL; // ← corrige Zona Libre / Importación para el Informe Financiero
       cambios++;
@@ -12420,15 +12478,20 @@ function _corregirRubroUI(idx){
       d.viaTransporte = _nuevaVia; // ← corrige LAND/SEA/AIR
       cambios++;
     }
-    // ── Restaurar valores financieros manualmente, si el panel está abierto ──
+    // ── Valores financieros + ahorro, si el panel está abierto ──
     if(_finBody && _finBody.style.display==='block'){
       var _fm = parseFloat(document.getElementById('_fix_fin_merc').value)||0;
       var _fn = parseFloat(document.getElementById('_fix_fin_nm').value)||0;
       var _fi = parseFloat(document.getElementById('_fix_fin_itbms').value)||0;
       var _fl = parseFloat(document.getElementById('_fix_fin_landed').value)||0;
+      var _fa = parseFloat(document.getElementById('_fix_fin_ahorro').value)||0;
       var _huboDatos = (_fm>0||_fn>0||_fi>0||_fl>0);
       if(_huboDatos){
         d._overrideFin = {mercOrig:_fm, costoNM:_fn, itbms:_fi, landed:_fl};
+        cambios++;
+      }
+      if(_fa !== ahorroActual){
+        d.ahorro = _fa; // ← ahorro editable directo, se ve tal cual en Historial y KPIs
         cambios++;
       }
     }
@@ -12438,7 +12501,7 @@ function _corregirRubroUI(idx){
     //    podría revertir esta corrección en la próxima sincronización. ──
     d.ts = Date.now();
     saveTendData();
-    if(typeof _showToast==='function') _showToast('✅ '+cambios+' cambio(s) guardado(s) en la nube','green',3500);
+    if(typeof _showToast==='function') _showToast('✅ '+cambios+' cambio(s) recalculado(s) y guardado(s) en la nube','green',3500);
     if(typeof renderTendencias==='function') renderTendencias();
     else if(typeof _renderTend==='function') _renderTend();
     if(typeof renderDashboardKPIs==='function') renderDashboardKPIs();
@@ -26608,6 +26671,29 @@ function _motoresMapeado(rows) {
     'honorarios':'honorarios','itbms':'itbms','acarreo':'acarreo',
     'dmce':'liquidacion','comision':'honorarios','gastos':'gastos'
   };
+  // ── FIX (jul-2026): la plantilla traía "GASTO_ORIGEN" (singular) y el
+  //    mapa solo reconocía "GASTOS_ORIGEN" (plural) — la línea caía en
+  //    "Otros Gastos" en vez de "Gastos Origen/Destino", y por eso el
+  //    campo "Gastos Destino/Agente" del simulador Sababa quedaba en $0
+  //    aunque la factura sí traía ese gasto. Ahora la comparación ignora
+  //    singular/plural: se normaliza cada palabra (quitando una 's' final)
+  //    tanto en el diccionario como en lo que trae la plantilla, así que
+  //    "gasto_origen", "gastos_origen", "gasto origen", etc. coinciden
+  //    todos con la misma categoría, sin importar cómo lo haya escrito
+  //    quien armó la plantilla. ──
+  function _singularizarToken(w){
+    return (w.length>3 && w.charAt(w.length-1)==='s') ? w.slice(0,-1) : w;
+  }
+  function _normRubroKey(s){
+    return String(s||'').toLowerCase().trim()
+      .split(/[\s_-]+/).filter(Boolean)
+      .map(_singularizarToken).join('_');
+  }
+  var _rubroMapNorm = {};
+  Object.keys(_rubroMap).forEach(function(k){ _rubroMapNorm[_normRubroKey(k)] = _rubroMap[k]; });
+  function _lookupRubro(rubro){
+    return _rubroMap[rubro] || _rubroMapNorm[_normRubroKey(rubro)];
+  }
 
   rows.slice(1).forEach(function(r) {
     var prov  = String(r[cProv] || '').trim();
@@ -26636,7 +26722,7 @@ function _motoresMapeado(rows) {
     // Determinar tipoFac
     var tipoFac = 'mercancia';
     if (tipo === 'servicio' || tipo === 'service') {
-      tipoFac = _rubroMap[rubro] || 'gastos';
+      tipoFac = _lookupRubro(rubro) || 'gastos';
     } else if (!tipo) {
       // Legacy: detectar por proveedor
       if (provUp === 'FLETE' || provUp.startsWith('FLETE ')) { fleteVal = monto; return; }
