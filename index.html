@@ -12441,13 +12441,15 @@ function _corregirRubroUI(idx){
   };
 
   // ── Recalcular Mercancía/Costo No Mercancía sumando los montos editados ──
-  function _sumarMontos(sel, excluirSeguro){
+  // Suma montos del selector dado. excluirNoMerc=true → salta 'seguro' (solo para CIF)
+  // e 'itbms' (desembolso fiscal, va en su propio campo, NO en Costo No Mercancía).
+  function _sumarMontos(sel, excluirNoMerc){
     var t=0;
     ov.querySelectorAll(sel).forEach(function(inp){
-      if(excluirSeguro){
+      if(excluirNoMerc){
         var i = inp.dataset.montoIdx;
         var rSel = ov.querySelector('._fix_rubro_sel[data-idx="'+i+'"]');
-        if(rSel && rSel.value==='seguro') return;
+        if(rSel && (rSel.value==='seguro' || rSel.value==='itbms')) return;
       }
       t += parseFloat(inp.value)||0;
     });
@@ -12455,21 +12457,31 @@ function _corregirRubroUI(idx){
   }
   var _btnRecalc = ov.querySelector('#_fix_fin_recalc');
   if(_btnRecalc) _btnRecalc.onclick = function(){
-    var nuevoMerc = 0, extraNM = 0;
+    var nuevoMerc = 0, extraNM = 0, nuevoITBMS = 0;
     ov.querySelectorAll('._fix_monto_merc').forEach(function(inp){
       var i = inp.dataset.montoIdx;
       var sel = ov.querySelector('._fix_tipo_merc_sel[data-idx="'+i+'"]');
       var tipo = sel ? sel.value : 'mercancia';
       var monto = parseFloat(inp.value)||0;
-      if(tipo==='mercancia') nuevoMerc += monto; else if(tipo!=='seguro') extraNM += monto;
+      if(tipo==='mercancia') nuevoMerc += monto;
+      else if(tipo!=='seguro' && tipo!=='itbms') extraNM += monto;
+    });
+    // Recalcular ITBMS sumando las líneas de gastos etiquetadas como 'itbms'
+    ov.querySelectorAll('._fix_monto_gasto').forEach(function(inp){
+      var i = inp.dataset.montoIdx;
+      var rSel = ov.querySelector('._fix_rubro_sel[data-idx="'+i+'"]');
+      if(rSel && rSel.value==='itbms') nuevoITBMS += parseFloat(inp.value)||0;
     });
     var nuevoNM = _sumarMontos('._fix_monto_gasto', true) + extraNM;
     if(nuevoMerc>0) document.getElementById('_fix_fin_merc').value = nuevoMerc.toFixed(2);
     document.getElementById('_fix_fin_nm').value = nuevoNM.toFixed(2);
-    var itbms = parseFloat(document.getElementById('_fix_fin_itbms').value)||0;
-    document.getElementById('_fix_fin_landed').value = (nuevoMerc+nuevoNM+itbms).toFixed(2);
+    // ITBMS: actualizar si se encontraron líneas etiquetadas; si no, mantener el campo actual
+    if(nuevoITBMS>0) document.getElementById('_fix_fin_itbms').value = nuevoITBMS.toFixed(2);
+    // Landed Costeable = Mercancía + No Mercancía (SIN ITBMS — el ITBMS es fiscal, no costeable)
+    // Costo Inventario = Landed + ITBMS → se calcula en _calcCostoInventario al leer el override
+    document.getElementById('_fix_fin_landed').value = (nuevoMerc+nuevoNM).toFixed(2);
     if(_finBody.style.display!=='block'){ _finBody.style.display='block'; _finToggleBtn.textContent='cerrar'; }
-    if(typeof _showToast==='function') _showToast('🔄 Mercancía/No Mercancía/Landed recalculados','green',2500);
+    if(typeof _showToast==='function') _showToast('🔄 Recalculado — Landed='+(nuevoMerc+nuevoNM).toFixed(2)+' · ITBMS='+((nuevoITBMS>0?nuevoITBMS:parseFloat(document.getElementById('_fix_fin_itbms').value)||0)).toFixed(2),'green',3500);
   };
 
   ov.querySelector('#_fix_rubro_cancel').onclick = function(){ ov.remove(); };
@@ -18897,9 +18909,13 @@ function _calcCostoInventario(d){
   //    sin importar qué diga el resto de la lógica de cálculo. ──
   if(d._overrideFin){
     var ov=d._overrideFin;
+    // landed = Landed Costeable (Merc + NoMerc, sin ITBMS)
+    // costoInv = Costo Inventario = Landed Costeable + ITBMS
+    var _ovLanded = ov.landed||0;
+    var _ovItbms  = ov.itbms||0;
     return {mercOrig:ov.mercOrig||0, mercHomol:0, mercInv:ov.mercOrig||0,
-            costoNM:ov.costoNM||0, itbms:ov.itbms||0,
-            costoInv:ov.landed||0, landed1:ov.landed||0, landedG:ov.landed||0};
+            costoNM:ov.costoNM||0, itbms:_ovItbms,
+            costoInv:_ovLanded+_ovItbms, landed1:_ovLanded, landedG:_ovLanded};
   }
   var sc1=(d.snap&&d.snap.sc1)||{};
   var sc2=(d.snap&&d.snap.sc2)||{};
