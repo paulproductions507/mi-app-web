@@ -8695,7 +8695,7 @@ function calc(){
          comision:sc3_comision, comBruta:sc3_comision>0?(sc3_comision-sc3_itbmsHomol):0,
          flete:sc3_flete, gastos:sc3_gastos,
          mv:Math.round((window._mvUserEdited&&window._mvManualValue!==undefined&&!isNaN(window._mvManualValue)?window._mvManualValue:sc3_mv)*100)/100, mvPct:sc3_mvPct,
-         noMerc:sc3_noMerc, landed1:sc3_landed1, landedG:sc3_landedG, factor:sc3_factor,
+         noMerc:Math.round(sc3_noMerc*100)/100, landed1:Math.round(sc3_landed1*100)/100, landedG:Math.round(sc3_landedG*100)/100, factor:sc3_factor,
          // ── AHORRO DESEMBOLSO (fórmula 4 Criterios) ──
          // SC1 desembolso: impuestos + gastos + honorarios (sin base — se cancela)
          // SC3 desembolso: itbmsHomol (impuesto Sababa) + flete + gastos + honorario neto (comision-itbmsHomol)
@@ -11956,6 +11956,15 @@ window._selMes = function(mesIdx){
   if(tfD) tfD.value=fmt(desde);
   if(tfH) tfH.value=fmt(hasta);
   picker.remove();
+  // Persistir selección en localStorage para recordar al reabrir
+  try{ localStorage.setItem('_tendMesPref', JSON.stringify({mesIdx:mesIdx, anio:anio})); }catch(e){}
+  // Resaltar el botón "Mes ▾"
+  document.querySelectorAll('._prBtn').forEach(function(b){
+    b.style.background='var(--s2)'; b.style.borderColor='var(--border)'; b.style.color='var(--muted)'; b.style.fontWeight='600';
+  });
+  document.querySelectorAll('._prBtn').forEach(function(b){
+    if(b.textContent.startsWith('Mes')){ b.style.background='rgba(88,166,255,.15)'; b.style.borderColor='rgba(88,166,255,.4)'; b.style.color='var(--blue-l)'; b.style.fontWeight='700'; }
+  });
   if(typeof _applyTendFilters==='function') _applyTendFilters();
 };
 
@@ -12548,12 +12557,21 @@ function _corregirRubroUI(idx){
         cambios++;
       }
     });
-    if(_nuevoTipoZL && _nuevoTipoZL !== tipoActual){
-      d.tipo = _nuevoTipoZL; // ← corrige Zona Libre / Importación para el Informe Financiero
+    // ── Régimen y Vía: SIEMPRE guardar la selección del usuario, sin importar
+    //    si difiere del valor previo. Embarques Único/Sababa guardan el régimen
+    //    en campos distintos — actualizamos los tres para máxima compatibilidad. ──
+    if(_nuevoTipoZL){
+      d.tipo = _nuevoTipoZL;
+      d.tipoProveedor = (_nuevoTipoZL==='EXT'||_nuevoTipoZL==='IMP') ? 'IMP' : 'ZL';
+      if(d.snap){ d.snap.tipo = _nuevoTipoZL; }
+      if(d.invLines) d.invLines.forEach(function(l){
+        if(l && l.tipoFac==='mercancia') l.tipoProv = d.tipoProveedor;
+      });
       cambios++;
     }
-    if(_nuevaVia && _nuevaVia !== viaActual){
-      d.viaTransporte = _nuevaVia; // ← corrige LAND/SEA/AIR
+    if(_nuevaVia){
+      d.viaTransporte = _nuevaVia;
+      if(d.snap) d.snap.viaTransporte = _nuevaVia;
       cambios++;
     }
     // ── Valores financieros + ahorro, si el panel está abierto ──
@@ -15418,6 +15436,39 @@ function _toggleCandadoMes(ym){
 }
 
 function renderTend(){
+  // Auto-aplicar mes guardado en localStorage (o mes actual si nunca se guardó)
+  // Solo al primer render (cuando los filtros están vacíos)
+  if(!window._tendMesAplicado){
+    window._tendMesAplicado = true;
+    try{
+      var _tfD = document.getElementById('tf_desde');
+      var _tfH = document.getElementById('tf_hasta');
+      // Solo auto-aplicar si los filtros de fecha están vacíos (no hay filtro activo)
+      if(_tfD && !_tfD.value){
+        var pref = JSON.parse(localStorage.getItem('_tendMesPref')||'null');
+        var _hoyPref = new Date(new Date().getTime()-5*60*60*1000);
+        var mesIdx = pref ? pref.mesIdx : _hoyPref.getMonth();
+        var anio   = pref ? pref.anio   : _hoyPref.getFullYear();
+        window._mesExplicitoIdx  = mesIdx;
+        window._mesExplicitoAnio = anio;
+        var fmt = function(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
+        var allD = document.querySelectorAll('#tf_desde'), allH = document.querySelectorAll('#tf_hasta');
+        var tfDe = Array.from(allD).find(function(e){return e.offsetParent!==null;})||allD[allD.length-1];
+        var tfHa = Array.from(allH).find(function(e){return e.offsetParent!==null;})||allH[allH.length-1];
+        if(tfDe) tfDe.value = fmt(new Date(anio,mesIdx,1));
+        if(tfHa) tfHa.value = fmt(new Date(anio,mesIdx+1,0));
+        // Resaltar botón Mes ▾
+        setTimeout(function(){
+          document.querySelectorAll('._prBtn').forEach(function(b){
+            b.style.background='var(--s2)'; b.style.borderColor='var(--border)'; b.style.color='var(--muted)'; b.style.fontWeight='600';
+          });
+          document.querySelectorAll('._prBtn').forEach(function(b){
+            if(b.textContent.startsWith('Mes')){ b.style.background='rgba(88,166,255,.15)'; b.style.borderColor='rgba(88,166,255,.4)'; b.style.color='var(--blue-l)'; b.style.fontWeight='700'; }
+          });
+        }, 100);
+      }
+    }catch(e){}
+  }
   _populateYearFilter();
   const filteredData = _getFilteredTendData();
   // Find canvas in modal clone first, then fallback to document
