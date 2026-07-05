@@ -12546,79 +12546,130 @@ function _corregirRubroUI(idx){
   ov.addEventListener('click', function(e){ if(e.target===ov) ov.remove(); });
   ov.querySelector('#_fix_rubro_ok').onclick = function(){
     var cambios = 0;
-    ov.querySelectorAll('._fix_rubro_sel').forEach(function(sel){
-      var i = parseInt(sel.dataset.idx,10);
+
+    // ══════════════════════════════════════════════════════════════
+    //  PASO 1 — Régimen y Vía: guardar primero para que los pasos
+    //  siguientes usen el tipo correcto al propagar tipoProv.
+    // ══════════════════════════════════════════════════════════════
+    if(_nuevoTipoZL){
+      d.tipo = _nuevoTipoZL;
+      d.tipoProveedor = (_nuevoTipoZL==='EXT'||_nuevoTipoZL==='IMP') ? 'IMP' : 'ZL';
+      if(d.snap){ d.snap.tipo = _nuevoTipoZL; d.snap.tipoProveedor = d.tipoProveedor; }
+      cambios++;
+    }
+    if(_nuevaVia){
+      d.viaTransporte = _nuevaVia;
+      if(d.snap) d.snap.viaTransporte = _nuevaVia;
+      cambios++;
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    //  PASO 2 — Rubros: reclasificar tipoFac de TODAS las líneas
+    //  (gastos + mercancía) en una sola iteración del DOM.
+    // ══════════════════════════════════════════════════════════════
+    ov.querySelectorAll('._fix_rubro_sel, ._fix_tipo_merc_sel').forEach(function(sel){
+      var i = parseInt(sel.dataset.idx, 10);
       var nuevo = sel.value;
-      if(d.invLines[i] && d.invLines[i].tipoFac !== nuevo){
+      var prev = d.invLines[i] ? (d.invLines[i].tipoFac||'mercancia') : null;
+      if(prev !== null && prev !== nuevo){
         d.invLines[i].tipoFac = nuevo;
         cambios++;
       }
     });
-    // ── Reclasificar líneas de la pestaña Mercancía (ej. seguro/flete que
-    //    quedaron mal etiquetados y estaban inflando el valor mercancía) ──
-    ov.querySelectorAll('._fix_tipo_merc_sel').forEach(function(sel){
-      var i = parseInt(sel.dataset.idx,10);
-      var nuevo = sel.value;
-      if(d.invLines[i] && (d.invLines[i].tipoFac||'mercancia') !== nuevo){
-        d.invLines[i].tipoFac = nuevo;
-        cambios++;
-      }
-    });
-    // ── Aplicar montos editados de gastos y mercancía a las líneas reales ──
+
+    // ══════════════════════════════════════════════════════════════
+    //  PASO 3 — Montos: actualizar costo de cada línea desde el DOM.
+    //  Se hace DESPUÉS de los rubros para que el tipo ya sea correcto.
+    // ══════════════════════════════════════════════════════════════
     ov.querySelectorAll('._fix_monto_gasto, ._fix_monto_merc').forEach(function(inp){
-      var i = parseInt(inp.dataset.montoIdx,10);
+      var i = parseInt(inp.dataset.montoIdx, 10);
       var nuevoMonto = parseFloat(inp.value)||0;
       if(d.invLines[i] && Number(d.invLines[i].costo||0).toFixed(2) !== nuevoMonto.toFixed(2)){
         d.invLines[i].costo = nuevoMonto;
         cambios++;
       }
     });
-    // ── Régimen: SIEMPRE guardar, sin importar si cambió o no ──
-    if(_nuevoTipoZL){
-      d.tipo = _nuevoTipoZL;
-      d.tipoProveedor = (_nuevoTipoZL==='EXT'||_nuevoTipoZL==='IMP') ? 'IMP' : 'ZL';
-      if(d.snap){ d.snap.tipo = _nuevoTipoZL; d.snap.tipoProveedor = d.tipoProveedor; }
-      if(d.invLines) d.invLines.forEach(function(l){
+
+    // ══════════════════════════════════════════════════════════════
+    //  PASO 4 — Propagat tipoProv a líneas de mercancía (después de
+    //  aplicar rubros, para que solo afecte las que siguen siendo merc.)
+    // ══════════════════════════════════════════════════════════════
+    if(d.invLines && _nuevoTipoZL){
+      d.invLines.forEach(function(l){
         if(l && l.tipoFac==='mercancia') l.tipoProv = d.tipoProveedor;
       });
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    //  PASO 5 — Recalcular totales financieros AUTOMÁTICAMENTE desde
+    //  las líneas ya actualizadas (sin depender del panel ni del botón
+    //  "Recalcular" manual). Esto evita que un monto o rubro cambiado
+    //  no se refleje en _overrideFin por tener el panel cerrado.
+    // ══════════════════════════════════════════════════════════════
+    var _autoMerc = 0, _autoNM = 0, _autoITBMS = 0;
+    (d.invLines||[]).forEach(function(l){
+      var t = l.tipoFac||'mercancia';
+      var c = l.costo||0;
+      if(t === 'mercancia')      _autoMerc   += c;
+      else if(t === 'itbms')     _autoITBMS  += c;
+      else if(t !== 'seguro')    _autoNM     += c;
+      // seguro: excluido del costo inventario (solo para cálculo de arancel)
+    });
+    var _autoLanded = _autoMerc + _autoNM;
+
+    // Valor Homologado: leer del campo si el panel estaba abierto, si no
+    // conservar el que ya tenía el embarque (no pisarlo con 0).
+    var _autoHomol = 0;
+    var _hInp = document.getElementById('_fix_fin_homol');
+    if(_finBody && _finBody.style.display==='block' && _hInp){
+      _autoHomol = parseFloat(_hInp.value)||0;
+    } else if(d._overrideFin){
+      _autoHomol = d._overrideFin.mercHomol||0;
+    } else {
+      var _snap = d.snap||{};
+      _autoHomol = (_snap.sc3&&_snap.sc3.mercHomol)||0;
+    }
+
+    // Solo guardar _overrideFin si hay datos reales (evita pisar embarques
+    // que se leen directamente desde snap sin override).
+    if(_autoMerc>0 || _autoNM>0 || _autoLanded>0){
+      d._overrideFin = {
+        mercOrig:  _autoMerc,
+        mercHomol: _autoHomol,
+        costoNM:   _autoNM,
+        itbms:     _autoITBMS,
+        landed:    _autoLanded
+      };
+      // Actualizar también los campos del panel si está abierto (visual)
+      if(_finBody && _finBody.style.display==='block'){
+        var _mI2=document.getElementById('_fix_fin_merc'), _nI2=document.getElementById('_fix_fin_nm'),
+            _iI2=document.getElementById('_fix_fin_itbms'), _lI2=document.getElementById('_fix_fin_landed'),
+            _cS2=document.getElementById('_fix_fin_costoinv');
+        if(_mI2) _mI2.value = _autoMerc.toFixed(2);
+        if(_nI2) _nI2.value = _autoNM.toFixed(2);
+        if(_iI2) _iI2.value = _autoITBMS.toFixed(2);
+        if(_lI2) _lI2.value = _autoLanded.toFixed(2);
+        if(_cS2) _cS2.textContent = (_autoHomol>0?_autoHomol:_autoMerc + _autoNM + _autoITBMS).toFixed(2);
+      }
       cambios++;
     }
-    // ── Vía de transporte: SIEMPRE guardar ──
-    if(_nuevaVia){
-      d.viaTransporte = _nuevaVia;
-      if(d.snap) d.snap.viaTransporte = _nuevaVia;
-      cambios++;
-    }
-    // ── Ahorro: guardar SIEMPRE (panel abierto o cerrado) ──
+
+    // ══════════════════════════════════════════════════════════════
+    //  PASO 6 — Ahorro: siempre guardar aunque el panel esté cerrado.
+    // ══════════════════════════════════════════════════════════════
     var _faGlobal = parseFloat((document.getElementById('_fix_fin_ahorro')||{}).value);
     if(!isNaN(_faGlobal) && _faGlobal !== ahorroActual){
       d.ahorro = _faGlobal;
       cambios++;
     }
-    // ── Valores financieros: guardar si el panel está abierto ──
-    if(_finBody && _finBody.style.display==='block'){
-      var _fm = parseFloat(document.getElementById('_fix_fin_merc').value)||0;
-      var _fh = parseFloat((document.getElementById('_fix_fin_homol')||{}).value)||0;
-      var _fn = parseFloat(document.getElementById('_fix_fin_nm').value)||0;
-      var _fi = parseFloat(document.getElementById('_fix_fin_itbms').value)||0;
-      var _fl = parseFloat(document.getElementById('_fix_fin_landed').value)||0;
-      var _huboDatos = (_fm>0||_fn>0||_fi>0||_fl>0);
-      if(_huboDatos){
-        d._overrideFin = {mercOrig:_fm, mercHomol:_fh, costoNM:_fn, itbms:_fi, landed:_fl};
-        cambios++;
-      }
-    }
+
     ov.remove();
     if(cambios===0){ if(typeof _showToast==='function') _showToast('ℹ️ No hubo cambios','orange',2500); return; }
-    // ── Bumpear ts: sin esto, una copia vieja en otra pestaña/dispositivo
-    //    podría revertir esta corrección en la próxima sincronización. ──
+    // Bumpear ts para ganar siempre en el merge de Supabase
     d.ts = Date.now();
-    // ── Esta corrección manual se vuelve el nuevo "histórico de referencia":
-    //    la próxima vez que se detecte una diferencia, se compara contra ESTE
-    //    valor recién corregido, no contra el original roto. ──
     if(typeof _setHistBaseline==='function') _setHistBaseline(d, true);
     saveTendData();
-    if(typeof _showToast==='function') _showToast('✅ '+cambios+' cambio(s) recalculado(s) y guardado(s) en la nube','green',3500);
+    if(typeof _showToast==='function') _showToast('✅ '+cambios+' campo(s) guardado(s) en la nube','green',3500);
     if(typeof renderTendencias==='function') renderTendencias();
     else if(typeof _renderTend==='function') _renderTend();
     if(typeof renderDashboardKPIs==='function') renderDashboardKPIs();
