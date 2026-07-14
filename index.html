@@ -12253,11 +12253,17 @@ function _corregirEmbarque(nro, nuevoEsc){
 }
 
 // Guarda tendData en localStorage (siempre) y en Supabase (si conectado).
+var _syncChain = Promise.resolve();
 function saveTendData(){
   // localStorage — siempre, sin depender de Supabase
   try { localStorage.setItem('_tendData_v2', JSON.stringify(tendData||[])); } catch(e){}
-  // Supabase — solo si conectado
-  if(window._sb) _syncTendToCloud();
+  // Supabase — solo si conectado. Encadenado: si ya hay una sincronización
+  // en curso, esta espera a que termine antes de empezar — dos guardados
+  // seguidos (o guardar mientras el anterior aún viaja por la red) ya NO
+  // corren en paralelo, que era lo que abría la puerta a perder cambios.
+  if(window._sb){
+    _syncChain = _syncChain.then(function(){ return _syncTendToCloud(); }).catch(function(e){ console.error('Cloud sync chain error:', e); });
+  }
 }
 
 // Corrige la FECHA de un embarque por número y guarda en nube
@@ -12396,6 +12402,16 @@ function _corregirRubroUI(idx){
   }
   var origenHtml = _fixOrigenHTML(tipoActual, _paisInit, _ciudadInit);
 
+  // ── Lugar de Recepción — heredado del formulario de costeo (s1_lugar_recep) ──
+  var _lugarInit = d.lugarRecep || '';
+  var lugarHtml = '<div style="background:var(--bg);border:1px solid rgba(45,212,191,.3);border-radius:10px;padding:12px;margin-bottom:14px">'
+    +'<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:8px">🏭 Lugar de Recepción</div>'
+    +'<select id="_fix_lugar_recep" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:7px;padding:8px 10px;color:var(--text);font-size:12px">'
+    +'<option value=""'+(!_lugarInit?' selected':'')+'>— Selecciona —</option>'
+    +'<option value="CDF"'+(_lugarInit==='CDF'?' selected':'')+'>CDF</option>'
+    +'<option value="Westland"'+(_lugarInit==='Westland'?' selected':'')+'>Westland</option>'
+    +'</select></div>';
+
   // ── Vía de Transporte — LAND / SEA / AIR ──
   var viaActual = d.viaTransporte || 'SEA';
   var _viaBtn = function(val,ico,lbl,color){
@@ -12475,6 +12491,7 @@ function _corregirRubroUI(idx){
     +'<div style="font-size:11px;color:var(--muted);margin-bottom:14px">Embarque: <strong style="color:var(--orange-l)">'+d.nro+'</strong> — edita montos, rubro, régimen y ahorro. Todo se recalcula y guarda en la nube.</div>'
     +tipoZLHtml
     +'<div id="_fix_origen_wrap">'+origenHtml+'</div>'
+    +lugarHtml
     +viaHtml
     +finHtml
     +'<div style="display:flex;gap:6px;margin-bottom:12px;border-bottom:1px solid var(--border)">'
@@ -12632,6 +12649,13 @@ function _corregirRubroUI(idx){
   ov.querySelector('#_fix_rubro_cancel').onclick = function(){ ov.remove(); };
   ov.addEventListener('click', function(e){ if(e.target===ov) ov.remove(); });
   ov.querySelector('#_fix_rubro_ok').onclick = function(){
+    // Defensa adicional: re-buscar el embarque VIVO en tendData por su N°
+    // justo antes de guardar (no confiar en la referencia capturada al
+    // abrir el modal, por si el arreglo cambió mientras estaba abierto).
+    if(d.nro){
+      var _fresco = tendData.find(function(x){ return x && x.nro===d.nro; });
+      if(_fresco) d = _fresco;
+    }
     var cambios = 0;
     ov.querySelectorAll('._fix_rubro_sel').forEach(function(sel){
       var i = parseInt(sel.dataset.idx,10);
@@ -12674,6 +12698,16 @@ function _corregirRubroUI(idx){
     if(_nuevaVia){
       d.viaTransporte = _nuevaVia;
       if(d.snap) d.snap.viaTransporte = _nuevaVia;
+      cambios++;
+    }
+    // ── Lugar de Recepción: guardar si cambió ──
+    var _selLugar = document.getElementById('_fix_lugar_recep');
+    if(_selLugar && _selLugar.value !== _lugarInit){
+      d.lugarRecep = _selLugar.value;
+      if(d.snap){
+        if(!d.snap.campos) d.snap.campos = {};
+        d.snap.campos.s1_lugar_recep = _selLugar.value;
+      }
       cambios++;
     }
     // ── País / Origen: SIEMPRE guardar (heredado del costeo, editable aquí) ──
@@ -12886,10 +12920,22 @@ async function _syncTendToCloud(){
       _marcarSyncPendiente();
       throw _r.error;
     }
-    // Si la fusión trajo embarques que este dispositivo no tenía (de otro
-    // usuario), incorporarlos también en memoria para que se vean aquí.
-    if(mergedArr.length !== (tendData||[]).length){
-      tendData = mergedArr;
+    // ── FIX CRÍTICO #3 (jul-2026): antes, si el largo de la fusión no
+    //    coincidía, se reemplazaba TODO el arreglo tendData por uno nuevo
+    //    (mergedArr), con objetos NUEVOS traídos de la nube. Si en ese
+    //    momento el usuario tenía abierto "Corregir Embarque" editando un
+    //    objeto `d` que ya no estaba en el arreglo reemplazado, sus cambios
+    //    quedaban aplicados a un objeto huérfano — y saveTendData() subía
+    //    la nube el arreglo NUEVO, sin esos cambios. Por eso a veces
+    //    "no se guardaba" o había que corregir el mismo embarque varias
+    //    veces (cada intento tenía otra chance de no toparse con el race).
+    //    Ahora NUNCA se reemplaza el arreglo ni los objetos existentes —
+    //    solo se AGREGAN los que de verdad falten (de otro dispositivo/
+    //    usuario), preservando cada referencia en memoria intacta. ──
+    const localKeys = new Set((tendData||[]).map(keyOf));
+    const faltantes = mergedArr.filter(d => !localKeys.has(keyOf(d)));
+    if(faltantes.length){
+      tendData = (tendData||[]).concat(faltantes);
       window.tendData = tendData;
       try { localStorage.setItem('_tendData_v2', JSON.stringify(tendData)); } catch(e){}
       if(typeof renderTend==='function') renderTend();
