@@ -9651,7 +9651,7 @@ function _autoFillGastosProveedores(){
     const mv2 = sc2.mv || 0;
     if(!window._omitMV_cif){
       if(mv2 > 0.005){
-        add('gastos', 'MASTER VALUE, S.A.', 'Diferencia Liq. vs CIF Express', mv2);
+        add('otro_no_gravado', 'MASTER VALUE, S.A.', 'Diferencia Liq. vs CIF Express', mv2);
       } else if(mv2 < -0.005){
         _showToast('⚠️ Master Value negativo ($'+Math.abs(mv2).toFixed(2)+') — Activa "Omitir MV" si no aplica.','orange',6000);
       }
@@ -9698,7 +9698,7 @@ function _autoFillGastosProveedores(){
     }
     if(!window._omitMV_sab){
       if(mv3 > 0.005){
-        add('gastos', 'MASTER VALUE, S.A.', 'Diferencia Liq. vs Sababa', mv3);
+        add('otro_no_gravado', 'MASTER VALUE, S.A.', 'Diferencia Liq. vs Sababa', mv3);
       } else if(mv3 < -0.005){
         _showToast('⚠️ Master Value negativo ($'+Math.abs(mv3).toFixed(2)+') — Activa "Omitir MV" si no aplica.','orange',6000);
       }
@@ -13551,7 +13551,7 @@ function _migrarGastosDesdeSnap(d){
     if((sc2.flete||0)>0.01)    gastos.push({tipoFac:'flete',      deptCat:'GASTOS', prov:'Flete CIF Express',     costo:Math.round((sc2.flete||0)*100)/100, oc:'auto-migrado'});
     if((sc2.gastos||0)>0.01)   gastos.push({tipoFac:'acarreo',    deptCat:'GASTOS', prov:'Gastos Origen/Destino', costo:Math.round((sc2.gastos||0)*100)/100, oc:'auto-migrado'});
     if((sc2.hon||0)>0.01)      gastos.push({tipoFac:'honorarios', deptCat:'GASTOS', prov:'Honorarios CIF Express', costo:Math.round((sc2.hon||0)*100)/100,   oc:'auto-migrado'});
-    if((sc2.mv||0)>0.01)       gastos.push({tipoFac:'gastos',     deptCat:'GASTOS', prov:'Master Value',           costo:Math.round((sc2.mv||0)*100)/100,    oc:'auto-migrado'});
+    if((sc2.mv||0)>0.01)       gastos.push({tipoFac:'otro_no_gravado', deptCat:'GASTOS', prov:'Master Value',           costo:Math.round((sc2.mv||0)*100)/100,    oc:'auto-migrado'});
     if((sc2.itbmsHon||0)>0.01) gastos.push({tipoFac:'itbms',      deptCat:'GASTOS', prov:'ITBMS s/Honorarios',    costo:Math.round((sc2.itbmsHon||0)*100)/100, oc:'auto-migrado'});
   } else if(isSab){
     // Sababa: usar comBruta (honorario neto) e itbmsHomol desglosados — NO comision total
@@ -13566,7 +13566,7 @@ function _migrarGastosDesdeSnap(d){
     if((sc3.gastos||0)>0.01)  gastos.push({tipoFac:'acarreo',    deptCat:'GASTOS', prov:'Gastos Origen/Destino', costo:Math.round((sc3.gastos||0)*100)/100,  oc:'auto-migrado'});
     if(comBrutaSab>0.01)      gastos.push({tipoFac:'honorarios', deptCat:'GASTOS', prov:'SABABA IMPORTS, S.A.',  costo:Math.round(comBrutaSab*100)/100,       oc:'auto-migrado', _desc:'Comisión Bruta s/Pago Fiscal'});
     if(itbmsHomolSab>0.01)    gastos.push({tipoFac:'itbms',      deptCat:'GASTOS', prov:'SABABA IMPORTS, S.A.',  costo:Math.round(itbmsHomolSab*100)/100,     oc:'auto-migrado', _desc:'ITBMS Homologado'});
-    if(mv3>0.01)              gastos.push({tipoFac:'gastos',      deptCat:'GASTOS', prov:'MASTER VALUE, S.A.',          costo:Math.round(mv3*100)/100,               oc:'auto-migrado', _desc:'Diferencia Liq. vs Sababa'});
+    if(mv3>0.01)              gastos.push({tipoFac:'otro_no_gravado', deptCat:'GASTOS', prov:'MASTER VALUE, S.A.',          costo:Math.round(mv3*100)/100,               oc:'auto-migrado', _desc:'Diferencia Liq. vs Sababa'});
   }
 
   if(!gastos.length) return;
@@ -14405,12 +14405,13 @@ async function procesarEmbarque(){
   // ── Registrar el uso real de plantillas: recién ahora que el embarque quedó
   // efectivamente procesado y guardado, las plantillas aplicadas en esta sesión
   // pasan de "disponibles" a "historial" (ligadas a este número de embarque).
-  if(nro && window._plntAplicadasEnSesion && window._plntAplicadasEnSesion.length && typeof _plntLoad==='function'){
+  var _plntPend = _plntSesionGet();
+  if(nro && _plntPend.length && typeof _plntLoad==='function'){
     (async function(){
       try{
         var arrP = await _plntLoad();
         var cambiado = false;
-        window._plntAplicadasEnSesion.forEach(function(pid){
+        _plntPend.forEach(function(pid){
           var p = arrP.find(function(x){ return x.id===pid; });
           if(!p) return;
           p.usos = p.usos||[];
@@ -14425,7 +14426,7 @@ async function procesarEmbarque(){
       }catch(e){ console.warn('Error registrando uso de plantilla:', e); }
     })();
   }
-  window._plntAplicadasEnSesion = [];
+  _plntSesionSet([]);
 
   // Save to cloud — wait for it, then reload
   const _nroGuardar = nro || ('EMB-'+Date.now());
@@ -14882,7 +14883,7 @@ function _clearFormSilent(){
   // Clear invLines
   invLines=[];
   window.invLines=[];
-  window._plntAplicadasEnSesion=[];
+  _plntSesionSet([]);
   renderInvLines();
   // Reset globals
   window._lastCIF=0; window._lastAhorroNeto=0; window._lastSnap=null; window._sc1_landed1=0;
@@ -16781,6 +16782,23 @@ function _fdProvSearchFilter(input){
 // ═══════════════════════════════════════════════════════════════════
 var _PLANT_KEY = '_PLANT_MASTER';
 
+// ── Persistencia de "plantillas aplicadas en esta sesión" ──
+// Antes vivía solo en window._plntAplicadasEnSesion (memoria), así que si el
+// usuario cerraba/recargaba la app entre aplicar la plantilla y procesar el
+// embarque, se perdía el vínculo y la plantilla se quedaba "disponible" para
+// siempre aunque ya se hubiera usado. Ahora se guarda en localStorage.
+var _PLNT_SESION_KEY = '_plntAplicadasEnSesion';
+function _plntSesionGet(){
+  try{ return JSON.parse(localStorage.getItem(_PLNT_SESION_KEY)||'[]'); }catch(e){ return []; }
+}
+function _plntSesionSet(arr){
+  try{ localStorage.setItem(_PLNT_SESION_KEY, JSON.stringify(arr||[])); }catch(e){}
+}
+function _plntSesionAdd(id){
+  var arr = _plntSesionGet();
+  if(arr.indexOf(id)===-1){ arr.push(id); _plntSesionSet(arr); }
+}
+
 async function _plntLoad(){
   var local=[];
   try{ local=JSON.parse(localStorage.getItem(_PLANT_KEY)||'[]'); }catch(e){}
@@ -17169,8 +17187,7 @@ async function _plntAplicar(id, ovEl, btnEl){
     // el embarque. El uso (y por tanto, que deje de estar "disponible") se registra
     // recién cuando procesarEmbarque() guarda el embarque de verdad en tendData.
     // Aquí solo recordamos qué plantilla(s) se aplicaron en esta sesión de formulario.
-    window._plntAplicadasEnSesion = window._plntAplicadasEnSesion || [];
-    if(window._plntAplicadasEnSesion.indexOf(p.id)===-1) window._plntAplicadasEnSesion.push(p.id);
+    _plntSesionAdd(p.id);
     _showToast('✅ Plantilla "'+p.nombre+'" aplicada','green',3000);
   }catch(e){
     console.warn('Plantilla apply error:',e);
@@ -24132,11 +24149,12 @@ async function procesarUnico(){
   //    Escenario Único nunca marcaba las plantillas aplicadas como
   //    "usadas", así que quedaban disponibles para siempre y había que
   //    marcarlas a mano. Mismo comportamiento que el flujo principal. ──
-  if(nro && window._plntAplicadasEnSesion && window._plntAplicadasEnSesion.length && typeof _plntLoad==='function'){
+  var _plntPendU = _plntSesionGet();
+  if(nro && _plntPendU.length && typeof _plntLoad==='function'){
     try{
       var arrP = await _plntLoad();
       var cambiado = false;
-      window._plntAplicadasEnSesion.forEach(function(pid){
+      _plntPendU.forEach(function(pid){
         var p = arrP.find(function(x){ return x.id===pid; });
         if(!p) return;
         p.usos = p.usos||[];
@@ -24149,7 +24167,7 @@ async function procesarUnico(){
       if(cambiado) await _plntSave(arrP);
     }catch(e){ console.warn('Error registrando uso de plantilla (único):', e); }
   }
-  window._plntAplicadasEnSesion = [];
+  _plntSesionSet([]);
 
   if(typeof renderTend==='function') renderTend();
   if(typeof renderTopProvs==='function') renderTopProvs();
@@ -24689,9 +24707,9 @@ function renderInvLines(){
 
   // ── Render gastos de servicio — aplicar a TODOS los contenedores ──
   const fmt=n=>'$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-  const tipoColors={liquidacion:'rgba(248,81,73,.15)',itbms:'rgba(88,166,255,.15)',tasa:'rgba(210,153,34,.15)',flete:'rgba(240,136,62,.15)',flete_sababa:'rgba(163,113,247,.15)',acarreo:'rgba(210,153,34,.15)',gastos_destino:'rgba(99,179,237,.15)',honorarios:'rgba(168,85,247,.15)',uso_sistema:'rgba(63,185,80,.15)',seguro:'rgba(88,166,255,.1)',almacenaje:'rgba(240,136,62,.1)',inspeccion:'rgba(248,81,73,.1)',dmce:'rgba(139,148,158,.15)',gastos:'rgba(139,148,158,.15)',otros:'rgba(139,148,158,.15)'};
-  const tipoIcons={liquidacion:'🏛️',itbms:'🧾',tasa:'💵',flete:'🚢',flete_sababa:'🔗',acarreo:'🚛',gastos_destino:'📦',honorarios:'💼',uso_sistema:'💻',seguro:'🛡️',almacenaje:'🏪',inspeccion:'🔍',dmce:'📝',gastos:'📋',otros:'📋'};
-  const tipoLabels={liquidacion:'Liquidación / Pago Arancelario',itbms:'ITBMS',tasa:'Tasa / Uso del Sistema',flete:'Flete Internacional',flete_sababa:'Flete Sababa (reconciliación)',acarreo:'Acarreo / Transporte',gastos_destino:'Gastos Destino / Origen',honorarios:'Honorarios / Comisión',uso_sistema:'Uso del Sistema (SIGA/SICE)',seguro:'Seguro de Carga',almacenaje:'Almacenaje',inspeccion:'Inspección / Reconocimiento',dmce:'DMCE',gastos:'Otros Gastos',otros:'Otros Gastos'};
+  const tipoColors={liquidacion:'rgba(248,81,73,.15)',itbms:'rgba(88,166,255,.15)',tasa:'rgba(210,153,34,.15)',flete:'rgba(240,136,62,.15)',flete_sababa:'rgba(163,113,247,.15)',acarreo:'rgba(210,153,34,.15)',gastos_destino:'rgba(99,179,237,.15)',honorarios:'rgba(168,85,247,.15)',uso_sistema:'rgba(63,185,80,.15)',seguro:'rgba(88,166,255,.1)',almacenaje:'rgba(240,136,62,.1)',inspeccion:'rgba(248,81,73,.1)',dmce:'rgba(139,148,158,.15)',gastos:'rgba(139,148,158,.15)',otros:'rgba(139,148,158,.15)',otro_no_gravado:'rgba(210,153,34,.15)'};
+  const tipoIcons={liquidacion:'🏛️',itbms:'🧾',tasa:'💵',flete:'🚢',flete_sababa:'🔗',acarreo:'🚛',gastos_destino:'📦',honorarios:'💼',uso_sistema:'💻',seguro:'🛡️',almacenaje:'🏪',inspeccion:'🔍',dmce:'📝',gastos:'📋',otros:'📋',otro_no_gravado:'💰'};
+  const tipoLabels={liquidacion:'Liquidación / Pago Arancelario',itbms:'ITBMS',tasa:'Tasa / Uso del Sistema',flete:'Flete Internacional',flete_sababa:'Flete Sababa (reconciliación)',acarreo:'Acarreo / Transporte',gastos_destino:'Gastos Destino / Origen',honorarios:'Honorarios / Comisión',uso_sistema:'Uso del Sistema (SIGA/SICE)',seguro:'Seguro de Carga',almacenaje:'Almacenaje',inspeccion:'Inspección / Reconocimiento',dmce:'DMCE',gastos:'Otros Gastos',otros:'Otros Gastos',otro_no_gravado:'Otro Costo No Gravado'};
   let gastosHTML;
   if(!gastoLines.length){
     gastosHTML = '<div style="text-align:center;padding:12px;color:var(--muted);font-size:11px">Calcula un embarque para ver los gastos de servicio auto-mapeados.</div>';
@@ -24711,6 +24729,12 @@ function renderInvLines(){
           +(isAuto?'<span style="font-size:9px;background:rgba(240,136,62,.15);border:1px solid rgba(240,136,62,.3);color:var(--orange-l);border-radius:4px;padding:1px 6px">AUTO</span>':'')
           +(tf==='flete_sababa'?'<button onclick="_reclasificarFleteSababa('+i+')" title="Pasar esta línea a Gastos Origen/Destino — resta del flete declarado a Sababa" style="background:rgba(99,179,237,.12);border:1px solid rgba(99,179,237,.35);color:#63b3ed;border-radius:5px;padding:2px 8px;font-size:10px;font-weight:700;cursor:pointer;flex-shrink:0">🔄 A Gastos Origen/Destino</button>':'')
           +'<button onclick="removeInvLine('+i+')" style="background:rgba(218,54,51,.1);border:1px solid rgba(218,54,51,.2);color:var(--red-l);border-radius:5px;width:24px;height:24px;cursor:pointer;font-size:12px;flex-shrink:0">×</button>'
+          +'</div>'
+          // Rubro — editable directamente aquí, sin necesidad de ir a Historial → Corregir Rubro
+          +'<div style="margin-bottom:6px">'
+          +'<select onchange="invLines['+i+'].tipoFac=this.value;invLines['+i+']._rubroEditado=true;renderInvLines();" style="width:100%;background:var(--s2);border:1px solid rgba(240,136,62,.3);border-radius:6px;padding:5px 8px;color:var(--orange-l);font-size:11px;font-weight:600">'
+          +Object.entries(_RUBRO_LABELS_FIX).map(function(e){ return '<option value="'+e[0]+'"'+(tf===e[0]?' selected':'')+'>'+e[1]+'</option>'; }).join('')
+          +'</select>'
           +'</div>'
           // Proveedor — editable con autocomplete igual que mercancía
           +'<div style="margin-bottom:6px">'
