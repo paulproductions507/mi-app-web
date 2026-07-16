@@ -232,6 +232,11 @@ datalist option{background:var(--s2);color:var(--text)}
           <option value="Italia">🇮🇹 Italia</option>
           <option value="Espana">🇪🇸 España</option>
           <option value="Panama">🇵🇦 Panamá</option>
+          <option value="Guatemala">🇬🇹 Guatemala</option>
+          <option value="Nicaragua">🇳🇮 Nicaragua</option>
+          <option value="Honduras">🇭🇳 Honduras</option>
+          <option value="Costa Rica">🇨🇷 Costa Rica</option>
+          <option value="El Salvador">🇸🇻 El Salvador</option>
           <option value="Otro">🌐 Otro</option>
         </select>
       </div>
@@ -248,7 +253,10 @@ datalist option{background:var(--s2);color:var(--text)}
         <select id="tipo-emb" onchange="_autoViaTransporte(this.value)">
           <option value="">— Selecciona —</option>
           <option value="Contenedor directo">Contenedor directo</option>
+          <option value="Consolidado Marítimo">Consolidado Marítimo</option>
+          <option value="Consolidado Terrestre">Consolidado Terrestre</option>
           <option value="Camión">Camión</option>
+          <option value="Furgón">Furgón</option>
           <option value="Carga suelta">Carga suelta</option>
         </select>
       </div>
@@ -262,7 +270,7 @@ datalist option{background:var(--s2);color:var(--text)}
           <option value="Westland">Westland</option>
         </select>
       </div>
-      <div class="field" id="blk-nro-cont-unico"><label>N° Contenedor</label><input type="text" id="nro-cont" placeholder="Ej: MSCU1234567" oninput="saveState()"></div>
+      <div class="field" id="blk-nro-cont-unico"><label id="lbl-nro-cont-unico">N° Contenedor</label><input type="text" id="nro-cont" placeholder="Ej: MSCU1234567" oninput="saveState()"></div>
     </div>
     <!-- Multi-contenedores: un campo de N° por cada equipo cuando hay 2+ -->
     <div id="multi-contenedores-wrap" style="display:none;margin-bottom:10px">
@@ -510,6 +518,11 @@ var CIUDADES={
   'Turkey':['Estambul','Izmir','Mersin'],
   'Italia':['Milán','Génova','Nápoles'],
   'Espana':['Barcelona','Madrid','Valencia'],
+  'Guatemala':['Ciudad de Guatemala','Puerto Quetzal','Santo Tomás de Castilla','Paso Canoa (frontera CR-PA)'],
+  'Nicaragua':['Managua','Corinto','Peñas Blancas (frontera CR-NI)'],
+  'Honduras':['Tegucigalpa','San Pedro Sula','Puerto Cortés'],
+  'Costa Rica':['San José','Limón','Caldera','Paso Canoa (frontera CR-PA)'],
+  'El Salvador':['San Salvador','Acajutla'],
 };
 
 // RUBROS
@@ -618,6 +631,11 @@ var CIUDADES={
   'Turkey':['Estambul','Izmir','Mersin'],
   'Italia':['Milán','Génova','Nápoles'],
   'Espana':['Barcelona','Madrid','Valencia'],
+  'Guatemala':['Ciudad de Guatemala','Puerto Quetzal','Santo Tomás de Castilla','Paso Canoa (frontera CR-PA)'],
+  'Nicaragua':['Managua','Corinto','Peñas Blancas (frontera CR-NI)'],
+  'Honduras':['Tegucigalpa','San Pedro Sula','Puerto Cortés'],
+  'Costa Rica':['San José','Limón','Caldera','Paso Canoa (frontera CR-PA)'],
+  'El Salvador':['San Salvador','Acajutla'],
 };
 
 function fillCiudades(){
@@ -933,10 +951,24 @@ function calcular(){
 // ════════════════════════════════════════
 function _autoViaTransporte(tipoEmb){
   var el=document.getElementById('via-transporte');
-  if(!el) return;
-  if(tipoEmb==='Camión') el.value='LAND';
-  else if(tipoEmb==='') {}
-  else el.value='SEA';
+  var esTerrestre = tipoEmb==='Camión' || tipoEmb==='Furgón' || tipoEmb==='Consolidado Terrestre';
+  if(el){
+    if(esTerrestre) el.value='LAND';
+    else if(tipoEmb==='') {}
+    else el.value='SEA';
+  }
+  // Furgón/Camión no llevan N° de Contenedor — llevan Placa o N° de Cabezal
+  var lbl = document.getElementById('lbl-nro-cont-unico');
+  var inp = document.getElementById('nro-cont');
+  if(lbl && inp){
+    if(esTerrestre){
+      lbl.textContent = 'N° de Placa / Cabezal';
+      inp.placeholder = 'Ej: PA-1234A';
+    } else {
+      lbl.textContent = 'N° Contenedor';
+      inp.placeholder = 'Ej: MSCU1234567';
+    }
+  }
   saveState();
 }
 
