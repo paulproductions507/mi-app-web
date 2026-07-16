@@ -849,7 +849,7 @@ function calcular(){
   var landed_g=R(landed+itbms);
 
   lastCalc={cor,nro,desc,pais,ciudad,tipoEmb,fecha,provCor,corName,
-    cif,arPct:arPct*100,itbPct:itbPct*100,honPct:honPct*100,
+    cif,mercPura:mercPuraC,arPct:arPct*100,itbPct:itbPct*100,honPct:honPct*100,
     arancel,itbms,itbmsTasa,hon,tasa,uso,agente,extras,landed,landed_g,factor,
     gastosRows, honNfac:gv('hon-nfac'), idFiscal:gv('id-fiscal'),
     nfacTesoro:gv('nfac-tesoro'), cantEquipos:parseInt(gv('cant-equipos'))||1,
@@ -1267,7 +1267,12 @@ function _buildUnicoData(d){
     desc: d.desc||'Embarque Único',
     fecha: d.fecha||new Date().toISOString().slice(0,10),
     ahorro: 0,
-    cif: d.cif,
+    // FIX (jul-2026): "cif" es el campo que Tendencias/Historial lee como
+    // "Valor Mercancía" — por eso debe llevar SIEMPRE el valor mercancía puro
+    // (sin flete/seguro), nunca el CIF completo. El CIF completo (para
+    // referencia del cálculo de Arancel/ITBMS) se guarda aparte en cifTotal.
+    cif: d.mercPura,
+    cifTotal: d.cif,
     esc: 'Único — '+(d.corName||'').replace(/[⚡🤝✏️]/g,'').trim(),
     tipoEsc: 'unico',
     tipoLiquidacion: 'liquidacion',  // siempre liquidación en Único
@@ -1277,7 +1282,7 @@ function _buildUnicoData(d){
     ts: Date.now(),
     snap:{
       sc1:{
-        cif:d.cif, landed:d.landed, factor:d.factor,
+        cif:d.mercPura, cifTotal:d.cif, landed:d.landed, factor:d.factor,
         arancel:d.arancel, itbms:d.itbms, itbmsTasa:d.itbmsTasa,
         hon:d.hon, tasa:d.tasa, uso:d.uso, agente:d.agente||0,
         extras:d.extras||0,
@@ -1345,21 +1350,62 @@ async function procesar(){
     await _fdConsumirParcial(_fdLines[_fi].nfac, _fdLines[_fi].costo, d.nro);
   }
 
+  // ── Overlay de procesamiento (pantalla oscura + spinner verde, estilo index) ──
+  _showProcessingOverlay();
+
   var ok = await _pushToCloud(data);
 
   if(ok){
     localStorage.removeItem('_unico_estado2');
     lastCalc=null;
-    // Show success overlay
-    _showSuccessOverlay(data.nro, data.desc, data.cif, d.landed, d.factor);
+    // Transición del spinner a check verde, luego muestra el resultado
+    await _procOverlaySuccess();
+    _showSuccessOverlay(data.nro, data.desc, data.cif, d.landed, d.factor, d.cif);
   } else {
+    _hideProcessingOverlay();
     toast('⚠️ Guardado localmente — sin conexión a la nube','orange');
     btn.textContent='✅ Procesar al Historial';
     btn.disabled=false;
   }
 }
 
-function _showSuccessOverlay(nro, desc, cif, desembolso, factor){
+// ── Overlay de procesamiento: pantalla oscura + spinner verde (mismo estilo del index) ──
+function _showProcessingOverlay(){
+  var old=document.getElementById('_procSpinOverlay'); if(old) old.remove();
+  var div=document.createElement('div');
+  div.id='_procSpinOverlay';
+  div.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:100000;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px';
+  div.innerHTML='<style>@keyframes _plnSpin{to{transform:rotate(360deg)}}@keyframes _plnPop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}</style>'
+    +'<div id="_procSpinIcon" style="width:64px;height:64px;border:4px solid rgba(255,255,255,.15);border-top-color:#3fb950;border-radius:50%;animation:_plnSpin .8s linear infinite"></div>'
+    +'<div id="_procSpinTxt" style="color:#e6edf3;font-size:14px;font-weight:600;margin-top:20px;letter-spacing:.02em">Procesando y guardando en la nube…</div>';
+  document.body.appendChild(div);
+}
+function _hideProcessingOverlay(){
+  var old=document.getElementById('_procSpinOverlay'); if(old) old.remove();
+}
+// Cambia el spinner por un check verde animado, espera un momento y resuelve
+function _procOverlaySuccess(){
+  return new Promise(function(resolve){
+    var icon=document.getElementById('_procSpinIcon');
+    var txt=document.getElementById('_procSpinTxt');
+    if(icon){
+      icon.style.animation='none';
+      icon.style.border='none';
+      icon.style.background='linear-gradient(135deg,#22c55e,#16a34a)';
+      icon.style.display='flex';
+      icon.style.alignItems='center';
+      icon.style.justifyContent='center';
+      icon.style.fontSize='34px';
+      icon.style.borderRadius='16px';
+      icon.style.animation='_plnPop .35s cubic-bezier(.34,1.56,.64,1)';
+      icon.textContent='✅';
+    }
+    if(txt) txt.textContent='¡Guardado!';
+    setTimeout(function(){ _hideProcessingOverlay(); resolve(); }, 700);
+  });
+}
+
+function _showSuccessOverlay(nro, desc, cif, desembolso, factor, cifTotal){
   var fmt=function(n){ return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
   var old=document.getElementById('_succOverlay'); if(old) old.remove();
   var div=document.createElement('div');
@@ -1381,16 +1427,47 @@ function _showSuccessOverlay(nro, desc, cif, desembolso, factor){
         +'<div style="font-family:monospace;font-size:15px;font-weight:700;color:#7c3aed">'+fmt(desembolso)+'</div>'
       +'</div>'
     +'</div>'
-    +'<div style="background:#f8f9fa;border-radius:8px;padding:8px 12px;margin-bottom:16px;font-size:11px;color:#374151">'
+    +'<div style="background:#f8f9fa;border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:11px;color:#374151">'
       +'Factor de Importación: <strong style="color:#d97706">'+Number(factor||0).toFixed(2)+'%</strong>'
     +'</div>'
-    +'<div style="font-size:11px;color:#636c76;margin-bottom:20px">☁️ Guardado en la nube automáticamente</div>'
-    +'<button onclick="document.getElementById(\'_succOverlay\').remove();localStorage.removeItem(\'_unico_estado2\');if(window.opener&&!window.opener.closed){window.opener.location.reload();}window.close()" '
+    +(cifTotal?('<div style="font-size:9px;color:#9ca3af;margin-bottom:16px">Valor CIF (ref. cálculo Arancel+ITBMS): '+fmt(cifTotal)+'</div>'):'<div style="margin-bottom:16px"></div>')
+    +'<div style="font-size:11px;color:#636c76;margin-bottom:16px">☁️ Guardado en la nube automáticamente</div>'
+    +'<div id="_succCountdown" style="font-size:11px;color:#9ca3af;margin-bottom:14px">Cerrando automáticamente en <strong id="_succCdNum">6</strong>s…</div>'
+    +'<button onclick="_succCerrarYVolver(\''+nro+'\',false)" '
       +'style="width:100%;background:linear-gradient(135deg,#22c55e,#2563eb);border:none;border-radius:14px;padding:16px;color:#fff;font-size:15px;font-weight:800;cursor:pointer;letter-spacing:.02em;box-shadow:0 4px 20px rgba(34,197,94,.4);margin-bottom:10px">🏠 Cerrar y Volver</button>'
-    +'<button onclick="_marcarPendienteStandalone(\''+nro+'\');document.getElementById(\'_succOverlay\').remove();localStorage.removeItem(\'_unico_estado2\');if(window.opener&&!window.opener.closed){window.opener.location.reload();}window.close()" '
-      +'style="width:100%;background:rgba(210,153,34,.12);border:1.5px solid rgba(210,153,34,.5);border-radius:14px;padding:11px;color:#d29922;font-size:12px;font-weight:700;cursor:pointer;">🟡 Marcar como Pendiente (factura por confirmar)</button>'
+    +'<button onclick="_succCerrarYVolver(\''+nro+'\',true)" '
+      +'style="width:100%;background:rgba(210,153,34,.12);border:1.5px solid rgba(210,153,34,.5);border-radius:14px;padding:11px;color:#d29922;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:10px">🟡 Marcar como Pendiente (factura por confirmar)</button>'
+    +'<button onclick="_succCancelarCierre()" '
+      +'style="width:100%;background:none;border:none;color:#9ca3af;font-size:11px;cursor:pointer;text-decoration:underline">Cancelar cierre automático</button>'
     +'</div>';
   document.body.appendChild(div);
+
+  // ── Cuenta regresiva de cierre automático (6s) ──
+  var seg=6;
+  window._succTimer = setInterval(function(){
+    seg--;
+    var el=document.getElementById('_succCdNum');
+    if(el) el.textContent=seg;
+    if(seg<=0){
+      clearInterval(window._succTimer);
+      _succCerrarYVolver(nro,false);
+    }
+  },1000);
+}
+
+function _succCancelarCierre(){
+  if(window._succTimer) clearInterval(window._succTimer);
+  var el=document.getElementById('_succCountdown');
+  if(el) el.textContent='Cierre automático cancelado — puedes cerrar cuando quieras.';
+}
+
+function _succCerrarYVolver(nro, marcarPendiente){
+  if(window._succTimer) clearInterval(window._succTimer);
+  if(marcarPendiente) _marcarPendienteStandalone(nro);
+  var ov=document.getElementById('_succOverlay'); if(ov) ov.remove();
+  localStorage.removeItem('_unico_estado2');
+  if(window.opener&&!window.opener.closed){ window.opener.location.reload(); }
+  window.close();
 }
 
 async function _marcarPendienteStandalone(nro){
