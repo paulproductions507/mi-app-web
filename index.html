@@ -2746,6 +2746,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
             <option value="Espana">🇪🇸 España</option>
             <option value="Alemania">🇩🇪 Alemania</option>
             <option value="Canada">🇨🇦 Canadá</option>
+            <option value="Guatemala">🇬🇹 Guatemala</option>
             <option value="Hong Kong">🇭🇰 Hong Kong</option>
           </select>
         </div>
@@ -2902,10 +2903,14 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
   </div>
   </div><!-- /_tend-static-topprov -->
 
-  <!-- HISTORIAL DE EMBARQUES — acordeón visible, con edición y borrado -->
-  <div>
+  <!-- HISTORIAL DE EMBARQUES — acordeón visible, con edición y borrado.
+       FIX: antes no tenía wrapper propio y quedaba SIEMPRE visible sin
+       importar la sub-pestaña activa (Departamento, Origen, etc.), lo que
+       causaba que pareciera "duplicado" entre Departamento y Costos/Ahorro.
+       Ahora solo se muestra en la pestaña Ahorro y Costeo de Embarque. -->
+  <div id="_tend-static-histproc" style="display:none">
   <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden">
-    <div onclick="(function(hdr){var b=hdr.parentElement.querySelector('#tend-hist-body');if(!b)b=document.getElementById('tend-hist-body');var c=hdr.querySelector('.hist-chev');if(b){var o=b.style.display==='none';b.style.display=o?'block':'none';if(c)c.textContent=o?'▼':'▶';if(o&&typeof renderTend==='function')renderTend();}}).call(this,this)"
+    <div onclick="_toggleHistAcordeonMain(this)"
          style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;cursor:pointer;user-select:none;background:var(--s2);-webkit-tap-highlight-color:rgba(0,0,0,0)"
          ontouchstart="this.style.background='rgba(255,255,255,.06)'" ontouchend="this.style.background='var(--s2)'">
       <div style="display:flex;align-items:center;gap:8px">
@@ -2926,7 +2931,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       </div>
     </div>
   </div>
-  </div>
+  </div><!-- /_tend-static-histproc -->
 
 </div>
 </div>
@@ -8357,7 +8362,7 @@ function iniciarApp(tab){
         _mb2.querySelectorAll('.kpi-chev,.itb-chev,.ah-chev').forEach(function(c){ c.textContent='▶'; });
         // Open historial section
         var histBody = _mb2.querySelector('#tend-hist-body');
-        if(histBody){ histBody.style.display='block'; }
+        if(histBody){ histBody.style.display='block'; if(typeof renderTend==='function') renderTend(histBody); }
         var chev=_mb2.querySelector('.hist-chev'); if(chev) chev.textContent='▼';
         // Scroll to it
         if(histBody) setTimeout(function(){ histBody.scrollIntoView({behavior:'smooth',block:'start'}); }, 200);
@@ -8995,7 +9000,7 @@ function calc(){
           <!-- 4 Criterios colapsados -->
           ${criterioRow2(1,'Impuestos',c1_reg,c1_altVal,a1,det1cif)}
           ${criterioRow2(2,'Gastos Origen / Destino',c2_reg,isCIF?c2_cifVal:(sc3_flete+sc3_gastos),a2,det2cif)}
-          ${criterioRow2(3,'Honorarios / Comisión',c3_reg,c3_alt,a3,det3cif)}
+          ${criterioRow2(3,'Honorarios',c3_reg,c3_alt,a3,det3cif)}
           ${criterioRow2(4,'Valor Mercancía',c4_reg,c4_alt,a4,det4cif)}
 
           <!-- TOTAL DESEMBOLSO -->
@@ -9396,7 +9401,7 @@ function calc(){
           <tbody>
             <tr style="background:rgba(63,185,80,.04)"><td style="font-weight:600">Valor Mercancía (${termino})</td><td class="tr" style="font-weight:700">${fmt(sc1_base)}</td><td class="tr" style="font-weight:700">${fmt(compar==='cifexp'?sc2_base:sc3_mercHomol)}</td><td class="tr" style="color:var(--muted2)">${compar==='cifexp'?'=':'Homologado'}</td></tr>
             <tr><td class="tm">Arancel</td><td class="tr" style="color:var(--red-l)">${fmt(sc1_arancel)}</td><td class="tr" style="color:${sc2pcolor}">${fmt(compar==='cifexp'?sc2_arancel:0)}</td><td class="tr" style="color:var(--green-l)">${fmt(sc1_arancel-(compar==='cifexp'?sc2_arancel:0))}</td></tr>
-            <tr><td class="tm">Honorarios / Comisión</td><td class="tr">${fmt(sc1_hon)}</td><td class="tr">${fmt(compar==='cifexp'?sc2_hon:sc3_comision)}</td><td class="tr" style="color:var(--orange-l)">${fmt(sc1_hon-(compar==='cifexp'?sc2_hon:sc3_comision))}</td></tr>
+            <tr><td class="tm">Honorarios</td><td class="tr">${fmt(sc1_hon)}</td><td class="tr">${fmt(compar==='cifexp'?sc2_hon:sc3_comision)}</td><td class="tr" style="color:var(--orange-l)">${fmt(sc1_hon-(compar==='cifexp'?sc2_hon:sc3_comision))}</td></tr>
             <tr><td class="tm" style="color:var(--blue-l)">Master Value (no pagado)</td><td class="tr" style="color:var(--muted2)">—</td><td class="tr" style="color:var(--blue-l)">${fmt(altMV)}</td><td class="tr" style="color:var(--muted2)">Puente</td></tr>
             <tr style="font-weight:600"><td>Total No Mercancía</td><td class="tr" style="color:var(--green-l)">${fmt(sc1_noMerc)}</td><td class="tr" style="color:${sc2pcolor}">${fmt(altNoMerc)}</td><td class="tr" style="color:var(--muted2)">=$0 ✓</td></tr>
             <tr><td class="tm">ITBMS (Otros Gastos)</td><td class="tr" style="color:var(--muted2)">${fmt(sc1_itbms_total)}</td><td class="tr" style="color:var(--muted2)">${fmt(altItbms)}</td><td class="tr" style="color:var(--green-l)">${fmt(sc1_itbms_total-altItbms)}</td></tr>
@@ -10607,7 +10612,7 @@ function calcSab2(){
             <!-- 4 Criterios colapsados -->
             ${criterioRow(1,'Impuestos',c1_reg,c1_sab,a1,det1)}
             ${criterioRow(2,'Gastos Origen / Destino',c2_reg,c2_sab,a2,det2)}
-            ${criterioRow(3,'Honorarios / Comisión',c3_reg,c3_sab,a3,det3)}
+            ${criterioRow(3,'Honorarios',c3_reg,c3_sab,a3,det3)}
             ${criterioRow(4,'Valor Mercancía',c4_reg,c4_sab,a4,det4)}
 
             <!-- TOTAL DESEMBOLSO -->
@@ -11333,7 +11338,7 @@ function exportCSV(){
       ['Concepto','Escenario Regular','Escenario Cif Express','Sababa Imports (#3)'],
       ['Valor Mercancía',f(sc1.base),f(sc2.base),f(sc3.mercHomol||sc3.base)],
       ['Arancel / Impuestos',f(sc1.arancel),'Exonerado','Exonerado'],
-      ['Honorarios / Comisión',f(sc1.hon),f(sc2.hon),f(sc3.comision)],
+      ['Honorarios',f(sc1.hon),f(sc2.hon),f(sc3.comision)],
       ['Flete',f(sc1.noMerc-sc1.arancel-sc1.hon-(sc1.tasa||0)-(sc1.form1||0)-sc1.acarreo-sc1.dmce-sc1.agente),f(0),f(sc3.flete)],
       ['Master Value (no pagado)','—',f(sc2.mv),f(sc3.mv)],
       ['Total No Mercancía',f(sc1.noMerc),f(sc2.noMerc),f(sc3.noMerc)],
@@ -11549,7 +11554,7 @@ function renderComparativo(data){
             ${row('Valor Mercancía ('+s.termino+')',f(sc1.base),f(sc2.base),sc3.mercHomol>0?f(sc3.mercHomol)+' ✓':f(sc1.base),true,'var(--green-l)','var(--blue-l)','var(--orange-l)')}
             <tr><td colspan="4" style="background:var(--s2);font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;padding:6px 14px">Costo No Mercancía</td></tr>
             ${row('Arancel ('+((s.arPct||0)*100).toFixed(2)+'%)',f(sc1.arancel),sc2.exon?'Exonerado':f(sc2.arancel),'Exonerado',false,'var(--red-l)','var(--muted2)','var(--muted2)')}
-            ${row('Honorarios / Comisión',f(sc1.hon),f(sc2.hon),f(sc3.comision))}
+            ${row('Honorarios',f(sc1.hon),f(sc2.hon),f(sc3.comision))}
             ${row('Flete',f(sc1.base===s.CIF?0:s.flete||0),f(sc2.base===s.CIF?0:s.flete||0),f(sc3.flete))}
             ${sc1.acarreo>0?row('Acarreo',f(sc1.acarreo),'—','—'):''}
             ${sc1.dmce>0?row('DMCE / Otros',f(sc1.dmce),'—','—'):''}
@@ -12089,27 +12094,20 @@ window._hfToggleMes = function(hId, bId){
 
 // Toggle para renderTend — usa patrón de IDs con sufijo -hd / -body / -chev
 window._hfToggleMes2 = function(hd){
-  var baseId = hd.id.replace(/-hd$/, '');
-  var body = document.getElementById(baseId+'-body');
-  var chev = document.getElementById(baseId+'-chev');
+  var body = hd.nextElementSibling;
+  var chev = hd.querySelector('span[id$="-chev"]');
   if(!body) return;
   var open = body.style.display !== 'none';
   body.style.display = open ? 'none' : 'block';
   if(chev) chev.textContent = open ? '▶' : '▼';
 };
 
-// Event listener delegado para data-hftoggle (más robusto que onclick inline)
-document.addEventListener('click', function(e){
-  var el = e.target.closest('[data-hftoggle]');
-  if(!el) return;
-  var bodyId = el.getAttribute('data-hftoggle');
-  var body = document.getElementById(bodyId);
-  if(!body) return;
-  var open = body.style.display === 'none';
-  body.style.display = open ? 'block' : 'none';
-  var chev = el.querySelector('.hf-mes-chev,.hf-anio-chev');
-  if(chev) chev.textContent = open ? '▼' : '▶';
-});
+// NOTA (jul-2026): el listener delegado en document que vivía aquí fue eliminado.
+// Duplicaba el trabajo del listener local (el.onclick) asignado en el punto de
+// renderizado de cada acordeón año/mes — con ambos activos, un solo clic disparaba
+// los dos handlers en cascada (bubbling) y el segundo revertía lo que acababa de
+// hacer el primero (abre→cierra en el mismo clic). Ese era el bug de "hay que
+// tocar varias veces para que el desplegable abra".
 
 // ══════════════════════════════════════════════════════════════
 // REGLA DE NEGOCIO — Supabase es la única fuente de verdad.
@@ -12355,7 +12353,7 @@ function _corregirFechaUI(idx){
 // ══════════════════════════════════════════════════════════════
 var _RUBRO_LABELS_FIX = {
   liquidacion:'🏛️ Liquidación / Pago Arancelario', itbms:'🧾 ITBMS', tasa:'💵 Tasa Aduana',
-  honorarios:'💼 Honorarios / Comisión', acarreo:'🚛 Acarreo / Transporte', gastos_destino:'📦 Gastos Origen / Destino',
+  honorarios:'💼 Honorarios', acarreo:'🚛 Acarreo / Transporte', gastos_destino:'📦 Gastos Origen / Destino',
   flete:'🚢 Flete Internacional', flete_sababa:'🔗 Flete Sababa (reconciliación)', uso_sistema:'💻 Uso del Sistema (SIGA/SICE)',
   seguro:'🛡️ Seguro (informativo)', almacenaje:'🏪 Almacenaje', inspeccion:'🔍 Inspección / Reconocimiento',
   otro_no_gravado:'💰 Otro Costo No Gravado (Master Value)',
@@ -12391,10 +12389,12 @@ function _corregirRubroUI(idx){
   var _ciudadInit = d.ciudad || _campD.s1_ciudad_emb || '';
   if(!_paisInit && tipoActual==='ZL'){ _paisInit='Panamá'; _ciudadInit=_ciudadInit||'Zona Libre de Colón'; }
   var _PAISES_FULL = [
-    ['Alemania','🇩🇪 Alemania'],['Bangladesh','🇧🇩 Bangladesh'],['Brasil','🇧🇷 Brasil'],['China','🇨🇳 China'],
-    ['Colombia','🇨🇴 Colombia'],['Espana','🇪🇸 España'],['India','🇮🇳 India'],['Indonesia','🇮🇩 Indonesia'],
-    ['Italia','🇮🇹 Italia'],['Japan','🇯🇵 Japón'],['Korea','🇰🇷 Corea del Sur'],['Malasia','🇲🇾 Malasia'],
-    ['Mexico','🇲🇽 México'],['Pakistan','🇵🇰 Pakistán'],['Portugal','🇵🇹 Portugal'],['Puerto Rico','🇵🇷 Puerto Rico'],
+    ['Alemania','🇩🇪 Alemania'],['Bangladesh','🇧🇩 Bangladesh'],['Brasil','🇧🇷 Brasil'],['Canada','🇨🇦 Canadá'],
+    ['China','🇨🇳 China'],['Colombia','🇨🇴 Colombia'],['Costa Rica','🇨🇷 Costa Rica'],['Espana','🇪🇸 España'],
+    ['El Salvador','🇸🇻 El Salvador'],['Guatemala','🇬🇹 Guatemala'],['Honduras','🇭🇳 Honduras'],['Hong Kong','🇭🇰 Hong Kong'],
+    ['India','🇮🇳 India'],['Indonesia','🇮🇩 Indonesia'],['Italia','🇮🇹 Italia'],['Japan','🇯🇵 Japón'],
+    ['Korea','🇰🇷 Corea del Sur'],['Malasia','🇲🇾 Malasia'],['Mexico','🇲🇽 México'],['Nicaragua','🇳🇮 Nicaragua'],
+    ['Pakistan','🇵🇰 Pakistán'],['Portugal','🇵🇹 Portugal'],['Puerto Rico','🇵🇷 Puerto Rico'],
     ['Tailandia','🇹🇭 Tailandia'],['Taiwan','🇹🇼 Taiwán'],['Turkey','🇹🇷 Turquía'],['USA','🇺🇸 Estados Unidos'],
     ['Vietnam','🇻🇳 Vietnam'],['Otro','🌐 Otro']
   ];
@@ -12410,9 +12410,12 @@ function _corregirRubroUI(idx){
         +'<select id="_fix_origen_ciudad" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:7px;padding:8px 10px;color:var(--text);font-size:12px">'+optsZL+'</select>'
         +'</div></div>';
     }
-    var optsPais = _PAISES_FULL.map(function(p){ return '<option value="'+p[0]+'"'+(p[0]===paisSel?' selected':'')+'>'+p[1]+'</option>'; }).join('');
-    if(paisSel && !_PAISES_FULL.some(function(p){return p[0]===paisSel;})) optsPais += '<option value="'+paisSel.replace(/"/g,'&quot;')+'" selected>'+paisSel+'</option>';
-    var ciudadesPais = (window._CIUDADES_POR_PAIS && window._CIUDADES_POR_PAIS[paisSel]) || [];
+    var _paisSelNorm = _sinAcentos(paisSel||'').toLowerCase();
+    var _paisMatch = _PAISES_FULL.find(function(p){ return _sinAcentos(p[0]).toLowerCase()===_paisSelNorm; });
+    var optsPais = _PAISES_FULL.map(function(p){ return '<option value="'+p[0]+'"'+((_paisMatch?p[0]===_paisMatch[0]:p[0]===paisSel)?' selected':'')+'>'+p[1]+'</option>'; }).join('');
+    if(paisSel && !_paisMatch) optsPais += '<option value="'+paisSel.replace(/"/g,'&quot;')+'" selected>'+paisSel+'</option>';
+    var _ciudadesKey = _paisMatch ? _paisMatch[0] : paisSel;
+    var ciudadesPais = (window._CIUDADES_POR_PAIS && (window._CIUDADES_POR_PAIS[_ciudadesKey]||window._CIUDADES_POR_PAIS[paisSel])) || [];
     var optsCiudad = ciudadesPais.map(function(c){ return '<option value="'+c+'"'+(c===ciudadSel?' selected':'')+'>'+c+'</option>'; }).join('');
     if(ciudadSel && ciudadesPais.indexOf(ciudadSel)===-1) optsCiudad += '<option value="'+ciudadSel.replace(/"/g,'&quot;')+'" selected>'+ciudadSel+'</option>';
     optsCiudad += '<option value="__otro__">✏️ Otra (escribir)…</option>';
@@ -13772,6 +13775,12 @@ function _tendSubtab(sec, btn){
     staticTopprov.style.display = (sec === 'topprov') ? '' : 'none';
     if(sec === 'topprov' && typeof renderTopProvs === 'function') setTimeout(function(){ renderTopProvs(); }, 0);
   }
+  // Historial de Embarques Procesados — antes se mostraba SIEMPRE sin importar
+  // la pestaña; ahora vive únicamente dentro de "Ahorro y Costeo de Embarque".
+  var staticHistProc = scope.querySelector('#_tend-static-histproc');
+  if(staticHistProc){
+    staticHistProc.style.display = (sec === 'costos') ? '' : 'none';
+  }
   // Historial de Proveedores real (con filtros/export) — se carga dentro de la pestaña.
   if(sec === 'histprov' && typeof renderHistProv === 'function'){
     setTimeout(renderHistProv, 0);
@@ -14735,6 +14744,7 @@ function _showProcessingOverlay(nro, desc, cif, ahorro, landedVal, factorVal, on
       var chev = (histBody.closest('[id]') || document).querySelector('.hist-chev');
       if(chev) chev.textContent = '▼';
     }
+    if(histBody && typeof renderTend==='function') renderTend(histBody);
     if(nro){
       setTimeout(function(){
         var searchRoot = document.getElementById('tab-modal-body') || document;
@@ -15368,7 +15378,7 @@ function verTres3(){
             ${tr('Tasa Aduana',f(sc1.tasa||0),f(d2_tasa),dash)}
             ${tr('ITBMS s/Tasa',f(sc1.itbmsTasaFinal||0),f(d2_itbms_t),dash)}
             ${tr('Uso de Sistema',f(sc1.form1||0),f(d2_uso),dash)}
-            ${secHd('Honorarios / Comisión')}
+            ${secHd('Honorarios')}
             ${tr('Honorarios Corredor / Comisión Sababa',
               f(d1_hon), f(d2_hon),
               sc3OK?`<div style="color:#f08632;font-weight:700;font-size:13px">${f(comBruta)}<br><span style="font-size:9px;font-weight:400;color:#8b949e">(${pctComBruta} s/total pago)</span></div>
@@ -15866,7 +15876,33 @@ function _toggleCandadoMes(ym){
   if(typeof renderTend==='function') renderTend();
 }
 
-function renderTend(){
+function _toggleHistAcordeonMain(hdr){
+  var b = hdr.parentElement.querySelector('#tend-hist-body');
+  if(!b) b = document.getElementById('tend-hist-body');
+  var c = hdr.querySelector('.hist-chev');
+  if(!b) return;
+  var o = b.style.display==='none';
+  b.style.display = o ? 'block' : 'none';
+  if(c) c.textContent = o ? '▼' : '▶';
+  if(o && typeof renderTend==='function'){
+    try{
+      renderTend(b);
+    }catch(e){
+      console.error('renderTend (historial acordeón):', e);
+      var _th = b.querySelector('#tend-hist');
+      if(_th){
+        var _msg = (e && e.message) ? e.message : String(e);
+        var _errDiv = document.createElement('div');
+        _errDiv.style.cssText = 'text-align:center;padding:24px;color:var(--red-l);font-size:11px';
+        _errDiv.textContent = '⚠ Error al cargar el historial: ' + _msg;
+        _th.innerHTML = '';
+        _th.appendChild(_errDiv);
+      }
+    }
+  }
+}
+
+function renderTend(_scopeEl){
   // ── FIX (jul-2026): se quitó el "auto-aplicar último mes guardado" que
   //    corría una sola vez por sesión y escribía silenciosamente una fecha
   //    Desde/Hasta en los filtros (tomada de una preferencia guardada en
@@ -15883,14 +15919,7 @@ function renderTend(){
   const _modalBody = document.getElementById('tab-modal-body');
   const canvas = (_modalBody && _modalBody.querySelector('#tend-canvas')) || document.getElementById('tend-canvas');
   const emptyEl = (_modalBody && _modalBody.querySelector('#tend-empty')) || document.getElementById('tend-empty');
-  const _getEl = id => {
-    var _all = document.querySelectorAll('#'+id);
-    if(_all.length>1){
-      var _vis = Array.from(_all).find(function(e){ return e.offsetParent!==null; });
-      if(_vis) return _vis;
-    }
-    return (_modalBody && _modalBody.querySelector('#'+id)) || document.getElementById(id);
-  };
+  const _getEl = id => (_modalBody && _modalBody.querySelector('#'+id)) || document.getElementById(id);
   if(!filteredData.length){
     if(emptyEl) emptyEl.style.display='flex';
     if(canvas) canvas.style.display='none';
@@ -16078,7 +16107,7 @@ function renderTend(){
       const difBadge = _difMonto ? `<span title="El Costo Inventario actual difiere del histórico guardado al procesar — revisa con 🏷️" style="background:rgba(248,81,73,.15);border:1px solid rgba(248,81,73,.4);border-radius:3px;padding:0 4px;font-size:8px;font-weight:800;color:#f85149;cursor:help">⚠️ Dif: ${_difMonto>0?'+':''}${window._fmtMoney(_difMonto)}</span>` : '';
       const _rowYm = (d.fecha||'').slice(0,7);
       const _mesEditable = !(window._mesesBloqueados||new Set()).has(_rowYm);
-      return `<div style="display:grid;grid-template-columns:auto 1fr auto auto auto;gap:8px;align-items:center;padding:9px 14px;border-bottom:1px solid rgba(48,54,61,.4);cursor:pointer;transition:background .15s${(isPend||isParcial)?';border-left:3px solid '+(isPend?'var(--orange-l)':'var(--blue-l)'):''}" onclick="if(event.target.classList.contains('del-btn')||event.target.classList.contains('btn-reabrir')){return;}abrirModuloComparativo_idx(${idx})" onmouseover="this.style.background='rgba(255,255,255,.03)'" onmouseout="this.style.background=''">
+      return `<div style="display:grid;grid-template-columns:auto 1fr auto auto auto;gap:8px;align-items:center;padding:9px 14px;border-bottom:1px solid rgba(48,54,61,.4);cursor:pointer;transition:background .15s${(isPend||isParcial)?';border-left:3px solid '+(isPend?'var(--orange-l)':'var(--blue-l)'):''}" onclick="if(event.target.classList.contains('del-btn')||event.target.classList.contains('btn-reabrir')){return;}abrirModuloComparativo_idx(${idx})" onmouseenter="this.style.background='rgba(255,255,255,.03)'" onmouseleave="this.style.background=''">
         <div style="font-size:10px;font-weight:700;color:${nroColor};white-space:nowrap">${d.nro||'—'} ${unicoBadge} ${difBadge}</div>
         <div><div style="font-size:12px;font-weight:500;color:var(--text)">${d.desc}${isPend?'&nbsp;<span class="badge-pendiente">🟡 PENDIENTE</span>':''}${d.status==='parcial'?'&nbsp;<span style="background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:3px;padding:1px 5px;font-size:9px;font-weight:700">🚢 PARCIAL</span>':''}</div><div style="font-size:10px;color:var(--muted);display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-top:2px">${d.fecha} · ${d.esc||''}&nbsp;<span style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:var(--blue-l)">${viaIco} ${viaLabel}</span>${d.tramiteTipo?`<span style="background:${tramiteBg};border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:${tramiteColor}">${d.tramiteTipo}</span>`:''}${d.lugarRecep?`<span style="background:rgba(45,212,191,.1);border:1px solid rgba(45,212,191,.25);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:#2dd4bf">🏭 ${d.lugarRecep}</span>`:''}
 </div></div>
@@ -16266,7 +16295,7 @@ function renderTend(){
         const _mesEditable = !_bloqueado;
         const _difMonto2 = typeof _getDiferencia==='function' ? _getDiferencia(d) : 0;
         const difBadge2 = _difMonto2 ? `<span title="El Costo Inventario actual difiere del histórico guardado al procesar — revisa con 🏷️" style="background:rgba(248,81,73,.15);border:1px solid rgba(248,81,73,.4);border-radius:3px;padding:0 4px;font-size:8px;font-weight:800;color:#f85149;cursor:help">⚠️ Dif: ${_difMonto2>0?'+':''}${window._fmtMoney(_difMonto2)}</span>` : '';
-        histHtml+=`<div style="display:grid;grid-template-columns:auto 1fr auto auto auto;gap:8px;align-items:center;padding:9px 14px 9px 42px;border-top:1px solid rgba(48,54,61,.3);cursor:pointer;transition:background .15s${isPend?';border-left:3px solid var(--orange-l)':''}" onclick="if(event.target.classList.contains('del-btn')||event.target.classList.contains('btn-reabrir')){return;}abrirModuloComparativo_idx(${idx})" onmouseover="this.style.background='rgba(255,255,255,.03)'" onmouseout="this.style.background=''">
+        histHtml+=`<div style="display:grid;grid-template-columns:auto 1fr auto auto auto;gap:8px;align-items:center;padding:9px 14px 9px 42px;border-top:1px solid rgba(48,54,61,.3);cursor:pointer;transition:background .15s${isPend?';border-left:3px solid var(--orange-l)':''}" onclick="if(event.target.classList.contains('del-btn')||event.target.classList.contains('btn-reabrir')){return;}abrirModuloComparativo_idx(${idx})" onmouseenter="this.style.background='rgba(255,255,255,.03)'" onmouseleave="this.style.background=''">
           <div style="font-size:10px;font-weight:700;color:var(--orange-l);white-space:nowrap">${d.nro||'—'} ${difBadge2}</div>
           <div>
             <div style="font-size:12px;font-weight:500;color:var(--text)">${d.desc}${isPend?'&nbsp;<span class="badge-pendiente">🟡 PENDIENTE</span>':''}</div>
@@ -16362,7 +16391,7 @@ function renderHistProv(){
       <select id="hp-rubro" onchange="_renderHistProvList()" style="background:var(--s2);border:1px solid var(--border);border-radius:7px;padding:7px 8px;color:var(--text);font-size:11px;display:none">
         <option value="">Rubro: Todos</option>
         <option value="flete">🚢 Flete</option>
-        <option value="honorarios">💼 Honorarios / Comisión</option>
+        <option value="honorarios">💼 Honorarios</option>
         <option value="acarreo">📦 Acarreo / Gastos Origen</option>
         <option value="itbms">🧾 ITBMS</option>
         <option value="mv">💰 Master Value</option>
@@ -16783,7 +16812,7 @@ function _fdMostrarDialogoUso(input, lineIdx, f){
   // Estado local de rubros a asignar
   window._fdRubrosAsignar = [{rubro: tipoInicial, monto: montoInicial, lineIdx: lineIdx}];
 
-  var _RUBRO_LABELS = {liquidacion:'🏛️ Liquidación / Pago Arancelario',itbms:'🧾 ITBMS',tasa:'💵 Tasa / Uso del Sistema',honorarios:'💼 Honorarios / Comisión',acarreo:'🚛 Acarreo / Transporte',gastos_destino:'📦 Gasto Origen/Destino',flete:'🚢 Flete Internacional',uso_sistema:'💻 Uso del Sistema',seguro:'🛡️ Seguro de Carga',almacenaje:'🏪 Almacenaje',inspeccion:'🔍 Inspección',dmce:'📝 DMCE',otros:'📋 Otros Gastos'};
+  var _RUBRO_LABELS = {liquidacion:'🏛️ Liquidación / Pago Arancelario',itbms:'🧾 ITBMS',tasa:'💵 Tasa / Uso del Sistema',honorarios:'💼 Honorarios',acarreo:'🚛 Acarreo / Transporte',gastos_destino:'📦 Gasto Origen/Destino',flete:'🚢 Flete Internacional',uso_sistema:'💻 Uso del Sistema',seguro:'🛡️ Seguro de Carga',almacenaje:'🏪 Almacenaje',inspeccion:'🔍 Inspección',dmce:'📝 DMCE',otros:'📋 Otros Gastos'};
   var rubrosOpts = Object.entries(_RUBRO_LABELS).map(function(e){ return '<option value="'+e[0]+'">'+e[1]+'</option>'; }).join('');
 
   function _renderRubroRows(){
@@ -17016,6 +17045,32 @@ function _plntSesionSet(arr){
 function _plntSesionAdd(id){
   var arr = _plntSesionGet();
   if(arr.indexOf(id)===-1){ arr.push(id); _plntSesionSet(arr); }
+}
+// ── FIX (jul-2026): registrar automáticamente el uso real de las plantillas
+//    aplicadas en esta sesión de formulario, en el momento en que el
+//    embarque de verdad se guarda (procesarEmbarque → _guardarYRecargar).
+//    Antes _plntSesionAdd() guardaba la intención pero nada la consumía,
+//    así que las plantillas se quedaban "disponibles" para siempre aunque
+//    ya se hubieran usado para procesar un embarque real. ──
+async function _plntConsumirSesion(nroEmbarque){
+  try{
+    var ids = _plntSesionGet();
+    if(!ids || !ids.length || !nroEmbarque) return;
+    var arr = await _plntLoad();
+    var cambiado = false;
+    ids.forEach(function(id){
+      var p = arr.find(function(x){ return x.id===id; });
+      if(!p) return;
+      p.usos = p.usos||[];
+      var yaRegistrado = p.usos.some(function(u){ return (u.embarque||'').trim().toUpperCase()===String(nroEmbarque).trim().toUpperCase(); });
+      if(!yaRegistrado){
+        p.usos.push({embarque:String(nroEmbarque).trim(), fecha:new Date().toISOString(), manual:false, auto:true});
+        cambiado = true;
+      }
+    });
+    if(cambiado) await _plntSave(arr);
+    _plntSesionSet([]); // limpiar — ya quedaron vinculadas a este embarque
+  }catch(e){ console.warn('plantilla auto-consumo:', e.message); }
 }
 
 async function _plntLoad(){
@@ -18727,7 +18782,7 @@ function _kpiMostrarAhorro(){
     '</tr>'+
 
     // C3 Honorarios
-    sectionHdr('3 · Honorarios / Comisión')+
+    sectionHdr('3 · Honorarios')+
     '<tr>'+
       labelCell('👔 Honorarios corredor vs comisión elegida','','Sababa 3.70% neto · CIF 3% + ITBMS sobre monto gravado')+
       vCell(cif.c3,cif.c3>=0?'var(--blue-l)':'var(--red-l)',false,'11')+
@@ -19763,13 +19818,13 @@ function renderDashboardKPIs(data){
     </div>
 
     <!-- SUB-PESTAÑAS: Departamento / Origen / Costos — todo sujeto a los mismos filtros de arriba -->
-    <div style="display:flex;gap:6px;margin-bottom:14px;border-bottom:1px solid var(--border);padding-bottom:0;flex-wrap:wrap">
-      <button onclick="_tendSubtab('depto',this)" class="_tend-subtab-btn" data-sec="depto" style="background:none;border:none;border-bottom:2px solid var(--blue-l);color:var(--blue-l);padding:8px 4px;font-size:12px;font-weight:700;cursor:pointer;margin-right:14px">📦 Departamento</button>
-      <button onclick="_tendSubtab('origen',this)" class="_tend-subtab-btn" data-sec="origen" style="background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);padding:8px 4px;font-size:12px;font-weight:700;cursor:pointer;margin-right:14px">🌍 Origen</button>
-      <button onclick="_tendSubtab('costos',this)" class="_tend-subtab-btn" data-sec="costos" style="background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);padding:8px 4px;font-size:12px;font-weight:700;cursor:pointer;margin-right:14px">💰 Costos y Ahorro</button>
-      <button onclick="_tendSubtab('topprov',this)" class="_tend-subtab-btn" data-sec="topprov" style="background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);padding:8px 4px;font-size:12px;font-weight:700;cursor:pointer;margin-right:14px">🏆 Top 10 Proveedores</button>
-      <button onclick="iniciarApp('histprovs')" class="_tend-subtab-btn" data-sec="histprov" style="background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);padding:8px 4px;font-size:12px;font-weight:700;cursor:pointer">📜 Historial Proveedores ↗</button>
-      <button onclick="renderHistFact()" style="background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.3);color:#a855f7;border-radius:8px;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer;margin-left:14px">📋 Historial Embarques</button>
+    <div style="display:flex;gap:6px;margin-bottom:14px;border-bottom:1px solid var(--border);padding-bottom:0;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none">
+      <button onclick="_tendSubtab('depto',this)" class="_tend-subtab-btn" data-sec="depto" style="background:none;border:none;border-bottom:2px solid var(--blue-l);color:var(--blue-l);padding:8px 4px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0;white-space:nowrap;margin-right:14px">📦 Departamento</button>
+      <button onclick="_tendSubtab('origen',this)" class="_tend-subtab-btn" data-sec="origen" style="background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);padding:8px 4px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0;white-space:nowrap;margin-right:14px">🌍 Origen</button>
+      <button onclick="_tendSubtab('costos',this)" class="_tend-subtab-btn" data-sec="costos" style="background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);padding:8px 4px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0;white-space:nowrap;margin-right:14px">💰 Ahorro y Costeo de Embarque</button>
+      <button onclick="_tendSubtab('topprov',this)" class="_tend-subtab-btn" data-sec="topprov" style="background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);padding:8px 4px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0;white-space:nowrap;margin-right:14px">🏆 Top 10 Proveedores</button>
+      <button onclick="iniciarApp('histprovs')" class="_tend-subtab-btn" data-sec="histprov" style="background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);padding:8px 4px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0;white-space:nowrap">📜 Historial Proveedores ↗</button>
+      <button id="_btn-histfact" onclick="renderHistFact()" class="_tend-subtab-btn" style="background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);padding:8px 4px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0;white-space:nowrap">📋 Historial Embarques</button>
     </div>
 
     <div id="_tend-sec-depto" class="_tend-sec">
@@ -19939,7 +19994,7 @@ function _renderGastosNoMerc(all){
   const rubros = {
     flete:       { label:'Flete Internacional',     icon:'🚢', color:'var(--orange-l)', total:0 },
     gastos_orig: { label:'Gastos Origen y Destino', icon:'🌐', color:'var(--blue-l)',   total:0 },
-    honorarios:  { label:'Honorarios / Comisión',   icon:'👔', color:'#a855f7',         total:0,
+    honorarios:  { label:'Honorarios',   icon:'👔', color:'#a855f7',         total:0,
                    subs:{
                      cifExon:0, cifLiq:0, unico:0,
                      sababaHomol:0, sababaLiq:0, otros:0
@@ -19961,7 +20016,7 @@ function _renderGastosNoMerc(all){
   const ahorroRubros = {
     impuestos:  { label:'Criterio 1 — Impuestos',             icon:'🏛️', color:'var(--green-l)', ahorro:0 },
     gastos:     { label:'Criterio 2 — Gastos Origen/Destino', icon:'🚚', color:'var(--blue-l)',  ahorro:0 },
-    honorarios: { label:'Criterio 3 — Honorarios / Comisión', icon:'👔', color:'#a855f7',        ahorro:0 },
+    honorarios: { label:'Criterio 3 — Honorarios', icon:'👔', color:'#a855f7',        ahorro:0 },
     mercancia:  { label:'Criterio 4 — Valor Mercancía',       icon:'📦', color:'var(--muted)',   ahorro:0 },
   };
 
@@ -20317,7 +20372,7 @@ function _renderGastosNoMerc(all){
         const uid = '_hon_detail_'+Date.now();
         return `<div>
           <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;border-bottom:1px solid rgba(48,54,61,.3);cursor:pointer;user-select:none"
-               onclick="var d=document.getElementById('${uid}');var c=this.querySelector('.hc');if(d.style.display==='none'){d.style.display='block';c.textContent='▼';}else{d.style.display='none';c.textContent='▶';}">
+               onclick="var d=this.nextElementSibling;var c=this.querySelector('.hc');if(d.style.display==='none'){d.style.display='block';c.textContent='▼';}else{d.style.display='none';c.textContent='▶';}">
             <div style="display:flex;align-items:center;gap:8px">
               <span style="font-size:13px">${r.icon}</span>
               <span style="font-size:12px;color:var(--text)">${r.label}</span>
@@ -20343,7 +20398,7 @@ function _renderGastosNoMerc(all){
         ].filter(Boolean).join('');
         return `<div>
           <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;border-bottom:1px solid rgba(48,54,61,.3);cursor:pointer;user-select:none"
-               onclick="var d=document.getElementById('${uid4}');var c=this.querySelector('.tc4');if(d.style.display==='none'){d.style.display='block';c.textContent='▼';}else{d.style.display='none';c.textContent='▶';}">
+               onclick="var d=this.nextElementSibling;var c=this.querySelector('.tc4');if(d.style.display==='none'){d.style.display='block';c.textContent='▼';}else{d.style.display='none';c.textContent='▶';}">
             <div style="display:flex;align-items:center;gap:8px">
               <span style="font-size:13px">🏛️</span>
               <span style="font-size:12px;color:var(--text)">Tesoro Nacional (Costeable)</span>
@@ -23062,14 +23117,20 @@ function renderHistFact(){
   el.innerHTML = html;
 
   // Toggle mes/año — listener en el contenedor
-  el.addEventListener('click', function(e){
+  // FIX (jul-2026): antes era addEventListener, que se acumulaba en cada
+  // llamada de renderHistFact() (cada vez que se visitaba esta pantalla se
+  // sumaba un listener más). Con 2+ listeners idénticos en el mismo click,
+  // el segundo revertía lo que hizo el primero (abre→cierra en el mismo
+  // click) y el acordeón parecía "no responder" para todo lo que no fuera
+  // la primera apertura de la sesión. .onclick= reemplaza siempre, nunca acumula.
+  el.onclick = function(e){
     // Buscar el elemento con data-hftoggle subiendo hasta 5 niveles
     var target = e.target;
     for(var i=0; i<5; i++){
       if(!target || target === el) break;
       if(target.hasAttribute && target.hasAttribute('data-hftoggle')){
         var bodyId = target.getAttribute('data-hftoggle');
-        var body = document.getElementById(bodyId);
+        var body = el.querySelector('#'+bodyId) || document.getElementById(bodyId);
         if(body){
           var isHidden = body.style.display === 'none' || body.style.display === '';
           body.style.display = isHidden ? 'block' : 'none';
@@ -23080,7 +23141,7 @@ function renderHistFact(){
       }
       target = target.parentElement;
     }
-  });
+  };
 }
 function _toggleHF(uid){
   const b=document.getElementById(uid); if(b) b.classList.toggle('open');
@@ -25222,7 +25283,7 @@ function renderInvLines(){
   const fmt=n=>'$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
   const tipoColors={liquidacion:'rgba(248,81,73,.15)',itbms:'rgba(88,166,255,.15)',tasa:'rgba(210,153,34,.15)',flete:'rgba(240,136,62,.15)',flete_sababa:'rgba(163,113,247,.15)',acarreo:'rgba(210,153,34,.15)',gastos_destino:'rgba(99,179,237,.15)',honorarios:'rgba(168,85,247,.15)',uso_sistema:'rgba(63,185,80,.15)',seguro:'rgba(88,166,255,.1)',almacenaje:'rgba(240,136,62,.1)',inspeccion:'rgba(248,81,73,.1)',dmce:'rgba(139,148,158,.15)',gastos:'rgba(139,148,158,.15)',otros:'rgba(139,148,158,.15)',otro_no_gravado:'rgba(210,153,34,.15)'};
   const tipoIcons={liquidacion:'🏛️',itbms:'🧾',tasa:'💵',flete:'🚢',flete_sababa:'🔗',acarreo:'🚛',gastos_destino:'📦',honorarios:'💼',uso_sistema:'💻',seguro:'🛡️',almacenaje:'🏪',inspeccion:'🔍',dmce:'📝',gastos:'📋',otros:'📋',otro_no_gravado:'💰'};
-  const tipoLabels={liquidacion:'Liquidación / Pago Arancelario',itbms:'ITBMS',tasa:'Tasa / Uso del Sistema',flete:'Flete Internacional',flete_sababa:'Flete Sababa (reconciliación)',acarreo:'Acarreo / Transporte',gastos_destino:'Gastos Destino / Origen',honorarios:'Honorarios / Comisión',uso_sistema:'Uso del Sistema (SIGA/SICE)',seguro:'Seguro de Carga',almacenaje:'Almacenaje',inspeccion:'Inspección / Reconocimiento',dmce:'DMCE',gastos:'Otros Gastos',otros:'Otros Gastos',otro_no_gravado:'Otro Costo No Gravado'};
+  const tipoLabels={liquidacion:'Liquidación / Pago Arancelario',itbms:'ITBMS',tasa:'Tasa / Uso del Sistema',flete:'Flete Internacional',flete_sababa:'Flete Sababa (reconciliación)',acarreo:'Acarreo / Transporte',gastos_destino:'Gastos Destino / Origen',honorarios:'Honorarios',uso_sistema:'Uso del Sistema (SIGA/SICE)',seguro:'Seguro de Carga',almacenaje:'Almacenaje',inspeccion:'Inspección / Reconocimiento',dmce:'DMCE',gastos:'Otros Gastos',otros:'Otros Gastos',otro_no_gravado:'Otro Costo No Gravado'};
   let gastosHTML;
   if(!gastoLines.length){
     gastosHTML = '<div style="text-align:center;padding:12px;color:var(--muted);font-size:11px">Calcula un embarque para ver los gastos de servicio auto-mapeados.</div>';
@@ -25542,6 +25603,9 @@ async function _guardarYRecargar(nombre){
   // Guardar siempre en localStorage primero
   try { localStorage.setItem('_tendData_v2', JSON.stringify(tendData||[])); } catch(e){}
 
+  // Vincular automáticamente cualquier plantilla usada en esta sesión con este embarque real
+  if(typeof _plntConsumirSesion==='function') _plntConsumirSesion(nombre);
+
   try {
     if(window._sb) await autoGuardarSupabase(nombre);
     // Update spinner to success
@@ -25575,7 +25639,7 @@ function _abrirSelectorRubro(callback){
     {val:'liquidacion', lbl:'🏛️ Liquidación / Pago Arancelario'},
     {val:'itbms',       lbl:'🧾 ITBMS'},
     {val:'tasa',        lbl:'💵 Tasa Aduana'},
-    {val:'honorarios',  lbl:'💼 Honorarios / Comisión'},
+    {val:'honorarios',  lbl:'💼 Honorarios'},
     {val:'acarreo',     lbl:'🚛 Acarreo / Transporte'},
     {val:'flete',       lbl:'🚢 Flete Internacional'},
     {val:'flete_sababa',lbl:'🔗 Flete Sababa (reconciliación)'},
@@ -28949,8 +29013,8 @@ function _modCompShowSnap(snap, nro, desc, fecha) {
             ${_tblRow('Tasa Aduana', _mf(D.ta), _mf(D.ta2), '—')}
             ${_tblRow('ITBMS s/Tasa', _mf(D.iT), _mf(D.iT2), '—')}
             ${_tblRow('Uso de Sistema', _mf(D.u1), _mf(D.u2), '—')}
-            ${_tblSec('Honorarios / Comisión')}
-            ${_tblRow3('Honorarios / Comisión Sababa',
+            ${_tblSec('Honorarios')}
+            ${_tblRow3('Honorarios Sababa',
               _mf(D.h1),
               _mf(D.h2)+'<div style="font-size:9px;color:#f08632">+ITBMS grav: '+_mf(D.iH2)+'</div>',
               '<span style="color:#f08632;font-weight:700">'+_mf(D.com)+'</span><div style="font-size:9px;color:#8b949e">ITBMS: '+_mf(D.itb3)+' | Neto: '+_mf(D.hNeto)+'</div>')}
@@ -29149,8 +29213,8 @@ body.theme-dark, body:not(.theme-light) {
         <tr><td>Tasa Aduana</td><td class="r">${_mf(D.ta)}</td><td class="r">${_mf(D.ta2)}</td><td class="r m">—</td></tr>
         <tr><td>ITBMS s/Tasa</td><td class="r">${_mf(D.iT)}</td><td class="r">${_mf(D.iT2)}</td><td class="r m">—</td></tr>
         <tr><td>Uso de Sistema</td><td class="r">${_mf(D.u1)}</td><td class="r">${_mf(D.u2)}</td><td class="r m">—</td></tr>
-        <tr class="sh"><td colspan="4">Honorarios / Comisión</td></tr>
-        <tr><td>Honorarios / Comisión Sababa</td><td class="r">${_mf(D.h1)}</td><td class="r">${_mf(D.h2)}<br><span class="o" style="font-size:9px">+ITBMS: ${_mf(D.iH2)}</span></td><td class="r o">${_mf(D.com)}<br><span class="m" style="font-size:9px">ITBMS: ${_mf(D.itb3)} | Neto: ${_mf(D.hNeto)}</span></td></tr>
+        <tr class="sh"><td colspan="4">Honorarios</td></tr>
+        <tr><td>Honorarios Sababa</td><td class="r">${_mf(D.h1)}</td><td class="r">${_mf(D.h2)}<br><span class="o" style="font-size:9px">+ITBMS: ${_mf(D.iH2)}</span></td><td class="r o">${_mf(D.com)}<br><span class="m" style="font-size:9px">ITBMS: ${_mf(D.itb3)} | Neto: ${_mf(D.hNeto)}</span></td></tr>
         <tr class="sh"><td colspan="4">Otros Gastos</td></tr>
         <tr><td>Acarreo</td><td class="r">${_mf(D.ac)}</td><td class="r m" style="font-size:9px">Incl. M.V.</td><td class="r m" style="font-size:9px">Incl. comisión</td></tr>
         <tr><td>DMCE / Otros</td><td class="r">${_mf(D.dm)}</td><td class="r m" style="font-size:9px">Incl. M.V.</td><td class="r m">—</td></tr>
