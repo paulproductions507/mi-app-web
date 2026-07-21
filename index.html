@@ -21,6 +21,20 @@ if('serviceWorker' in navigator){
     navigator.serviceWorker.register('./sw.js').catch(()=>{});
   });
 }
+// Chevron ▶/▼ para todos los <details class="acc-native"> — un solo listener
+// global en fase de captura (el evento 'toggle' de <details> no burbujea),
+// así que no hace falta id ni onclick por acordeón: el navegador maneja el
+// abrir/cerrar de forma 100% nativa, inmune a duplicados de id o al clonado
+// del modal de Tendencias.
+if(!window._accNativeBound){
+  window._accNativeBound = true;
+  document.addEventListener('toggle', function(e){
+    var det = e.target;
+    if(!det || !det.classList || !det.classList.contains('acc-native')) return;
+    var chev = det.querySelector(':scope > summary .acc-chev');
+    if(chev) chev.textContent = det.open ? '▼' : '▶';
+  }, true);
+}
 </script>
 <title>Gestión Integral de Compras y Costeo — ZLC Panamá</title>
 <script>
@@ -41,6 +55,11 @@ if('serviceWorker' in navigator){
 </script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
+
+/* ── Acordeones nativos <details>/<summary> (acc-native) ── */
+.acc-native > summary{list-style:none;}
+.acc-native > summary::-webkit-details-marker{display:none;}
+.acc-native > summary::marker{content:'';display:none;}
 
 /* ── Enterprise Typography (Inter + IBM Plex) ── */
 h1,h2,h3,h4,h5,h6 {
@@ -75,6 +94,9 @@ h1,h2,h3,h4,h5,h6 {
   --red:#da3633; --red-l:#f85149; --red-dim:rgba(218,54,51,.1);
   --text:#e6edf3; --muted:#8b949e; --muted2:#6e7681;
   --accent:#58a6ff;
+}
+body.theme-light {
+  --green:#1a7f37; --green-l:#116329; --green-dim:rgba(26,127,55,.1);
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 body{font-family:'Inter','IBM Plex Sans',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:13px;line-height:1.6;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;font-feature-settings:'tnum' 1,'kern' 1;letter-spacing:-.01em;}
@@ -644,9 +666,10 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
 .kpi-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px;}
 @media(min-width:600px){.kpi-grid{grid-template-columns:repeat(4,1fr);}}
 .kpi-card{background:var(--s1);border:1px solid var(--border);border-radius:14px;padding:14px 16px;position:relative;overflow:hidden;transition:transform .15s,box-shadow .15s;}
-.kpi-card:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(0,0,0,.35);}
+.kpi-card:hover{background:var(--s2);box-shadow:0 2px 10px rgba(0,0,0,.18);}
 .kpi-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:14px 14px 0 0;}
 .kpi-card.g::before{background:linear-gradient(90deg,#2ea043,#3fb950);}
+.kpi-card.g .kpi-val{color:var(--text)!important;}
 .kpi-card.b::before{background:linear-gradient(90deg,#1f6feb,#58a6ff);}
 .kpi-card.o::before{background:linear-gradient(90deg,#d29922,#f08632);}
 .kpi-card.p::before{background:linear-gradient(90deg,#7c3aed,#a855f7);}
@@ -678,7 +701,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
 .grp-row-meta{font-size:10px;color:var(--muted);}
 .grp-row-right{display:flex;flex-direction:column;align-items:flex-end;gap:2px;margin-left:12px;flex-shrink:0;}
 .grp-row-cif{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:var(--text);}
-.grp-row-ahorro{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;color:var(--green-l);}
+.grp-row-ahorro{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;color:var(--text);}
 .grp-row-pct{font-size:10px;color:var(--orange-l);}
 .dash-chart-wrap{background:var(--s1);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:10px;}
 .dash-chart-title{font-size:11px;font-weight:700;color:var(--text);margin-bottom:12px;display:flex;align-items:center;gap:6px;}
@@ -689,7 +712,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
 .hfact-nro{font-size:10px;font-weight:700;color:var(--orange-l);}
 .hfact-desc{font-size:13px;font-weight:600;color:var(--text);}
 .hfact-meta{font-size:10px;color:var(--muted);}
-.hfact-total{font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:800;color:var(--green-l);}
+.hfact-total{font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:800;color:var(--text);}
 .hfact-count{font-size:10px;color:var(--muted);margin-top:2px;}
 .hfact-body{border-top:1px solid var(--border);display:none;}
 .hfact-body.open{display:block;}
@@ -697,11 +720,11 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
 .hfact-inv-row:last-child{border-bottom:none;}
 .hfact-inv-prov{font-weight:600;color:var(--text);}
 .hfact-inv-oc{color:var(--muted);font-size:10px;}
-.hfact-inv-val{font-family:'IBM Plex Mono',monospace;font-weight:700;color:var(--green-l);white-space:nowrap;margin-left:10px;}
+.hfact-inv-val{font-family:'IBM Plex Mono',monospace;font-weight:700;color:var(--text);white-space:nowrap;margin-left:10px;}
 /* SPLASH KPI STRIP */
 .splash-kpi-strip{display:flex;gap:6px;padding:0 16px 12px;overflow-x:auto;scrollbar-width:none;}
 .splash-kpi-chip{flex-shrink:0;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:8px 12px;text-align:center;min-width:80px;}
-.splash-kpi-chip-val{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:800;color:var(--green-l);}
+.splash-kpi-chip-val{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:800;color:var(--text);}
 .splash-kpi-chip-lbl{font-size:9px;color:var(--muted);margin-top:2px;}
 /* PAID CHECKBOX */
 .paid-wrap{display:flex;align-items:center;justify-content:space-between;padding:5px 14px;border-bottom:1px solid rgba(48,54,61,.45);}
@@ -973,96 +996,96 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;padding:4px 16px 20px">
       <button onclick="iniciarApp('sim')"
         style="background:linear-gradient(135deg,rgba(63,185,80,.12),rgba(63,185,80,.05));border:1px solid rgba(63,185,80,.3);border-radius:14px;padding:12px;text-align:left;cursor:pointer;transition:transform .15s,box-shadow .15s;display:flex;flex-direction:column;gap:3px"
-        onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(63,185,80,.2)'"
-        onmouseout="this.style.transform='';this.style.boxShadow=''">
+        onmouseenter="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(63,185,80,.2)'"
+        onmouseleave="this.style.transform='';this.style.boxShadow=''">
         <span style="font-size:28px">🧮</span>
         <div style="font-size:12px;font-weight:700;color:#3fb950">Calcular Costo</div>
         <div style="font-size:10px;color:var(--muted)">3 escenarios aduanales</div>
       </button>
       <button onclick="iniciarApp('dashboard')"
         style="background:linear-gradient(135deg,rgba(88,166,255,.12),rgba(88,166,255,.05));border:1px solid rgba(88,166,255,.3);border-radius:14px;padding:12px;text-align:left;cursor:pointer;transition:transform .15s,box-shadow .15s;display:flex;flex-direction:column;gap:3px"
-        onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(88,166,255,.2)'"
-        onmouseout="this.style.transform='';this.style.boxShadow=''">
+        onmouseenter="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(88,166,255,.2)'"
+        onmouseleave="this.style.transform='';this.style.boxShadow=''">
         <span style="font-size:28px">📊</span>
         <div style="font-size:12px;font-weight:700;color:#58a6ff">Dashboard</div>
         <div style="font-size:10px;color:var(--muted)">KPIs · Gráficas · Tendencias</div>
       </button>
       <button onclick="iniciarApp('histprovs');setTimeout(function(){var s=document.getElementById('histprov-filter-tipo');if(s){s.value='Mercancia';if(typeof _histProvSearch==='function')_histProvSearch();}},400)"
         style="background:linear-gradient(135deg,rgba(163,113,247,.12),rgba(163,113,247,.05));border:1px solid rgba(163,113,247,.3);border-radius:14px;padding:12px;text-align:left;cursor:pointer;transition:transform .15s,box-shadow .15s;display:flex;flex-direction:column;gap:3px"
-        onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(163,113,247,.2)'"
-        onmouseout="this.style.transform='';this.style.boxShadow=''">
+        onmouseenter="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(163,113,247,.2)'"
+        onmouseleave="this.style.transform='';this.style.boxShadow=''">
         <span style="font-size:28px">📦</span>
         <div style="font-size:12px;font-weight:700;color:#a371f7">Hist. Prov. Mercancía</div>
         <div style="font-size:10px;color:var(--muted)">Facturas de mercancía registradas</div>
       </button>
       <button onclick="iniciarApp('aranceles')"
         style="background:linear-gradient(135deg,rgba(240,136,62,.12),rgba(240,136,62,.05));border:1px solid rgba(240,136,62,.3);border-radius:14px;padding:12px;text-align:left;cursor:pointer;transition:transform .15s,box-shadow .15s;display:flex;flex-direction:column;gap:3px"
-        onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(240,136,62,.2)'"
-        onmouseout="this.style.transform='';this.style.boxShadow=''">
+        onmouseenter="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(240,136,62,.2)'"
+        onmouseleave="this.style.transform='';this.style.boxShadow=''">
         <span style="font-size:28px">🔎</span>
         <div style="font-size:12px;font-weight:700;color:#f08632">Aranceles Ítem</div>
         <div style="font-size:10px;color:var(--muted)">Factor arancelario detallado</div>
       </button>
       <button onclick="iniciarApp('histfact')"
         style="background:linear-gradient(135deg,rgba(245,158,11,.12),rgba(245,158,11,.05));border:1px solid rgba(245,158,11,.3);border-radius:14px;padding:12px;text-align:left;cursor:pointer;transition:transform .15s,box-shadow .15s;display:flex;flex-direction:column;gap:3px"
-        onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(245,158,11,.2)'"
-        onmouseout="this.style.transform='';this.style.boxShadow=''">
+        onmouseenter="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(245,158,11,.2)'"
+        onmouseleave="this.style.transform='';this.style.boxShadow=''">
         <span style="font-size:28px">🧾</span>
         <div style="font-size:12px;font-weight:700;color:#fbbf24">Historial Embarques</div>
         <div style="font-size:10px;color:var(--muted)">Facturas por embarque</div>
       </button>
       <button onclick="iniciarApp('unico')"
         style="background:linear-gradient(135deg,rgba(20,184,166,.12),rgba(20,184,166,.05));border:1px solid rgba(20,184,166,.3);border-radius:14px;padding:12px;text-align:left;cursor:pointer;transition:transform .15s,box-shadow .15s;display:flex;flex-direction:column;gap:3px"
-        onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(20,184,166,.2)'"
-        onmouseout="this.style.transform='';this.style.boxShadow=''">
+        onmouseenter="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(20,184,166,.2)'"
+        onmouseleave="this.style.transform='';this.style.boxShadow=''">
         <span style="font-size:28px">🔒</span>
         <div style="font-size:12px;font-weight:700;color:#2dd4bf">Esc. Aduanal</div>
         <div style="font-size:10px;color:var(--muted)">Sin comparación alternativa</div>
       </button>
       <button onclick="window.open('AjusteProrrateo_v4-2.html','_blank')"
         style="background:linear-gradient(135deg,rgba(20,184,166,.12),rgba(20,184,166,.05));border:1px solid rgba(20,184,166,.3);border-radius:14px;padding:12px;text-align:left;cursor:pointer;transition:transform .15s,box-shadow .15s;display:flex;flex-direction:column;gap:3px"
-        onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(20,184,166,.2)'"
-        onmouseout="this.style.transform='';this.style.boxShadow=''">
+        onmouseenter="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(20,184,166,.2)'"
+        onmouseleave="this.style.transform='';this.style.boxShadow=''">
         <span style="font-size:28px">📉</span>
         <div style="font-size:12px;font-weight:700;color:#2dd4bf">Ajuste de Prorrateo</div>
         <div style="font-size:10px;color:var(--muted)">Distribución de costos · Embarques</div>
       </button>
       <button onclick="iniciarApp('facturas')"
         style="background:linear-gradient(135deg,rgba(251,191,36,.12),rgba(251,191,36,.05));border:1px solid rgba(251,191,36,.3);border-radius:14px;padding:12px;text-align:left;cursor:pointer;transition:transform .15s,box-shadow .15s;display:flex;flex-direction:column;gap:3px"
-        onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(251,191,36,.2)'"
-        onmouseout="this.style.transform='';this.style.boxShadow=''">
+        onmouseenter="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(251,191,36,.2)'"
+        onmouseleave="this.style.transform='';this.style.boxShadow=''">
         <span style="font-size:28px">🏪</span>
         <div style="font-size:12px;font-weight:700;color:#fbbf24">Proveedores</div>
         <div style="font-size:10px;color:var(--muted)">Facturas del embarque</div>
       </button>
       <button onclick="window.open('cuadro-importacion-estadistico-2025.html','_blank')"
         style="background:linear-gradient(135deg,rgba(248,209,34,.12),rgba(248,209,34,.05));border:1px solid rgba(248,209,34,.3);border-radius:14px;padding:12px;text-align:left;cursor:pointer;transition:transform .15s,box-shadow .15s;display:flex;flex-direction:column;gap:3px"
-        onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(248,209,34,.2)'"
-        onmouseout="this.style.transform='';this.style.boxShadow=''">
+        onmouseenter="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(248,209,34,.2)'"
+        onmouseleave="this.style.transform='';this.style.boxShadow=''">
         <span style="font-size:28px">🗃️</span>
         <div style="font-size:12px;font-weight:700;color:#f8d122">Cuadro Importación</div>
         <div style="font-size:10px;color:var(--muted)">Equipos, puertos, departamentos 2025</div>
       </button>
       <button onclick="window.open('corregir-fecha.html','_blank')"
         style="background:linear-gradient(135deg,rgba(240,136,62,.12),rgba(240,136,62,.05));border:1px solid rgba(240,136,62,.3);border-radius:14px;padding:12px;text-align:left;cursor:pointer;transition:transform .15s,box-shadow .15s;display:flex;flex-direction:column;gap:3px"
-        onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(240,136,62,.2)'"
-        onmouseout="this.style.transform='';this.style.boxShadow=''">
+        onmouseenter="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(240,136,62,.2)'"
+        onmouseleave="this.style.transform='';this.style.boxShadow=''">
         <span style="font-size:28px">📅</span>
         <div style="font-size:12px;font-weight:700;color:#f0883e">Corregir Fecha</div>
         <div style="font-size:10px;color:var(--muted)">Ajustar fecha de un embarque en la nube</div>
       </button>
       <button onclick="abrirTransito()"
         style="background:linear-gradient(135deg,rgba(45,212,191,.12),rgba(45,212,191,.05));border:1px solid rgba(45,212,191,.3);border-radius:14px;padding:12px;text-align:left;cursor:pointer;transition:transform .15s,box-shadow .15s;display:flex;flex-direction:column;gap:3px"
-        onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(45,212,191,.2)'"
-        onmouseout="this.style.transform='';this.style.boxShadow=''">
+        onmouseenter="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(45,212,191,.2)'"
+        onmouseleave="this.style.transform='';this.style.boxShadow=''">
         <span style="font-size:28px">🚢</span>
         <div style="font-size:12px;font-weight:700;color:#2dd4bf">Mercancía en Tránsito</div>
         <div style="font-size:10px;color:var(--muted)">Control logístico en ruta</div>
       </button>
       <button onclick="iniciarApp('planeacion')"
         style="background:linear-gradient(135deg,rgba(248,209,34,.12),rgba(248,209,34,.05));border:1px solid rgba(248,209,34,.3);border-radius:14px;padding:12px;text-align:left;cursor:pointer;transition:transform .15s,box-shadow .15s;display:flex;flex-direction:column;gap:3px"
-        onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(248,209,34,.2)'"
-        onmouseout="this.style.transform='';this.style.boxShadow=''">
+        onmouseenter="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(248,209,34,.2)'"
+        onmouseleave="this.style.transform='';this.style.boxShadow=''">
         <span style="font-size:28px">📋</span>
         <div style="font-size:12px;font-weight:700;color:#f8d122">Planeación de Carga</div>
         <div style="font-size:10px;color:var(--muted)">Plan semanal · Cruce embarques</div>
@@ -1083,16 +1106,16 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       </button>
       <button onclick="iniciarApp('plantillas')"
         style="background:linear-gradient(135deg,rgba(34,197,94,.12),rgba(34,197,94,.05));border:1px solid rgba(34,197,94,.3);border-radius:14px;padding:12px;text-align:left;cursor:pointer;transition:transform .15s,box-shadow .15s;display:flex;flex-direction:column;gap:3px"
-        onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(34,197,94,.2)'"
-        onmouseout="this.style.transform='';this.style.boxShadow=''">
+        onmouseenter="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(34,197,94,.2)'"
+        onmouseleave="this.style.transform='';this.style.boxShadow=''">
         <span style="font-size:28px">📁</span>
         <div style="font-size:12px;font-weight:700;color:#22c55e">Plantillas</div>
         <div style="font-size:10px;color:var(--muted)">Plantillas Excel compartidas</div>
       </button>
       <button onclick="iniciarApp('config')"
         style="background:linear-gradient(135deg,rgba(139,148,158,.12),rgba(139,148,158,.05));border:1px solid rgba(139,148,158,.3);border-radius:14px;padding:12px;text-align:left;cursor:pointer;transition:transform .15s,box-shadow .15s;display:flex;flex-direction:column;gap:3px"
-        onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(139,148,158,.2)'"
-        onmouseout="this.style.transform='';this.style.boxShadow=''">
+        onmouseenter="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(139,148,158,.2)'"
+        onmouseleave="this.style.transform='';this.style.boxShadow=''">
         <span style="font-size:28px">⚙️</span>
         <div style="font-size:12px;font-weight:700;color:#8b949e">Configuración</div>
         <div style="font-size:10px;color:var(--muted)">Aranceles · Temas · Datos</div>
@@ -1268,31 +1291,31 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
     <button onclick="openSidebar()" style="display:none" title="Panel">
       <span style="font-size:16px">☰</span><span style="font-size:9px;color:var(--muted2)">Menú</span>
     </button>
-    <button onclick="window.print()" style="background:none;border:none;color:var(--muted);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 8px;border-radius:8px;transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,.06)'" onmouseout="this.style.background='none'" title="Imprimir PDF">
+    <button onclick="window.print()" style="background:none;border:none;color:var(--muted);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 8px;border-radius:8px;transition:background .15s" onmouseenter="this.style.background='rgba(255,255,255,.06)'" onmouseleave="this.style.background='none'" title="Imprimir PDF">
       <span style="font-size:16px">🖨️</span><span style="font-size:9px;color:var(--muted2)">PDF</span>
     </button>
-    <button onclick="exportCSV()" style="background:none;border:none;color:var(--muted);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 8px;border-radius:8px;transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,.06)'" onmouseout="this.style.background='none'" title="Exportar CSV">
+    <button onclick="exportCSV()" style="background:none;border:none;color:var(--muted);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 8px;border-radius:8px;transition:background .15s" onmouseenter="this.style.background='rgba(255,255,255,.06)'" onmouseleave="this.style.background='none'" title="Exportar CSV">
       <span style="font-size:16px">📊</span><span style="font-size:9px;color:var(--muted2)">CSV</span>
     </button>
-    <button onclick="guardarSesion()" style="background:none;border:none;color:var(--muted);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 8px;border-radius:8px;transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,.06)'" onmouseout="this.style.background='none'" title="Guardar Local">
+    <button onclick="guardarSesion()" style="background:none;border:none;color:var(--muted);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 8px;border-radius:8px;transition:background .15s" onmouseenter="this.style.background='rgba(255,255,255,.06)'" onmouseleave="this.style.background='none'" title="Guardar Local">
       <span style="font-size:16px">💾</span><span style="font-size:9px;color:var(--muted2)">Guardar</span>
     </button>
-    <button onclick="_startProgress();guardarSesionNube()" style="background:none;border:none;color:var(--muted);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 8px;border-radius:8px;transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,.06)'" onmouseout="this.style.background='none'" title="Guardar en Nube">
+    <button onclick="_startProgress();guardarSesionNube()" style="background:none;border:none;color:var(--muted);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 8px;border-radius:8px;transition:background .15s" onmouseenter="this.style.background='rgba(255,255,255,.06)'" onmouseleave="this.style.background='none'" title="Guardar en Nube">
       <span style="font-size:16px">☁️</span><span style="font-size:9px;color:var(--muted2)">Nube↑</span>
     </button>
-    <button onclick="_startProgress();cargarSesionNube()" style="background:none;border:none;color:var(--muted);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 8px;border-radius:8px;transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,.06)'" onmouseout="this.style.background='none'" title="Cargar desde Nube">
+    <button onclick="_startProgress();cargarSesionNube()" style="background:none;border:none;color:var(--muted);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 8px;border-radius:8px;transition:background .15s" onmouseenter="this.style.background='rgba(255,255,255,.06)'" onmouseleave="this.style.background='none'" title="Cargar desde Nube">
       <span style="font-size:16px">📥</span><span style="font-size:9px;color:var(--muted2)">Nube↓</span>
     </button>
-    <button onclick="_abrirBackupsSemanales()" style="background:none;border:none;color:var(--muted);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 8px;border-radius:8px;transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,.06)'" onmouseout="this.style.background='none'" title="Backups Semanales">
+    <button onclick="_abrirBackupsSemanales()" style="background:none;border:none;color:var(--muted);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 8px;border-radius:8px;transition:background .15s" onmouseenter="this.style.background='rgba(255,255,255,.06)'" onmouseleave="this.style.background='none'" title="Backups Semanales">
       <span style="font-size:16px">🗄️</span><span style="font-size:9px;color:var(--muted2)">Backups</span>
     </button>
-    <button onclick="_descargarBackupManual()" style="background:none;border:none;color:var(--muted);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 8px;border-radius:8px;transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,.06)'" onmouseout="this.style.background='none'" title="Descargar Backup Manual">
+    <button onclick="_descargarBackupManual()" style="background:none;border:none;color:var(--muted);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 8px;border-radius:8px;transition:background .15s" onmouseenter="this.style.background='rgba(255,255,255,.06)'" onmouseleave="this.style.background='none'" title="Descargar Backup Manual">
       <span style="font-size:16px">⬇️🗄️</span><span style="font-size:9px;color:var(--muted2)">Backup</span>
     </button>
-    <button onclick="document.getElementById('sesion-file-input').click()" style="background:none;border:none;color:var(--muted);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 8px;border-radius:8px;transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,.06)'" onmouseout="this.style.background='none'" title="Cargar Local">
+    <button onclick="document.getElementById('sesion-file-input').click()" style="background:none;border:none;color:var(--muted);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 8px;border-radius:8px;transition:background .15s" onmouseenter="this.style.background='rgba(255,255,255,.06)'" onmouseleave="this.style.background='none'" title="Cargar Local">
       <span style="font-size:16px">📂</span><span style="font-size:9px;color:var(--muted2)">Cargar</span>
     </button>
-    <button onclick="clearAll()" style="background:none;border:none;color:var(--muted);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 8px;border-radius:8px;transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,.06)'" onmouseout="this.style.background='none'" title="Limpiar">
+    <button onclick="clearAll()" style="background:none;border:none;color:var(--muted);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 8px;border-radius:8px;transition:background .15s" onmouseenter="this.style.background='rgba(255,255,255,.06)'" onmouseleave="this.style.background='none'" title="Limpiar">
       <span style="font-size:16px">🗑️</span><span style="font-size:9px;color:var(--muted2)">Limpiar</span>
     </button>
     <input type="file" id="sesion-file-input" accept=".json" style="display:none" onchange="cargarSesion(this)">
@@ -1334,28 +1357,28 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px">
 
         <!-- BOTÓN EMBARQUE -->
-        <button onclick="_abrirModalEmbarque()" style="background:rgba(63,185,80,.08);border:1px solid rgba(63,185,80,.28);border-radius:10px;padding:9px 8px;text-align:left;cursor:pointer;transition:background .15s" onmouseover="this.style.background='rgba(63,185,80,.15)'" onmouseout="this.style.background='rgba(63,185,80,.08)'">
+        <button onclick="_abrirModalEmbarque()" style="background:rgba(63,185,80,.08);border:1px solid rgba(63,185,80,.28);border-radius:10px;padding:9px 8px;text-align:left;cursor:pointer;transition:background .15s" onmouseenter="this.style.background='rgba(63,185,80,.15)'" onmouseleave="this.style.background='rgba(63,185,80,.08)'">
           <div style="font-size:16px;margin-bottom:3px">📋</div>
           <div style="font-size:11px;font-weight:700;color:var(--green-l)">Embarque</div>
           <div id="_emb_summary_lbl" style="font-size:10px;color:var(--muted);margin-top:2px;font-family:'IBM Plex Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Nuevo Embarque</div>
         </button>
 
         <!-- BOTÓN IMPUESTOS -->
-        <button onclick="_abrirModalImpuestos()" style="background:rgba(240,136,62,.08);border:1px solid rgba(240,136,62,.28);border-radius:10px;padding:9px 8px;text-align:left;cursor:pointer;transition:background .15s" onmouseover="this.style.background='rgba(240,136,62,.15)'" onmouseout="this.style.background='rgba(240,136,62,.08)'">
+        <button onclick="_abrirModalImpuestos()" style="background:rgba(240,136,62,.08);border:1px solid rgba(240,136,62,.28);border-radius:10px;padding:9px 8px;text-align:left;cursor:pointer;transition:background .15s" onmouseenter="this.style.background='rgba(240,136,62,.15)'" onmouseleave="this.style.background='rgba(240,136,62,.08)'">
           <div style="font-size:16px;margin-bottom:3px">🏛️</div>
           <div style="font-size:11px;font-weight:700;color:var(--orange-l)">Impuestos</div>
           <div id="_imp_summary_lbl" style="font-size:10px;color:var(--muted);margin-top:2px;font-family:'IBM Plex Mono',monospace">AR 10% · ITBMS 7%</div>
         </button>
 
         <!-- BOTÓN HONORARIOS -->
-        <button onclick="_abrirModalHonorarios()" style="background:rgba(168,85,247,.08);border:1px solid rgba(168,85,247,.28);border-radius:10px;padding:9px 8px;text-align:left;cursor:pointer;transition:background .15s" onmouseover="this.style.background='rgba(168,85,247,.15)'" onmouseout="this.style.background='rgba(168,85,247,.08)'">
+        <button onclick="_abrirModalHonorarios()" style="background:rgba(168,85,247,.08);border:1px solid rgba(168,85,247,.28);border-radius:10px;padding:9px 8px;text-align:left;cursor:pointer;transition:background .15s" onmouseenter="this.style.background='rgba(168,85,247,.15)'" onmouseleave="this.style.background='rgba(168,85,247,.08)'">
           <div style="font-size:16px;margin-bottom:3px">👔</div>
           <div style="font-size:11px;font-weight:700;color:#a855f7">Honorarios</div>
           <div id="_hon_summary_lbl" style="font-size:10px;color:var(--muted);margin-top:2px;font-family:'IBM Plex Mono',monospace">—</div>
         </button>
 
         <!-- BOTÓN EQUIPO -->
-        <button onclick="_abrirModalEquipo()" style="background:rgba(88,166,255,.08);border:1px solid rgba(88,166,255,.28);border-radius:10px;padding:9px 8px;text-align:left;cursor:pointer;transition:background .15s" onmouseover="this.style.background='rgba(88,166,255,.15)'" onmouseout="this.style.background='rgba(88,166,255,.08)'">
+        <button onclick="_abrirModalEquipo()" style="background:rgba(88,166,255,.08);border:1px solid rgba(88,166,255,.28);border-radius:10px;padding:9px 8px;text-align:left;cursor:pointer;transition:background .15s" onmouseenter="this.style.background='rgba(88,166,255,.15)'" onmouseleave="this.style.background='rgba(88,166,255,.08)'">
           <div style="font-size:16px;margin-bottom:3px">🚛</div>
           <div style="font-size:11px;font-weight:700;color:var(--blue-l)">Equipo</div>
           <div id="_equipo_summary_lbl" style="font-size:10px;color:var(--muted);margin-top:2px;font-family:'IBM Plex Mono',monospace">—</div>
@@ -3184,7 +3207,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
         ${['#3fb950','#58a6ff','#f08632','#f85149','#a855f7','#34d399','#fbbf24','#fb7185','#22d3ee','#e879f9'].map(c=>
           `<div onclick="document.getElementById('custom-accent').value='${c}';applyCustomColor('${c}','accent')"
             style="width:28px;height:28px;border-radius:6px;background:${c};cursor:pointer;border:2px solid rgba(255,255,255,.1);flex-shrink:0;transition:transform .1s"
-            onmouseover="this.style.transform='scale(1.2)'" onmouseout="this.style.transform=''"></div>`
+            onmouseenter="this.style.transform='scale(1.2)'" onmouseleave="this.style.transform=''"></div>`
         ).join('')}
       </div>
     </div>
@@ -5600,7 +5623,7 @@ function _plnEmbRenderDrop(q,forceOpen){
         var nroH=qU&&nroE.toUpperCase().indexOf(qU)>=0
           ? nroE.replace(new RegExp('('+qU.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi'),'<mark style="background:rgba(248,209,34,.3);color:#f8d122;border-radius:2px">$1</mark>')
           : nroE;
-        h+='<div onclick="_plnEmbSelect(\''+nroE+'\')" style="padding:8px 10px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.04);transition:background .12s" onmouseover="this.style.background=\'rgba(45,212,191,.08)\'" onmouseout="this.style.background=\'\'">'
+        h+='<div onclick="_plnEmbSelect(\''+nroE+'\')" style="padding:8px 10px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.04);transition:background .12s" onmouseenter="this.style.background=\'rgba(45,212,191,.08)\'" onmouseleave="this.style.background=\'\'">'
           +'<div style="display:flex;align-items:center;justify-content:space-between;gap:6px">'
             +'<div style="font-weight:800;font-size:12px;color:var(--text);font-family:\'IBM Plex Mono\',monospace">'+nroH+'</div>'
             +(fob>0?'<div style="font-size:10px;font-weight:700;color:var(--green-l);font-family:\'IBM Plex Mono\',monospace">'+_plnF(fob)+'</div>':'')
@@ -6292,7 +6315,7 @@ var cubData={nroEmb:cub.nroEmb||'',status:cub.status||'',lugarRecep:cub.lugarRec
     +'var _curThemeIdx=(_INIT_THEME===\'light\')?1:(_INIT_THEME===\'green\'?2:0);'
     +'var _ORIG_MAP=new WeakMap();'
     +'function _origStyle(el){if(!_ORIG_MAP.has(el))_ORIG_MAP.set(el,el.getAttribute(\'style\')||\'\');return _ORIG_MAP.get(el);}'
-    +'var _RL=[[\'background:#0d1117\',\'background:#ffffff\'],[\'background:#1a2530\',\'background:#ffffff\'],[\'background:#161b22\',\'background:#f8f9fb\'],[\'background:#21262d\',\'background:#eaecef\'],[\'background:#1c2128\',\'background:#f0f4f8\'],[\'background:#13181f\',\'background:#eef1f4\'],[\'border:1px solid #30363d\',\'border:1px solid #d0d7de\'],[\'border:2px solid #30363d\',\'border:2px solid #d0d7de\'],[\'border-bottom:1px solid #30363d\',\'border-bottom:1px solid #d0d7de\'],[\'border:2px dashed #30363d\',\'border:2px dashed #d0d7de\'],[\'border-top:2px solid #21262d\',\'border-top:2px solid #e2e8f0\'],[\'border-bottom:1px solid #21262d\',\'border-bottom:1px solid #e2e8f0\'],[\'color:#e6edf3\',\'color:#1f2328\'],[\'color:#8b949e\',\'color:#57606a\'],[\'color:rgba(255,255,255,.8)\',\'color:rgba(0,0,0,.7)\'],[\'color:#ffffff\',\'color:#1f2328\'],[\'background:#161b22;border-top:1px solid #21262d\',\'background:#f0f4f8;border-top:1px solid #e2e8f0\'],[\'background:#0d1117;border-top:1px solid #21262d\',\'background:#ffffff;border-top:1px solid #e2e8f0\']];'
+    +'var _RL=[[\'background:#0d1117\',\'background:#ffffff\'],[\'background:#1a2530\',\'background:#ffffff\'],[\'background:#161b22\',\'background:#f8f9fb\'],[\'background:#21262d\',\'background:#eaecef\'],[\'background:#1c2128\',\'background:#f0f4f8\'],[\'background:#13181f\',\'background:#eef1f4\'],[\'border:1px solid #30363d\',\'border:1px solid #d0d7de\'],[\'border:2px solid #30363d\',\'border:2px solid #d0d7de\'],[\'border-bottom:1px solid #30363d\',\'border-bottom:1px solid #d0d7de\'],[\'border:2px dashed #30363d\',\'border:2px dashed #d0d7de\'],[\'border-top:2px solid #21262d\',\'border-top:2px solid #e2e8f0\'],[\'border-bottom:1px solid #21262d\',\'border-bottom:1px solid #e2e8f0\'],[\'color:#e6edf3\',\'color:#1f2328\'],[\'color:#8b949e\',\'color:#57606a\'],[\'color:rgba(255,255,255,.8)\',\'color:rgba(0,0,0,.7)\'],[\'color:#ffffff\',\'color:#1f2328\'],[\'background:#161b22;border-top:1px solid #21262d\',\'background:#f0f4f8;border-top:1px solid #e2e8f0\'],[\'background:#0d1117;border-top:1px solid #21262d\',\'background:#ffffff;border-top:1px solid #e2e8f0\'],[\'color:#3fb950\',\'color:#116329\'],[\'color: #3fb950\',\'color: #116329\'],[\'color:var(--green-l)\',\'color:#116329\'],[\'color: var(--green-l)\',\'color: #116329\'],[\'color:#2ea043\',\'color:#0f5323\'],[\'color:var(--green)\',\'color:#0f5323\']];'
     +'var _RG=[[\'background:#0d1117\',\'background:rgba(0,0,0,.18)\'],[\'background:#1a2530\',\'background:linear-gradient(135deg,#1C2B4A 0%,#1a7a6e 100%)\'],[\'background:#161b22\',\'background:rgba(255,255,255,.06)\'],[\'background:#21262d\',\'background:rgba(255,255,255,.12)\'],[\'background:#1c2128\',\'background:rgba(255,255,255,.08)\'],[\'background:#13181f\',\'background:rgba(255,255,255,.05)\'],[\'border:1px solid #30363d\',\'border:1px solid rgba(255,255,255,.25)\'],[\'border:2px solid #30363d\',\'border:2px solid rgba(255,255,255,.25)\'],[\'border-bottom:1px solid #30363d\',\'border-bottom:1px solid rgba(255,255,255,.25)\'],[\'border:2px dashed #30363d\',\'border:2px dashed rgba(255,255,255,.35)\'],[\'border-top:2px solid #21262d\',\'border-top:2px solid rgba(255,255,255,.25)\'],[\'border-bottom:1px solid #21262d\',\'border-bottom:1px solid rgba(255,255,255,.25)\'],[\'color:#e6edf3\',\'color:#ffffff\'],[\'color:#8b949e\',\'color:rgba(255,255,255,.62)\'],[\'background:#161b22;border-top:1px solid #21262d\',\'background:rgba(255,255,255,.06);border-top:1px solid rgba(255,255,255,.25)\'],[\'background:#0d1117;border-top:1px solid #21262d\',\'background:rgba(0,0,0,.18);border-top:1px solid rgba(255,255,255,.25)\']];'
     +'function _applyTheme(mode){'
     +'  var all=document.querySelectorAll(\'[style]\');'
@@ -8294,7 +8317,7 @@ function drawNavTrend(){
   // Arrow tip
   const last=pts[pts.length-1], prev=pts[pts.length-2];
   const angle=Math.atan2(last.y-prev.y,last.x-prev.x);
-  ctx.fillStyle='rgba(63,185,80,.9)';
+  ctx.fillStyle=_themeGreenColor(.9);
   ctx.beginPath();
   ctx.moveTo(last.x,last.y);
   ctx.lineTo(last.x-12*Math.cos(angle-0.4),last.y-12*Math.sin(angle-0.4));
@@ -8933,7 +8956,7 @@ function calc(){
           const ahClr = ah>0?'var(--green-l)':ah<0?'var(--red-l)':'var(--muted)';
           return `<div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 8px;align-items:center;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04)">
             <span style="font-size:11px;color:var(--muted)">${c}</span>
-            <span style="font-size:11px;font-family:monospace;color:var(--green-l);text-align:right;min-width:76px">${fmt2(reg)}</span>
+            <span style="font-size:11px;font-family:monospace;color:var(--text);text-align:right;min-width:76px">${fmt2(reg)}</span>
             <span style="font-size:11px;font-family:monospace;color:${altColor};text-align:right;min-width:76px">${fmt2(alt)}</span>
             <span style="font-size:11px;font-family:monospace;color:${ahClr};text-align:right;min-width:72px;font-weight:700">${ah>0?'+':''}${fmt2(ah)}</span>
           </div>`;
@@ -8947,7 +8970,7 @@ function calc(){
           return `<div style="border-bottom:1px solid rgba(255,255,255,.06)">
             <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 8px;align-items:center;padding:7px 14px;cursor:pointer" onclick="(function(el){var b=document.getElementById('${rid}');if(!b)return;var open=b.style.display!=='none';b.style.display=open?'none':'block';el.querySelector('.cmp-chev2').textContent=open?'▶ Detalles':'▼ Ocultar';})(this)">
               <span style="font-size:11px;font-weight:700;color:var(--text)">${num} · ${label} <span class="cmp-chev2" style="font-size:9px;color:var(--blue-l);font-weight:600;margin-left:4px">▶ Detalles</span></span>
-              <span style="font-size:12px;font-family:monospace;color:var(--green-l);text-align:right;min-width:76px;font-weight:700">${fmt2(reg)}</span>
+              <span style="font-size:12px;font-family:monospace;color:var(--text);text-align:right;min-width:76px;font-weight:700">${fmt2(reg)}</span>
               <span style="font-size:12px;font-family:monospace;color:${altColor};text-align:right;min-width:76px;font-weight:700">${fmt2(alt)}</span>
               <span style="font-size:13px;font-family:monospace;color:${ahClr};text-align:right;min-width:72px;font-weight:900">${ah>=0?'+':''}${fmt2(ah)}</span>
             </div>
@@ -9007,7 +9030,7 @@ function calc(){
           <div style="background:rgba(0,0,0,.2);border-top:2px solid rgba(63,185,80,.3);padding:12px 14px">
             <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 8px;align-items:center;margin-bottom:8px">
               <span style="font-size:13px;font-weight:800;color:var(--text)">TOTAL DESEMBOLSO</span>
-              <span style="font-size:14px;font-family:monospace;color:var(--green-l);text-align:right;min-width:76px;font-weight:800">${fmt2(desReg)}</span>
+              <span style="font-size:14px;font-family:monospace;color:var(--text);text-align:right;min-width:76px;font-weight:800">${fmt2(desReg)}</span>
               <span style="font-size:14px;font-family:monospace;color:${altColor};text-align:right;min-width:76px;font-weight:800">${fmt2(desAlt)}</span>
               <span style="font-size:16px;font-family:monospace;color:${ahorroTotal>=0?'var(--green-l)':'var(--red-l)'};text-align:right;min-width:72px;font-weight:900">${ahorroTotal>=0?'+':''}${fmt2(ahorroTotal)}</span>
             </div>
@@ -9026,13 +9049,13 @@ function calc(){
 <details style="margin-bottom:12px">
       <summary style="cursor:pointer;padding:10px 14px;background:var(--s1);border:1px solid var(--border);border-radius:8px;font-size:11px;color:var(--muted);list-style:none;display:flex;justify-content:space-between">
         <span>📋 Base del Embarque — ${termino} · ${tipo==='ZL'?'Zona Libre':'Importación'}</span>
-        <span style="color:var(--green-l)">${fmt(sc1_base)}</span>
+        <span style="color:var(--text)">${fmt(sc1_base)}</span>
       </summary>
       <div style="background:var(--s1);border:1px solid var(--border);border-top:none;border-radius:0 0 8px 8px;padding:12px">
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
           <div style="background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:10px 13px">
             <div style="font-size:10px;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em">Valor Mercancía (${termino})</div>
-            <div style="font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:700;color:var(--green-l)">${fmt(sc1_base)}</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:700;color:var(--text)">${fmt(sc1_base)}</div>
           </div>
           <div style="background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:10px 13px">
             <div style="font-size:10px;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em">Arancel (${(arPct*100).toFixed(4)}%)</div>
@@ -9047,7 +9070,7 @@ function calc(){
       </div>
     </details>
       </div>
-      <div style="margin-top:12px;font-size:12px;color:var(--green-l)">💰 Ahorro Landed Global: <strong>${fmt(ahorro_landedG)}</strong></div>
+      <div style="margin-top:12px;font-size:12px;color:var(--text)">💰 Ahorro Landed Global: <strong>${fmt(ahorro_landedG)}</strong></div>
     </div>
 
     <!-- KPI DASHBOARD -->
@@ -9058,7 +9081,7 @@ function calc(){
           <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:11px 13px">
             <div style="font-size:10px;color:var(--muted);font-weight:600;letter-spacing:.05em;text-transform:uppercase;margin-bottom:5px">Valor Merc. + No Merc.</div>
             <div style="font-size:10px;color:var(--muted2);margin-bottom:2px">${fmt(sc1_base)} + ${fmt(sc1_noMerc)}</div>
-            <div style="font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:700;color:var(--green-l)">${fmt(sc1_landed1)}</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:700;color:var(--text)">${fmt(sc1_landed1)}</div>
             <div style="font-size:10px;color:var(--muted);margin-top:2px">% Importación <strong style="color:var(--orange-l);font-size:14px">${((sc1_factor-1)*100).toFixed(2)+'%'}</strong></div>
           </div>
           <div style="background:var(--bg);border:1px solid rgba(88,166,255,.3);border-radius:8px;padding:11px 13px">
@@ -9071,14 +9094,14 @@ function calc(){
             <div style="font-size:10px;color:var(--green-l);font-weight:600;letter-spacing:.05em;text-transform:uppercase;margin-bottom:5px">Ahorro Neto Real</div>
             ${compar==='cifexp'?`
             <div style="font-size:9px;color:var(--muted);margin-bottom:4px">+Arancel +ITBMS diff −Honorarios extra</div>
-            <div style="font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:700;color:var(--green-l)">${fmt(sc1_arancel+itbms_diff-(sc2_hon+sc2_itbms_hon-sc1_hon))}</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:700;color:var(--text)">${fmt(sc1_arancel+itbms_diff-(sc2_hon+sc2_itbms_hon-sc1_hon))}</div>
             <div style="font-size:10px;color:var(--muted);margin-top:2px">
-              <span style="color:var(--green-l)">+${fmt(sc1_arancel)}</span> arancel
-              <span style="color:var(--green-l)"> +${fmt(itbms_diff)}</span> ITBMS
+              <span style="color:var(--text)">+${fmt(sc1_arancel)}</span> arancel
+              <span style="color:var(--text)"> +${fmt(itbms_diff)}</span> ITBMS
               <span style="color:var(--red-l)"> −${fmt(sc2_hon+sc2_itbms_hon-sc1_hon)}</span> hon.extra
             </div>`:`
             <div style="font-size:9px;color:var(--muted);margin-bottom:4px">Esc.#1 − Desembolso Sababa</div>
-            <div style="font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:700;color:var(--green-l)">${fmt(sc3_comision>0 ? (sc1_base+sc1_arancel+sc1_itbms+sc1_hon+tasa+form1+itbmsTasaFinal+sc1_flete_nm+acarreo+dmce+agente) - (sc1_base+sc3_comision+sc3_flete+sc3_gastos) : sc1_arancel)}</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:700;color:var(--text)">${fmt(sc3_comision>0 ? (sc1_base+sc1_arancel+sc1_itbms+sc1_hon+tasa+form1+itbmsTasaFinal+sc1_flete_nm+acarreo+dmce+agente) - (sc1_base+sc3_comision+sc3_flete+sc3_gastos) : sc1_arancel)}</div>
             <div style="font-size:10px;color:var(--muted);margin-top:2px">Desembolso total comparado</div>`}
           </div>
         </div>
@@ -9179,10 +9202,10 @@ function calc(){
           </p>
       <div class="ar-row"><span class="ar-lbl">Arancel Esc.#1</span><span class="ar-val" style="color:var(--red-l)">${fmt(sc1_arancel)}</span></div>
       <div class="ar-row"><span class="ar-lbl">Arancel ${sc2label} (exonerado)</span><span class="ar-val" style="color:var(--muted2)">${fmt(compar==='cifexp'?sc2_arancel:0)}</span></div>
-      <div class="ar-row"><span class="ar-lbl">→ Ahorro Arancel</span><span class="ar-val" style="color:var(--green-l)">${fmt(sc1_arancel-(compar==='cifexp'?sc2_arancel:0))}</span></div>
+      <div class="ar-row"><span class="ar-lbl">→ Ahorro Arancel</span><span class="ar-val" style="color:var(--text)">${fmt(sc1_arancel-(compar==='cifexp'?sc2_arancel:0))}</span></div>
       <div class="ar-row"><span class="ar-lbl">ITBMS Esc.#1</span><span class="ar-val" style="color:var(--muted)">${fmt(sc1_itbms+itbmsTasaFinal)}</span></div>
       <div class="ar-row"><span class="ar-lbl">ITBMS ${sc2label}</span><span class="ar-val" style="color:var(--muted)">${compar==='cifexp'?fmt(altItbms):'Incluido en comisión Sababa'}</span></div>
-      <div class="ar-row"><span class="ar-lbl">→ Diferencia ITBMS</span><span class="ar-val" style="color:var(--green-l)">${compar==='cifexp'?fmt((sc1_itbms+itbmsTasaFinal)-altItbms):'— (no aplica)'}</span></div>
+      <div class="ar-row"><span class="ar-lbl">→ Diferencia ITBMS</span><span class="ar-val" style="color:var(--text)">${compar==='cifexp'?fmt((sc1_itbms+itbmsTasaFinal)-altItbms):'— (no aplica)'}</span></div>
       <div class="ar-row"><span class="ar-lbl">Master Value (proveedor interno, no pagado)</span><span class="ar-val" style="color:var(--blue-l)">${fmt(altMV)}</span></div>
       <div class="ar-row" style="border-top:2px solid rgba(63,185,80,.3);padding-top:10px;margin-top:4px">
         <span class="ar-lbl" style="color:var(--green-l);font-weight:700">AHORRO TOTAL (Arancel + ITBMS diff)</span>
@@ -9211,7 +9234,7 @@ function calc(){
         <div class="sum-hd"><div class="sum-title" style="color:var(--green-l)">Escenario #1 — Pago de Impuestos</div><div class="badge bg-g">Real</div></div>
         <div>
           <div class="res-hd">Valor Mercancía</div>
-          <div class="paid-wrap"><span class="paid-lbl" style="color:var(--green-l);font-weight:600">${termino}</span><span style="font-family:'IBM Plex Mono',monospace;font-weight:700;color:var(--green-l)">${fmt(sc1_base)}</span></div>
+          <div class="paid-wrap"><span class="paid-lbl" style="color:var(--text);font-weight:600">${termino}</span><span style="font-family:'IBM Plex Mono',monospace;font-weight:700;color:var(--text)">${fmt(sc1_base)}</span></div>
           <div class="res-hd">Costo No Mercancía</div>
           ${termino==='FOB'&&tipo==='EXT'?paidRow('Flete',flete,'sc1-flete'):''}
           ${paidRow('Arancel ('+((arPct*100).toFixed(4))+'%)', sc1_arancel,'sc1-arancel','var(--red-l)')}
@@ -9233,7 +9256,7 @@ function calc(){
           ${acarreo>0?paidRow('Acarreo', acarreo,'sc1-acarreo'):''}
           ${dmce>0?paidRow('DMCE / Otros', dmce,'sc1-dmce'):''}
           ${agente>0?paidRow('Gastos Destino', agente,'sc1-agente'):''}
-          <div class="paid-wrap" style="background:var(--s2)"><span class="paid-lbl" style="font-weight:700">TOTAL NO MERCANCÍA</span><span style="font-family:'IBM Plex Mono',monospace;font-weight:700;color:var(--green-l)">${fmt(sc1_noMerc)}</span></div>
+          <div class="paid-wrap" style="background:var(--s2)"><span class="paid-lbl" style="font-weight:700">TOTAL NO MERCANCÍA</span><span style="font-family:'IBM Plex Mono',monospace;font-weight:700;color:var(--text)">${fmt(sc1_noMerc)}</span></div>
           <div class="res-hd">Otros Gastos (fuera del factor)</div>
           ${paidRow('ITBMS (CIF+Aran.)×'+((itbPct*100).toFixed(0))+'%', sc1_itbms,'sc1-itbms','var(--muted)')}
           ${paidRow('ITBMS Tasa', itbmsTasaFinal,'sc1-itbms-tasa','var(--muted)')}
@@ -9270,7 +9293,7 @@ function calc(){
               </div>
             </div>
             <div class="acc-body">
-              <div class="mrow" style="padding-left:14px"><span class="ml">Valor Exento</span><span class="mv" style="color:var(--green-l)">${fmt(sc2_hon_ng)}</span></div>
+              <div class="mrow" style="padding-left:14px"><span class="ml">Valor Exento</span><span class="mv" style="color:var(--text)">${fmt(sc2_hon_ng)}</span></div>
               <div class="mrow" style="padding-left:14px"><span class="ml">Valor Gravado</span><span class="mv" style="color:var(--orange-l)">${fmt(sc2_hon_g)}</span></div>
               <div class="mrow" style="padding-left:14px"><span class="ml">ITBMS s/Gravado (informativo)</span><span class="mv" style="color:var(--muted)">${fmt(sc2_itbms_hon)}</span></div>
               <div class="mrow bold" style="padding-left:14px;background:rgba(88,166,255,.05)"><span class="ml">Total factura honorarios</span><span class="mv b">${fmt(sc2_hon+sc2_itbms_hon)}</span></div>
@@ -9292,14 +9315,14 @@ function calc(){
             <div style="font-size:10px;font-weight:700;color:var(--green-l);letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px">💰 Ahorro Real — Esc.#1 vs Esc.#2</div>
             <div class="ar-row"><span class="ar-lbl">Arancel que pagaste en Esc.#1</span><span class="ar-val" style="color:var(--red-l)">${fmt(sc1_arancel)}</span></div>
             <div class="ar-row"><span class="ar-lbl">Arancel en Esc.#2 (exonerado)</span><span class="ar-val" style="color:var(--muted2)">$0.00</span></div>
-            <div class="ar-row"><span class="ar-lbl">Ahorro en Arancel</span><span class="ar-val" style="color:var(--green-l)">${fmt(sc1_arancel)}</span></div>
+            <div class="ar-row"><span class="ar-lbl">Ahorro en Arancel</span><span class="ar-val" style="color:var(--text)">${fmt(sc1_arancel)}</span></div>
             <div class="ar-row"><span class="ar-lbl">ITBMS Esc.#1 (sobre CIF+Arancel)</span><span class="ar-val" style="color:var(--muted)">${fmt(sc1_itbms_total)}</span></div>
             <div class="ar-row"><span class="ar-lbl">ITBMS Esc.#2 (solo sobre CIF)</span><span class="ar-val" style="color:var(--muted)">${fmt(sc2_itbms_total)}</span></div>
-            <div class="ar-row"><span class="ar-lbl">Ahorro en ITBMS</span><span class="ar-val" style="color:var(--green-l)">${fmt(itbms_diff)}</span></div>
+            <div class="ar-row"><span class="ar-lbl">Ahorro en ITBMS</span><span class="ar-val" style="color:var(--text)">${fmt(itbms_diff)}</span></div>
             <div class="ar-row"><span class="ar-lbl">Honorarios adicionales Esc.#2</span><span class="ar-val" style="color:var(--red-l)">-${fmt(sc2_hon+sc2_itbms_hon-sc1_hon)}</span></div>
             <div class="ar-row" style="border-top:2px solid rgba(63,185,80,.3);padding-top:8px;margin-top:4px">
               <span class="ar-lbl" style="color:var(--green-l);font-weight:700;font-size:13px">AHORRO NETO REAL</span>
-              <span class="ar-val" style="color:var(--green-l);font-size:16px;font-weight:700">${fmt(sc1_arancel+itbms_diff-(sc2_hon+sc2_itbms_hon-sc1_hon))}</span>
+              <span class="ar-val" style="color:var(--text);font-size:16px;font-weight:700">${fmt(sc1_arancel+itbms_diff-(sc2_hon+sc2_itbms_hon-sc1_hon))}</span>
             </div>
           </div>
 
@@ -9357,7 +9380,7 @@ function calc(){
             ${acarreo>0?`<div class="ar-row"><span class="ar-lbl">Acarreo</span><span class="ar-val">${fmt(acarreo)}</span></div>`:''}
             ${dmce>0?`<div class="ar-row"><span class="ar-lbl">DMCE</span><span class="ar-val">${fmt(dmce)}</span></div>`:''}
             ${agente>0?`<div class="ar-row"><span class="ar-lbl">Gastos Destino</span><span class="ar-val">${fmt(agente)}</span></div>`:''}
-            <div class="ar-row" style="border-top:1px solid rgba(48,54,61,.5);margin-top:4px;padding-top:6px"><span class="ar-lbl" style="font-weight:700">Total Esc.#1</span><span class="ar-val" style="color:var(--green-l);font-weight:700">${fmt(sc1_base+sc1_arancel+sc1_hon+tasa+form1+sc1_flete_nm+acarreo+dmce+agente)}</span></div>
+            <div class="ar-row" style="border-top:1px solid rgba(48,54,61,.5);margin-top:4px;padding-top:6px"><span class="ar-lbl" style="font-weight:700">Total Esc.#1</span><span class="ar-val" style="color:var(--text);font-weight:700">${fmt(sc1_base+sc1_arancel+sc1_hon+tasa+form1+sc1_flete_nm+acarreo+dmce+agente)}</span></div>
             <div style="border-top:1px dashed var(--border);margin:8px 0;padding-top:8px">
               <div style="font-size:10px;font-weight:700;color:var(--orange-l);margin-bottom:6px">Desembolso Sababa (lo que pagas con Sababa):</div>
               <div class="ar-row"><span class="ar-lbl">Mercancía Homologada (÷1.07)</span><span class="ar-val" style="color:var(--orange-l)">${fmt(sc3_mercHomol)}</span></div>
@@ -9373,7 +9396,7 @@ function calc(){
             </div>
             <div class="ar-row" style="border-top:2px solid rgba(63,185,80,.4);padding-top:8px;margin-top:4px">
               <span class="ar-lbl" style="color:var(--green-l);font-weight:700;font-size:13px">AHORRO NETO REAL</span>
-              <span class="ar-val" style="color:var(--green-l);font-size:16px;font-weight:700">${fmt((sc1_base+sc1_arancel+sc1_itbms+sc1_hon+tasa+form1+itbmsTasaFinal+sc1_flete_nm+acarreo+dmce+agente)-(sc1_base+sc3_comision+sc3_flete+sc3_gastos))}</span>
+              <span class="ar-val" style="color:var(--text);font-size:16px;font-weight:700">${fmt((sc1_base+sc1_arancel+sc1_itbms+sc1_hon+tasa+form1+itbmsTasaFinal+sc1_flete_nm+acarreo+dmce+agente)-(sc1_base+sc3_comision+sc3_flete+sc3_gastos))}</span>
             </div>
             <div style="font-size:10px;color:var(--muted);margin-top:6px;text-align:right">= Desembolso Esc.#1 − Desembolso Sababa</div>
           </div>
@@ -9400,13 +9423,13 @@ function calc(){
           </tr></thead>
           <tbody>
             <tr style="background:rgba(63,185,80,.04)"><td style="font-weight:600">Valor Mercancía (${termino})</td><td class="tr" style="font-weight:700">${fmt(sc1_base)}</td><td class="tr" style="font-weight:700">${fmt(compar==='cifexp'?sc2_base:sc3_mercHomol)}</td><td class="tr" style="color:var(--muted2)">${compar==='cifexp'?'=':'Homologado'}</td></tr>
-            <tr><td class="tm">Arancel</td><td class="tr" style="color:var(--red-l)">${fmt(sc1_arancel)}</td><td class="tr" style="color:${sc2pcolor}">${fmt(compar==='cifexp'?sc2_arancel:0)}</td><td class="tr" style="color:var(--green-l)">${fmt(sc1_arancel-(compar==='cifexp'?sc2_arancel:0))}</td></tr>
+            <tr><td class="tm">Arancel</td><td class="tr" style="color:var(--red-l)">${fmt(sc1_arancel)}</td><td class="tr" style="color:${sc2pcolor}">${fmt(compar==='cifexp'?sc2_arancel:0)}</td><td class="tr" style="color:var(--text)">${fmt(sc1_arancel-(compar==='cifexp'?sc2_arancel:0))}</td></tr>
             <tr><td class="tm">Honorarios</td><td class="tr">${fmt(sc1_hon)}</td><td class="tr">${fmt(compar==='cifexp'?sc2_hon:sc3_comision)}</td><td class="tr" style="color:var(--orange-l)">${fmt(sc1_hon-(compar==='cifexp'?sc2_hon:sc3_comision))}</td></tr>
             <tr><td class="tm" style="color:var(--blue-l)">Master Value (no pagado)</td><td class="tr" style="color:var(--muted2)">—</td><td class="tr" style="color:var(--blue-l)">${fmt(altMV)}</td><td class="tr" style="color:var(--muted2)">Puente</td></tr>
-            <tr style="font-weight:600"><td>Total No Mercancía</td><td class="tr" style="color:var(--green-l)">${fmt(sc1_noMerc)}</td><td class="tr" style="color:${sc2pcolor}">${fmt(altNoMerc)}</td><td class="tr" style="color:var(--muted2)">=$0 ✓</td></tr>
-            <tr><td class="tm">ITBMS (Otros Gastos)</td><td class="tr" style="color:var(--muted2)">${fmt(sc1_itbms_total)}</td><td class="tr" style="color:var(--muted2)">${fmt(altItbms)}</td><td class="tr" style="color:var(--green-l)">${fmt(sc1_itbms_total-altItbms)}</td></tr>
-            <tr style="font-weight:700"><td>Costo Landed (factor)</td><td class="tr" style="color:var(--green-l)">${fmt(sc1_landed1)}</td><td class="tr" style="color:${sc2pcolor}">${fmt(altLanded1)}</td><td class="tr" style="color:var(--muted2)">=$0 ✓</td></tr>
-            <tr style="font-weight:700"><td>Landed Global</td><td class="tr" style="color:var(--green-l)">${fmt(sc1_landedG)}</td><td class="tr" style="color:${sc2pcolor}">${fmt(altLandedG)}</td><td class="tr" style="color:var(--green-l)">${fmt(ahorro_landedG)}</td></tr>
+            <tr style="font-weight:600"><td>Total No Mercancía</td><td class="tr" style="color:var(--text)">${fmt(sc1_noMerc)}</td><td class="tr" style="color:${sc2pcolor}">${fmt(altNoMerc)}</td><td class="tr" style="color:var(--muted2)">=$0 ✓</td></tr>
+            <tr><td class="tm">ITBMS (Otros Gastos)</td><td class="tr" style="color:var(--muted2)">${fmt(sc1_itbms_total)}</td><td class="tr" style="color:var(--muted2)">${fmt(altItbms)}</td><td class="tr" style="color:var(--text)">${fmt(sc1_itbms_total-altItbms)}</td></tr>
+            <tr style="font-weight:700"><td>Costo Landed (factor)</td><td class="tr" style="color:var(--text)">${fmt(sc1_landed1)}</td><td class="tr" style="color:${sc2pcolor}">${fmt(altLanded1)}</td><td class="tr" style="color:var(--muted2)">=$0 ✓</td></tr>
+            <tr style="font-weight:700"><td>Landed Global</td><td class="tr" style="color:var(--text)">${fmt(sc1_landedG)}</td><td class="tr" style="color:${sc2pcolor}">${fmt(altLandedG)}</td><td class="tr" style="color:var(--text)">${fmt(ahorro_landedG)}</td></tr>
             <tr><td class="tm">Factor</td><td class="tr"><span class="factor-chip">${((sc1_factor-1)*100).toFixed(2)+'%'}</span></td><td class="tr"><span class="factor-chip">${((altFactor-1)*100).toFixed(2)+'%'}</span></td><td class="tr">—</td></tr>
           </tbody>
         </table>
@@ -10444,7 +10467,7 @@ function calcSab2(){
           <div style="padding:14px;border-right:1px solid var(--border)">
             <div style="font-size:10px;font-weight:700;color:var(--green-l);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Escenario Regular</div>
             ${esc1L>0?`
-              <div style="font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:800;color:var(--green-l)">${fmt(esc1L)}</div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:800;color:var(--text)">${fmt(esc1L)}</div>
               <div style="font-size:10px;color:var(--muted);margin-top:2px">Costo Landed</div>
               <div style="font-family:monospace;font-size:14px;font-weight:700;color:var(--orange-l);margin-top:4px">${window._sc1_factor>0?((window._sc1_factor-1)*100).toFixed(2)+'%':'—'}</div>
               <div style="font-size:9px;color:var(--muted)">% Importación</div>
@@ -10543,7 +10566,7 @@ function calcSab2(){
             const ahClr = ah>0?'var(--green-l)':ah<0?'var(--red-l)':'var(--muted)';
             return `<div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 8px;align-items:center;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04)">
               <span style="font-size:11px;color:var(--muted)">${c}</span>
-              <span style="font-size:11px;font-family:monospace;color:var(--green-l);text-align:right;min-width:76px">${fmt2(reg)}</span>
+              <span style="font-size:11px;font-family:monospace;color:var(--text);text-align:right;min-width:76px">${fmt2(reg)}</span>
               <span style="font-size:11px;font-family:monospace;color:var(--orange-l);text-align:right;min-width:76px">${fmt2(sab)}</span>
               <span style="font-size:11px;font-family:monospace;color:${ahClr};text-align:right;min-width:72px;font-weight:700">${ah>0?'+':''}${fmt2(ah)}</span>
             </div>`;
@@ -10558,7 +10581,7 @@ function calcSab2(){
               <!-- Summary row (always visible) -->
               <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 8px;align-items:center;padding:7px 14px;cursor:pointer" onclick="(function(el){var b=document.getElementById('${rid}');if(!b)return;var open=b.style.display!=='none';b.style.display=open?'none':'block';el.querySelector('.cmp-chev').textContent=open?'▶ Detalles':'▼ Ocultar';})(this)">
                 <span style="font-size:11px;font-weight:700;color:var(--text)">${num} · ${label} <span class="cmp-chev" style="font-size:9px;color:var(--blue-l);font-weight:600;margin-left:4px">▶ Detalles</span></span>
-                <span style="font-size:12px;font-family:monospace;color:var(--green-l);text-align:right;min-width:76px;font-weight:700">${fmt2(reg)}</span>
+                <span style="font-size:12px;font-family:monospace;color:var(--text);text-align:right;min-width:76px;font-weight:700">${fmt2(reg)}</span>
                 <span style="font-size:12px;font-family:monospace;color:var(--orange-l);text-align:right;min-width:76px;font-weight:700">${fmt2(sab)}</span>
                 <span style="font-size:13px;font-family:monospace;color:${ahClr};text-align:right;min-width:72px;font-weight:900">${ah>=0?'+':''}${fmt2(ah)}</span>
               </div>
@@ -10619,7 +10642,7 @@ function calcSab2(){
             <div style="background:rgba(0,0,0,.2);border-top:2px solid rgba(63,185,80,.3);padding:12px 14px">
               <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 8px;align-items:center;margin-bottom:10px">
                 <span style="font-size:13px;font-weight:800;color:var(--text)">TOTAL DESEMBOLSO</span>
-                <span style="font-size:14px;font-family:monospace;color:var(--green-l);text-align:right;min-width:76px;font-weight:800">${fmt2(desReg)}</span>
+                <span style="font-size:14px;font-family:monospace;color:var(--text);text-align:right;min-width:76px;font-weight:800">${fmt2(desReg)}</span>
                 <span style="font-size:14px;font-family:monospace;color:var(--orange-l);text-align:right;min-width:76px;font-weight:800">${fmt2(desSab)}</span>
                 <span style="font-size:16px;font-family:monospace;color:${_ahorroForzadoCero?'var(--muted)':aTotal>=0?'var(--green-l)':'var(--red-l)'};text-align:right;min-width:72px;font-weight:900">${_ahorroForzadoCero?'—':(aTotal>=0?'+':'')+fmt2(aTotal)}</span>
               </div>
@@ -10637,7 +10660,7 @@ function calcSab2(){
               <div style="font-size:10px;font-weight:700;color:var(--blue-l);margin-bottom:4px">📊 Diferencia de Inventario <span style="font-weight:400;color:var(--muted)">(ajuste contable — no es ahorro de desembolso)</span></div>
               <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 8px;font-size:11px">
                 <span style="color:var(--muted)">FOB Original → Costo Homologado</span>
-                <span style="font-family:monospace;color:var(--green-l);text-align:right;min-width:76px">${fmt2(r1_merc)}</span>
+                <span style="font-family:monospace;color:var(--text);text-align:right;min-width:76px">${fmt2(r1_merc)}</span>
                 <span style="font-family:monospace;color:var(--orange-l);text-align:right;min-width:76px">${fmt2(mercHomol)}</span>
                 <span style="font-family:monospace;color:var(--blue-l);text-align:right;min-width:72px;font-weight:700">${fmt2(difInv)}</span>
               </div>
@@ -10761,7 +10784,7 @@ function calcAr(){
     const p=i.arPct!==null?i.arPct:(lookupArt(i.desc)||10);
     const tot=i.piezas*i.costo,imp=tot*(p/100);
     const unk=i.arPct===null&&!lookupArt(i.desc);
-    return `<tr><td>${i.desc||'—'}${unk?' <span style="color:var(--orange-l);font-size:10px">⚠ est.</span>':''}</td><td class="tr">${i.piezas}</td><td class="tr">${fmt(i.costo)}</td><td class="tr">${fmt(tot)}</td><td class="tr">${p.toFixed(2)}%</td><td class="tr" style="color:var(--green-l)">${fmt(imp)}</td><td class="tr" style="color:var(--muted2)">${(tot/cifTotal*100).toFixed(2)}%</td></tr>`;
+    return `<tr><td>${i.desc||'—'}${unk?' <span style="color:var(--orange-l);font-size:10px">⚠ est.</span>':''}</td><td class="tr">${i.piezas}</td><td class="tr">${fmt(i.costo)}</td><td class="tr">${fmt(tot)}</td><td class="tr">${p.toFixed(2)}%</td><td class="tr" style="color:var(--text)">${fmt(imp)}</td><td class="tr" style="color:var(--muted2)">${(tot/cifTotal*100).toFixed(2)}%</td></tr>`;
   }).join('');
 
   document.getElementById('res-ar').innerHTML=`
@@ -11962,7 +11985,7 @@ window._showMesPicker = function(btn){
   var anioActual=hoy.getFullYear();
   var div=document.createElement('div');
   div.id='_mesPicker';
-  div.style.cssText='position:fixed;z-index:99999;background:#ffffff;border:1px solid #e5e7eb;border-radius:14px;padding:14px 14px 12px;box-shadow:0 8px 32px rgba(0,0,0,.18);min-width:230px';
+  div.style.cssText='position:fixed;z-index:1000000;background:#ffffff;border:1px solid #e5e7eb;border-radius:14px;padding:14px 14px 12px;box-shadow:0 8px 32px rgba(0,0,0,.18);min-width:230px';
   var rect=btn.getBoundingClientRect();
   div.style.top=(rect.bottom+6)+'px'; div.style.left=Math.min(rect.left,window.innerWidth-250)+'px';
   var yearHtml='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
@@ -12042,7 +12065,7 @@ window._showAnioPicker = function(btn){
   var anioActual=hoy.getFullYear();
   var div=document.createElement('div');
   div.id='_anioPicker';
-  div.style.cssText='position:fixed;z-index:99999;background:var(--s1,#161b22);border:1px solid var(--border,#30363d);border-radius:12px;padding:12px;box-shadow:0 8px 32px rgba(0,0,0,.5);min-width:160px';
+  div.style.cssText='position:fixed;z-index:1000000;background:var(--s1,#161b22);border:1px solid var(--border,#30363d);border-radius:12px;padding:12px;box-shadow:0 8px 32px rgba(0,0,0,.5);min-width:160px';
   var rect=btn.getBoundingClientRect();
   div.style.top=(rect.bottom+6)+'px'; div.style.left=rect.left+'px';
   var grid='<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:4px">';
@@ -12093,7 +12116,8 @@ window._hfToggleMes = function(hId, bId){
 };
 
 // Toggle para renderTend — usa patrón de IDs con sufijo -hd / -body / -chev
-window._hfToggleMes2 = function(hd){
+window._hfToggleMes2 = function(hd, ev){
+  if(ev && ev.stopPropagation) ev.stopPropagation();
   var body = hd.nextElementSibling;
   var chev = hd.querySelector('span[id$="-chev"]');
   if(!body) return;
@@ -14798,7 +14822,7 @@ function _showProcessingOverlay(nro, desc, cif, ahorro, landedVal, factorVal, on
       +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">'
       +'<div style="background:rgba(63,185,80,.08);border:1px solid rgba(63,185,80,.2);border-radius:10px;padding:10px">'
       +'<div style="font-size:8px;color:var(--muted);text-transform:uppercase;font-weight:700;margin-bottom:3px">Valor Mercancía</div>'
-      +'<div style="font-size:13px;font-weight:800;color:var(--green-l);font-family:monospace">'+fmt(cif)+'</div></div>'
+      +'<div style="font-size:13px;font-weight:800;color:var(--text);font-family:monospace">'+fmt(cif)+'</div></div>'
       +'<div style="background:rgba(88,166,255,.08);border:1px solid rgba(88,166,255,.2);border-radius:10px;padding:10px">'
       +'<div style="font-size:8px;color:var(--muted);text-transform:uppercase;font-weight:700;margin-bottom:3px">Ahorro Desembolso</div>'
       +'<div style="font-size:13px;font-weight:800;color:'+ahClr+';font-family:monospace">'+fmt(ahorro)+'</div></div>'
@@ -15549,7 +15573,7 @@ function drawDeptBarsInPortal(invLinesParam){
     const pct=((cats[k]/tot)*100).toFixed(1);
     const clr=colors[idx2%colors.length];
     const deptEsc=k.replace(/'/g,"\\'");
-    return '<div style="margin-bottom:10px;cursor:pointer;border-radius:6px;padding:4px 6px;transition:background .15s" onmouseover="this.style.background=\'rgba(255,255,255,.04)\'" onmouseout="this.style.background=\'transparent\'" onclick="showDeptDetail(\''+deptEsc+'\')" title="Ver facturas — '+deptEsc+'">'+
+    return '<div style="margin-bottom:10px;cursor:pointer;border-radius:6px;padding:4px 6px;transition:background .15s" onmouseenter="this.style.background=\'rgba(255,255,255,.04)\'" onmouseleave="this.style.background=\'transparent\'" onclick="showDeptDetail(\''+deptEsc+'\')" title="Ver facturas — '+deptEsc+'">'+
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'+
         '<div style="display:flex;align-items:center;gap:6px">'+
           '<div style="width:9px;height:9px;border-radius:2px;background:'+clr+';flex-shrink:0"></div>'+
@@ -15902,6 +15926,15 @@ function _toggleHistAcordeonMain(hdr){
   }
 }
 
+function _themeGreenColor(alpha){
+  alpha = (alpha===undefined) ? 1 : alpha;
+  try{
+    var c = getComputedStyle(document.body).color || '';
+    var m = c.match(/\d+/g);
+    var isLight = m && (parseInt(m[0],10)+parseInt(m[1],10)+parseInt(m[2],10)) < 380;
+    return isLight ? 'rgba(17,99,41,'+alpha+')' : 'rgba(63,185,80,'+alpha+')';
+  }catch(e){ return 'rgba(63,185,80,'+alpha+')'; }
+}
 function renderTend(_scopeEl){
   // ── FIX (jul-2026): se quitó el "auto-aplicar último mes guardado" que
   //    corría una sola vez por sesión y escribía silenciosamente una fecha
@@ -16070,7 +16103,7 @@ function renderTend(_scopeEl){
       ctx.fillStyle=g;
       if(ctx.roundRect){ctx.beginPath();ctx.roundRect(x,pad.t+ch-barH2,barW2,barH2,3);ctx.fill();}
       else{ctx.fillRect(x,pad.t+ch-barH2,barW2,barH2);}
-      ctx.fillStyle='rgba(63,185,80,1)'; ctx.font='bold 9px JetBrains Mono'; ctx.textAlign='center';
+      ctx.fillStyle=_themeGreenColor(1); ctx.font='bold 9px JetBrains Mono'; ctx.textAlign='center';
       ctx.fillText('$'+(values[i]/1000).toFixed(1)+'k', x+barW2/2, pad.t+ch-barH2-5);
       ctx.fillStyle='rgba(139,148,158,.8)'; ctx.font='9px Inter';
       const lbl2=lbl.length>8?lbl.slice(-6):lbl;
@@ -16109,9 +16142,9 @@ function renderTend(_scopeEl){
       const _mesEditable = !(window._mesesBloqueados||new Set()).has(_rowYm);
       return `<div style="display:grid;grid-template-columns:auto 1fr auto auto auto;gap:8px;align-items:center;padding:9px 14px;border-bottom:1px solid rgba(48,54,61,.4);cursor:pointer;transition:background .15s${(isPend||isParcial)?';border-left:3px solid '+(isPend?'var(--orange-l)':'var(--blue-l)'):''}" onclick="if(event.target.classList.contains('del-btn')||event.target.classList.contains('btn-reabrir')){return;}abrirModuloComparativo_idx(${idx})" onmouseenter="this.style.background='rgba(255,255,255,.03)'" onmouseleave="this.style.background=''">
         <div style="font-size:10px;font-weight:700;color:${nroColor};white-space:nowrap">${d.nro||'—'} ${unicoBadge} ${difBadge}</div>
-        <div><div style="font-size:12px;font-weight:500;color:var(--text)">${d.desc}${isPend?'&nbsp;<span class="badge-pendiente">🟡 PENDIENTE</span>':''}${d.status==='parcial'?'&nbsp;<span style="background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:3px;padding:1px 5px;font-size:9px;font-weight:700">🚢 PARCIAL</span>':''}</div><div style="font-size:10px;color:var(--muted);display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-top:2px">${d.fecha} · ${d.esc||''}&nbsp;<span style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:var(--blue-l)">${viaIco} ${viaLabel}</span>${d.tramiteTipo?`<span style="background:${tramiteBg};border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:${tramiteColor}">${d.tramiteTipo}</span>`:''}${d.lugarRecep?`<span style="background:rgba(45,212,191,.1);border:1px solid rgba(45,212,191,.25);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:#2dd4bf">🏭 ${d.lugarRecep}</span>`:''}
+        <div><div style="font-size:12px;font-weight:500;color:var(--text);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.35">${d.desc}${isPend?'&nbsp;<span class="badge-pendiente">🟡 PENDIENTE</span>':''}${d.status==='parcial'?'&nbsp;<span style="background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:3px;padding:1px 5px;font-size:9px;font-weight:700">🚢 PARCIAL</span>':''}</div><div style="font-size:10px;color:var(--muted);display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-top:2px">${d.fecha} · ${d.esc||''}&nbsp;<span style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:var(--blue-l)">${viaIco} ${viaLabel}</span>${d.tramiteTipo?`<span style="background:${tramiteBg};border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:${tramiteColor}">${d.tramiteTipo}</span>`:''}${d.lugarRecep?`<span style="background:rgba(45,212,191,.1);border:1px solid rgba(45,212,191,.25);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:#2dd4bf">🏭 ${d.lugarRecep}</span>`:''}
 </div></div>
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:${d._requiereReproceso?'var(--orange-l)':'var(--green-l)'};font-weight:700;white-space:nowrap">${d._requiereReproceso?'⚠ Reprocesar':window._fmtMoney(_ahorroDisplay)}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:${d._requiereReproceso?'var(--orange-l)':'var(--text)'};font-weight:700;white-space:nowrap">${d._requiereReproceso?'⚠ Reprocesar':window._fmtMoney(_ahorroDisplay)}</div>
         <div style="font-size:11px;color:var(--orange-l);white-space:nowrap">${d._requiereReproceso?'':pct}</div>
         <div style="display:flex;gap:4px;align-items:center">${!window._histEditMode || !_mesEditable ? '' : `
           <button class="btn-reabrir" onclick="event.stopPropagation();reabrirEmbarquePendiente(${idx})" style="${isPend?'':'background:rgba(88,166,255,.1);border-color:rgba(88,166,255,.3);color:var(--blue-l)'}">✏️ ${isPend?'Reabrir':'Editar'}</button>
@@ -16154,7 +16187,7 @@ function renderTend(_scopeEl){
     g.addColorStop(0,'rgba(63,185,80,.85)'); g.addColorStop(1,'rgba(31,111,235,.3)');
     ctx.fillStyle=g;
     ctx.beginPath(); ctx.roundRect(x-24,pad.t+ch-barH,48,barH,4); ctx.fill();
-    ctx.fillStyle='var(--green-l)'; ctx.font='bold 11px JetBrains Mono'; ctx.textAlign='center';
+    ctx.fillStyle=_themeGreenColor(1); ctx.font='bold 11px JetBrains Mono'; ctx.textAlign='center';
     ctx.fillText('$'+(values[0]/1000).toFixed(1)+'k',x,pad.t+ch-barH-6);
     ctx.fillStyle='rgba(139,148,158,.8)'; ctx.font='10px Inter';
     ctx.fillText(labels[0],x,pad.t+ch+20);
@@ -16197,7 +16230,7 @@ function renderTend(_scopeEl){
       ctx.strokeStyle='rgba(63,185,80,1)'; ctx.lineWidth=2;
       ctx.beginPath(); ctx.arc(p.x,p.y,5,0,Math.PI*2); ctx.stroke();
       // Value
-      ctx.fillStyle='rgba(63,185,80,1)'; ctx.font='bold 10px JetBrains Mono'; ctx.textAlign='center';
+      ctx.fillStyle=_themeGreenColor(1); ctx.font='bold 10px JetBrains Mono'; ctx.textAlign='center';
       ctx.fillText('$'+(values[i]/1000).toFixed(1)+'k', p.x, p.y-10);
       // Label
       ctx.fillStyle='rgba(139,148,158,.8)'; ctx.font='9px Inter';
@@ -16256,13 +16289,13 @@ function renderTend(_scopeEl){
     const yrId='tend-yr-'+yr;
     histHtml+=`
     <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:8px">
-      <div id="${yrId}-hd" onclick="_hfToggleMes2(this)" style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--s2);cursor:pointer;user-select:none">
+      <div id="${yrId}-hd" onclick="_hfToggleMes2(this,event)" style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--s2);cursor:pointer;user-select:none">
         <div style="display:flex;align-items:center;gap:10px">
           <span id="${yrId}-chev" style="font-size:9px;color:var(--muted)">▼</span>
           <span style="font-size:13px;font-weight:700;color:var(--text)">${yr}</span>
           <span style="font-size:10px;color:var(--muted)">${yrCount} embarque${yrCount!==1?'s':''}</span>
         </div>
-        <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:var(--green-l)">${window._fmtMoney(yrTotal)} ahorro</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:var(--text)">${window._fmtMoney(yrTotal)} ahorro</span>
       </div>
       <div id="${yrId}-body">`;
 
@@ -16276,7 +16309,7 @@ function renderTend(_scopeEl){
       const _bloqueado = (window._mesesBloqueados||new Set()).has(ym);
       histHtml+=`
         <div style="border-top:1px solid var(--border)">
-          <div id="${moId}-hd" onclick="_hfToggleMes2(this)" style="display:flex;justify-content:space-between;align-items:center;padding:8px 14px 8px 28px;background:${_bloqueado?'rgba(63,185,80,.04)':'rgba(255,255,255,.02)'};cursor:pointer;user-select:none">
+          <div id="${moId}-hd" onclick="_hfToggleMes2(this,event)" style="display:flex;justify-content:space-between;align-items:center;padding:8px 14px 8px 28px;background:${_bloqueado?'rgba(63,185,80,.04)':'rgba(255,255,255,.02)'};cursor:pointer;user-select:none">
             <div style="display:flex;align-items:center;gap:8px">
               <span id="${moId}-chev" style="font-size:9px;color:var(--muted)">${isCurrentMonth?'▼':'▶'}</span>
               <span style="font-size:12px;font-weight:600;color:var(--text)">${moName}</span>
@@ -16284,7 +16317,7 @@ function renderTend(_scopeEl){
               <span style="font-size:10px;color:var(--muted)">${entries.length} embarque${entries.length!==1?'s':''}</span>
               <button onclick="event.stopPropagation();_toggleCandadoMes('${ym}')" title="${_bloqueado?'Mes cerrado — clic para reabrir':'Mes abierto — clic para cerrar y proteger'}" style="background:${_bloqueado?'rgba(63,185,80,.15)':'none'};border:1px solid ${_bloqueado?'rgba(63,185,80,.4)':'var(--border)'};color:${_bloqueado?'var(--green-l)':'var(--muted)'};border-radius:6px;padding:1px 7px;font-size:11px;cursor:pointer">${_bloqueado?'🔒':'🔓'}</button>
             </div>
-            <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:var(--green-l)">${window._fmtMoney(moTotal)}</span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:var(--text)">${window._fmtMoney(moTotal)}</span>
           </div>
           <div id="${moId}-body" style="display:${isCurrentMonth?'block':'none'}">`;
 
@@ -16298,10 +16331,10 @@ function renderTend(_scopeEl){
         histHtml+=`<div style="display:grid;grid-template-columns:auto 1fr auto auto auto;gap:8px;align-items:center;padding:9px 14px 9px 42px;border-top:1px solid rgba(48,54,61,.3);cursor:pointer;transition:background .15s${isPend?';border-left:3px solid var(--orange-l)':''}" onclick="if(event.target.classList.contains('del-btn')||event.target.classList.contains('btn-reabrir')){return;}abrirModuloComparativo_idx(${idx})" onmouseenter="this.style.background='rgba(255,255,255,.03)'" onmouseleave="this.style.background=''">
           <div style="font-size:10px;font-weight:700;color:var(--orange-l);white-space:nowrap">${d.nro||'—'} ${difBadge2}</div>
           <div>
-            <div style="font-size:12px;font-weight:500;color:var(--text)">${d.desc}${isPend?'&nbsp;<span class="badge-pendiente">🟡 PENDIENTE</span>':''}</div>
+            <div style="font-size:12px;font-weight:500;color:var(--text);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.35">${d.desc}${isPend?'&nbsp;<span class="badge-pendiente">🟡 PENDIENTE</span>':''}</div>
             <div style="font-size:10px;color:var(--muted);display:flex;gap:5px;align-items:center;margin-top:2px">${d.fecha} · ${d.esc||''} <span style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:var(--blue-l)">${viaIco} ${d.viaTransporte||'SEA'}</span></div>
           </div>
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--green-l);font-weight:700;white-space:nowrap">${window._fmtMoney(d.ahorro)}</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--text);font-weight:700;white-space:nowrap">${window._fmtMoney(d.ahorro)}</div>
           <div style="font-size:11px;color:var(--orange-l);white-space:nowrap">${pct}</div>
           <div style="display:flex;gap:4px;align-items:center">${!window._histEditMode || !_mesEditable ? '' : `
             <button class="btn-reabrir" onclick="event.stopPropagation();reabrirEmbarquePendiente(${idx})" style="${isPend?'':'background:rgba(88,166,255,.1);border-color:rgba(88,166,255,.3);color:var(--blue-l)'}">✏️ ${isPend?'Reabrir':'Editar'}</button>
@@ -16342,8 +16375,14 @@ function renderTend(_scopeEl){
     }
   };
 
-  // Inject premium KPI block above chart if not already present
-  renderDashboardKPIs(filteredData);
+  // FIX: se quitó la llamada automática a renderDashboardKPIs() aquí — esta
+  // función se ejecuta en cada refresco de renderTend() (incluido el
+  // setTimeout de _tendSubtab al cambiar de pestaña), y reconstruía TODO el
+  // bloque de KPIs — incluido "Costo No Mercancía" con sus acordeones —
+  // destruyendo cualquier <details> que el usuario acabara de abrir. Eso
+  // era la causa real de "se abre y se cierra solo". renderDashboardKPIs()
+  // ya se llama por separado donde realmente hace falta (carga inicial,
+  // después de procesar un embarque, cambios de filtro, etc.).
 }
 
 // ── DASHBOARD KPI BLOCK ──────────────────────────────
@@ -16430,7 +16469,7 @@ function renderHistProv(){
     </div>
     <div style="background:var(--s1);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">
       <div style="font-size:9px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Total Valor</div>
-      <div style="font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:800;color:var(--green-l)">${fmtK(totalValor)}</div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:800;color:var(--text)">${fmtK(totalValor)}</div>
     </div>
     <div style="background:var(--s1);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">
       <div style="font-size:9px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Total Piezas</div>
@@ -16741,7 +16780,7 @@ async function _fdAbrirBuscador(lineIdx, inputEl){
         +'<div style="font-size:10px;color:var(--muted);margin-top:2px">'+f.tipo+(mes?' · '+mes:'')+'</div>'
         +'</div>'
         +'<div style="text-align:right;flex-shrink:0;margin-left:12px">'
-        +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:14px;font-weight:800;color:var(--green-l)">'+fmt(saldo)+'</div>'
+        +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:14px;font-weight:800;color:var(--text)">'+fmt(saldo)+'</div>'
         +'<div style="font-size:9px;color:var(--muted);margin-top:2px">saldo disponible</div>'
         +'</div>'
         +'</div>';
@@ -16791,7 +16830,7 @@ function _fdMostrarDialogoUso(input, lineIdx, f){
 
   var sub = document.createElement('div');
   sub.style.cssText = 'font-size:11px;color:var(--muted);margin-bottom:14px';
-  sub.innerHTML = f.prov + ' · Saldo disponible: <strong style="color:var(--green-l)">' + fmt(saldo) + '</strong>';
+  sub.innerHTML = f.prov + ' · Saldo disponible: <strong style="color:var(--text)">' + fmt(saldo) + '</strong>';
 
   // ── Sección de múltiples rubros ──
   var rubrosSection = document.createElement('div');
@@ -17365,7 +17404,7 @@ async function _plntAbrirBuscador(){
     html+=disponibles.slice().sort(function(a,b){return new Date(b.fecha)-new Date(a.fecha);}).map(function(p){
       return '<div class="_plnt_modal_row" data-nombre="'+(p.nombre||'').toLowerCase()+'" '
         +'style="background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:border-color .15s" '
-        +'onmouseover="this.style.borderColor=\'rgba(34,197,94,.5)\'" onmouseout="this.style.borderColor=\'var(--border)\'"'
+        +'onmouseenter="this.style.borderColor=\'rgba(34,197,94,.5)\'" onmouseleave="this.style.borderColor=\'var(--border)\'"'
         +'onclick="_plntAplicar(\''+p.id+'\',this.closest(\'._plnt_buscador_overlay\'),this)">'
         +'<div style="font-size:22px;flex-shrink:0">📄</div>'
         +'<div style="flex:1;min-width:0">'
@@ -18295,7 +18334,7 @@ function _renderHistProvList(){
   var tp=f.reduce(function(s,r){return s+r.piezas;},0);
   if(statsEl) statsEl.innerHTML=
     '<div style="background:var(--s1);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center"><div style="font-size:9px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Registros</div><div style="font-family:\'IBM Plex Mono\',monospace;font-size:16px;font-weight:800;color:var(--text)">'+f.length+'</div></div>'+
-    '<div style="background:var(--s1);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center"><div style="font-size:9px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Total Valor</div><div style="font-family:\'IBM Plex Mono\',monospace;font-size:16px;font-weight:800;color:var(--green-l)">'+fmtK(tv)+'</div></div>'+
+    '<div style="background:var(--s1);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center"><div style="font-size:9px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Total Valor</div><div style="font-family:\'IBM Plex Mono\',monospace;font-size:16px;font-weight:800;color:var(--text)">'+fmtK(tv)+'</div></div>'+
     '<div style="background:var(--s1);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center"><div style="font-size:9px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Total Piezas</div><div style="font-family:\'IBM Plex Mono\',monospace;font-size:16px;font-weight:800;color:var(--blue-l)">'+(tp>0?tp.toLocaleString():'—')+'</div></div>';
   if(!f.length){
     // Try to find closest match for suggestion
@@ -18810,7 +18849,7 @@ function _kpiMostrarAhorro(){
       '<td style="padding:12px;font-size:13px;font-weight:800;color:var(--green-l);border:1px solid rgba(46,160,67,.3)">🏁 AHORRO TOTAL</td>'+
       '<td style="padding:12px;font-family:monospace;font-size:13px;font-weight:800;color:var(--blue-l);text-align:right;border:1px solid rgba(46,160,67,.3)">+'+fmt2(cif.total)+'</td>'+
       '<td style="padding:12px;font-family:monospace;font-size:13px;font-weight:800;color:var(--orange-l);text-align:right;border:1px solid rgba(46,160,67,.3)">+'+fmt2(sab.total)+'</td>'+
-      '<td style="padding:12px;font-family:monospace;font-size:14px;font-weight:900;color:var(--green-l);text-align:right;border:1px solid rgba(46,160,67,.3)">+'+fmt2(tot.total)+'</td>'+
+      '<td style="padding:12px;font-family:monospace;font-size:14px;font-weight:900;color:var(--text);text-align:right;border:1px solid rgba(46,160,67,.3)">+'+fmt2(tot.total)+'</td>'+
     '</tr>'+
     '<tr style="background:rgba(63,185,80,.04)">'+
       '<td style="padding:4px 12px 10px;font-size:9px;color:var(--green-l);border:1px solid rgba(46,160,67,.2)">% del total</td>'+
@@ -20319,7 +20358,6 @@ function _renderGastosNoMerc(all){
     honSubs.unico       > 0.01 ? `<div style="display:flex;justify-content:space-between;padding:7px 14px 7px 38px;font-size:11px;border-bottom:1px solid rgba(48,54,61,.2)"><span style="color:var(--muted)">🔒 Escenario Único</span><span style="font-family:'IBM Plex Mono',monospace;color:#a855f7">${fmt2(honSubs.unico)}</span></div>` : '',
     honSubs.sababaHomol > 0.01 ? `<div style="display:flex;justify-content:space-between;padding:7px 14px 7px 38px;font-size:11px;border-bottom:1px solid rgba(48,54,61,.2)"><span style="color:var(--muted)">🟠 Sababa: Comisión Homologado</span><span style="font-family:'IBM Plex Mono',monospace;color:#a855f7">${fmt2(honSubs.sababaHomol)}</span></div>` : '',
     (sababaLiqSubs.honorarios + sababaLiqSubs.acarreo + sababaLiqSubs.formulario + sababaLiqSubs.otros) > 0.01 ? (()=>{
-      const uid2 = '_sabaliq_'+Date.now();
       // Total neto = honorarios + acarreo + otros - notaCredito
       const sababaLiqTotal = sababaLiqSubs.honorarios + sababaLiqSubs.acarreo + sababaLiqSubs.formulario + sababaLiqSubs.otros - sababaLiqSubs.notaCredito;
       const subDetail = [
@@ -20329,14 +20367,13 @@ function _renderGastosNoMerc(all){
         sababaLiqSubs.otros       > 0.01 ? `<div style="display:flex;justify-content:space-between;padding:5px 14px 5px 56px;font-size:10px;border-bottom:1px solid rgba(48,54,61,.15)"><span style="color:var(--muted2)">📋 Otros Gastos</span><span style="font-family:'IBM Plex Mono',monospace;color:#c084fc">${fmt2(sababaLiqSubs.otros)}</span></div>` : '',
         sababaLiqSubs.notaCredito > 0.01 ? `<div style="display:flex;justify-content:space-between;padding:5px 14px 5px 56px;font-size:10px"><span style="color:var(--muted2)">🏷 Nota de Crédito (descuento)</span><span style="font-family:'IBM Plex Mono',monospace;color:#4ade80">-${fmt2(sababaLiqSubs.notaCredito)}</span></div>` : '',
       ].filter(Boolean).join('');
-      return `<div style="border-bottom:1px solid rgba(48,54,61,.2)">
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 14px 7px 38px;font-size:11px;cursor:pointer"
-             onclick="var d=document.getElementById('${uid2}');var c=this.querySelector('.slc');d.style.display=d.style.display==='none'?'block':'none';c.textContent=d.style.display==='none'?'▶':'▼'">
-          <span style="color:var(--muted)">🟡 Sababa: Liquidación <span class="slc" style="font-size:9px;color:var(--muted2)">▶</span></span>
+      return `<details class="acc-native" style="border-bottom:1px solid rgba(48,54,61,.2)">
+        <summary style="display:flex;justify-content:space-between;align-items:center;padding:7px 14px 7px 38px;font-size:11px;cursor:pointer;list-style:none">
+          <span style="color:var(--muted)">🟡 Sababa: Liquidación <span class="acc-chev" style="font-size:9px;color:var(--muted2)">▶</span></span>
           <span style="font-family:'IBM Plex Mono',monospace;color:#a855f7">${fmt2(sababaLiqTotal)}</span>
-        </div>
-        <div id="${uid2}" style="display:none;background:rgba(168,85,247,.03)">${subDetail}</div>
-      </div>`;
+        </summary>
+        <div style="background:rgba(168,85,247,.03)">${subDetail}</div>
+      </details>`;
     })() : '',
     honSubs.otros       > 0.01 ? `<div style="display:flex;justify-content:space-between;padding:7px 14px 7px 38px;font-size:11px;border-bottom:1px solid rgba(48,54,61,.2)"><span style="color:var(--muted)">📋 Otros</span><span style="font-family:'IBM Plex Mono',monospace;color:#a855f7">${fmt2(honSubs.otros)}</span></div>` : '',
   ].filter(Boolean).join('');
@@ -20369,50 +20406,46 @@ function _renderGastosNoMerc(all){
 
       if(r === hon && hasHonSubs){
         // Honorarios — collapsible
-        const uid = '_hon_detail_'+Date.now();
-        return `<div>
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;border-bottom:1px solid rgba(48,54,61,.3);cursor:pointer;user-select:none"
-               onclick="var d=this.nextElementSibling;var c=this.querySelector('.hc');if(d.style.display==='none'){d.style.display='block';c.textContent='▼';}else{d.style.display='none';c.textContent='▶';}">
+        return `<details class="acc-native">
+          <summary style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;border-bottom:1px solid rgba(48,54,61,.3);cursor:pointer;user-select:none;list-style:none">
             <div style="display:flex;align-items:center;gap:8px">
               <span style="font-size:13px">${r.icon}</span>
               <span style="font-size:12px;color:var(--text)">${r.label}</span>
             </div>
             <div style="display:flex;align-items:center;gap:6px">
               <div style="display:flex;align-items:center">${pctHtml}</div>
-              <span class="hc" style="font-size:10px;color:var(--muted)">▶</span>
+              <span class="acc-chev" style="font-size:10px;color:var(--muted)">▶</span>
             </div>
-          </div>
-          <div id="${uid}" style="display:none;background:rgba(168,85,247,.04);border-bottom:1px solid rgba(48,54,61,.2)">
+          </summary>
+          <div style="background:rgba(168,85,247,.04);border-bottom:1px solid rgba(48,54,61,.2)">
             ${honSubRows}
           </div>
-        </div>`;
+        </details>`;
       }
       if(r === tesoro && r.total>0.01){
         // Tesoro Nacional Costeable — collapsible
-        const uid4 = '_tesoro_c_'+Date.now();
         const subs4 = r.subs||{};
         const tSubRows = [
           subs4.liquidacion > 0.01 ? `<div style="display:flex;justify-content:space-between;padding:6px 14px 6px 38px;font-size:11px;border-bottom:1px solid rgba(88,166,255,.1)"><span style="color:var(--muted)">📄 Liquidación (arancel)</span><span style="font-family:'IBM Plex Mono',monospace;color:var(--blue-l)">${fmt2(subs4.liquidacion)}</span></div>` : '',
           subs4.tasa > 0.01 ? `<div style="display:flex;justify-content:space-between;padding:6px 14px 6px 38px;font-size:11px;border-bottom:1px solid rgba(88,166,255,.1)"><span style="color:var(--muted)">📊 Tasa Aduana</span><span style="font-family:'IBM Plex Mono',monospace;color:var(--blue-l)">${fmt2(subs4.tasa)}</span></div>` : '',
           subs4.usoSistema > 0.01 ? `<div style="display:flex;justify-content:space-between;padding:6px 14px 6px 38px;font-size:11px;border-bottom:1px solid rgba(88,166,255,.1)"><span style="color:var(--muted)">💻 Uso del Sistema</span><span style="font-family:'IBM Plex Mono',monospace;color:var(--blue-l)">${fmt2(subs4.usoSistema)}</span></div>` : '',
         ].filter(Boolean).join('');
-        return `<div>
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;border-bottom:1px solid rgba(48,54,61,.3);cursor:pointer;user-select:none"
-               onclick="var d=this.nextElementSibling;var c=this.querySelector('.tc4');if(d.style.display==='none'){d.style.display='block';c.textContent='▼';}else{d.style.display='none';c.textContent='▶';}">
+        return `<details class="acc-native">
+          <summary style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;border-bottom:1px solid rgba(48,54,61,.3);cursor:pointer;user-select:none;list-style:none">
             <div style="display:flex;align-items:center;gap:8px">
               <span style="font-size:13px">🏛️</span>
               <span style="font-size:12px;color:var(--text)">Tesoro Nacional (Costeable)</span>
             </div>
             <div style="display:flex;align-items:center;gap:6px">
               <div style="display:flex;align-items:center">${pctHtml}</div>
-              <span class="tc4" style="font-size:10px;color:var(--muted)">▶</span>
+              <span class="acc-chev" style="font-size:10px;color:var(--muted)">▶</span>
             </div>
-          </div>
-          <div id="${uid4}" style="display:none;background:rgba(88,166,255,.04);border-bottom:1px solid rgba(48,54,61,.2)">
+          </summary>
+          <div style="background:rgba(88,166,255,.04);border-bottom:1px solid rgba(48,54,61,.2)">
             ${tSubRows}
             <div style="padding:5px 14px 6px 38px;font-size:9px;color:var(--muted2)">Estos rubros entran al costo de inventario</div>
           </div>
-        </div>`;
+        </details>`;
       }
       return `<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;border-bottom:1px solid rgba(48,54,61,.3)">
         <div style="display:flex;align-items:center;gap:8px">
@@ -20464,7 +20497,7 @@ function _renderGastosNoMerc(all){
   ${totalItbms>0.01?`
   <div style="border-top:1px solid var(--border)">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;cursor:pointer;user-select:none;background:rgba(88,166,255,.04)"
-         onclick="var b=this.nextElementSibling;b.style.display=b.style.display==='none'?'block':'none';this.querySelector('.itbf').textContent=b.style.display==='none'?'▶':'▼'">
+         onclick="event.stopPropagation();var b=this.nextElementSibling;b.style.display=b.style.display==='none'?'block':'none';this.querySelector('.itbf').textContent=b.style.display==='none'?'▶':'▼'">
       <div style="display:flex;align-items:center;gap:8px">
         <span style="font-size:14px">🧾</span>
         <div>
@@ -20484,37 +20517,35 @@ function _renderGastosNoMerc(all){
       <div style="padding:8px 16px;font-size:10px;color:var(--muted)">El ITBMS Sababa costeable ya está dentro de Honorarios/Comisión.</div>
       <div style="display:flex;justify-content:space-between;padding:8px 16px;background:rgba(63,185,80,.05);border-top:1px solid rgba(63,185,80,.15)">
         <span style="font-size:11px;font-weight:700;color:var(--green-l)">Landed Total (No Merc + ITBMS)</span>
-        <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:800;color:var(--green-l)">${window._fmtMoney(totalNoMerc+totalItbms)}</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:800;color:var(--text)">${window._fmtMoney(totalNoMerc+totalItbms)}</span>
       </div>
     </div>
   </div>`:''}
 
   <!-- ¿DE DÓNDE VIENE EL AHORRO? -->
   ${totalAhorroDetalle>0 ? `
-  <div style="border-top:1px solid var(--border)">
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;cursor:pointer;user-select:none;background:rgba(63,185,80,.04);-webkit-tap-highlight-color:rgba(0,0,0,0)"
-         ontouchstart="this.style.background='rgba(63,185,80,.1)'" ontouchend="this.style.background='rgba(63,185,80,.04)'"
-         onclick="var b=this.nextElementSibling;b.style.display=b.style.display==='none'?'block':'none';this.querySelector('.ah-chev').textContent=b.style.display==='none'?'▶':'▼'">
+  <details class="acc-native" style="border-top:1px solid var(--border)">
+    <summary style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;cursor:pointer;user-select:none;background:rgba(63,185,80,.04);-webkit-tap-highlight-color:rgba(0,0,0,0);list-style:none">
       <div style="display:flex;align-items:center;gap:8px">
         <span style="font-size:14px">💰</span>
         <div>
-          <div style="font-size:11px;font-weight:700;color:var(--green-l)">¿De dónde viene el Ahorro?</div>
+          <div style="font-size:11px;font-weight:700;color:var(--text)">¿De dónde viene el Ahorro?</div>
           <div style="font-size:10px;color:var(--muted)">Liq. Aduanal vs Esc. Elegido — por rubro</div>
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
-        <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:800;color:var(--green-l)">${fmtK(totalAhorroDetalle)}</span>
-        <span class="ah-chev" style="font-size:11px;color:var(--muted)">▶</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:800;color:var(--text)">${fmtK(totalAhorroDetalle)}</span>
+        <span class="acc-chev" style="font-size:11px;color:var(--muted)">▶</span>
       </div>
-    </div>
-    <div style="display:none">
+    </summary>
+    <div>
       ${ahorroRows||'<div style="padding:12px 16px;color:var(--muted);font-size:11px">Sin desglose disponible.</div>'}
       <div style="display:flex;justify-content:space-between;padding:10px 16px;background:rgba(63,185,80,.04);border-top:1px solid rgba(63,185,80,.15)">
         <span style="font-size:12px;font-weight:700;color:var(--text)">Ahorro Total Acumulado</span>
-        <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:800;color:var(--green-l)">+${window._fmtMoney(totalAhorroDetalle)}</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:800;color:var(--text)">+${window._fmtMoney(totalAhorroDetalle)}</span>
       </div>
     </div>
-  </div>` : ''}
+  </details>` : ''}
   </div><!-- /_tend-sec-costos -->
 
   <div id="_tend-sec-histprov" class="_tend-sec" style="display:none">
@@ -21181,7 +21212,7 @@ function _renderDeptChart(all){
       var clickFn = single
         ? (single.nro ? 'window._abrirPorNro(\''+single.nro+'\')' : (single.dIdx>=0 ? 'abrirFacturasEmbarque('+single.dIdx+')' : ''))
         : '_deptAbrirEmbarquesProveedor(\''+dkey.replace(/'/g,"\\'")+'\',\''+p.prov.replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;')+'\')';
-      return '<div onclick="'+(clickFn ? 'event.stopPropagation();'+clickFn : '')+'" style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:8px 14px;border-bottom:1px solid rgba(255,255,255,.04);'+(clickFn?'cursor:pointer;':'')+'transition:background .12s" onmouseover="'+(clickFn?'this.style.background=\'rgba(255,255,255,.05)\'':'')+'" onmouseout="this.style.background=\'transparent\'">'
+      return '<div onclick="'+(clickFn ? 'event.stopPropagation();'+clickFn : '')+'" style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:8px 14px;border-bottom:1px solid rgba(255,255,255,.04);'+(clickFn?'cursor:pointer;':'')+'transition:background .12s" onmouseenter="'+(clickFn?'this.style.background=\'rgba(255,255,255,.05)\'':'')+'" onmouseleave="this.style.background=\'transparent\'">'
         +'<div style="flex:1;min-width:0">'
         +'<div style="font-size:11px;font-weight:700;color:#e6edf3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+p.prov+'</div>'
         +'<div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-top:2px">'+tipoBadge
@@ -21197,7 +21228,7 @@ function _renderDeptChart(all){
 
     html += '<div style="margin-bottom:2px;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,.08)">';
     // ── Header: click expands/collapses inline ──
-    html += '<div onclick="(function(el){var b=document.getElementById(\''+accBodyId+'\');if(!b)return;var open=b.style.display!==\'none\';b.style.display=open?\'none\':\'block\';el.querySelector(\'.dept-chev\').textContent=open?\'▶\':\'▼\';})(this)" style="padding:10px 12px;cursor:pointer;user-select:none;background:var(--s2);transition:background .12s" onmouseover="this.style.background=\'rgba(255,255,255,.07)\'" onmouseout="this.style.background=\'var(--s2)\'">';
+    html += '<div onclick="(function(el){var b=document.getElementById(\''+accBodyId+'\');if(!b)return;var open=b.style.display!==\'none\';b.style.display=open?\'none\':\'block\';el.querySelector(\'.dept-chev\').textContent=open?\'▶\':\'▼\';})(this)" style="padding:10px 12px;cursor:pointer;user-select:none;background:var(--s2);transition:background .12s" onmouseenter="this.style.background=\'rgba(255,255,255,.07)\'" onmouseleave="this.style.background=\'var(--s2)\'">';
     html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
     html += '<span style="font-size:12px;font-weight:700;color:var(--text)">'+ico+' '+k+'</span>';
     html += '<div style="display:flex;gap:8px;align-items:center">';
@@ -21360,7 +21391,7 @@ function _renderDeptAhorroChart(all){
   });
   html += '<div style="margin-top:6px;padding-top:8px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;font-size:11px">';
   html += '<span style="color:var(--muted)">'+entries.length+' departamentos con ahorro — toca uno para ver qué proveedores lo generaron</span>';
-  html += '<span style="font-family:\'IBM Plex Mono\',monospace;font-weight:700;color:var(--green-l)">'+fmtK(totalAhorroDept)+' ahorro total</span>';
+  html += '<span style="font-family:\'IBM Plex Mono\',monospace;font-weight:700;color:var(--text)">'+fmtK(totalAhorroDept)+' ahorro total</span>';
   html += '</div>';
   html += '</div>';
   return html;
@@ -21875,8 +21906,8 @@ function _renderGroupSections(data){
         : '<span style="background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:3px;padding:1px 5px;font-size:9px;font-weight:700;white-space:nowrap">🚛 ZL</span>';
       return '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 16px;'
         +'border-bottom:1px solid rgba(48,54,61,.4);cursor:pointer;transition:background .12s" '
-        +'onmouseover="this.style.background=\'rgba(255,255,255,.03)\'" '
-        +'onmouseout="this.style.background=\'\'" '
+        +'onmouseenter="this.style.background=\'rgba(255,255,255,.03)\'" '
+        +'onmouseleave="this.style.background=\'\'" '
         +'onclick="abrirFacturasEmbarque('+f.embarqueIdx+')">'
         +'<div style="flex:1;min-width:0">'
         +'<div style="font-size:12px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+f.prov+'</div>'
@@ -22447,7 +22478,7 @@ window.abrirFacturasEmbarque = function(idx){
       + buildProvRows(allFacs)
       +'<div style="display:flex;justify-content:space-between;padding:8px 16px;background:rgba(63,185,80,.05);font-size:11px;font-weight:700;border-top:1px solid var(--border)">'
       +'<span style="color:var(--muted)">Total '+k+'</span>'
-      +'<span style="color:var(--green-l)">'+fmt2(v.totalCosto)+'</span></div>'
+      +'<span style="color:var(--text)">'+fmt2(v.totalCosto)+'</span></div>'
       +'</div>';
 
     // Panel desglosado ZL / EXT
@@ -22484,8 +22515,8 @@ window.abrirFacturasEmbarque = function(idx){
         +'<div id="'+arrId+'" style="width:44px;display:flex;align-items:center;justify-content:center;'
         +'background:var(--s2);border-left:1px solid var(--border);cursor:pointer;font-size:14px;'
         +'color:var(--muted);flex-shrink:0;transition:background .15s" '
-        +'onmouseover="this.style.background=\'rgba(255,255,255,.06)\'" '
-        +'onmouseout="this.style.background=\'var(--s2)\'" '
+        +'onmouseenter="this.style.background=\'rgba(255,255,255,.06)\'" '
+        +'onmouseleave="this.style.background=\'var(--s2)\'" '
         +'onclick="_grpToggleDesg(\''+uid+'\',this)" title="Desglosar por tipo de proveedor">&#9660;</div>'
 
       +'</div>'
@@ -22994,7 +23025,7 @@ function renderHistFact(){
       +'<div style="font-size:10px;color:var(--muted)">'+countAnio+' embarque'+(countAnio!==1?'s':'')+' · '+mesesAnio.length+' mes'+(mesesAnio.length!==1?'es':'')+'</div>'
       +'</div></div>'
       +'<div style="display:flex;align-items:center;gap:10px">'
-      +'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:13px;font-weight:800;color:var(--green-l)">'+fmtK(totalAnio)+'</span>'
+      +'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:13px;font-weight:800;color:var(--text)">'+fmtK(totalAnio)+'</span>'
       +'<span class="hf-anio-chev" style="font-size:12px;color:var(--muted)">'+(anioOpen?'▼':'▶')+'</span>'
       +'</div></div>';
 
@@ -23090,7 +23121,7 @@ function renderHistFact(){
 
         // Card del embarque
         html += '<div style="border-top:1px solid rgba(48,54,61,.3)">'
-          +'<div onclick="_toggleHF(\''+uid+'\')" style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;cursor:pointer;transition:background .12s" onmouseover="this.style.background=\'rgba(255,255,255,.03)\'" onmouseout="this.style.background=\'\'">'
+          +'<div onclick="_toggleHF(\''+uid+'\')" style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;cursor:pointer;transition:background .12s" onmouseenter="this.style.background=\'rgba(255,255,255,.03)\'" onmouseleave="this.style.background=\'\'">'
           +'<div>'
           +'<div style="font-size:10px;font-weight:700;color:var(--orange-l)">'+(d.nro||'—')
           +(isPend?' <span style="background:rgba(210,153,34,.15);border:1px solid rgba(210,153,34,.4);color:var(--orange-l);font-size:9px;padding:1px 5px;border-radius:4px">PENDIENTE</span>':'')
@@ -24540,7 +24571,7 @@ function calcUnicoFull(){
         </div>
         <div style="text-align:center;background:rgba(63,185,80,.08);border:1px solid rgba(63,185,80,.3);border-radius:10px;padding:12px 8px">
           <div style="font-size:9px;font-weight:700;color:var(--green-l);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Costo Landed</div>
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:800;color:var(--green-l)">${fmt(landed)}</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:800;color:var(--text)">${fmt(landed)}</div>
         </div>
         <div style="text-align:center;background:rgba(240,136,62,.08);border:1px solid rgba(240,136,62,.3);border-radius:10px;padding:12px 8px">
           <div style="font-size:9px;font-weight:700;color:var(--orange-l);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Factor Import.</div>
@@ -24556,7 +24587,7 @@ function calcUnicoFull(){
           ${gastosDesglose.map(g=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(48,54,61,.3)"><span style="font-size:12px;color:var(--muted)">${g.lbl}</span><span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:${g.color};font-weight:600">${fmt(g.val)}</span></div>`).join('')}
           <div style="display:flex;justify-content:space-between;padding:8px;background:rgba(63,185,80,.06);margin-top:6px;border-radius:8px">
             <span style="font-size:13px;font-weight:700;color:var(--text)">Costo Landed Total</span>
-            <span style="font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:800;color:var(--green-l)">${fmt(landed)}</span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:800;color:var(--text)">${fmt(landed)}</span>
           </div>
           <div style="display:flex;justify-content:space-between;padding:5px 8px"><span style="font-size:11px;color:var(--orange-l);font-weight:600">Costo No Mercancía</span><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--orange-l);font-weight:700">${fmt(landed-cif)}</span></div>
           <div style="display:flex;justify-content:space-between;padding:5px 0;border-top:1px solid rgba(48,54,61,.3);margin-top:4px"><span style="font-size:11px;color:var(--blue-l)">Otros Gastos — ITBMS (${(itbPct*100).toFixed(0)}%)</span><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--blue-l);font-weight:700">${fmt(itbms+itbmsTasa)}</span></div>
@@ -25669,7 +25700,7 @@ function _abrirSelectorRubro(callback){
     +'<div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:14px">📋 Selecciona el Rubro del Gasto</div>'
     +'<div style="display:flex;flex-direction:column;gap:6px" id="_rubro-opts">'
     +rubros.map(function(r){
-      return '<button onclick="_selectRubro(\''+r.val+'\')" style="text-align:left;background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer;transition:background .15s" onmouseover="this.style.background=\'rgba(88,166,255,.12)\'" onmouseout="this.style.background=\'var(--s2)\'">'+r.lbl+'</button>';
+      return '<button onclick="_selectRubro(\''+r.val+'\')" style="text-align:left;background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer;transition:background .15s" onmouseenter="this.style.background=\'rgba(88,166,255,.12)\'" onmouseleave="this.style.background=\'var(--s2)\'">'+r.lbl+'</button>';
     }).join('')
     +'</div>'
     +'<button onclick="document.getElementById(\'_rubro-modal\').remove()" style="margin-top:12px;width:100%;background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:12px;color:var(--muted);cursor:pointer">Cancelar</button>'
@@ -26300,7 +26331,7 @@ function _unicoLoadPlantilla(input){
             <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
               <span style="font-size:9px;background:rgba(218,54,51,.18);color:var(--red-l);border-radius:3px;padding:1px 6px;flex-shrink:0">⚠ No encontrado</span>
               <span style="color:var(--muted);font-size:9px">${l.deptCat||''}</span>
-              <span style="color:var(--green-l);font-family:monospace;font-size:11px;font-weight:700;margin-left:auto">${fmt(l.costo)}</span>
+              <span style="color:var(--text);font-family:monospace;font-size:11px;font-weight:700;margin-left:auto">${fmt(l.costo)}</span>
             </div>
             <div style="display:flex;gap:4px;align-items:center">
               <input type="text" value="${(l.prov||'').replace(/"/g,'&quot;')}"
@@ -26329,7 +26360,7 @@ function _unicoLoadPlantilla(input){
                 ${badge}
                 <span style="color:var(--muted);font-size:9px;margin-left:2px">${l.deptCat||''}</span>
               </div>
-              <span style="color:var(--green-l);font-family:monospace;font-size:11px;font-weight:700;flex-shrink:0;margin-left:8px">${fmt(l.costo)}</span>
+              <span style="color:var(--text);font-family:monospace;font-size:11px;font-weight:700;flex-shrink:0;margin-left:8px">${fmt(l.costo)}</span>
             </div>
           </div>`;
         }
@@ -27080,8 +27111,10 @@ function loadInvFile(input){
     const _totalMercAuto = _mercLinesAuto.reduce((s,l)=>s+(l.costo||0),0);
     const _deptSumsAuto = {};
     _mercLinesAuto.forEach(l=>{ const k=(l.deptCat||l.dept||'').trim(); if(k){if(!_deptSumsAuto[k])_deptSumsAuto[k]=0;_deptSumsAuto[k]+=(l.costo||0);} });
-    const _dptParts = Object.entries(_deptSumsAuto).sort((a,b)=>b[1]-a[1])
+    const _dptPartsAll = Object.entries(_deptSumsAuto).sort((a,b)=>b[1]-a[1])
       .map(([k,v])=>{ const p=_totalMercAuto>0?(v/_totalMercAuto*100).toFixed(0):0; return k+' '+p+'%'; });
+    const _dptParts = _dptPartsAll.slice(0,3);
+    if(_dptPartsAll.length>3) _dptParts.push('+'+(_dptPartsAll.length-3)+' más');
     const _descStr = _dptParts.join(', ');
     // Actualizar campo Tipo de Mercancía del formulario principal
     const _descAutoEl = document.getElementById('s1_desc_emb');
@@ -28371,7 +28404,7 @@ function _mapearPiezas(input) {
 
 window.onload=function(){
   initSupabase();
-  setTimeout(function(){ if(typeof _cargarMesesBloqueados==='function') _cargarMesesBloqueados().then(function(){ if(typeof renderTend==='function') renderTend(); }); }, 800);
+  setTimeout(function(){ if(typeof _cargarMesesBloqueados==='function') _cargarMesesBloqueados().then(function(){ var _tmOverlay=document.getElementById('tab-modal-overlay'); var _tmOpenOnTend=_tmOverlay && _tmOverlay.classList.contains('open') && _tmOverlay.getAttribute('data-tab')==='tendencias'; if(!_tmOpenOnTend && typeof renderTend==='function') renderTend(); }); }, 800);
   // Si quedaron sincronizaciones o borrados pendientes de una sesión
   // anterior (la app se cerró antes de que la nube confirmara), reintentar.
   try{
@@ -29611,9 +29644,6 @@ body:not(.sidebar-pinned) #app-wrapper {
     var o1 = document.createElement('div');
     o1.id = 'tab-modal-overlay';
     // clicking the dark backdrop closes the modal
-    o1.addEventListener('click', function(e){
-      if(e.target === o1) { if(typeof window.closeTabModal==='function') window.closeTabModal(); }
-    });
     document.addEventListener('keydown', function(e){
       if(e.key==='Escape'){
         var o2open = document.getElementById('tab-modal-overlay2');
@@ -29695,9 +29725,6 @@ body:not(.sidebar-pinned) #app-wrapper {
             if(typeof renderDashboardKPIs==='function') renderDashboardKPIs();
             if(typeof cargarPendientes==='function') cargarPendientes();
             if(typeof renderTopProvs==='function') renderTopProvs();
-            setTimeout(function(){ if(typeof renderTend==='function') renderTend(); }, 200);
-            setTimeout(function(){ if(typeof renderTend==='function') renderTend(); }, 500);
-            setTimeout(function(){ if(typeof renderTend==='function') renderTend(); }, 1000);
           })();
         }
         if(tabId==='facturas'  && typeof renderInvLines==='function'){
@@ -30976,7 +31003,7 @@ window._plnModuloEmbarques = async function(){
       var faltantes=totalLines-rowsAsig;
       parcialBadge='<span style="display:inline-block;margin-top:3px;background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.4);color:#79c0ff;border-radius:4px;padding:1px 6px;font-size:9px;font-weight:700">\u231b '+rowsAsig+'/'+totalLines+' fact. &middot; '+faltantes+' pendiente'+(faltantes>1?'s':'')+'</span>';
     }
-    return '<div class="_plnEmbItem" data-nro="'+nro+'" style="padding:11px 12px;border:1px solid '+(rowsAsig>0?'rgba(88,166,255,.4)':'var(--border)')+';border-radius:9px;margin-bottom:7px;cursor:pointer;background:var(--bg)">'      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div style="flex:1;min-width:0">'      +'<div style="font-size:13px;font-weight:700;color:var(--orange-l)">Emb. '+nro+'</div>'      +'<div style="font-size:11px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+( d.desc||"")+parcialBadge+'</div>'      +'<div style="font-size:10px;color:var(--muted)">'+( d.fecha||'')+' &middot; '+( d.esc||"")+(tipoEq?" &middot; "+nEquip+"x "+tipoEq:"")+(lines.length?" &middot; "+lines.length+" prov.":"")+(deptos?" &middot; "+deptos:"")+' </div>'      +'</div><div style="text-align:right;flex-shrink:0">'      +'<div style="font-size:11px;font-weight:700;color:var(--green-l);font-family:monospace">'+fmt(fob)+'</div>'      +'<div style="font-size:10px;color:var(--orange-l);font-family:monospace">'+fmt(lnd)+'</div>'      +'<div style="font-size:9px;color:var(--muted)">FOB / Landed</div></div></div></div>';
+    return '<div class="_plnEmbItem" data-nro="'+nro+'" style="padding:11px 12px;border:1px solid '+(rowsAsig>0?'rgba(88,166,255,.4)':'var(--border)')+';border-radius:9px;margin-bottom:7px;cursor:pointer;background:var(--bg)">'      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div style="flex:1;min-width:0">'      +'<div style="font-size:13px;font-weight:700;color:var(--orange-l)">Emb. '+nro+'</div>'      +'<div style="font-size:11px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+( d.desc||"")+parcialBadge+'</div>'      +'<div style="font-size:10px;color:var(--muted)">'+( d.fecha||'')+' &middot; '+( d.esc||"")+(tipoEq?" &middot; "+nEquip+"x "+tipoEq:"")+(lines.length?" &middot; "+lines.length+" prov.":"")+(deptos?" &middot; "+deptos:"")+' </div>'      +'</div><div style="text-align:right;flex-shrink:0">'      +'<div style="font-size:11px;font-weight:700;color:var(--text);font-family:monospace">'+fmt(fob)+'</div>'      +'<div style="font-size:10px;color:var(--orange-l);font-family:monospace">'+fmt(lnd)+'</div>'      +'<div style="font-size:9px;color:var(--muted)">FOB / Landed</div></div></div></div>';
   }
   function selectEmbarque(nro){
     var d=td.find(function(x){return (x.nro||'').trim()===nro.trim();}); if(!d){alert('No encontrado: '+nro);return;}
@@ -31077,7 +31104,7 @@ window._plnModuloEmbarques = async function(){
       +'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+(d.fecha||'')+' &middot; '+(d.esc||'')+' &middot; '+nEquip+'x '+tipoEq+'</div>'
       +'<div style="display:flex;gap:14px;margin-top:6px;flex-wrap:wrap">'
       +'<div><div style="font-size:9px;color:var(--muted)">FOB</div><div style="font-size:12px;font-weight:700;color:var(--blue-l);font-family:monospace">'+fmt(fob)+'</div></div>'
-      +'<div><div style="font-size:9px;color:var(--muted)">Homologado</div><div style="font-size:12px;font-weight:700;color:var(--green-l);font-family:monospace">'+fmt(totHom)+'</div></div>'
+      +'<div><div style="font-size:9px;color:var(--muted)">Homologado</div><div style="font-size:12px;font-weight:700;color:var(--text);font-family:monospace">'+fmt(totHom)+'</div></div>'
       +'<div><div style="font-size:9px;color:var(--muted)">Landed</div><div style="font-size:12px;font-weight:700;color:var(--orange-l);font-family:monospace">'+fmt(lndTotal)+'</div></div>'
       +(impCnt>0?'<div style="background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.2);border-radius:6px;padding:4px 8px;font-size:10px;color:#f97316;font-weight:700">IMP: '+impCnt+'</div>':'')
       +(zlCnt>0?'<div style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.2);border-radius:6px;padding:4px 8px;font-size:10px;color:#60a5fa;font-weight:700">ZL: '+zlCnt+'</div>':'')
