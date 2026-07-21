@@ -15935,6 +15935,31 @@ function _themeGreenColor(alpha){
     return isLight ? 'rgba(17,99,41,'+alpha+')' : 'rgba(63,185,80,'+alpha+')';
   }catch(e){ return 'rgba(63,185,80,'+alpha+')'; }
 }
+// ══════════════════════════════════════════════════════════════
+//  _fechaEmbarqueReal(d) — resuelve la fecha "de negocio" de un
+//  embarque con una cadena de respaldo, EN VEZ de asumir '2000-01-01'
+//  cuando d.fecha viene vacío (bug jul-2026: embarques recién
+//  procesados con d.fecha vacío por una sincronización a medias
+//  aparecían agrupados bajo "2000 / Enero 2000" en el Historial,
+//  perdiéndose visualmente aunque los datos estuvieran completos).
+//  Orden de respaldo: d.fecha → d.fechaDoc → d.snap.fecha → fecha
+//  derivada de d.ts (el timestamp SIEMPRE se graba al procesar).
+//  Devuelve null si de verdad no hay ninguna fecha usable — en ese
+//  caso quien llama debe agrupar en un bloque "Sin fecha", nunca en
+//  el año 2000.
+// ══════════════════════════════════════════════════════════════
+function _fechaEmbarqueReal(d){
+  if(!d) return null;
+  var _esFechaValida = function(s){ return typeof s==='string' && /^\d{4}-\d{2}-\d{2}/.test(s) && s.slice(0,4)!=='0000'; };
+  if(_esFechaValida(d.fecha))    return d.fecha.slice(0,10);
+  if(_esFechaValida(d.fechaDoc)) return d.fechaDoc.slice(0,10);
+  if(d.snap && _esFechaValida(d.snap.fecha)) return d.snap.fecha.slice(0,10);
+  if(d.ts && typeof d.ts==='number' && d.ts>0){
+    try{ return new Date(d.ts).toISOString().slice(0,10); }catch(e){}
+  }
+  return null;
+}
+
 function renderTend(_scopeEl){
   // ── FIX (jul-2026): se quitó el "auto-aplicar último mes guardado" que
   //    corría una sola vez por sesión y escribía silenciosamente una fecha
@@ -16270,10 +16295,16 @@ function renderTend(_scopeEl){
   const byYear = {};
   [...filteredData].forEach((d)=>{
     const idx=tendData.indexOf(d);
-    const dt=new Date(d.fecha||'2000-01-01');
-    const yr=dt.getFullYear();
-    const mo=String(dt.getMonth()+1).padStart(2,'0');
-    const ym=`${yr}-${mo}`;
+    // ── FIX (jul-2026): antes `new Date(d.fecha||'2000-01-01')` metía
+    //    cualquier embarque con d.fecha vacío en un falso "2000" —
+    //    invisible entre los años reales. Ahora se intenta recuperar
+    //    la fecha real por varias vías y, si de plano no hay ninguna,
+    //    se agrupa en un bloque "Sin fecha" explícito. ──
+    const _fReal = _fechaEmbarqueReal(d);
+    const dt = _fReal ? new Date(_fReal) : null;
+    const yr = dt ? dt.getFullYear() : 'Sin fecha';
+    const mo = dt ? String(dt.getMonth()+1).padStart(2,'0') : '00';
+    const ym = dt ? `${yr}-${mo}` : 'Sin fecha';
     if(!byYear[yr]) byYear[yr]={};
     if(!byYear[yr][ym]) byYear[yr][ym]=[];
     byYear[yr][ym].push({d,idx});
@@ -16281,7 +16312,12 @@ function renderTend(_scopeEl){
 
   const monthNames=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   let histHtml='';
-  const years=Object.keys(byYear).sort((a,b)=>b-a); // desc
+  // "Sin fecha" siempre al final, nunca mezclado por orden numérico con años reales
+  const years=Object.keys(byYear).sort((a,b)=>{
+    if(a==='Sin fecha') return 1;
+    if(b==='Sin fecha') return -1;
+    return b-a;
+  });
   years.forEach(yr=>{
     const monthsInYear=Object.keys(byYear[yr]).sort((a,b)=>b.localeCompare(a));
     const yrTotal=monthsInYear.reduce((s,ym)=>s+byYear[yr][ym].reduce((ms,{d})=>ms+(d.ahorro||0),0),0);
@@ -16292,7 +16328,7 @@ function renderTend(_scopeEl){
       <div id="${yrId}-hd" onclick="_hfToggleMes2(this,event)" style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--s2);cursor:pointer;user-select:none">
         <div style="display:flex;align-items:center;gap:10px">
           <span id="${yrId}-chev" style="font-size:9px;color:var(--muted)">▼</span>
-          <span style="font-size:13px;font-weight:700;color:var(--text)">${yr}</span>
+          <span style="font-size:13px;font-weight:700;color:${yr==='Sin fecha'?'var(--orange-l)':'var(--text)'}">${yr==='Sin fecha'?'⚠️ Sin fecha':yr}</span>
           <span style="font-size:10px;color:var(--muted)">${yrCount} embarque${yrCount!==1?'s':''}</span>
         </div>
         <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:var(--text)">${window._fmtMoney(yrTotal)} ahorro</span>
@@ -16300,8 +16336,9 @@ function renderTend(_scopeEl){
       <div id="${yrId}-body">`;
 
     monthsInYear.forEach(ym=>{
-      const [yStr,mStr]=ym.split('-');
-      const moName=monthNames[parseInt(mStr,10)-1];
+      const isSinFecha = ym==='Sin fecha';
+      const [yStr,mStr]=isSinFecha ? ['Sin fecha',''] : ym.split('-');
+      const moName=isSinFecha ? 'Sin fecha registrada' : monthNames[parseInt(mStr,10)-1];
       const entries=byYear[yr][ym];
       const moTotal=entries.reduce((s,{d})=>s+(d.ahorro||0),0);
       const isCurrentMonth=(ym===currentYM);
@@ -16419,7 +16456,7 @@ function renderHistProv(){
       oninput="_histProvSearch()"
       style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:7px;padding:8px 10px;color:var(--text);font-size:12px;box-sizing:border-box;margin-bottom:8px">
     <label style="display:flex;align-items:center;gap:7px;font-size:11px;color:var(--text);font-weight:600;margin-bottom:8px;cursor:pointer">
-      <input id="hp-agrupar" type="checkbox" onchange="_renderHistProvList()" style="width:15px;height:15px;accent-color:var(--green-l,#3fb950)">
+      <input id="hp-agrupar" type="checkbox" checked onchange="_renderHistProvList()" style="width:15px;height:15px;accent-color:var(--green-l,#3fb950)">
       👥 Agrupar por proveedor (total acumulado · toca para ver sus embarques)
     </label>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
@@ -18228,6 +18265,70 @@ async function _fdAsociarPorNumFact(numFact){
   }
 }
 
+// ── Editar PIEZAS directamente desde Historial de Proveedores ──
+// A diferencia de _editarFactHistProv (N° de factura, que se bloquea tras
+// una sola edición), las piezas SÍ se pueden corregir varias veces —
+// es habitual que una factura llegue sin piezas y se complete después.
+function _editarPiezasHistProv(embarqueIdx, provName, numFact, oc, piezasActuales){
+  var d = tendData[embarqueIdx];
+  if(!d) return;
+  var lines = (d.invLines||(d.snap&&d.snap.invLines)||[]);
+  var lProvBuscado = (provName||'').trim().toLowerCase();
+
+  // Localiza TODAS las copias de la línea (d.invLines y d.snap.invLines
+  // pueden ser arrays distintos) para mantenerlas sincronizadas.
+  function _lineasCoincidentes(){
+    var out = [];
+    [lines, (d.snap && d.snap.invLines)||[]].forEach(function(arr){
+      arr.forEach(function(l){
+        var lProv = (l.prov||'').trim().toLowerCase();
+        if(lProv !== lProvBuscado) return;
+        if(numFact && (l.numFact||l.nfac||'') === numFact) out.push(l);
+        else if(!numFact && oc && (l.oc||'') === oc) out.push(l);
+      });
+    });
+    return out;
+  }
+
+  var ov = document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:999999;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px)';
+  ov.innerHTML='<div style="background:var(--s1);border:1px solid var(--border);border-radius:16px;padding:24px;max-width:340px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.5)">'
+    +'<div style="font-size:14px;font-weight:800;color:var(--text);margin-bottom:4px">🔢 Editar Piezas</div>'
+    +'<div style="font-size:11px;color:var(--muted);margin-bottom:14px">'+(provName||'—')+(numFact?' · Fact: '+numFact:(oc?' · OC: '+oc:''))+'</div>'
+    +'<label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Cantidad de piezas</label>'
+    +'<input id="_pzas_edit_inp" type="number" min="0" step="1" value="'+(piezasActuales||0)+'" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:9px 12px;color:var(--text);font-family:\'IBM Plex Mono\',monospace;font-size:14px;margin-bottom:16px;box-sizing:border-box">'
+    +'<div style="display:flex;gap:10px">'
+    +'<button id="_pzas_cancelar" style="flex:1;background:none;border:1px solid var(--border);color:var(--muted);border-radius:10px;padding:10px;font-size:12px;font-weight:600;cursor:pointer">← Cancelar</button>'
+    +'<button id="_pzas_guardar" style="flex:2;background:linear-gradient(135deg,rgba(63,185,80,.2),rgba(46,160,67,.12));border:1.5px solid rgba(63,185,80,.45);color:var(--green-l);border-radius:10px;padding:10px;font-size:12px;font-weight:800;cursor:pointer">💾 Guardar</button>'
+    +'</div></div>';
+  document.body.appendChild(ov);
+
+  var inp = document.getElementById('_pzas_edit_inp');
+  if(inp) setTimeout(function(){ inp.focus(); inp.select(); }, 100);
+
+  document.getElementById('_pzas_cancelar').onclick = function(){ ov.remove(); };
+  ov.addEventListener('click', function(e){ if(e.target===ov) ov.remove(); });
+
+  document.getElementById('_pzas_guardar').onclick = function(){
+    var nuevo = parseInt(document.getElementById('_pzas_edit_inp')?.value, 10);
+    if(isNaN(nuevo) || nuevo < 0){
+      if(typeof _showToast==='function') _showToast('⚠️ Ingresa una cantidad de piezas válida','orange',3000);
+      return;
+    }
+    ov.remove();
+    var encontradas = _lineasCoincidentes();
+    if(!encontradas.length){
+      if(typeof _showToast==='function') _showToast('⚠️ No se encontró la línea de factura para actualizar','red',3500);
+      return;
+    }
+    encontradas.forEach(function(l){ l.piezas = nuevo; });
+    if(typeof saveTendData==='function') saveTendData();
+    if(typeof _syncTendToCloud==='function') _syncTendToCloud();
+    if(typeof _showToast==='function') _showToast('✅ Piezas actualizadas a '+nuevo.toLocaleString(),'green',3000);
+    if(typeof _renderHistProvList==='function') _renderHistProvList();
+  };
+}
+
 // ── Editar N° factura directamente desde Historial de Proveedores ──
 function _editarFactHistProv(embarqueIdx, provName, factInfo, seccion){
   var d = tendData[embarqueIdx];
@@ -18428,7 +18529,10 @@ function _renderHistProvList(){
         +'</span>':'')+
         (r.seccion==='merc'?(
           (r.oc!=='—'?'<span>OC: <strong style="color:var(--text)">'+r.oc+'</strong></span>':'')+
-          (r.piezas>0?'<span>🔢 <strong style="color:var(--blue-l)">'+r.piezas.toLocaleString()+' pzas</strong></span>':'<span style="color:var(--muted)">— pzas</span>')+
+          '<span style="display:flex;align-items:center;gap:4px">'+
+            (r.piezas>0?'🔢 <strong style="color:var(--blue-l)">'+r.piezas.toLocaleString()+' pzas</strong>':'<span style="color:var(--muted)">— pzas</span>')+
+            '<button onclick="event.stopPropagation();_editarPiezasHistProv('+r._dIdx+',\''+r.prov.replace(/'/g,"\\'")+'\',\''+(r.numFact!=='—'?r.numFact:'').replace(/'/g,"\\'")+'\',\''+(r.oc!=='—'?r.oc:'').replace(/'/g,"\\'")+'\','+(r.piezas||0)+')" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:3px;padding:0 5px;font-size:10px;cursor:pointer" title="Editar piezas">✏️</button>'+
+          '</span>'+
           (r.bultos>0?'<span>📦 <strong style="color:var(--text)">'+r.bultos+' ctn</strong></span>':'<span style="color:var(--muted)">— ctn</span>')
         ):'')+
         '<span>📅 '+r.fecha+'</span>'+
@@ -19575,6 +19679,38 @@ function _setDeptVista(modo, btn){
   vL.style.display = esGrafica ? 'none'  : 'block';
   if(bG){ bG.style.background=esGrafica?'rgba(88,166,255,.2)':'transparent'; bG.style.borderColor=esGrafica?'rgba(88,166,255,.4)':'var(--border)'; bG.style.color=esGrafica?'var(--blue-l)':'var(--muted)'; bG.style.fontWeight=esGrafica?'700':'600'; }
   if(bL){ bL.style.background=esGrafica?'transparent':'rgba(88,166,255,.2)'; bL.style.borderColor=esGrafica?'var(--border)':'rgba(88,166,255,.4)'; bL.style.color=esGrafica?'var(--muted)':'var(--blue-l)'; bL.style.fontWeight=esGrafica?'600':'700'; }
+  // Si la vista está fija con candado, cambiar de vista manualmente actualiza
+  // también cuál queda como predeterminada (el candado sigue "cerrado").
+  if(_getDeptVistaDefault()){
+    try{ localStorage.setItem('_deptVistaLock', modo); }catch(e){}
+  }
+}
+
+// ── Candado de Vista predeterminada (Gráfica/Lista) — pestaña Departamento ──
+// Sin candado (🔓): la pestaña siempre abre en Gráfica por defecto.
+// Con candado (🔒): la pestaña abre en la última vista que quedó fijada,
+// y cambiar de vista mientras está fija actualiza esa preferencia.
+function _getDeptVistaDefault(){
+  try{ return localStorage.getItem('_deptVistaLock') || ''; }catch(e){ return ''; }
+}
+function _toggleDeptVistaLock(btn){
+  var root = btn ? (btn.closest('#tab-modal-body')||document) : document;
+  var yaFija = _getDeptVistaDefault();
+  if(yaFija){
+    try{ localStorage.removeItem('_deptVistaLock'); }catch(e){}
+    btn.textContent='🔓';
+    btn.title='Fijar esta vista como predeterminada';
+    btn.style.background='transparent'; btn.style.borderColor='var(--border)'; btn.style.color='var(--muted)';
+    if(typeof _showToast==='function') _showToast('🔓 Vista liberada — Tendencias abrirá en Gráfica por defecto','blue',2400);
+  } else {
+    var vL = root.querySelector('#_dept-vista-lista');
+    var modo = (vL && vL.style.display!=='none') ? 'lista' : 'grafica';
+    try{ localStorage.setItem('_deptVistaLock', modo); }catch(e){}
+    btn.textContent='🔒';
+    btn.title='Vista fija: '+(modo==='grafica'?'Gráfica':'Lista')+' — toca para liberar';
+    btn.style.background='rgba(240,214,78,.12)'; btn.style.borderColor='rgba(240,214,78,.4)'; btn.style.color='#f0d64e';
+    if(typeof _showToast==='function') _showToast('🔒 Vista fijada como predeterminada: '+(modo==='grafica'?'Gráfica':'Lista'),'green',2400);
+  }
 }
 // ══════════════════════════════════════════════════════════════
 //  _calcCostoInventario(d) — FUENTE ÚNICA DE VERDAD
@@ -19728,6 +19864,12 @@ function renderDashboardKPIs(data){
   for(var _i=0;_i<_activeBtns.length;_i++){
     if(_activeBtns[_i].style.color==='var(--blue-l)' || _activeBtns[_i].style.color==='rgb(88, 166, 255)'){ _prevSec=_activeBtns[_i].dataset.sec; break; }
   }
+  // ── Preservar la Vista (Gráfica/Lista) de Departamento activa antes de reconstruir ──
+  // Igual criterio que _prevSec arriba: si el usuario estaba en Lista y dispara un
+  // re-render (p.ej. paginación), no debe devolverlo a Gráfica.
+  var _prevDeptVistaEl = el.querySelector('#_dept-vista-lista');
+  var _prevDeptVista = (_prevDeptVistaEl && _prevDeptVistaEl.style.display!=='none') ? 'lista' : null;
+  var _deptVistaInicial = _prevDeptVista || (typeof _getDeptVistaDefault==='function' ? _getDeptVistaDefault() : '') || 'grafica';
   const fmt=n=>'$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});
   const fmtK=n=>window._fmtMoney(n);
   // Siempre usar el filtro activo — los KPIs reflejan el período seleccionado
@@ -19874,23 +20016,28 @@ function renderDashboardKPIs(data){
           <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em">📊 Valor Mercancía por Departamento</span>
           <span style="font-size:9px;font-weight:500;color:var(--muted2);text-transform:none;letter-spacing:0">— toca para ver proveedores</span>
         </div>
-        <div style="display:flex;gap:4px">
+        <div style="display:flex;gap:4px;align-items:center">
           <button id="_btn-vista-grafica" onclick="_setDeptVista('grafica',this)"
-            style="background:rgba(88,166,255,.2);border:1px solid rgba(88,166,255,.4);color:var(--blue-l);border-radius:6px;padding:3px 10px;font-size:10px;font-weight:700;cursor:pointer">
+            style="background:${_deptVistaInicial==='grafica'?'rgba(88,166,255,.2)':'transparent'};border:1px solid ${_deptVistaInicial==='grafica'?'rgba(88,166,255,.4)':'var(--border)'};color:${_deptVistaInicial==='grafica'?'var(--blue-l)':'var(--muted)'};border-radius:6px;padding:3px 10px;font-size:10px;font-weight:${_deptVistaInicial==='grafica'?'700':'600'};cursor:pointer">
             📊 Gráfica
           </button>
           <button id="_btn-vista-lista" onclick="_setDeptVista('lista',this)"
-            style="background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:3px 10px;font-size:10px;font-weight:600;cursor:pointer">
+            style="background:${_deptVistaInicial==='lista'?'rgba(88,166,255,.2)':'transparent'};border:1px solid ${_deptVistaInicial==='lista'?'rgba(88,166,255,.4)':'var(--border)'};color:${_deptVistaInicial==='lista'?'var(--blue-l)':'var(--muted)'};border-radius:6px;padding:3px 10px;font-size:10px;font-weight:${_deptVistaInicial==='lista'?'700':'600'};cursor:pointer">
             ☰ Lista
+          </button>
+          <button id="_btn-vista-lock" onclick="_toggleDeptVistaLock(this)"
+            title="${_getDeptVistaDefault()? 'Vista fija: '+(_getDeptVistaDefault()==='grafica'?'Gráfica':'Lista')+' — toca para liberar' : 'Fijar esta vista como predeterminada'}"
+            style="background:${_getDeptVistaDefault()?'rgba(240,214,78,.12)':'transparent'};border:1px solid ${_getDeptVistaDefault()?'rgba(240,214,78,.4)':'var(--border)'};color:${_getDeptVistaDefault()?'#f0d64e':'var(--muted)'};border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;margin-left:2px">
+            ${_getDeptVistaDefault() ? '🔒' : '🔓'}
           </button>
         </div>
       </div>
       <!-- Vista Gráfica -->
-      <div id="_dept-vista-grafica">
+      <div id="_dept-vista-grafica" style="display:${_deptVistaInicial==='lista'?'none':'block'}">
         ${_renderDeptChart(all)}
       </div>
-      <!-- Vista Lista (proveedores por depto, oculta por defecto) -->
-      <div id="_dept-vista-lista" style="display:none">
+      <!-- Vista Lista (proveedores por depto) -->
+      <div id="_dept-vista-lista" style="display:${_deptVistaInicial==='lista'?'block':'none'}">
         ${_renderGroupSections(all)}
       </div>
     </div>
@@ -22457,7 +22604,20 @@ window.abrirFacturasEmbarque = function(idx){
   var deptEntries = Object.keys(byDept).map(function(k){ return [k, byDept[k]]; });
   deptEntries.sort(function(a,b){ return b[1].totalCosto - a[1].totalCosto; });
 
-  deptEntries.forEach(function(entry, gi){
+  // ── Paginación (mismo criterio que Vista Gráfica: 5/10/20/Todo) ──
+  // Estado independiente (window._deptListPorPag / _deptListPag) para no
+  // interferir con la paginación propia de la Vista Gráfica.
+  if(!window._deptListPorPag) window._deptListPorPag = 5;
+  if(window._deptListPag == null) window._deptListPag = 0;
+  var _lppp = window._deptListPorPag;
+  var _lTotalPags = _lppp===999 ? 1 : Math.ceil(deptEntries.length/_lppp);
+  var _lPagAct = Math.min(window._deptListPag||0, _lTotalPags-1);
+  var _lDesde = _lppp===999 ? 0 : _lPagAct*_lppp;
+  var _lHasta = _lppp===999 ? deptEntries.length : Math.min(_lDesde+_lppp, deptEntries.length);
+  var deptEntriesTodas = deptEntries;
+  var deptEntriesPag = deptEntries.slice(_lDesde, _lHasta);
+
+  deptEntriesPag.forEach(function(entry, gi){
     var k = entry[0], v = entry[1];
     var uid    = 'gd-'+gi;
     var allId  = uid+'-all';   // panel con TODOS los proveedores
@@ -22525,6 +22685,25 @@ window.abrirFacturasEmbarque = function(idx){
       + desgPanel
       +'</div>';
   });
+
+  // ── Controles de paginación (Vista Lista) ──
+  if(deptEntriesTodas.length > 5){
+    var _lbS = 'background:var(--s2);border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:3px 10px;font-size:11px;cursor:pointer;';
+    var _lbA = 'background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.4);color:var(--blue-l);border-radius:6px;padding:3px 10px;font-size:11px;cursor:pointer;font-weight:700;';
+    var _lOpciones = [5,10,20,999].map(function(n){
+      return '<option value="'+n+'"'+(_lppp===n?' selected':'')+'>'+(n===999?'Todo':n)+'</option>';
+    }).join('');
+    var _lPagBtns = _lTotalPags > 1 ? Array.from({length:_lTotalPags},function(_,i){
+      return '<button style="'+(i===_lPagAct?_lbA:_lbS)+'" onclick="window._deptListPag='+i+';if(typeof renderDashboardKPIs===\'function\')renderDashboardKPIs()">'+(i+1)+'</button>';
+    }).join('') : '';
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin:8px 0 4px;padding-top:8px;border-top:1px solid var(--border)">';
+    html += '<div style="display:flex;align-items:center;gap:6px">';
+    html += '<span style="font-size:10px;color:var(--muted)">Por página:</span>';
+    html += '<select onchange="window._deptListPorPag=parseInt(this.value);window._deptListPag=0;if(typeof renderDashboardKPIs===\'function\')renderDashboardKPIs()" style="background:var(--s2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:2px 6px;font-size:11px;cursor:pointer">'+_lOpciones+'</select>';
+    html += '</div>';
+    html += '<div style="display:flex;gap:4px;flex-wrap:wrap">'+_lPagBtns+'</div>';
+    html += '</div>';
+  }
 
   // ── Por Escenario ──
   html += '<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:16px 0 8px;display:flex;align-items:center;gap:6px">&#x1F500; Por Escenario Utilizado</div>';
@@ -22981,16 +23160,29 @@ function renderHistFact(){
   var MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   var grupos = {}; // { '2026': { '05': [d,...], '04': [d,...] }, '2025': {...} }
   data.forEach(function(d){
-    var f = d.fecha || '2000-01-01';
-    var parts = f.split('-');
-    var anio = parts[0] || '----';
-    var mes  = parts[1] || '01';
+    // ── FIX (jul-2026): mismo criterio que renderTend — nunca asumir
+    //    año 2000 cuando falta d.fecha. Se intenta recuperar por otras
+    //    vías (ver _fechaEmbarqueReal) y, si no hay nada, va a un
+    //    bloque "Sin fecha" explícito en vez de esconderse en 2000. ──
+    var _fReal = (typeof _fechaEmbarqueReal==='function') ? _fechaEmbarqueReal(d) : (d.fecha||null);
+    var anio, mes;
+    if(_fReal){
+      var parts = _fReal.split('-');
+      anio = parts[0] || 'Sin fecha';
+      mes  = parts[1] || '01';
+    } else {
+      anio = 'Sin fecha'; mes = '00';
+    }
     if(!grupos[anio]) grupos[anio] = {};
     if(!grupos[anio][mes]) grupos[anio][mes] = [];
     grupos[anio][mes].push(d);
   });
 
-  var anios = Object.keys(grupos).sort(function(a,b){ return b.localeCompare(a); }); // más reciente primero
+  var anios = Object.keys(grupos).sort(function(a,b){
+    if(a==='Sin fecha') return 1;
+    if(b==='Sin fecha') return -1;
+    return b.localeCompare(a);
+  }); // más reciente primero, "Sin fecha" siempre al final
 
   var html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">'
     +'<div style="font-size:14px;font-weight:800;color:var(--text)">🧾 Historial de Facturas por Embarque</div>'
@@ -23009,10 +23201,11 @@ function renderHistFact(){
       });
     });
 
-    var anioId = 'hf-anio-'+anio;
-    var anioBodyId = 'hf-anio-body-'+anio;
+    var anioId = 'hf-anio-'+anio.replace(/\s+/g,'_');
+    var anioBodyId = 'hf-anio-body-'+anio.replace(/\s+/g,'_');
     // Año actual abierto por defecto, años anteriores cerrados
     var anioOpen = (anio === new Date().getFullYear().toString());
+    var anioLabel = anio==='Sin fecha' ? '⚠️ Sin fecha' : anio;
 
     html += '<div style="margin-bottom:10px;border:1px solid var(--border);border-radius:12px;overflow:hidden">';
     // Header del año
@@ -23021,12 +23214,12 @@ function renderHistFact(){
       +'<div style="display:flex;align-items:center;gap:10px">'
       +'<span style="font-size:18px">📅</span>'
       +'<div>'
-      +'<div style="font-size:14px;font-weight:800;color:var(--text)">'+anio+'</div>'
+      +'<div style="font-size:14px;font-weight:800;color:'+(anio==='Sin fecha'?'var(--orange-l)':'var(--text)')+'">'+anioLabel+'</div>'
       +'<div style="font-size:10px;color:var(--muted)">'+countAnio+' embarque'+(countAnio!==1?'s':'')+' · '+mesesAnio.length+' mes'+(mesesAnio.length!==1?'es':'')+'</div>'
       +'</div></div>'
       +'<div style="display:flex;align-items:center;gap:10px">'
       +'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:13px;font-weight:800;color:var(--text)">'+fmtK(totalAnio)+'</span>'
-      +'<span class="hf-anio-chev" style="font-size:12px;color:var(--muted)">'+(anioOpen?'▼':'▶')+'</span>'
+      +_hfChev(anioOpen)
       +'</div></div>';
 
     html += '<div id="'+anioBodyId+'" style="display:'+(anioOpen?'block':'none')+'">';
@@ -23038,9 +23231,9 @@ function renderHistFact(){
         var invL=(d.snap&&d.snap.invLines)?d.snap.invLines:(d.invLines||[]);
         totalMes += invL.filter(function(l){ return (l.tipoFac||'mercancia')==='mercancia'; }).reduce(function(s,l){ return s+(l.costo||0); }, 0);
       });
-      var mesNombre = MESES[parseInt(mes,10)-1] || mes;
-      var mesId  = 'hf-mes-'+anio+'-'+mes;
-      var mesBodyId = 'hf-mes-body-'+anio+'-'+mes;
+      var mesNombre = (anio==='Sin fecha') ? 'Sin fecha registrada' : (MESES[parseInt(mes,10)-1] || mes);
+      var mesId  = 'hf-mes-'+anio.replace(/\s+/g,'_')+'-'+mes;
+      var mesBodyId = 'hf-mes-body-'+anio.replace(/\s+/g,'_')+'-'+mes;
       // Mes actual abierto, meses anteriores cerrados
       var mesOpen = anioOpen && (mes === String(new Date().getMonth()+1).padStart(2,'0'));
 
@@ -23051,12 +23244,12 @@ function renderHistFact(){
         +'<div style="display:flex;align-items:center;gap:8px">'
         +'<span style="font-size:14px">📦</span>'
         +'<div>'
-        +'<div style="font-size:12px;font-weight:700;color:var(--text)">'+mesNombre+' '+anio+'</div>'
+        +'<div style="font-size:12px;font-weight:700;color:var(--text)">'+(anio==='Sin fecha'?mesNombre:(mesNombre+' '+anio))+'</div>'
         +'<div style="font-size:10px;color:var(--muted)">'+embsMes.length+' embarque'+(embsMes.length!==1?'s':'')+'</div>'
         +'</div></div>'
         +'<div style="display:flex;align-items:center;gap:10px">'
         +'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:var(--blue-l)">'+fmtK(totalMes)+'</span>'
-        +'<span class="hf-mes-chev" style="font-size:11px;color:var(--muted)">'+(mesOpen?'▼':'▶')+'</span>'
+        +_hfChev(mesOpen)
         +'</div></div>';
 
       html += '<div id="'+mesBodyId+'" style="display:'+(mesOpen?'block':'none')+';background:var(--bg)">';
@@ -23067,7 +23260,7 @@ function renderHistFact(){
         var invL=(d.snap&&d.snap.invLines)?d.snap.invLines:(d.invLines||[]);
         var mercLines = invL.filter(function(l){ return (l.tipoFac||'mercancia')==='mercancia'; });
         var total = mercLines.reduce(function(s,l){ return s+(l.costo||0); }, 0);
-        var uid = 'hf-'+anio+mes+ei;
+        var uid = 'hf-'+anio.replace(/\s+/g,'_')+mes+ei;
         var tipoEmb = ((d.snap&&d.snap.tipo)||d.tipo||'ZL')==='EXT'?'Importación':'Zona Libre';
         var totalStr = invL.length ? fmt(total) : 'Sin facturas';
         var isPend = d.status==='pendiente';
@@ -23105,10 +23298,15 @@ function renderHistFact(){
             });
             provHtml+='<div style="display:flex;justify-content:space-between;padding:6px 14px 6px 28px;background:rgba(88,166,255,.04);font-size:11px;font-weight:700;border-top:1px solid var(--border)">'
               +'<span style="color:var(--muted)">Subtotal '+dk+'</span><span style="color:var(--blue-l)">'+fmt(dv.subtotal)+'</span></div>';
-            var toggleFn='(function(t){var b=document.getElementById("'+duid+'");if(b){var o=b.style.display==="none";b.style.display=o?"block":"none";t.querySelector(".hf-dc").textContent=o?"&#9660;":"&#9658;"}}).call(this,this)';
+            // ── FIX (jul-2026): antes este toggle usaba document.getElementById(duid)
+            //    global — si quedaba más de un render de este panel en el DOM (modales
+            //    reabiertos, etc.) podía encontrar y togglear la copia equivocada y
+            //    parecer que "no pasaba nada". Ahora usa el mismo mecanismo delegado
+            //    y con alcance acotado (data-hftoggle + el.onclick) que ya funciona
+            //    bien para Año/Mes. ──
             deptHtml+='<div>'
-              +'<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:rgba(255,255,255,.03);cursor:pointer;border-bottom:1px solid rgba(48,54,61,.3)" onclick="'+toggleFn+'">'
-              +'<div style="display:flex;align-items:center;gap:8px"><span class="hf-dc" style="font-size:10px;color:var(--muted)">&#9658;</span>'
+              +'<div data-hftoggle="'+duid+'" style="display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:rgba(255,255,255,.03);cursor:pointer;border-bottom:1px solid rgba(48,54,61,.3)">'
+              +'<div style="display:flex;align-items:center;gap:8px">'+_hfChev(false)
               +'<span style="font-size:11px;font-weight:700;color:var(--text)">📂 '+dk+'</span>'
               +'<span style="font-size:10px;color:var(--muted)">'+dv.lines.length+' factura'+(dv.lines.length!==1?'s':'')+'</span>'
               +'</div><span style="font-family:\'IBM Plex Mono\',monospace;font-size:11px;font-weight:700;color:var(--text)">'+fmt(dv.subtotal)+'</span></div>'
@@ -23121,7 +23319,7 @@ function renderHistFact(){
 
         // Card del embarque
         html += '<div style="border-top:1px solid rgba(48,54,61,.3)">'
-          +'<div onclick="_toggleHF(\''+uid+'\')" style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;cursor:pointer;transition:background .12s" onmouseenter="this.style.background=\'rgba(255,255,255,.03)\'" onmouseleave="this.style.background=\'\'">'
+          +'<div data-hftoggle="'+uid+'" style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;cursor:pointer;transition:background .12s" onmouseenter="this.style.background=\'rgba(255,255,255,.03)\'" onmouseleave="this.style.background=\'\'">'
           +'<div>'
           +'<div style="font-size:10px;font-weight:700;color:var(--orange-l)">'+(d.nro||'—')
           +(isPend?' <span style="background:rgba(210,153,34,.15);border:1px solid rgba(210,153,34,.4);color:var(--orange-l);font-size:9px;padding:1px 5px;border-radius:4px">PENDIENTE</span>':'')
@@ -23131,11 +23329,14 @@ function renderHistFact(){
           +'<div style="font-size:12px;font-weight:600;color:var(--text);margin-top:1px">'+(d.desc||'Sin descripción')+'</div>'
           +'<div style="font-size:10px;color:var(--muted);margin-top:1px">'+tipoEmb+' · <span style="color:'+escColor+'">'+d.esc+'</span></div>'
           +'</div>'
-          +'<div style="text-align:right;flex-shrink:0;margin-left:12px">'
+          +'<div style="display:flex;align-items:center;gap:8px;flex-shrink:0;margin-left:12px">'
+          +'<div style="text-align:right">'
           +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:13px;font-weight:800;color:var(--green-l)">'+totalStr+'</div>'
           +'<div style="font-size:10px;color:var(--muted)">'+invL.length+' factura'+(invL.length!==1?'s':'')+'</div>'
+          +'</div>'
+          +_hfChev(false)
           +'</div></div>'
-          +'<div class="hfact-body" id="'+uid+'">'+deptHtml+'</div>'
+          +'<div id="'+uid+'" style="display:none">'+deptHtml+'</div>'
           +'</div>';
       });
 
@@ -23147,32 +23348,44 @@ function renderHistFact(){
 
   el.innerHTML = html;
 
-  // Toggle mes/año — listener en el contenedor
+  // Toggle año/mes/embarque/departamento — un único listener delegado en el contenedor.
   // FIX (jul-2026): antes era addEventListener, que se acumulaba en cada
   // llamada de renderHistFact() (cada vez que se visitaba esta pantalla se
   // sumaba un listener más). Con 2+ listeners idénticos en el mismo click,
   // el segundo revertía lo que hizo el primero (abre→cierra en el mismo
   // click) y el acordeón parecía "no responder" para todo lo que no fuera
   // la primera apertura de la sesión. .onclick= reemplaza siempre, nunca acumula.
+  // Ahora los 4 niveles (año/mes/embarque/departamento) comparten este mismo
+  // mecanismo — antes departamento usaba document.getElementById() global,
+  // que podía togglear una copia vieja/duplicada del panel en vez de la visible.
   el.onclick = function(e){
-    // Buscar el elemento con data-hftoggle subiendo hasta 5 niveles
+    // Buscar el elemento con data-hftoggle subiendo hasta 6 niveles
     var target = e.target;
-    for(var i=0; i<5; i++){
+    for(var i=0; i<6; i++){
       if(!target || target === el) break;
       if(target.hasAttribute && target.hasAttribute('data-hftoggle')){
         var bodyId = target.getAttribute('data-hftoggle');
-        var body = el.querySelector('#'+bodyId) || document.getElementById(bodyId);
+        var body = el.querySelector('#'+CSS.escape(bodyId));
         if(body){
           var isHidden = body.style.display === 'none' || body.style.display === '';
           body.style.display = isHidden ? 'block' : 'none';
-          var chev = target.querySelector('.hf-mes-chev,.hf-anio-chev');
-          if(chev) chev.textContent = isHidden ? '▼' : '▶';
+          var chev = target.querySelector('.hf-chev');
+          if(chev) chev.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
         }
         return;
       }
       target = target.parentElement;
     }
   };
+}
+// ── Chevron moderno y consistente para los 4 niveles del acordeón de Historial ──
+// Reemplaza las flechitas ▶/▼ de texto por un botón redondeado con transición
+// suave de rotación — mismo look en Año, Mes, Embarque y Departamento.
+function _hfChev(open){
+  return '<span class="hf-chev" style="display:inline-flex;align-items:center;justify-content:center;'
+    +'width:22px;height:22px;border-radius:7px;background:rgba(136,146,176,.14);color:var(--muted);'
+    +'font-size:13px;font-weight:700;line-height:1;flex-shrink:0;transition:transform .2s ease;'
+    +'transform:rotate('+(open?180:0)+'deg)">⌄</span>';
 }
 function _toggleHF(uid){
   const b=document.getElementById(uid); if(b) b.classList.toggle('open');
