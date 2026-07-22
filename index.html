@@ -8983,25 +8983,8 @@ function calc(){
         // Build detail sections
         const det1cif = rowA('Arancel',sc1_arancel,0) + rowA('ITBMS s/Arancel',sc1_itbms,0) + (tasa>0?rowA('Tasa',tasa,0):'') + (itbmsTasaFinal>0?rowA('ITBMS s/Tasa',itbmsTasaFinal,0):'') + (form1>0?rowA('Uso de Sistema',form1,0):'') + (!isCIF&&c1_sab3>0?rowA('ITBMS s/Homologado (7% Sababa)',0,c1_sab3):'') + (isCIF?`<div style="padding:5px 8px;background:rgba(88,166,255,.06);border-radius:4px;font-size:10px;color:var(--blue-l);margin:3px 0">⚡ CIF Express exonerado — Master Value absorbe el arancel</div>`:'');
         const det2cif = (sc1_flete_nm>0?rowA('Flete',sc1_flete_nm,isCIF?sc1_flete_nm:sc3_flete):'') + rowA('Gastos Origen/Destino',agente,agente) + (acarreo>0?rowA('Acarreo (absorbido por comisión)',acarreo,0):'') + (dmce>0?rowA('DMCE (absorbido por comisión)',dmce,0):'');
-        const det3cif = rowA('Honorarios corredor (Esc. Regular)',sc1_hon,0) + (isCIF?`
-          <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 8px;align-items:center;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.04)">
-            <span style="font-size:10px;color:var(--muted)">Comisión CIF Express (3% s/CIF)</span>
-            <span style="font-family:monospace;color:var(--green-l);text-align:right;min-width:76px;font-size:10px">—</span>
-            <span style="font-family:monospace;color:${altColor};text-align:right;min-width:76px;font-size:10px">${fmt2(sc2_hon)}</span>
-            <span style="font-family:monospace;color:var(--muted);text-align:right;min-width:72px;font-size:10px">—</span>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 8px;align-items:center;padding:3px 0 3px 10px;border-bottom:1px solid rgba(255,255,255,.04);opacity:.85">
-            <span style="font-size:10px;color:var(--muted)">└ ITBMS s/monto gravado</span>
-            <span style="font-family:monospace;color:var(--green-l);text-align:right;min-width:76px;font-size:10px">—</span>
-            <span style="font-family:monospace;color:var(--muted);text-align:right;min-width:76px;font-size:10px">${fmt2(sc2_itbms_hon)}</span>
-            <span style="font-family:monospace;color:var(--muted);text-align:right;min-width:72px;font-size:10px">—</span>
-          </div>`:
-          `<div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 8px;align-items:center;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.04)">
-            <span style="font-size:10px;color:var(--orange-l);font-weight:600">Honorario neto Sababa (3.70%)</span>
-            <span style="font-family:monospace;color:var(--green-l);text-align:right;min-width:76px;font-size:10px">—</span>
-            <span style="font-family:monospace;color:var(--orange-l);text-align:right;min-width:76px;font-size:10px;font-weight:700">${fmt2(c3_sab)}</span>
-            <span style="font-family:monospace;color:var(--muted);text-align:right;min-width:72px;font-size:10px">—</span>
-          </div>`);
+        // ── Un solo rubro de comparativa (jul-2026, misma regla en toda la app) ──
+        const det3cif = rowA('Honorarios (Esc. Regular vs '+altLabel+')', c3_reg, c3_alt);
         const det4cif = rowA('FOB Original (igual en ambos)',sc1_base,sc1_base);
 
         return `<div style="border:1px solid rgba(63,185,80,.25);border-radius:12px;overflow:hidden;margin-bottom:12px">
@@ -10595,25 +10578,15 @@ function calcSab2(){
           // Detalles de cada criterio
           const det1 = rowA('Arancel',r1_aran,0) + rowA('ITBMS (Arancel vs Homologado)',r1_itbmsAr,c1_sab) + rowA('Tasa',r1_tasa,0) + rowA('ITBMS s/Tasa',r1_itbmsTa,0) + (r1_usoSis>0?rowA('Uso de Sistema',r1_usoSis,0):'');
           const det2 = (r1_flete>0?rowA('Flete',r1_flete,fleteStd):'') + rowA('Gastos Origen/Destino',r1_gastos,agente) + (r1_acarreo>0?rowA('Acarreo',r1_acarreo,0):'') + (r1_dmce>0?rowA('DMCE',r1_dmce,0):'');
-          const det3 = rowA('Honorarios corredor (Esc. Regular)',r1_hon,0)
-            + `<div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 8px;align-items:center;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.04)">
-                <span style="font-size:10px;color:var(--muted)">Comisión Sababa 10% (incl. ITBMS)</span>
-                <span style="font-size:10px;font-family:monospace;color:var(--green-l);text-align:right;min-width:76px">—</span>
-                <span style="font-size:10px;font-family:monospace;color:var(--orange-l);text-align:right;min-width:76px">${fmt2(comision)}</span>
-                <span style="font-size:10px;font-family:monospace;color:var(--muted);text-align:right;min-width:72px">—</span>
-              </div>
-              <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 8px;align-items:center;padding:3px 0 3px 10px;border-bottom:1px solid rgba(255,255,255,.04);opacity:.8">
-                <span style="font-size:10px;color:var(--muted)">└ ITBMS del homologado (7%)</span>
-                <span style="font-size:10px;font-family:monospace;color:var(--green-l);text-align:right;min-width:76px">—</span>
-                <span style="font-size:10px;font-family:monospace;color:var(--muted);text-align:right;min-width:76px">${fmt2(itbmsHomol)}</span>
-                <span style="font-size:10px;font-family:monospace;color:var(--muted);text-align:right;min-width:72px">—</span>
-              </div>
-              <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 8px;align-items:center;padding:3px 0 3px 10px;border-bottom:1px solid rgba(255,255,255,.04)">
-                <span style="font-size:10px;color:var(--orange-l);font-weight:600">└ Honorario neto Sababa (3.70% s/Homol.)</span>
-                <span style="font-size:10px;font-family:monospace;color:var(--green-l);text-align:right;min-width:76px">—</span>
-                <span style="font-size:10px;font-family:monospace;color:var(--orange-l);text-align:right;min-width:76px;font-weight:700">${fmt2(c3_sab)}</span>
-                <span style="font-size:10px;font-family:monospace;color:var(--muted);text-align:right;min-width:72px">—</span>
-              </div>`;
+          // ── Un solo rubro de comparativa (jul-2026, a pedido) ──
+          // Antes esto eran 3 sub-filas (Comisión Sababa 10%, ITBMS del
+          // homologado, Honorario neto Sababa) que repetían — desglosadas —
+          // los mismos dos números que ya muestra la fila resumen del
+          // criterio. Ahora es una sola línea: Esc. Regular vs Sababa, con
+          // el ahorro (rowA ya lo colorea en rojo si sale negativo) — un
+          // ahorro negativo aquí no afecta el cálculo del ahorro total,
+          // que sigue sumando los 4 criterios tal cual (a1+a2+a3+a4).
+          const det3 = rowA('Honorarios (Esc. Regular vs Sababa)', c3_reg, c3_sab);
           const det4 = rowA('FOB Original (igual en ambos)',r1_merc,r1_merc);
 
           return `<div style="margin:0 0 12px;border:1px solid rgba(63,185,80,.25);border-radius:12px;overflow:hidden">
@@ -16366,7 +16339,7 @@ function renderTend(_scopeEl){
         const _difMonto2 = typeof _getDiferencia==='function' ? _getDiferencia(d) : 0;
         const difBadge2 = _difMonto2 ? `<span title="El Costo Inventario actual difiere del histórico guardado al procesar — revisa con 🏷️" style="background:rgba(248,81,73,.15);border:1px solid rgba(248,81,73,.4);border-radius:3px;padding:0 4px;font-size:8px;font-weight:800;color:#f85149;cursor:help">⚠️ Dif: ${_difMonto2>0?'+':''}${window._fmtMoney(_difMonto2)}</span>` : '';
         histHtml+=`<div style="display:grid;grid-template-columns:auto 1fr auto auto auto;gap:8px;align-items:center;padding:9px 14px 9px 42px;border-top:1px solid rgba(48,54,61,.3);cursor:pointer;transition:background .15s${isPend?';border-left:3px solid var(--orange-l)':''}" onclick="if(event.target.classList.contains('del-btn')||event.target.classList.contains('btn-reabrir')){return;}abrirModuloComparativo_idx(${idx})" onmouseenter="this.style.background='rgba(255,255,255,.03)'" onmouseleave="this.style.background=''">
-          <div style="font-size:10px;font-weight:700;color:var(--orange-l);white-space:nowrap">${d.nro||'—'} ${difBadge2}</div>
+          <div style="font-size:10px;font-weight:700;color:var(--orange-l);white-space:nowrap">${d.nro||'—'}${d.idFiscal?` <span style="color:#a371f7;font-weight:600">· 🧾 ${d.idFiscal}</span>`:''} ${difBadge2}</div>
           <div>
             <div style="font-size:12px;font-weight:500;color:var(--text);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.35">${d.desc}${isPend?'&nbsp;<span class="badge-pendiente">🟡 PENDIENTE</span>':''}</div>
             <div style="font-size:10px;color:var(--muted);display:flex;gap:5px;align-items:center;margin-top:2px">${d.fecha} · ${d.esc||''} <span style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:var(--blue-l)">${viaIco} ${d.viaTransporte||'SEA'}</span></div>
@@ -18787,6 +18760,18 @@ function _kpiMostrarAhorro(){
   var fmt2 = function(n){ return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
   var fmtPct = function(n,tot){ return tot>0?((n/tot)*100).toFixed(1)+'%':'—'; };
 
+  // ── Paleta fija oscura (jul-2026) ──
+  // FIX: este popup se crea con document.createElement + document.body.appendChild,
+  // fuera del árbol donde normalmente se aplican las variables de tema. Si el body
+  // llega a tener activo el modo claro (body.theme-light / color-scheme:light) en
+  // ese momento, var(--s1)/var(--text) se resuelven a blanco/negro pero los acentos
+  // (var(--blue-l), var(--orange-l)...) NO tienen versión clara definida — quedan
+  // los mismos tonos pensados para fondo oscuro, perdiendo contraste. Se fija la
+  // paleta oscura directo en hex para que este popup SIEMPRE se vea consistente,
+  // sin depender del tema activo del body en ese instante.
+  var BG='#161b22', BORDER='rgba(255,255,255,.09)', TXT='#e6edf3', MUT='#8b949e';
+  var C_GREEN='#3fb950', C_BLUE='#58a6ff', C_ORANGE='#f0883e', C_RED='#f85149';
+
   // Acumular por corredor (Sababa y CIF) y por criterio
   var reg = {c1:0,c2:0,c3:0,c4:0,total:0,n:0};
   var sab = {c1:0,c2:0,c3:0,c4:0,total:0,n:0};
@@ -18837,58 +18822,65 @@ function _kpiMostrarAhorro(){
     total: sab.total+cif.total,
     n: sab.n+cif.n
   };
+  // ── Total "Escenario Regular" — lo que se habría pagado en total, sin
+  // ningún escenario alterno, para estos mismos embarques y criterios. ──
+  var regTotalCost = reg.c1+reg.c2+reg.c3+reg.c4;
 
   var _desde = (document.getElementById('tf_desde')||{}).value||'';
   var _hasta = (document.getElementById('tf_hasta')||{}).value||'';
   var periodoLabel = (_desde||_hasta)?(_desde||'inicio')+' → '+(_hasta||'hoy'):'Sin filtro (todos los períodos)';
 
-  var colSep = 'border-left:1px solid rgba(255,255,255,.08);';
-
   var labelCell = function(content, bold, sub){
-    return '<td style="padding:8px 12px;border:1px solid rgba(200,200,200,.12);font-size:'+(bold?'12':'11')+'px;font-weight:'+(bold?'700':'400')+';color:'+(bold?'var(--text)':'var(--muted)')+';max-width:160px">'+content+(sub?'<div style="font-size:9px;color:var(--muted);font-weight:400;margin-top:2px">'+sub+'</div>':'')+'</td>';
+    return '<td style="padding:8px 12px;border:1px solid '+BORDER+';font-size:'+(bold?'12':'11')+'px;font-weight:'+(bold?'700':'400')+';color:'+(bold?TXT:MUT)+';max-width:150px">'+content+(sub?'<div style="font-size:9px;color:'+MUT+';font-weight:400;margin-top:2px">'+sub+'</div>':'')+'</td>';
   };
   var sectionHdr = function(label){
-    return '<tr><td colspan="5" style="padding:10px 12px 4px;font-size:9px;font-weight:700;color:var(--green-l);text-transform:uppercase;letter-spacing:.08em;border-top:1px solid rgba(63,185,80,.15)">'+label+'</td></tr>';
+    return '<tr><td colspan="5" style="padding:10px 12px 4px;font-size:9px;font-weight:700;color:'+C_GREEN+';text-transform:uppercase;letter-spacing:.08em;border-top:1px solid rgba(63,185,80,.15)">'+label+'</td></tr>';
   };
   // Value cell helper
   var vCell = function(val, color, bold, size){
     var s=size||'11'; var w=bold?'800':'600';
     var sign=val>0.01?'+':val<-0.01?'−':'';
-    return '<td style="padding:8px 12px;border:1px solid rgba(200,200,200,.12);font-family:monospace;font-size:'+s+'px;font-weight:'+w+';color:'+color+';text-align:right">'+sign+fmt2(Math.abs(val))+'</td>';
+    return '<td style="padding:8px 12px;border:1px solid '+BORDER+';font-family:monospace;font-size:'+s+'px;font-weight:'+w+';color:'+color+';text-align:right">'+sign+fmt2(Math.abs(val))+'</td>';
   };
+  // Columna base (Escenario Regular) — texto claro y bien contrastado, no un
+  // "monto normal": es la referencia contra la que se mide todo el ahorro.
   var regCell = function(val){
-    return '<td style="padding:8px 12px;border:1px solid rgba(200,200,200,.12);font-family:monospace;font-size:11px;font-weight:600;color:var(--muted);text-align:right">'+fmt2(val)+'</td>';
+    return '<td style="padding:8px 12px;border:1px solid '+BORDER+';font-family:monospace;font-size:11px;font-weight:700;color:'+TXT+';text-align:right;background:rgba(255,255,255,.03)">'+fmt2(val)+'</td>';
   };
-  var pctRow5 = function(sV,cV,tV,rV){
-    return '<tr style="opacity:.7">'+
-      '<td style="padding:4px 12px 8px;font-size:9px;color:var(--muted);border:1px solid rgba(200,200,200,.08)">% participación</td>'+
-      '<td style="padding:4px 12px 8px;font-size:9px;color:var(--muted);text-align:right;border:1px solid rgba(200,200,200,.08)">'+fmtPct(sV,tV)+'</td>'+
-      '<td style="padding:4px 12px 8px;font-size:9px;color:var(--muted);text-align:right;border:1px solid rgba(200,200,200,.08)">'+fmtPct(cV,tV)+'</td>'+
-      '<td style="padding:4px 12px 8px;font-size:9px;color:var(--muted);text-align:right;border:1px solid rgba(200,200,200,.08)">100%</td>'+
-      '<td style="padding:4px 12px 8px;font-size:9px;color:var(--muted);text-align:right;border:1px solid rgba(200,200,200,.08)">—</td>'+
+  // Fila de % de ahorro respecto a lo que se hubiese pagado en Regular —
+  // responde directamente "de impuestos pagábamos tanto, ahora tanto,
+  // ahorramos X%" para cada criterio.
+  var pctAhorroRow = function(regV, totV){
+    return '<tr style="opacity:.85">'+
+      '<td style="padding:4px 12px 8px;font-size:9px;color:'+C_GREEN+';font-weight:700;border:1px solid '+BORDER+'">% ahorro vs Regular</td>'+
+      '<td style="padding:4px 12px 8px;border:1px solid '+BORDER+'"></td>'+
+      '<td style="padding:4px 12px 8px;border:1px solid '+BORDER+'"></td>'+
+      '<td style="padding:4px 12px 8px;border:1px solid '+BORDER+'"></td>'+
+      '<td style="padding:4px 12px 8px;font-size:10px;font-weight:800;color:'+C_GREEN+';text-align:right;border:1px solid '+BORDER+'">'+fmtPct(totV,regV)+'</td>'+
     '</tr>';
   };
 
   var html =
-    '<div style="background:var(--s1);border:1px solid var(--border);border-radius:16px;width:100%;max-width:640px;max-height:92vh;overflow-y:auto">'+
+    '<div style="background:'+BG+';border:1px solid '+BORDER+';border-radius:16px;width:100%;max-width:700px;max-height:92vh;overflow-y:auto">'+
 
-    '<div style="padding:14px 16px 10px;border-bottom:1px solid var(--border);display:flex;align-items:start;justify-content:space-between">'+
+    '<div style="padding:14px 16px 10px;border-bottom:1px solid '+BORDER+';display:flex;align-items:start;justify-content:space-between">'+
       '<div>'+
-        '<div style="font-size:14px;font-weight:800;color:var(--green-l)">💰 Desglose de Ahorro por Corredor</div>'+
-        '<div style="font-size:10px;color:var(--muted);margin-top:3px">'+periodoLabel+' · '+tot.n+' embarques elegibles</div>'+
+        '<div style="font-size:14px;font-weight:800;color:'+C_GREEN+'">💰 Desglose de Ahorro por Corredor</div>'+
+        '<div style="font-size:10px;color:'+MUT+';margin-top:3px">'+periodoLabel+' · '+tot.n+' embarques elegibles</div>'+
       '</div>'+
-      '<button onclick="_kpiAhorroClose(this)" style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;padding:0 4px;line-height:1">×</button>'+
+      '<button onclick="_kpiAhorroClose(this)" style="background:none;border:none;color:'+MUT+';font-size:22px;cursor:pointer;padding:0 4px;line-height:1">×</button>'+
     '</div>'+
 
     '<div style="padding:12px;overflow-x:auto">'+
-    '<table style="width:100%;border-collapse:collapse;border:1px solid rgba(200,200,200,.15)">'+
+    '<table style="width:100%;border-collapse:collapse;border:1px solid '+BORDER+'">'+
 
     '<thead>'+
     '<tr style="border-bottom:2px solid rgba(63,185,80,.2)">'+
-      '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;border:1px solid rgba(200,200,200,.12)">Criterio</th>'+
-      '<th style="padding:10px 12px;text-align:right;font-size:11px;font-weight:700;color:var(--blue-l);border:1px solid rgba(200,200,200,.12)">⚡ CIF Express<br><span style="font-size:9px;font-weight:400">'+cif.n+' emb.</span></th>'+
-      '<th style="padding:10px 12px;text-align:right;font-size:11px;font-weight:700;color:var(--orange-l);border:1px solid rgba(200,200,200,.12)">🤝 Sababa<br><span style="font-size:9px;font-weight:400">'+sab.n+' emb.</span></th>'+
-      '<th style="padding:10px 12px;text-align:right;font-size:11px;font-weight:700;color:var(--green-l);border:1px solid rgba(200,200,200,.12)">🏁 Ahorro Total<br><span style="font-size:9px;font-weight:400">'+tot.n+' emb.</span></th>'+
+      '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;color:'+MUT+';text-transform:uppercase;letter-spacing:.06em;border:1px solid '+BORDER+'">Criterio</th>'+
+      '<th style="padding:10px 12px;text-align:right;font-size:11px;font-weight:700;color:'+TXT+';border:1px solid '+BORDER+';background:rgba(255,255,255,.03)">📋 Escenario Regular<br><span style="font-size:9px;font-weight:400;color:'+MUT+'">'+reg.n+' emb. · base</span></th>'+
+      '<th style="padding:10px 12px;text-align:right;font-size:11px;font-weight:700;color:'+C_BLUE+';border:1px solid '+BORDER+'">⚡ CIF Express<br><span style="font-size:9px;font-weight:400">'+cif.n+' emb.</span></th>'+
+      '<th style="padding:10px 12px;text-align:right;font-size:11px;font-weight:700;color:'+C_ORANGE+';border:1px solid '+BORDER+'">🤝 Sababa<br><span style="font-size:9px;font-weight:400">'+sab.n+' emb.</span></th>'+
+      '<th style="padding:10px 12px;text-align:right;font-size:11px;font-weight:700;color:'+C_GREEN+';border:1px solid '+BORDER+'">🏁 Ahorro Total<br><span style="font-size:9px;font-weight:400">'+tot.n+' emb.</span></th>'+
     '</tr>'+
     '</thead>'+
 
@@ -18898,74 +18890,72 @@ function _kpiMostrarAhorro(){
     sectionHdr('1 · Impuestos')+
     '<tr>'+
       labelCell('🏛️ Arancel + ITBMS + Tasa + Uso Sistema','','CIF exonerado · Sababa solo ITBMS homol.')+
-      vCell(cif.c1,'var(--blue-l)',false,'11')+
-      vCell(sab.c1,'var(--orange-l)',false,'11')+
-      vCell(tot.c1,'var(--green-l)',true,'12')+
+      regCell(reg.c1)+
+      vCell(cif.c1,C_BLUE,false,'11')+
+      vCell(sab.c1,C_ORANGE,false,'11')+
+      vCell(tot.c1,C_GREEN,true,'12')+
     '</tr>'+
-    '<tr style="opacity:.7">'+
-      '<td style="padding:4px 12px 8px;font-size:9px;color:var(--muted);border:1px solid rgba(200,200,200,.08)">% participación</td>'+
-      '<td style="padding:4px 12px 8px;font-size:9px;color:var(--muted);text-align:right;border:1px solid rgba(200,200,200,.08)">'+fmtPct(cif.c1,tot.c1)+'</td>'+
-      '<td style="padding:4px 12px 8px;font-size:9px;color:var(--muted);text-align:right;border:1px solid rgba(200,200,200,.08)">'+fmtPct(sab.c1,tot.c1)+'</td>'+
-      '<td style="padding:4px 12px 8px;font-size:9px;color:var(--muted);text-align:right;border:1px solid rgba(200,200,200,.08)">100%</td>'+
-    '</tr>'+
+    pctAhorroRow(reg.c1, tot.c1)+
 
     // C2 Gastos
     sectionHdr('2 · Gastos Origen / Destino')+
     '<tr>'+
       labelCell('🚚 Acarreo + DMCE absorbidos','','Flete y gastos son iguales en ambos escenarios')+
-      vCell(cif.c2,'var(--blue-l)',false,'11')+
-      vCell(sab.c2,'var(--orange-l)',false,'11')+
-      vCell(tot.c2,'var(--green-l)',true,'12')+
+      regCell(reg.c2)+
+      vCell(cif.c2,C_BLUE,false,'11')+
+      vCell(sab.c2,C_ORANGE,false,'11')+
+      vCell(tot.c2,C_GREEN,true,'12')+
     '</tr>'+
-    '<tr style="opacity:.7">'+
-      '<td style="padding:4px 12px 8px;font-size:9px;color:var(--muted);border:1px solid rgba(200,200,200,.08)">% participación</td>'+
-      '<td style="padding:4px 12px 8px;font-size:9px;color:var(--muted);text-align:right;border:1px solid rgba(200,200,200,.08)">'+fmtPct(cif.c2,tot.c2)+'</td>'+
-      '<td style="padding:4px 12px 8px;font-size:9px;color:var(--muted);text-align:right;border:1px solid rgba(200,200,200,.08)">'+fmtPct(sab.c2,tot.c2)+'</td>'+
-      '<td style="padding:4px 12px 8px;font-size:9px;color:var(--muted);text-align:right;border:1px solid rgba(200,200,200,.08)">100%</td>'+
-    '</tr>'+
+    pctAhorroRow(reg.c2, tot.c2)+
 
-    // C3 Honorarios
+    // C3 Honorarios — un solo rubro (mismo criterio aplicado en toda la app)
     sectionHdr('3 · Honorarios')+
     '<tr>'+
-      labelCell('👔 Honorarios corredor vs comisión elegida','','Sababa 3.70% neto · CIF 3% + ITBMS sobre monto gravado')+
-      vCell(cif.c3,cif.c3>=0?'var(--blue-l)':'var(--red-l)',false,'11')+
-      vCell(sab.c3,sab.c3>=0?'var(--orange-l)':'var(--red-l)',false,'11')+
-      vCell(tot.c3,tot.c3>=0?'var(--green-l)':'var(--red-l)',true,'12')+
+      labelCell('👔 Honorarios (Esc. Regular vs corredor elegido)','','Sababa 3.70% neto · CIF 3% + ITBMS sobre monto gravado')+
+      regCell(reg.c3)+
+      vCell(cif.c3,cif.c3>=0?C_BLUE:C_RED,false,'11')+
+      vCell(sab.c3,sab.c3>=0?C_ORANGE:C_RED,false,'11')+
+      vCell(tot.c3,tot.c3>=0?C_GREEN:C_RED,true,'12')+
     '</tr>'+
-    '<tr style="opacity:.7">'+
-      '<td style="padding:4px 12px 8px;font-size:9px;color:var(--muted);border:1px solid rgba(200,200,200,.08)">% participación</td>'+
-      '<td style="padding:4px 12px 8px;font-size:9px;color:var(--muted);text-align:right;border:1px solid rgba(200,200,200,.08)">'+fmtPct(cif.c3,tot.c3)+'</td>'+
-      '<td style="padding:4px 12px 8px;font-size:9px;color:var(--muted);text-align:right;border:1px solid rgba(200,200,200,.08)">'+fmtPct(sab.c3,tot.c3)+'</td>'+
-      '<td style="padding:4px 12px 8px;font-size:9px;color:var(--muted);text-align:right;border:1px solid rgba(200,200,200,.08)">100%</td>'+
-    '</tr>'+
+    pctAhorroRow(reg.c3, tot.c3)+
 
     // C4 Mercancía
     sectionHdr('4 · Valor Mercancía')+
     '<tr>'+
       labelCell('📦 FOB Original — igual en ambos escenarios','','No hay diferencia en el valor de la mercancía')+
-      '<td style="padding:8px 12px;border:1px solid rgba(200,200,200,.12);font-family:monospace;font-size:11px;color:var(--muted);text-align:right">$0.00</td>'+
-      '<td style="padding:8px 12px;border:1px solid rgba(200,200,200,.12);font-family:monospace;font-size:11px;color:var(--muted);text-align:right">$0.00</td>'+
-      '<td style="padding:8px 12px;border:1px solid rgba(200,200,200,.12);font-family:monospace;font-size:11px;color:var(--muted);text-align:right">$0.00</td>'+
+      '<td style="padding:8px 12px;border:1px solid '+BORDER+';font-family:monospace;font-size:11px;color:'+MUT+';text-align:right">'+fmt2(reg.c4)+'</td>'+
+      '<td style="padding:8px 12px;border:1px solid '+BORDER+';font-family:monospace;font-size:11px;color:'+MUT+';text-align:right">$0.00</td>'+
+      '<td style="padding:8px 12px;border:1px solid '+BORDER+';font-family:monospace;font-size:11px;color:'+MUT+';text-align:right">$0.00</td>'+
+      '<td style="padding:8px 12px;border:1px solid '+BORDER+';font-family:monospace;font-size:11px;color:'+MUT+';text-align:right">$0.00</td>'+
     '</tr>'+
 
     // TOTAL
     '<tr style="background:rgba(63,185,80,.08);border-top:1px solid rgba(63,185,80,.2)">'+
-      '<td style="padding:12px;font-size:13px;font-weight:800;color:var(--green-l);border:1px solid rgba(46,160,67,.3)">🏁 AHORRO TOTAL</td>'+
-      '<td style="padding:12px;font-family:monospace;font-size:13px;font-weight:800;color:var(--blue-l);text-align:right;border:1px solid rgba(46,160,67,.3)">+'+fmt2(cif.total)+'</td>'+
-      '<td style="padding:12px;font-family:monospace;font-size:13px;font-weight:800;color:var(--orange-l);text-align:right;border:1px solid rgba(46,160,67,.3)">+'+fmt2(sab.total)+'</td>'+
-      '<td style="padding:12px;font-family:monospace;font-size:14px;font-weight:900;color:var(--text);text-align:right;border:1px solid rgba(46,160,67,.3)">+'+fmt2(tot.total)+'</td>'+
+      '<td style="padding:12px;font-size:13px;font-weight:800;color:'+C_GREEN+';border:1px solid rgba(46,160,67,.3)">🏁 AHORRO TOTAL</td>'+
+      '<td style="padding:12px;font-family:monospace;font-size:13px;font-weight:900;color:'+TXT+';text-align:right;border:1px solid rgba(46,160,67,.3);background:rgba(255,255,255,.03)">'+fmt2(regTotalCost)+'</td>'+
+      '<td style="padding:12px;font-family:monospace;font-size:13px;font-weight:800;color:'+C_BLUE+';text-align:right;border:1px solid rgba(46,160,67,.3)">+'+fmt2(cif.total)+'</td>'+
+      '<td style="padding:12px;font-family:monospace;font-size:13px;font-weight:800;color:'+C_ORANGE+';text-align:right;border:1px solid rgba(46,160,67,.3)">+'+fmt2(sab.total)+'</td>'+
+      '<td style="padding:12px;font-family:monospace;font-size:14px;font-weight:900;color:'+TXT+';text-align:right;border:1px solid rgba(46,160,67,.3)">+'+fmt2(tot.total)+'</td>'+
     '</tr>'+
     '<tr style="background:rgba(63,185,80,.04)">'+
-      '<td style="padding:4px 12px 10px;font-size:9px;color:var(--green-l);border:1px solid rgba(46,160,67,.2)">% del total</td>'+
-      '<td style="padding:4px 12px 10px;font-size:10px;font-weight:700;color:var(--blue-l);text-align:right;border:1px solid rgba(46,160,67,.2)">'+fmtPct(cif.total,tot.total)+'</td>'+
-      '<td style="padding:4px 12px 10px;font-size:10px;font-weight:700;color:var(--orange-l);text-align:right;border:1px solid rgba(46,160,67,.2)">'+fmtPct(sab.total,tot.total)+'</td>'+
-      '<td style="padding:4px 12px 10px;font-size:10px;font-weight:700;color:var(--green-l);text-align:right;border:1px solid rgba(46,160,67,.2)">100%</td>'+
+      '<td style="padding:4px 12px 10px;font-size:9px;color:'+C_GREEN+';border:1px solid rgba(46,160,67,.2)">% del total</td>'+
+      '<td style="padding:4px 12px 10px;font-size:10px;font-weight:700;color:'+MUT+';text-align:right;border:1px solid rgba(46,160,67,.2)">base</td>'+
+      '<td style="padding:4px 12px 10px;font-size:10px;font-weight:700;color:'+C_BLUE+';text-align:right;border:1px solid rgba(46,160,67,.2)">'+fmtPct(cif.total,tot.total)+'</td>'+
+      '<td style="padding:4px 12px 10px;font-size:10px;font-weight:700;color:'+C_ORANGE+';text-align:right;border:1px solid rgba(46,160,67,.2)">'+fmtPct(sab.total,tot.total)+'</td>'+
+      '<td style="padding:4px 12px 10px;font-size:10px;font-weight:700;color:'+C_GREEN+';text-align:right;border:1px solid rgba(46,160,67,.2)">100%</td>'+
+    '</tr>'+
+    '<tr style="background:rgba(255,255,255,.03)">'+
+      '<td style="padding:4px 12px 10px;font-size:9px;color:'+C_GREEN+';font-weight:700;border:1px solid rgba(46,160,67,.2)">% ahorro vs Regular</td>'+
+      '<td style="padding:4px 12px 10px;border:1px solid rgba(46,160,67,.2)"></td>'+
+      '<td style="padding:4px 12px 10px;border:1px solid rgba(46,160,67,.2)"></td>'+
+      '<td style="padding:4px 12px 10px;border:1px solid rgba(46,160,67,.2)"></td>'+
+      '<td style="padding:4px 12px 10px;font-size:11px;font-weight:900;color:'+C_GREEN+';text-align:right;border:1px solid rgba(46,160,67,.2)">'+fmtPct(tot.total,regTotalCost)+'</td>'+
     '</tr>'+
 
     '</tbody></table>'+
     '</div>'+
 
-    '<div style="padding:8px 12px;border-top:1px solid var(--border);font-size:9px;color:var(--muted);text-align:center">'+
+    '<div style="padding:8px 12px;border-top:1px solid '+BORDER+';font-size:9px;color:'+MUT+';text-align:center">'+
       'Escenario Único no genera ahorro comparativo · Solo Sababa y CIF Express'+
     '</div>'+
   '</div>';
@@ -22709,6 +22699,66 @@ window.abrirFacturasEmbarque = function(idx){
   html += '<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:16px 0 8px;display:flex;align-items:center;gap:6px">&#x1F500; Por Escenario Utilizado</div>';
   var escColors = {'Escenario Regular':'rgba(63,185,80,.12)','CIF Express':'rgba(88,166,255,.12)','Sababa Imports (#3)':'rgba(240,136,62,.12)','Escenario Único':'rgba(163,113,247,.12)'};
   var escIcons  = {'Escenario Regular':'📋','CIF Express':'⚡','Sababa Imports (#3)':'🤝','Escenario Único':'🔒'};
+
+  // ── Fila sintética "Escenario Regular" (base de comparación) ──
+  // Ningún embarque se guarda con esc='Escenario Regular' — nadie "elige" ese
+  // escenario, es la referencia contra la que se calculó el ahorro de los
+  // demás. Por eso esta fila nunca aparecía, aunque escColors/escIcons ya
+  // traían el color y el ícono preparados para ella. Se reconstruye sumando,
+  // para cada embarque que sí usó un escenario alterno (Sababa/CIF Express/
+  // Único), lo que hubiera costado el trámite regular = costo real
+  // desembolsado (todas las líneas de la factura, mercancía + gastos) + el
+  // ahorro ya guardado en ese embarque (fuente: _ahorroTotal4C).
+  var byEscRegular = {ahorro:0, totalRegular:0, count:0, items:[]};
+  data.forEach(function(d){
+    var rawEsc = d.esc||'Sin Escenario';
+    var escLow = rawEsc.toLowerCase();
+    var isUnicoEmb = d.modoUnico || d.tipoEsc==='unico'
+      || escLow.includes('único') || escLow.includes('unico')
+      || (d.snap && d.snap.modoUnico) || (d.snap && d.snap.tipoEsc==='unico');
+    var esAlterno = escLow.includes('sababa') || escLow.includes('cif') || isUnicoEmb;
+    if(!esAlterno) return;
+    var invL = (d.snap && d.snap.invLines) ? d.snap.invLines : (d.invLines||[]);
+    var totalActual = invL.reduce(function(s,l){ return s+(l.costo||0); }, 0);
+    var totalRegular = totalActual + (d.ahorro||0);
+    byEscRegular.totalRegular += totalRegular;
+    byEscRegular.ahorro += d.ahorro||0;
+    byEscRegular.count++;
+    byEscRegular.items.push({d:d, totalRegular:totalRegular});
+  });
+  if(byEscRegular.count > 0){
+    var uidR = 'ge-regular';
+    var pctR = byEscRegular.totalRegular>0 ? (byEscRegular.ahorro/byEscRegular.totalRegular*100).toFixed(1)+'%' : '—';
+    var rowsHtmlR = byEscRegular.items.map(function(it){
+      var d = it.d, tr = it.totalRegular;
+      var idx = tendData.indexOf(d);
+      var dp = tr>0 ? (d.ahorro/tr*100).toFixed(1)+'%' : '—';
+      return '<div class="grp-row" onclick="abrirModuloComparativo_idx('+idx+')">'
+        +'<div class="grp-row-left">'
+        +'<div class="grp-row-nro">'+(d.nro||'—')+'</div>'
+        +'<div class="grp-row-desc">'+(d.desc||'—')+'</div>'
+        +'<div class="grp-row-meta">'+(d.fecha||'')+' &middot; vs. '+(d.esc||'')+'</div>'
+        +'</div>'
+        +'<div class="grp-row-right">'
+        +'<div class="grp-row-cif">'+fmtK(tr)+'</div>'
+        +'<div class="grp-row-ahorro">+'+fmtK(d.ahorro||0)+'</div>'
+        +'<div class="grp-row-pct">'+dp+'</div>'
+        +'</div></div>';
+    }).join('');
+    html += '<div class="grp-section" style="border:1px dashed rgba(63,185,80,.35)">'
+      +'<div class="grp-hdr" onclick="_toggleGrp(\''+uidR+'\',this)">'
+      +'<div class="grp-hdr-left">'
+      +'<div class="grp-hdr-icon" style="background:'+escColors['Escenario Regular']+'">'+escIcons['Escenario Regular']+'</div>'
+      +'<div><div class="grp-hdr-title">Escenario Regular <span style="font-weight:400;color:var(--muted);font-size:10px">— base de comparación, nunca se usa realmente</span></div>'
+      +'<div class="grp-hdr-sub">'+byEscRegular.count+' embarque'+(byEscRegular.count!==1?'s':'')+' &middot; hubiera costado '+fmtK(byEscRegular.totalRegular)+' &middot; '+pctR+' de ahorro total</div></div>'
+      +'</div>'
+      +'<div style="display:flex;align-items:center;gap:12px">'
+      +'<div class="grp-badge" style="color:var(--green-l)">'+fmtK(byEscRegular.totalRegular)+'</div>'
+      +'<span class="grp-chevron" id="'+uidR+'-chev">&#9660;</span>'
+      +'</div></div>'
+      +'<div class="grp-body" id="'+uidR+'">'+rowsHtmlR+'</div>'
+      +'</div>';
+  }
 
   var escEntries = Object.keys(byEsc).map(function(k){ return [k, byEsc[k]]; });
   escEntries.sort(function(a,b){ return b[1].count - a[1].count; });
