@@ -18950,7 +18950,12 @@ function _kpiMostrarAhorro(){
     // Sababa: solo paga ITBMS s/homologado.
     var alt_liq  = 0;
     var alt_itbms= isCif?((sc2.itbms||0)+(sc2.itbmsTasaFinal||0)):(sc3.itbmsHomol||0);
-    var alt_tasa = 0;
+    // CIF Express SÍ paga Tasa + Uso de Sistema (Sababa está exonerado de este rubro).
+    // sc2.tasa y sc2.form2 ya se capturan por embarque en el Escenario CIF Express;
+    // form2 usa el mismo fallback de 3 que el resto de la app cuando no fue editado.
+    var cifTasaMonto = isCif ? (sc2.tasa||0) : 0;
+    var cifUsoMonto  = isCif ? ((sc2.form2!==undefined&&sc2.form2!==null&&sc2.form2!=='')?parseFloat(sc2.form2):3) : 0;
+    var alt_tasa = cifTasaMonto + cifUsoMonto;
 
     // C2: Acarreo + DMCE — absorbidos por la comisión en ambos corredores alternos
     var reg_gastos=(sc1.acarreo||0)+(sc1.dmce||0);
@@ -19080,7 +19085,7 @@ function _kpiMostrarAhorro(){
     sectionHdr('1 · Impuestos')+
     filaRow('🧾','Liquidación (pago arancelario)','Arancel — CIF y Sababa exonerados', fLiq)+
     filaRow('🧮','ITBMS','CIF paga ITBMS s/CIF+Tasa · Sababa paga ITBMS sobre homologado', fItbms)+
-    filaRow('⚙️','Tasa y Uso de Sistema','Tasa + Formulario 1 — CIF y Sababa exonerados', fTasa)+
+    filaRow('⚙️','Tasa y Uso de Sistema','CIF Express paga Tasa + Uso de Sistema · Sababa exonerado', fTasa)+
 
     sectionHdr('2 · Gastos Origen / Destino')+
     filaRow('🚚','Acarreo + DMCE absorbidos','Absorbidos por la comisión en ambos corredores', fGastos)+
@@ -31822,6 +31827,55 @@ window._plnModuloEmbarques = async function(){
   renderList('');
   setTimeout(function(){ input.focus(); },300);
 };
+</script>
+<script>
+// ── Inactividad: fuerza actualización tras 1 hora sin interacción ──
+// Evita que una sesión dejada abierta (ej. alguien la abre y no la vuelve a
+// tocar) siga mostrando datos calculados con una versión vieja de la app.
+// Al cumplirse el límite, bloquea la pantalla con un aviso discreto que
+// obliga a recargar. No afecta ninguna otra función de la app.
+(function(){
+  var LIMITE_MS = 60*60*1000; // 1 hora
+  var _lastActivity = Date.now();
+  var _shown = false;
+
+  function _marcarActividad(){ _lastActivity = Date.now(); }
+
+  ['click','keydown','touchstart','mousemove','scroll','wheel'].forEach(function(ev){
+    window.addEventListener(ev, _marcarActividad, {passive:true});
+  });
+  document.addEventListener('visibilitychange', function(){
+    if(document.visibilityState==='visible') _checarInactividad();
+  });
+
+  function _mostrarAvisoInactividad(){
+    if(_shown) return;
+    _shown = true;
+    var isLight = document.body.classList.contains('theme-light');
+    var bg = isLight ? '#ffffff' : '#161b22';
+    var border = isLight ? 'rgba(0,0,0,.12)' : 'rgba(255,255,255,.09)';
+    var txt = isLight ? '#111827' : '#e6edf3';
+    var mut = isLight ? '#4b5563' : '#8b949e';
+    var ov = document.createElement('div');
+    ov.id = '_inactivityOverlay';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:20px';
+    ov.innerHTML =
+      '<div style="background:'+bg+';border:1px solid '+border+';border-radius:14px;max-width:320px;width:100%;padding:22px;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.35)">'+
+        '<div style="font-size:28px;margin-bottom:8px">⏱️</div>'+
+        '<div style="font-size:14px;font-weight:800;color:'+txt+';margin-bottom:6px">Sesión inactiva</div>'+
+        '<div style="font-size:12px;color:'+mut+';margin-bottom:16px;line-height:1.4">Ha pasado más de una hora sin actividad. Actualiza la página para ver la información más reciente.</div>'+
+        '<button onclick="location.reload()" style="background:#1a7a6e;border:none;color:#fff;border-radius:8px;padding:10px 22px;font-size:13px;font-weight:700;cursor:pointer;width:100%">🔄 Actualizar</button>'+
+      '</div>';
+    document.body.appendChild(ov);
+  }
+
+  function _checarInactividad(){
+    if(_shown) return;
+    if(Date.now() - _lastActivity >= LIMITE_MS) _mostrarAvisoInactividad();
+  }
+
+  setInterval(_checarInactividad, 30000); // revisa cada 30s
+})();
 </script>
 </body>
 </html>
