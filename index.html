@@ -16339,7 +16339,7 @@ function renderTend(_scopeEl){
         const _difMonto2 = typeof _getDiferencia==='function' ? _getDiferencia(d) : 0;
         const difBadge2 = _difMonto2 ? `<span title="El Costo Inventario actual difiere del histórico guardado al procesar — revisa con 🏷️" style="background:rgba(248,81,73,.15);border:1px solid rgba(248,81,73,.4);border-radius:3px;padding:0 4px;font-size:8px;font-weight:800;color:#f85149;cursor:help">⚠️ Dif: ${_difMonto2>0?'+':''}${window._fmtMoney(_difMonto2)}</span>` : '';
         histHtml+=`<div style="display:grid;grid-template-columns:auto 1fr auto auto auto;gap:8px;align-items:center;padding:9px 14px 9px 42px;border-top:1px solid rgba(48,54,61,.3);cursor:pointer;transition:background .15s${isPend?';border-left:3px solid var(--orange-l)':''}" onclick="if(event.target.classList.contains('del-btn')||event.target.classList.contains('btn-reabrir')){return;}abrirModuloComparativo_idx(${idx})" onmouseenter="this.style.background='rgba(255,255,255,.03)'" onmouseleave="this.style.background=''">
-          <div style="font-size:10px;font-weight:700;color:var(--orange-l);white-space:nowrap">${d.nro||'—'}${d.idFiscal?` <span style="color:#a371f7;font-weight:600">· 🧾 ${d.idFiscal}</span>`:''} ${difBadge2}</div>
+          <div style="font-size:10px;font-weight:700;color:var(--orange-l);white-space:nowrap">${d.nro||'—'} ${difBadge2}</div>
           <div>
             <div style="font-size:12px;font-weight:500;color:var(--text);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.35">${d.desc}${isPend?'&nbsp;<span class="badge-pendiente">🟡 PENDIENTE</span>':''}</div>
             <div style="font-size:10px;color:var(--muted);display:flex;gap:5px;align-items:center;margin-top:2px">${d.fecha} · ${d.esc||''} <span style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:var(--blue-l)">${viaIco} ${d.viaTransporte||'SEA'}</span></div>
@@ -16402,6 +16402,30 @@ function renderTend(_scopeEl){
 // y los muestra con: nombre, OC, embarque, piezas, valor, escenario,
 // tipo (ZL/IMP), homologado (sí/no)
 // ══════════════════════════════════════════════════════════════════
+// ── Modo Edición del Historial de Proveedores (jul-2026, a pedido) ──
+// Mismo criterio que Historial de Embarques Procesados: los lápices de
+// edición (Proveedor/Departamento/Piezas) están OCULTOS por defecto, y solo
+// aparecen cuando se activa "✏️ Editar" — reduce el ruido visual en el uso
+// normal de consulta. Al activarlo también se fuerza la vista SIN agrupar,
+// porque la vista agrupada por proveedor no tiene líneas individuales que editar.
+function _toggleHistProvEditMode(){
+  window._hpEditMode = !window._hpEditMode;
+  var mb = document.getElementById('tab-modal-body');
+  var root = (mb && mb.querySelector('#histprov-root')) || document.getElementById('histprov-root');
+  var btn = (root && root.querySelector('#hp-edit-toggle')) || document.getElementById('hp-edit-toggle');
+  var hint = (root && root.querySelector('#hp-edit-hint')) || document.getElementById('hp-edit-hint');
+  if(window._hpEditMode){
+    if(btn){ btn.style.background='rgba(240,136,62,.28)'; btn.style.borderColor='rgba(240,136,62,.55)'; btn.textContent='✏️ Editando…'; }
+    if(hint) hint.style.display='block';
+    var agrupar = root && root.querySelector('#hp-agrupar');
+    if(agrupar && agrupar.checked) agrupar.checked = false;
+  } else {
+    if(btn){ btn.style.background='rgba(240,136,62,.1)'; btn.style.borderColor='rgba(240,136,62,.3)'; btn.textContent='✏️ Editar'; }
+    if(hint) hint.style.display='none';
+  }
+  if(typeof _renderHistProvList==='function') _renderHistProvList();
+}
+
 function renderHistProv(){
   const _mb = document.getElementById('tab-modal-body');
   const root = (_mb && _mb.querySelector('#histprov-root')) || document.getElementById('histprov-root');
@@ -16420,6 +16444,7 @@ function renderHistProv(){
       <div style="font-size:14px;font-weight:800;color:var(--text);margin-bottom:2px">🏭 Historial de Proveedores</div>
       <div style="font-size:11px;color:var(--muted)">Todos los proveedores de mercancía de embarques procesados</div>
     </div>
+    <button onclick="_toggleHistProvEditMode()" id="hp-edit-toggle" style="background:rgba(240,136,62,.1);border:1px solid rgba(240,136,62,.3);color:var(--orange-l);border-radius:8px;padding:7px 14px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;margin-right:8px">✏️ Editar</button>
     <button onclick="_exportHistProvXLSX()" style="background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:8px;padding:7px 14px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">📊 Excel</button>
   </div>
 
@@ -16432,6 +16457,7 @@ function renderHistProv(){
       <input id="hp-agrupar" type="checkbox" checked onchange="_renderHistProvList()" style="width:15px;height:15px;accent-color:var(--green-l,#3fb950)">
       👥 Agrupar por proveedor (total acumulado · toca para ver sus embarques)
     </label>
+    <div id="hp-edit-hint" style="display:none;background:rgba(240,136,62,.08);border:1px solid rgba(240,136,62,.25);border-radius:7px;padding:7px 10px;font-size:10.5px;color:var(--orange-l);margin-bottom:8px">✏️ Modo edición activo — Proveedor, Departamento y Piezas son editables en cada factura. Toca "Editar" de nuevo para salir.</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
       <select id="hp-seccion" onchange="_renderHistProvList()" style="background:var(--s2);border:1px solid var(--border);border-radius:7px;padding:7px 8px;color:var(--text);font-size:11px">
         <option value="merc">🏭 Proveedores Mercancía</option>
@@ -18302,6 +18328,123 @@ function _editarPiezasHistProv(embarqueIdx, provName, numFact, oc, piezasActuale
   };
 }
 
+// ── Localizar todas las copias de una línea de factura (d.invLines y
+// d.snap.invLines pueden ser arrays distintos) por proveedor + numFact/OC.
+// Compartido por los editores de piezas, proveedor y departamento del
+// Historial de Proveedores para que los tres se mantengan sincronizados.
+function _lineasHistProvCoincidentes(embarqueIdx, provName, numFact, oc){
+  var d = tendData[embarqueIdx];
+  if(!d) return [];
+  var lProvBuscado = (provName||'').trim().toLowerCase();
+  var out = [];
+  [(d.invLines||[]), (d.snap && d.snap.invLines)||[]].forEach(function(arr){
+    arr.forEach(function(l){
+      var lProv = (l.prov||'').trim().toLowerCase();
+      if(lProv !== lProvBuscado) return;
+      if(numFact && (l.numFact||l.nfac||'') === numFact) out.push(l);
+      else if(!numFact && oc && (l.oc||'') === oc) out.push(l);
+    });
+  });
+  return out;
+}
+
+// ── Editar PROVEEDOR directamente desde Historial de Proveedores ──
+// Corrige el nombre tal cual quedó registrado (p.ej. cuando se marcó con
+// "S.I-" por error, o el nombre no coincide con el proveedor real).
+function _editarProveedorHistProv(embarqueIdx, provName, numFact, oc, provActual){
+  var ov = document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:999999;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px)';
+  ov.innerHTML='<div style="background:var(--s1);border:1px solid var(--border);border-radius:16px;padding:24px;max-width:360px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.5)">'
+    +'<div style="font-size:14px;font-weight:800;color:var(--text);margin-bottom:4px">✏️ Editar Proveedor</div>'
+    +'<div style="font-size:11px;color:var(--muted);margin-bottom:14px">'+(numFact?'Fact: '+numFact:(oc?'OC: '+oc:'—'))+'</div>'
+    +'<label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Nombre del proveedor</label>'
+    +'<input id="_prov_edit_inp" type="text" value="'+(provActual||'').replace(/"/g,'&quot;')+'" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:9px 12px;color:var(--text);font-size:13px;margin-bottom:8px;box-sizing:border-box">'
+    +'<div style="font-size:10px;color:var(--muted);margin-bottom:16px">Tip: si es proveedor homologado de Sababa, el prefijo "S.I-" se aplica solo automáticamente — no lo escribas a mano salvo que sepas que corresponde.</div>'
+    +'<div style="display:flex;gap:10px">'
+    +'<button id="_prov_cancelar" style="flex:1;background:none;border:1px solid var(--border);color:var(--muted);border-radius:10px;padding:10px;font-size:12px;font-weight:600;cursor:pointer">← Cancelar</button>'
+    +'<button id="_prov_guardar" style="flex:2;background:linear-gradient(135deg,rgba(63,185,80,.2),rgba(46,160,67,.12));border:1.5px solid rgba(63,185,80,.45);color:var(--green-l);border-radius:10px;padding:10px;font-size:12px;font-weight:800;cursor:pointer">💾 Guardar</button>'
+    +'</div></div>';
+  document.body.appendChild(ov);
+
+  var inp = document.getElementById('_prov_edit_inp');
+  if(inp) setTimeout(function(){ inp.focus(); inp.select(); }, 100);
+
+  document.getElementById('_prov_cancelar').onclick = function(){ ov.remove(); };
+  ov.addEventListener('click', function(e){ if(e.target===ov) ov.remove(); });
+
+  document.getElementById('_prov_guardar').onclick = function(){
+    var nuevo = (document.getElementById('_prov_edit_inp')?.value||'').trim();
+    if(!nuevo){
+      if(typeof _showToast==='function') _showToast('⚠️ El nombre del proveedor no puede quedar vacío','orange',3000);
+      return;
+    }
+    ov.remove();
+    var encontradas = _lineasHistProvCoincidentes(embarqueIdx, provName, numFact, oc);
+    if(!encontradas.length){
+      if(typeof _showToast==='function') _showToast('⚠️ No se encontró la línea de factura para actualizar','red',3500);
+      return;
+    }
+    encontradas.forEach(function(l){ l.prov = nuevo; });
+    if(typeof saveTendData==='function') saveTendData();
+    if(typeof _syncTendToCloud==='function') _syncTendToCloud();
+    if(typeof _showToast==='function') _showToast('✅ Proveedor actualizado a "'+nuevo+'"','green',3000);
+    if(typeof _renderHistProvList==='function') _renderHistProvList();
+  };
+}
+
+// ── Reclasificar DEPARTAMENTO directamente desde Historial de Proveedores ──
+// Ofrece los departamentos ya existentes en la data (para no crear variantes
+// por typo) más la opción de escribir uno nuevo — mismo criterio usado para
+// País/Origen ("Otra (escribir)").
+function _editarDeptoHistProv(embarqueIdx, provName, numFact, oc, deptoActual){
+  var deptosExistentes = Array.from(new Set(
+    _buildHistProvRows().map(function(r){ return r.depto; }).filter(Boolean)
+  )).sort();
+
+  var ov = document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:999999;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px)';
+  ov.innerHTML='<div style="background:var(--s1);border:1px solid var(--border);border-radius:16px;padding:24px;max-width:360px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.5)">'
+    +'<div style="font-size:14px;font-weight:800;color:var(--text);margin-bottom:4px">📁 Reclasificar Departamento</div>'
+    +'<div style="font-size:11px;color:var(--muted);margin-bottom:14px">'+(numFact?'Fact: '+numFact:(oc?'OC: '+oc:'—'))+' · Actual: <strong style="color:var(--orange-l)">'+deptoActual+'</strong></div>'
+    +'<label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Departamento correcto</label>'
+    +'<select id="_depto_edit_sel" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:9px 12px;color:var(--text);font-size:13px;margin-bottom:8px;box-sizing:border-box">'
+      +deptosExistentes.map(function(dv){ return '<option value="'+dv.replace(/"/g,'&quot;')+'"'+(dv===deptoActual?' selected':'')+'>'+dv+'</option>'; }).join('')
+      +'<option value="__otro__">✏️ Otro (escribir)…</option>'
+    +'</select>'
+    +'<input id="_depto_edit_otro" type="text" placeholder="Nombre del nuevo departamento" style="display:none;width:100%;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:9px 12px;color:var(--text);font-size:13px;margin-bottom:16px;box-sizing:border-box">'
+    +'<div style="display:flex;gap:10px;margin-top:8px">'
+    +'<button id="_depto_cancelar" style="flex:1;background:none;border:1px solid var(--border);color:var(--muted);border-radius:10px;padding:10px;font-size:12px;font-weight:600;cursor:pointer">← Cancelar</button>'
+    +'<button id="_depto_guardar" style="flex:2;background:linear-gradient(135deg,rgba(63,185,80,.2),rgba(46,160,67,.12));border:1.5px solid rgba(63,185,80,.45);color:var(--green-l);border-radius:10px;padding:10px;font-size:12px;font-weight:800;cursor:pointer">💾 Guardar</button>'
+    +'</div></div>';
+  document.body.appendChild(ov);
+
+  var sel = document.getElementById('_depto_edit_sel');
+  var otroInp = document.getElementById('_depto_edit_otro');
+  sel.onchange = function(){ otroInp.style.display = (sel.value==='__otro__') ? 'block' : 'none'; if(sel.value==='__otro__') otroInp.focus(); };
+
+  document.getElementById('_depto_cancelar').onclick = function(){ ov.remove(); };
+  ov.addEventListener('click', function(e){ if(e.target===ov) ov.remove(); });
+
+  document.getElementById('_depto_guardar').onclick = function(){
+    var nuevo = (sel.value==='__otro__' ? (otroInp.value||'').trim() : sel.value).toUpperCase();
+    if(!nuevo){
+      if(typeof _showToast==='function') _showToast('⚠️ Escribe el nombre del departamento','orange',3000);
+      return;
+    }
+    ov.remove();
+    var encontradas = _lineasHistProvCoincidentes(embarqueIdx, provName, numFact, oc);
+    if(!encontradas.length){
+      if(typeof _showToast==='function') _showToast('⚠️ No se encontró la línea de factura para actualizar','red',3500);
+      return;
+    }
+    encontradas.forEach(function(l){ l.deptCat = nuevo; l.dept = nuevo; });
+    if(typeof saveTendData==='function') saveTendData();
+    if(typeof _syncTendToCloud==='function') _syncTendToCloud();
+    if(typeof _showToast==='function') _showToast('✅ Reclasificado a "'+nuevo+'"','green',3000);
+    if(typeof _renderHistProvList==='function') _renderHistProvList();
+  };
+}
+
 // ── Editar N° factura directamente desde Historial de Proveedores ──
 function _editarFactHistProv(embarqueIdx, provName, factInfo, seccion){
   var d = tendData[embarqueIdx];
@@ -18482,7 +18625,9 @@ function _renderHistProvList(){
     return '<div style="background:var(--s1);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:7px;cursor:pointer" onclick="abrirFacturasEmbarque('+r._dIdx+')">'+
       // Row 1: tipo badge + proveedor + monto + comparativo button
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">'+
-        '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0">'+tB+'<span style="font-size:12px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+r.prov+'</span></div>'+
+        '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0">'+tB+'<span style="font-size:12px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+r.prov+'</span>'+
+          (window._hpEditMode?'<button onclick="event.stopPropagation();_editarProveedorHistProv('+r._dIdx+',\''+r.prov.replace(/'/g,"\\'")+'\',\''+(r.numFact!=='—'?r.numFact:'').replace(/'/g,"\\'")+'\',\''+(r.oc!=='—'?r.oc:'').replace(/'/g,"\\'")+'\')" title="Editar proveedor" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:3px;padding:0 4px;font-size:9px;cursor:pointer;flex-shrink:0">✏️</button>':'')+
+        '</div>'+
         '<div style="display:flex;align-items:center;gap:5px;flex-shrink:0;margin-left:8px">'+
           '<button onclick="event.stopPropagation();abrirModuloComparativo_idx('+r._dIdx+')" title="Ver comparativo de escenarios" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);color:var(--blue-l);border-radius:5px;padding:2px 7px;font-size:9px;font-weight:700;cursor:pointer;white-space:nowrap">📊 Comp.</button>'+
           (r.seccion==='serv'&&r.numFact&&r.numFact!=='—'
@@ -18492,7 +18637,9 @@ function _renderHistProvList(){
         '</div>'+
       '</div>'+
       // Row 2: depto + esc badge + homol badge
-      '<div style="display:flex;align-items:center;gap:5px;margin-bottom:6px;flex-wrap:wrap"><span style="font-size:10px;color:var(--muted);font-weight:600">'+r.depto+'</span>'+eB+hB+'</div>'+
+      '<div style="display:flex;align-items:center;gap:5px;margin-bottom:6px;flex-wrap:wrap"><span style="font-size:10px;color:var(--muted);font-weight:600">📁 '+r.depto+'</span>'+
+        (window._hpEditMode?'<button onclick="event.stopPropagation();_editarDeptoHistProv('+r._dIdx+',\''+r.prov.replace(/'/g,"\\'")+'\',\''+(r.numFact!=='—'?r.numFact:'').replace(/'/g,"\\'")+'\',\''+(r.oc!=='—'?r.oc:'').replace(/'/g,"\\'")+'\',\''+r.depto.replace(/'/g,"\\'")+'\')" title="Reclasificar departamento" style="background:rgba(240,136,62,.1);border:1px solid rgba(240,136,62,.3);color:var(--orange-l);border-radius:3px;padding:0 4px;font-size:9px;cursor:pointer">✏️</button>':'')+
+        eB+hB+'</div>'+
       // Row 3: Embarque + Factura + OC/piezas/bultos (hidden for service providers)
       '<div style="display:flex;gap:8px;font-size:10px;color:var(--muted);flex-wrap:wrap;align-items:center;margin-bottom:'+(hasHomolInfo?'4px':'0')+'">'+
         '<span>📋 <strong style="color:var(--text)">'+r.nro+'</strong></span>'+
@@ -18504,7 +18651,7 @@ function _renderHistProvList(){
           (r.oc!=='—'?'<span>OC: <strong style="color:var(--text)">'+r.oc+'</strong></span>':'')+
           '<span style="display:flex;align-items:center;gap:4px">'+
             (r.piezas>0?'🔢 <strong style="color:var(--blue-l)">'+r.piezas.toLocaleString()+' pzas</strong>':'<span style="color:var(--muted)">— pzas</span>')+
-            '<button onclick="event.stopPropagation();_editarPiezasHistProv('+r._dIdx+',\''+r.prov.replace(/'/g,"\\'")+'\',\''+(r.numFact!=='—'?r.numFact:'').replace(/'/g,"\\'")+'\',\''+(r.oc!=='—'?r.oc:'').replace(/'/g,"\\'")+'\','+(r.piezas||0)+')" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:3px;padding:0 5px;font-size:10px;cursor:pointer" title="Editar piezas">✏️</button>'+
+            (window._hpEditMode?'<button onclick="event.stopPropagation();_editarPiezasHistProv('+r._dIdx+',\''+r.prov.replace(/'/g,"\\'")+'\',\''+(r.numFact!=='—'?r.numFact:'').replace(/'/g,"\\'")+'\',\''+(r.oc!=='—'?r.oc:'').replace(/'/g,"\\'")+'\','+(r.piezas||0)+')" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:3px;padding:0 5px;font-size:10px;cursor:pointer" title="Editar piezas">✏️</button>':'')+
           '</span>'+
           (r.bultos>0?'<span>📦 <strong style="color:var(--text)">'+r.bultos+' ctn</strong></span>':'<span style="color:var(--muted)">— ctn</span>')
         ):'')+
@@ -18760,22 +18907,31 @@ function _kpiMostrarAhorro(){
   var fmt2 = function(n){ return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
   var fmtPct = function(n,tot){ return tot>0?((n/tot)*100).toFixed(1)+'%':'—'; };
 
-  // ── Paleta fija oscura (jul-2026) ──
-  // FIX: este popup se crea con document.createElement + document.body.appendChild,
-  // fuera del árbol donde normalmente se aplican las variables de tema. Si el body
-  // llega a tener activo el modo claro (body.theme-light / color-scheme:light) en
-  // ese momento, var(--s1)/var(--text) se resuelven a blanco/negro pero los acentos
-  // (var(--blue-l), var(--orange-l)...) NO tienen versión clara definida — quedan
-  // los mismos tonos pensados para fondo oscuro, perdiendo contraste. Se fija la
-  // paleta oscura directo en hex para que este popup SIEMPRE se vea consistente,
-  // sin depender del tema activo del body en ese instante.
-  var BG='#161b22', BORDER='rgba(255,255,255,.09)', TXT='#e6edf3', MUT='#8b949e';
-  var C_GREEN='#3fb950', C_BLUE='#58a6ff', C_ORANGE='#f0883e', C_RED='#f85149';
+  // ── Paleta según el TEMA ACTIVO (jul-2026, corregido) ──
+  // Antes se forzaba siempre la paleta oscura porque este popup se crea fuera
+  // del árbol normal (document.body.appendChild) y podía perder contraste si
+  // el modo claro estaba activo a medias. Ahora se detecta el tema real del
+  // body y se usa una paleta completa (fondo + acentos) pensada para ESE
+  // tema — clara si el tema es claro, oscura si es oscuro — nunca mezclada.
+  var _isLight = document.body.classList.contains('theme-light')
+    || (document.body.getAttribute('style')||'').indexOf('color-scheme: light')>=0;
+  var BG, BORDER, TXT, MUT, C_GREEN, C_BLUE, C_ORANGE, C_RED, ROWALT;
+  if(_isLight){
+    BG='#ffffff'; BORDER='rgba(0,0,0,.12)'; TXT='#111827'; MUT='#4b5563'; ROWALT='rgba(0,0,0,.025)';
+    C_GREEN='#116329'; C_BLUE='#1f6feb'; C_ORANGE='#b45309'; C_RED='#da3633';
+  } else {
+    BG='#161b22'; BORDER='rgba(255,255,255,.09)'; TXT='#e6edf3'; MUT='#8b949e'; ROWALT='rgba(255,255,255,.02)';
+    C_GREEN='#3fb950'; C_BLUE='#58a6ff'; C_ORANGE='#f0883e'; C_RED='#f85149';
+  }
 
-  // Acumular por corredor (Sababa y CIF) y por criterio
-  var reg = {c1:0,c2:0,c3:0,c4:0,total:0,n:0};
-  var sab = {c1:0,c2:0,c3:0,c4:0,total:0,n:0};
-  var cif = {c1:0,c2:0,c3:0,c4:0,total:0,n:0};
+  // Acumular por corredor (Sababa y CIF) y por criterio.
+  // p1a/p1b/p1c = Impuestos desglosado en 3 (jul-2026, a pedido):
+  //   a) Liquidación (pago arancelario)  b) ITBMS  c) Tasa y Uso de Sistema
+  // p2..p4 = MONTO REALMENTE PAGADO bajo ese corredor. Por construcción,
+  // Regular = Pagado + Ahorro siempre, para que cuadre exacto (trazabilidad).
+  var reg = {c1a:0,c1b:0,c1c:0,c2:0,c3:0,c4:0,n:0};
+  var sab = {c1a:0,c1b:0,c1c:0,c2:0,c3:0,c4:0,p1a:0,p1b:0,p1c:0,p2:0,p3:0,p4:0,total:0,n:0};
+  var cif = {c1a:0,c1b:0,c1c:0,c2:0,c3:0,c4:0,p1a:0,p1b:0,p1c:0,p2:0,p3:0,p4:0,total:0,n:0};
 
   all.forEach(function(d){
     var sc1=(d.snap&&d.snap.sc1)||{};
@@ -18786,89 +18942,124 @@ function _kpiMostrarAhorro(){
     var isSab=esc.includes('sababa')||esc.includes('sab');
     if(!isCif && !isSab) return;
 
-    // C1: Impuestos Regular
-    var reg_imp=(sc1.arancel||0)+(sc1.itbms||0)+(sc1.tasa||0)+(sc1.itbmsTasaFinal||0)+(sc1.form1||0);
-    var alt_imp=isCif?0:(sc3.itbmsHomol||0);
-    var a1=reg_imp-alt_imp;
+    // C1 desglosado — a) Liquidación  b) ITBMS  c) Tasa y Uso de Sistema
+    var reg_liq  = sc1.arancel||0;
+    var reg_itbms= (sc1.itbms||0)+(sc1.itbmsTasaFinal||0);
+    var reg_tasa = (sc1.tasa||0)+(sc1.form1||0);
+    // CIF: exonerado total (paga $0 en los 3). Sababa: solo paga ITBMS s/homologado.
+    var alt_liq  = 0;
+    var alt_itbms= isCif?0:(sc3.itbmsHomol||0);
+    var alt_tasa = 0;
 
-    // C2: Acarreo + DMCE
+    // C2: Acarreo + DMCE — absorbidos por la comisión en ambos corredores alternos
     var reg_gastos=(sc1.acarreo||0)+(sc1.dmce||0);
-    var a2=reg_gastos;
+    var alt_gastos=0;
 
     // C3: Honorarios
     var reg_hon=sc1.hon||0;
     var alt_hon=isCif?((sc2.hon||0)+(sc2.itbmsHon||0)):((sc3.comision||0)-(sc3.itbmsHomol||0));
-    var a3=reg_hon-alt_hon;
 
-    // C4: Mercancía (siempre 0)
-    var a4=0;
+    // C4: Mercancía — mismo valor, no genera ahorro ni gasto adicional
+    var alt_merc=(sc1.base||0);
 
     var bucket = isCif ? cif : sab;
-    bucket.c1+=a1; bucket.c2+=a2; bucket.c3+=a3; bucket.c4+=a4;
+    bucket.c1a+=(reg_liq-alt_liq); bucket.c1b+=(reg_itbms-alt_itbms); bucket.c1c+=(reg_tasa-alt_tasa);
+    bucket.c2+=(reg_gastos-alt_gastos); bucket.c3+=(reg_hon-alt_hon); bucket.c4+=0;
+    bucket.p1a+=alt_liq; bucket.p1b+=alt_itbms; bucket.p1c+=alt_tasa;
+    bucket.p2+=alt_gastos; bucket.p3+=alt_hon; bucket.p4+=alt_merc;
     bucket.total+=(d.ahorro||0);
     bucket.n++;
 
-    // Acumular Regular
-    reg.c1+=reg_imp; reg.c2+=reg_gastos; reg.c3+=reg_hon; reg.c4+=(sc1.base||0);
-    reg.total+=(d.ahorro||0); // not used directly but kept for reference
+    reg.c1a+=reg_liq; reg.c1b+=reg_itbms; reg.c1c+=reg_tasa;
+    reg.c2+=reg_gastos; reg.c3+=reg_hon; reg.c4+=(sc1.base||0);
     reg.n++;
   });
 
-  var tot = {
-    c1: sab.c1+cif.c1,
-    c2: sab.c2+cif.c2,
-    c3: sab.c3+cif.c3,
-    c4: 0,
-    total: sab.total+cif.total,
-    n: sab.n+cif.n
-  };
-  // ── Total "Escenario Regular" — lo que se habría pagado en total, sin
-  // ningún escenario alterno, para estos mismos embarques y criterios. ──
-  var regTotalCost = reg.c1+reg.c2+reg.c3+reg.c4;
+  // ── Totales de "Desembolso" (Pagado) — CIF + Sababa combinados ──
+  // Esta es la columna que pidió Ian: cuánto se pagó EN TOTAL bajo los
+  // corredores alternos, con el % de participación de cada uno adentro.
+  function _fila(regV, cifP, sabP){
+    var desembolso = cifP+sabP;
+    var ahorro = regV-desembolso;
+    var pctCif = desembolso>0?(cifP/desembolso*100):0;
+    var pctSab = desembolso>0?(sabP/desembolso*100):0;
+    var pctAhorro = regV>0?(ahorro/regV*100):0;
+    return {regular:regV, cifPagado:cifP, sabPagado:sabP, desembolso:desembolso, ahorro:ahorro, pctCif:pctCif, pctSab:pctSab, pctAhorro:pctAhorro};
+  }
+  var fLiq   = _fila(reg.c1a, cif.p1a, sab.p1a);
+  var fItbms = _fila(reg.c1b, cif.p1b, sab.p1b);
+  var fTasa  = _fila(reg.c1c, cif.p1c, sab.p1c);
+  var fGastos= _fila(reg.c2,  cif.p2,  sab.p2);
+  var fHon   = _fila(reg.c3,  cif.p3,  sab.p3);
+  var fMerc  = _fila(reg.c4,  cif.p4,  sab.p4);
+  var regTotalCost = reg.c1a+reg.c1b+reg.c1c+reg.c2+reg.c3+reg.c4;
+  var totCifPagado = cif.p1a+cif.p1b+cif.p1c+cif.p2+cif.p3+cif.p4;
+  var totSabPagado = sab.p1a+sab.p1b+sab.p1c+sab.p2+sab.p3+sab.p4;
+  var fTotal = _fila(regTotalCost, totCifPagado, totSabPagado);
+  var nTot = cif.n+sab.n;
 
   var _desde = (document.getElementById('tf_desde')||{}).value||'';
   var _hasta = (document.getElementById('tf_hasta')||{}).value||'';
   var periodoLabel = (_desde||_hasta)?(_desde||'inicio')+' → '+(_hasta||'hoy'):'Sin filtro (todos los períodos)';
 
-  var labelCell = function(content, bold, sub){
-    return '<td style="padding:8px 12px;border:1px solid '+BORDER+';font-size:'+(bold?'12':'11')+'px;font-weight:'+(bold?'700':'400')+';color:'+(bold?TXT:MUT)+';max-width:150px">'+content+(sub?'<div style="font-size:9px;color:'+MUT+';font-weight:400;margin-top:2px">'+sub+'</div>':'')+'</td>';
+  var labelCell = function(content, sub){
+    return '<td style="padding:8px 12px;border:1px solid '+BORDER+';font-size:11px;font-weight:400;color:'+MUT+';max-width:150px">'+content+(sub?'<div style="font-size:9px;color:'+MUT+';font-weight:400;margin-top:2px">'+sub+'</div>':'')+'</td>';
   };
   var sectionHdr = function(label){
-    return '<tr><td colspan="5" style="padding:10px 12px 4px;font-size:9px;font-weight:700;color:'+C_GREEN+';text-transform:uppercase;letter-spacing:.08em;border-top:1px solid rgba(63,185,80,.15)">'+label+'</td></tr>';
+    return '<tr><td colspan="4" style="padding:10px 12px 4px;font-size:9px;font-weight:700;color:'+C_GREEN+';text-transform:uppercase;letter-spacing:.08em;border-top:1px solid rgba(63,185,80,.15)">'+label+'</td></tr>';
   };
-  // Value cell helper
-  var vCell = function(val, color, bold, size){
-    var s=size||'11'; var w=bold?'800':'600';
-    var sign=val>0.01?'+':val<-0.01?'−':'';
-    return '<td style="padding:8px 12px;border:1px solid '+BORDER+';font-family:monospace;font-size:'+s+'px;font-weight:'+w+';color:'+color+';text-align:right">'+sign+fmt2(Math.abs(val))+'</td>';
-  };
-  // Columna base (Escenario Regular) — texto claro y bien contrastado, no un
-  // "monto normal": es la referencia contra la que se mide todo el ahorro.
   var regCell = function(val){
-    return '<td style="padding:8px 12px;border:1px solid '+BORDER+';font-family:monospace;font-size:11px;font-weight:700;color:'+TXT+';text-align:right;background:rgba(255,255,255,.03)">'+fmt2(val)+'</td>';
+    return '<td style="padding:8px 12px;border:1px solid '+BORDER+';font-family:monospace;font-size:11px;font-weight:700;color:'+TXT+';text-align:right;background:'+ROWALT+'">'+fmt2(val)+'</td>';
   };
-  // Fila de % de ahorro respecto a lo que se hubiese pagado en Regular —
-  // responde directamente "de impuestos pagábamos tanto, ahora tanto,
-  // ahorramos X%" para cada criterio.
-  var pctAhorroRow = function(regV, totV){
-    return '<tr style="opacity:.85">'+
-      '<td style="padding:4px 12px 8px;font-size:9px;color:'+C_GREEN+';font-weight:700;border:1px solid '+BORDER+'">% ahorro vs Regular</td>'+
-      '<td style="padding:4px 12px 8px;border:1px solid '+BORDER+'"></td>'+
-      '<td style="padding:4px 12px 8px;border:1px solid '+BORDER+'"></td>'+
-      '<td style="padding:4px 12px 8px;border:1px solid '+BORDER+'"></td>'+
-      '<td style="padding:4px 12px 8px;font-size:10px;font-weight:800;color:'+C_GREEN+';text-align:right;border:1px solid '+BORDER+'">'+fmtPct(totV,regV)+'</td>'+
-    '</tr>';
+  // ── Columna "Desembolso" — lo que pidió Ian: CIF + Sababa combinados,
+  // con el % de participación de cada corredor adentro de la misma celda. ──
+  var desembolsoCell = function(fila){
+    return '<td style="padding:8px 12px;border:1px solid '+BORDER+';text-align:right">'
+      +'<div style="font-family:monospace;font-size:12px;font-weight:800;color:'+TXT+'">'+fmt2(fila.desembolso)+'</div>'
+      +'<div style="font-size:9px;color:'+C_BLUE+';margin-top:2px">⚡ CIF: '+fmt2(fila.cifPagado)+' ('+fila.pctCif.toFixed(0)+'%)</div>'
+      +'<div style="font-size:9px;color:'+C_ORANGE+'">🤝 Sababa: '+fmt2(fila.sabPagado)+' ('+fila.pctSab.toFixed(0)+'%)</div>'
+    +'</td>';
+  };
+  var ahorroCell = function(fila, bold){
+    var color = fila.ahorro>=0?C_GREEN:C_RED;
+    var sign = fila.ahorro>0.01?'+':fila.ahorro<-0.01?'−':'';
+    return '<td style="padding:8px 12px;border:1px solid '+BORDER+';text-align:right">'
+      +'<div style="font-family:monospace;font-size:'+(bold?'13':'12')+'px;font-weight:'+(bold?'900':'800')+';color:'+color+'">'+sign+fmt2(Math.abs(fila.ahorro))+'</div>'
+      +'<div style="font-size:9px;color:'+MUT+';margin-top:2px">'+fmtPct(Math.abs(fila.ahorro),fila.regular)+' vs Regular</div>'
+    +'</td>';
+  };
+  var filaRow = function(icono, titulo, sub, fila){
+    return '<tr>'+labelCell(icono+' '+titulo, sub)+regCell(fila.regular)+desembolsoCell(fila)+ahorroCell(fila,false)+'</tr>';
+  };
+
+  // ── Datos para exportar (Excel / CSV / PDF) ──
+  window._kpiAhorroExport = {
+    periodo: periodoLabel,
+    filas: [
+      {criterio:'1a · Liquidación (Arancel)', regular:fLiq.regular, cifPagado:cif.p1a, sabPagado:sab.p1a, desembolso:fLiq.desembolso, ahorro:fLiq.ahorro, pctAhorro:fLiq.pctAhorro},
+      {criterio:'1b · ITBMS', regular:fItbms.regular, cifPagado:cif.p1b, sabPagado:sab.p1b, desembolso:fItbms.desembolso, ahorro:fItbms.ahorro, pctAhorro:fItbms.pctAhorro},
+      {criterio:'1c · Tasa y Uso de Sistema', regular:fTasa.regular, cifPagado:cif.p1c, sabPagado:sab.p1c, desembolso:fTasa.desembolso, ahorro:fTasa.ahorro, pctAhorro:fTasa.pctAhorro},
+      {criterio:'2 · Gastos Origen / Destino', regular:fGastos.regular, cifPagado:cif.p2, sabPagado:sab.p2, desembolso:fGastos.desembolso, ahorro:fGastos.ahorro, pctAhorro:fGastos.pctAhorro},
+      {criterio:'3 · Honorarios', regular:fHon.regular, cifPagado:cif.p3, sabPagado:sab.p3, desembolso:fHon.desembolso, ahorro:fHon.ahorro, pctAhorro:fHon.pctAhorro},
+      {criterio:'4 · Valor Mercancía', regular:fMerc.regular, cifPagado:cif.p4, sabPagado:sab.p4, desembolso:fMerc.desembolso, ahorro:0, pctAhorro:0},
+      {criterio:'AHORRO TOTAL', regular:fTotal.regular, cifPagado:totCifPagado, sabPagado:totSabPagado, desembolso:fTotal.desembolso, ahorro:fTotal.ahorro, pctAhorro:fTotal.pctAhorro}
+    ]
   };
 
   var html =
-    '<div style="background:'+BG+';border:1px solid '+BORDER+';border-radius:16px;width:100%;max-width:700px;max-height:92vh;overflow-y:auto">'+
+    '<div style="background:'+BG+';border:1px solid '+BORDER+';border-radius:16px;width:100%;max-width:680px;max-height:92vh;overflow-y:auto">'+
 
-    '<div style="padding:14px 16px 10px;border-bottom:1px solid '+BORDER+';display:flex;align-items:start;justify-content:space-between">'+
+    '<div style="padding:14px 16px 10px;border-bottom:1px solid '+BORDER+';display:flex;align-items:start;justify-content:space-between;gap:8px;flex-wrap:wrap">'+
       '<div>'+
         '<div style="font-size:14px;font-weight:800;color:'+C_GREEN+'">💰 Desglose de Ahorro por Corredor</div>'+
-        '<div style="font-size:10px;color:'+MUT+';margin-top:3px">'+periodoLabel+' · '+tot.n+' embarques elegibles</div>'+
+        '<div style="font-size:10px;color:'+MUT+';margin-top:3px">'+periodoLabel+' · '+nTot+' embarques elegibles</div>'+
       '</div>'+
-      '<button onclick="_kpiAhorroClose(this)" style="background:none;border:none;color:'+MUT+';font-size:22px;cursor:pointer;padding:0 4px;line-height:1">×</button>'+
+      '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">'+
+        '<button onclick="_exportAhorroCorredorXLSX()" style="background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:'+C_GREEN+';border-radius:6px;padding:5px 9px;font-size:10px;font-weight:700;cursor:pointer">📊 Excel</button>'+
+        '<button onclick="_exportAhorroCorredorCSV()" style="background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.3);color:'+C_BLUE+';border-radius:6px;padding:5px 9px;font-size:10px;font-weight:700;cursor:pointer">📄 CSV</button>'+
+        '<button onclick="_printModal(\'_kpiAhorroModal\')" style="background:rgba(240,136,62,.12);border:1px solid rgba(240,136,62,.3);color:'+C_ORANGE+';border-radius:6px;padding:5px 9px;font-size:10px;font-weight:700;cursor:pointer">🖨️ PDF</button>'+
+        '<button onclick="_kpiAhorroClose(this)" style="background:none;border:none;color:'+MUT+';font-size:22px;cursor:pointer;padding:0 4px;line-height:1">×</button>'+
+      '</div>'+
     '</div>'+
 
     '<div style="padding:12px;overflow-x:auto">'+
@@ -18877,94 +19068,148 @@ function _kpiMostrarAhorro(){
     '<thead>'+
     '<tr style="border-bottom:2px solid rgba(63,185,80,.2)">'+
       '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;color:'+MUT+';text-transform:uppercase;letter-spacing:.06em;border:1px solid '+BORDER+'">Criterio</th>'+
-      '<th style="padding:10px 12px;text-align:right;font-size:11px;font-weight:700;color:'+TXT+';border:1px solid '+BORDER+';background:rgba(255,255,255,.03)">📋 Escenario Regular<br><span style="font-size:9px;font-weight:400;color:'+MUT+'">'+reg.n+' emb. · base</span></th>'+
-      '<th style="padding:10px 12px;text-align:right;font-size:11px;font-weight:700;color:'+C_BLUE+';border:1px solid '+BORDER+'">⚡ CIF Express<br><span style="font-size:9px;font-weight:400">'+cif.n+' emb.</span></th>'+
-      '<th style="padding:10px 12px;text-align:right;font-size:11px;font-weight:700;color:'+C_ORANGE+';border:1px solid '+BORDER+'">🤝 Sababa<br><span style="font-size:9px;font-weight:400">'+sab.n+' emb.</span></th>'+
-      '<th style="padding:10px 12px;text-align:right;font-size:11px;font-weight:700;color:'+C_GREEN+';border:1px solid '+BORDER+'">🏁 Ahorro Total<br><span style="font-size:9px;font-weight:400">'+tot.n+' emb.</span></th>'+
+      '<th style="padding:10px 12px;text-align:right;font-size:11px;font-weight:700;color:'+TXT+';border:1px solid '+BORDER+';background:'+ROWALT+'">📋 Escenario Regular<br><span style="font-size:9px;font-weight:400;color:'+MUT+'">'+nTot+' emb. · base</span></th>'+
+      '<th style="padding:10px 12px;text-align:right;font-size:11px;font-weight:700;color:'+TXT+';border:1px solid '+BORDER+'">💵 Desembolso<br><span style="font-size:9px;font-weight:400;color:'+MUT+'">CIF '+cif.n+' + Sababa '+sab.n+'</span></th>'+
+      '<th style="padding:10px 12px;text-align:right;font-size:11px;font-weight:700;color:'+C_GREEN+';border:1px solid '+BORDER+'">🏁 Ahorro</th>'+
     '</tr>'+
     '</thead>'+
 
     '<tbody>'+
 
-    // C1 Impuestos
     sectionHdr('1 · Impuestos')+
-    '<tr>'+
-      labelCell('🏛️ Arancel + ITBMS + Tasa + Uso Sistema','','CIF exonerado · Sababa solo ITBMS homol.')+
-      regCell(reg.c1)+
-      vCell(cif.c1,C_BLUE,false,'11')+
-      vCell(sab.c1,C_ORANGE,false,'11')+
-      vCell(tot.c1,C_GREEN,true,'12')+
-    '</tr>'+
-    pctAhorroRow(reg.c1, tot.c1)+
+    filaRow('🧾','Liquidación (pago arancelario)','Arancel — CIF y Sababa exonerados', fLiq)+
+    filaRow('🧮','ITBMS','CIF exonerado · Sababa paga ITBMS sobre homologado', fItbms)+
+    filaRow('⚙️','Tasa y Uso de Sistema','Tasa + Formulario 1 — CIF y Sababa exonerados', fTasa)+
 
-    // C2 Gastos
     sectionHdr('2 · Gastos Origen / Destino')+
-    '<tr>'+
-      labelCell('🚚 Acarreo + DMCE absorbidos','','Flete y gastos son iguales en ambos escenarios')+
-      regCell(reg.c2)+
-      vCell(cif.c2,C_BLUE,false,'11')+
-      vCell(sab.c2,C_ORANGE,false,'11')+
-      vCell(tot.c2,C_GREEN,true,'12')+
-    '</tr>'+
-    pctAhorroRow(reg.c2, tot.c2)+
+    filaRow('🚚','Acarreo + DMCE absorbidos','Absorbidos por la comisión en ambos corredores', fGastos)+
 
-    // C3 Honorarios — un solo rubro (mismo criterio aplicado en toda la app)
     sectionHdr('3 · Honorarios')+
-    '<tr>'+
-      labelCell('👔 Honorarios (Esc. Regular vs corredor elegido)','','Sababa 3.70% neto · CIF 3% + ITBMS sobre monto gravado')+
-      regCell(reg.c3)+
-      vCell(cif.c3,cif.c3>=0?C_BLUE:C_RED,false,'11')+
-      vCell(sab.c3,sab.c3>=0?C_ORANGE:C_RED,false,'11')+
-      vCell(tot.c3,tot.c3>=0?C_GREEN:C_RED,true,'12')+
-    '</tr>'+
-    pctAhorroRow(reg.c3, tot.c3)+
+    filaRow('👔','Honorarios (Esc. Regular vs corredor elegido)','Sababa 3.70% neto · CIF 3% + ITBMS sobre monto gravado', fHon)+
 
-    // C4 Mercancía
     sectionHdr('4 · Valor Mercancía')+
-    '<tr>'+
-      labelCell('📦 FOB Original — igual en ambos escenarios','','No hay diferencia en el valor de la mercancía')+
-      '<td style="padding:8px 12px;border:1px solid '+BORDER+';font-family:monospace;font-size:11px;color:'+MUT+';text-align:right">'+fmt2(reg.c4)+'</td>'+
-      '<td style="padding:8px 12px;border:1px solid '+BORDER+';font-family:monospace;font-size:11px;color:'+MUT+';text-align:right">$0.00</td>'+
-      '<td style="padding:8px 12px;border:1px solid '+BORDER+';font-family:monospace;font-size:11px;color:'+MUT+';text-align:right">$0.00</td>'+
+    '<tr>'+labelCell('📦 FOB Original — igual en ambos escenarios','No hay diferencia en el valor de la mercancía')+
+      '<td style="padding:8px 12px;border:1px solid '+BORDER+';font-family:monospace;font-size:11px;color:'+MUT+';text-align:right">'+fmt2(fMerc.regular)+'</td>'+
+      '<td style="padding:8px 12px;border:1px solid '+BORDER+';font-family:monospace;font-size:11px;color:'+MUT+';text-align:right">'+fmt2(fMerc.desembolso)+'</td>'+
       '<td style="padding:8px 12px;border:1px solid '+BORDER+';font-family:monospace;font-size:11px;color:'+MUT+';text-align:right">$0.00</td>'+
     '</tr>'+
 
-    // TOTAL
     '<tr style="background:rgba(63,185,80,.08);border-top:1px solid rgba(63,185,80,.2)">'+
-      '<td style="padding:12px;font-size:13px;font-weight:800;color:'+C_GREEN+';border:1px solid rgba(46,160,67,.3)">🏁 AHORRO TOTAL</td>'+
-      '<td style="padding:12px;font-family:monospace;font-size:13px;font-weight:900;color:'+TXT+';text-align:right;border:1px solid rgba(46,160,67,.3);background:rgba(255,255,255,.03)">'+fmt2(regTotalCost)+'</td>'+
-      '<td style="padding:12px;font-family:monospace;font-size:13px;font-weight:800;color:'+C_BLUE+';text-align:right;border:1px solid rgba(46,160,67,.3)">+'+fmt2(cif.total)+'</td>'+
-      '<td style="padding:12px;font-family:monospace;font-size:13px;font-weight:800;color:'+C_ORANGE+';text-align:right;border:1px solid rgba(46,160,67,.3)">+'+fmt2(sab.total)+'</td>'+
-      '<td style="padding:12px;font-family:monospace;font-size:14px;font-weight:900;color:'+TXT+';text-align:right;border:1px solid rgba(46,160,67,.3)">+'+fmt2(tot.total)+'</td>'+
-    '</tr>'+
-    '<tr style="background:rgba(63,185,80,.04)">'+
-      '<td style="padding:4px 12px 10px;font-size:9px;color:'+C_GREEN+';border:1px solid rgba(46,160,67,.2)">% del total</td>'+
-      '<td style="padding:4px 12px 10px;font-size:10px;font-weight:700;color:'+MUT+';text-align:right;border:1px solid rgba(46,160,67,.2)">base</td>'+
-      '<td style="padding:4px 12px 10px;font-size:10px;font-weight:700;color:'+C_BLUE+';text-align:right;border:1px solid rgba(46,160,67,.2)">'+fmtPct(cif.total,tot.total)+'</td>'+
-      '<td style="padding:4px 12px 10px;font-size:10px;font-weight:700;color:'+C_ORANGE+';text-align:right;border:1px solid rgba(46,160,67,.2)">'+fmtPct(sab.total,tot.total)+'</td>'+
-      '<td style="padding:4px 12px 10px;font-size:10px;font-weight:700;color:'+C_GREEN+';text-align:right;border:1px solid rgba(46,160,67,.2)">100%</td>'+
-    '</tr>'+
-    '<tr style="background:rgba(255,255,255,.03)">'+
-      '<td style="padding:4px 12px 10px;font-size:9px;color:'+C_GREEN+';font-weight:700;border:1px solid rgba(46,160,67,.2)">% ahorro vs Regular</td>'+
-      '<td style="padding:4px 12px 10px;border:1px solid rgba(46,160,67,.2)"></td>'+
-      '<td style="padding:4px 12px 10px;border:1px solid rgba(46,160,67,.2)"></td>'+
-      '<td style="padding:4px 12px 10px;border:1px solid rgba(46,160,67,.2)"></td>'+
-      '<td style="padding:4px 12px 10px;font-size:11px;font-weight:900;color:'+C_GREEN+';text-align:right;border:1px solid rgba(46,160,67,.2)">'+fmtPct(tot.total,regTotalCost)+'</td>'+
+      '<td style="padding:12px;font-size:13px;font-weight:800;color:'+C_GREEN+';border:1px solid rgba(46,160,67,.3)">🏁 TOTAL</td>'+
+      '<td style="padding:12px;font-family:monospace;font-size:13px;font-weight:900;color:'+TXT+';text-align:right;border:1px solid rgba(46,160,67,.3);background:'+ROWALT+'">'+fmt2(fTotal.regular)+'</td>'+
+      '<td style="padding:12px;border:1px solid rgba(46,160,67,.3);text-align:right">'
+        +'<div style="font-family:monospace;font-size:13px;font-weight:900;color:'+TXT+'">'+fmt2(fTotal.desembolso)+'</div>'
+        +'<div style="font-size:9px;color:'+C_BLUE+';margin-top:2px">⚡ CIF: '+fmt2(totCifPagado)+' ('+fTotal.pctCif.toFixed(1)+'%)</div>'
+        +'<div style="font-size:9px;color:'+C_ORANGE+'">🤝 Sababa: '+fmt2(totSabPagado)+' ('+fTotal.pctSab.toFixed(1)+'%)</div>'
+      +'</td>'+
+      '<td style="padding:12px;border:1px solid rgba(46,160,67,.3);text-align:right">'
+        +'<div style="font-family:monospace;font-size:14px;font-weight:900;color:'+(fTotal.ahorro>=0?C_GREEN:C_RED)+'">+'+fmt2(fTotal.ahorro)+'</div>'
+        +'<div style="font-size:10px;font-weight:800;color:'+C_GREEN+';margin-top:2px">'+fTotal.pctAhorro.toFixed(1)+'% vs Regular</div>'
+      +'</td>'+
     '</tr>'+
 
     '</tbody></table>'+
     '</div>'+
 
     '<div style="padding:8px 12px;border-top:1px solid '+BORDER+';font-size:9px;color:'+MUT+';text-align:center">'+
-      'Escenario Único no genera ahorro comparativo · Solo Sababa y CIF Express'+
+      'Escenario Único no genera ahorro comparativo · Solo Sababa y CIF Express · "Desembolso" = lo que efectivamente se pagó, combinando ambos corredores'+
     '</div>'+
   '</div>';
 
   var ov=document.createElement('div');
+  ov.id='_kpiAhorroModal';
   ov.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;padding:16px';
   ov.innerHTML=html;
   ov.addEventListener('click',function(e){if(e.target===ov)ov.remove();});
   document.body.appendChild(ov);
+}
+
+// ── Exportar Desglose de Ahorro por Corredor — CSV ──
+function _exportAhorroCorredorCSV(){
+  var data = window._kpiAhorroExport;
+  if(!data){ if(typeof _showToast==='function') _showToast('⚠️ Abre primero el desglose de ahorro','orange',3000); return; }
+  var headers = ['Criterio','Escenario Regular','CIF Express — Pagado','Sababa — Pagado','Desembolso Total','Ahorro','% Ahorro vs Regular'];
+  var lines = [headers.join(',')];
+  data.filas.forEach(function(f){
+    var vals = [
+      '"'+f.criterio.replace(/"/g,'""')+'"',
+      f.regular.toFixed(2), f.cifPagado.toFixed(2),
+      f.sabPagado.toFixed(2), f.desembolso.toFixed(2), f.ahorro.toFixed(2),
+      f.pctAhorro.toFixed(2)+'%'
+    ];
+    lines.push(vals.join(','));
+  });
+  var csv = '\ufeff'+lines.join('\r\n');
+  var blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  var hoy = new Date().toISOString().slice(0,10);
+  a.download = 'Desglose_Ahorro_Corredor_'+hoy+'.csv';
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+  if(typeof _showToast==='function') _showToast('📄 CSV descargado','green',2500);
+}
+
+// ── Exportar Desglose de Ahorro por Corredor — Excel (ExcelJS, mismo patrón que el resto de la app) ──
+function _exportAhorroCorredorXLSX(){
+  var data = window._kpiAhorroExport;
+  if(!data){ if(typeof _showToast==='function') _showToast('⚠️ Abre primero el desglose de ahorro','orange',3000); return; }
+  function go(){
+    var wb = new ExcelJS.Workbook();
+    wb.creator = 'Gestión Integral de Compras y Costeo'; wb.created = new Date();
+    var ws = wb.addWorksheet('Ahorro por Corredor', {pageSetup:{paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1}});
+    ws.mergeCells('A1:G1');
+    var t1 = ws.getCell('A1');
+    t1.value = 'DESGLOSE DE AHORRO POR CORREDOR — '+data.periodo;
+    t1.font = {name:'Calibri',bold:true,size:13,color:{argb:'FFFFFFFF'}};
+    t1.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF1C2B4A'}};
+    t1.alignment = {horizontal:'center',vertical:'middle'};
+    ws.getRow(1).height = 26;
+    var headers = ['Criterio','Escenario Regular','CIF Express — Pagado','Sababa — Pagado','Desembolso Total','Ahorro','% Ahorro vs Regular'];
+    var hr = ws.getRow(3); hr.height = 26;
+    headers.forEach(function(h,i){
+      var c = hr.getCell(i+1); c.value = h;
+      c.font = {name:'Calibri',bold:true,size:10,color:{argb:'FFFFFFFF'}};
+      c.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF1A7A6E'}};
+      c.alignment = {horizontal:'center',vertical:'middle',wrapText:true};
+      c.border = {top:{style:'thin',color:{argb:'FFCCCCCC'}},bottom:{style:'thin',color:{argb:'FFCCCCCC'}},left:{style:'thin',color:{argb:'FFCCCCCC'}},right:{style:'thin',color:{argb:'FFCCCCCC'}}};
+    });
+    var rowN = 4;
+    data.filas.forEach(function(f){
+      var isTotal = f.criterio === 'AHORRO TOTAL';
+      var row = ws.getRow(rowN);
+      var vals = [f.criterio, f.regular, f.cifPagado, f.sabPagado, f.desembolso, f.ahorro, Math.round(f.pctAhorro*100)/100];
+      vals.forEach(function(v,i){
+        var c = row.getCell(i+1); c.value = v;
+        if(i>=1 && i<=5) c.numFmt = '"$"#,##0.00';
+        if(i===6) c.numFmt = '0.00"%"';
+        c.font = {name:'Calibri',size:isTotal?10:9,bold:isTotal||i===0,color:{argb:'FF'+(isTotal?'FFFFFF':'333333')}};
+        c.alignment = {horizontal:i===0?'left':'right',vertical:'middle'};
+        if(isTotal) c.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF1C2B4A'}};
+        else if(rowN%2===1) c.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFEEF4FB'}};
+      });
+      rowN++;
+    });
+    ws.columns = [{width:34},{width:18},{width:18},{width:18},{width:18},{width:16},{width:16}];
+    ws.views = [{state:'frozen',xSplit:1,ySplit:3}];
+    wb.xlsx.writeBuffer().then(function(buf){
+      var blob = new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a'); a.href = url;
+      var hoy = new Date().toISOString().slice(0,10);
+      a.download = 'Desglose_Ahorro_Corredor_'+hoy+'.xlsx';
+      document.body.appendChild(a); a.click();
+      setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+      if(typeof _showToast==='function') _showToast('📊 Excel descargado','green',2500);
+    }).catch(function(err){ alert('Error al exportar: '+err.message); });
+  }
+  if(typeof ExcelJS !== 'undefined'){ go(); return; }
+  var s = document.createElement('script');
+  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js';
+  s.onload = go;
+  s.onerror = function(){ alert('Error cargando ExcelJS. Verifica tu conexión.'); };
+  document.head.appendChild(s);
 }
 
 
@@ -22363,7 +22608,7 @@ window.abrirFacturasEmbarque = function(idx){
       +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
       +'<div>'
       +'<div style="font-size:14px;font-weight:800;color:var(--text)">📦 '+d.nro+' — '+(d.desc||'')+'</div>'
-      +'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+d.fecha+' · '+(d.esc||'')+'</div>'
+      +'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+d.fecha+' · '+(d.esc||'')+(d.idFiscal?' · <span style="color:#a371f7;font-weight:600">🧾 ID: '+d.idFiscal+'</span>':'')+'</div>'
       +'</div>'
       +'<div style="text-align:right">'
       +'<div style="font-size:10px;color:var(--muted)">'+(isUnicoM?'Landed Costeable':hideItbms?'Landed Global (comisión incl. ITBMS)':'Landed Global (incl. ITBMS)')+'</div>'
@@ -22882,7 +23127,7 @@ window.abrirFacturasEmbarque = function(idx){
     +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
     +'<div>'
     +'<div style="font-size:14px;font-weight:800;color:var(--text)">📦 '+d.nro+' — '+(d.desc||'')+'</div>'
-    +'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+d.fecha+' · '+(d.esc||'')+'</div>'
+    +'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+d.fecha+' · '+(d.esc||'')+(d.idFiscal?' · <span style="color:#a371f7;font-weight:600">🧾 ID: '+d.idFiscal+'</span>':'')+'</div>'
     +'</div>'
     +'<div style="text-align:right">'
     +'<div style="font-size:10px;color:var(--muted)">'+(isUnicoM?'Landed Costeable':hideItbms?'Landed Global (comisión incl. ITBMS)':'Landed Global (incl. ITBMS)')+'</div>'
