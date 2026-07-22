@@ -3700,6 +3700,10 @@ function _plnAD(ds,n){ var d=new Date(ds+'T00:00:00'); d.setDate(d.getDate()+n);
 function _plnISO(d){ return d.toISOString().slice(0,10); }
 function _plnLunes(ds){ var d=new Date(ds+'T00:00:00'); var dow=d.getDay(); d.setDate(d.getDate()+(dow===0?-6:1-dow)); return _plnISO(d); }
 function _plnESC(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+// ── Tiempos: días entre dos fechas (YYYY-MM-DD) y promedio de un arreglo ──
+function _plnDiasEntre(d1,d2){ if(!d1||!d2) return null; try{ var a=new Date(d1+'T00:00:00'); var b=new Date(d2+'T00:00:00'); if(isNaN(a.getTime())||isNaN(b.getTime())) return null; var diff=Math.round((b-a)/86400000); return isNaN(diff)?null:diff; }catch(e){ return null; } }
+function _plnAvg(arr){ var vals=(arr||[]).filter(function(v){return typeof v==='number'&&!isNaN(v)&&v!==null;}); if(!vals.length) return null; return Math.round((vals.reduce(function(s,v){return s+v;},0)/vals.length)*10)/10; }
+function _plnFmtDias(n){ return (n===null||n===undefined)?'—':(n+' d'); }
 // Normaliza el nombre del corredor a partir del campo esc/corredor de tendData
 function _plnCorredorLabel(esc,corredor){
   var s=(esc||corredor||'').toLowerCase();
@@ -3976,8 +3980,16 @@ function _PLN_BUILD_HTML(){
       +'<div style="font-weight:700;font-size:11px;margin-bottom:2px;color:var(--green-l)" id="_pln_mbox_t">✅ Encontrado</div>'
       +'<div style="font-size:10px;color:var(--muted)" id="_pln_mbox_v"></div>'
     +'</div>'
+    +'<div style="background:rgba(240,136,62,.05);border:1px solid rgba(240,136,62,.2);border-radius:8px;padding:10px 12px;margin-bottom:10px">'
+      +'<div style="font-size:9px;font-weight:700;color:var(--orange-l);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">⏱️ Tiempos en Tránsito</div>'
+      +'<div class="g2" style="margin-bottom:0">'
+        +'<div class="fl" style="margin:0"><label>🚢 ETD (Zarpe)</label><input type="date" id="_pln_etd" oninput="_plnCalcTiempos()" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 9px;color:var(--text);font-size:13px;width:100%"></div>'
+        +'<div class="fl" style="margin:0"><label>⚓ ETA (Puerto)</label><input type="date" id="_pln_eta_puerto" oninput="_plnCalcTiempos()" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 9px;color:var(--text);font-size:13px;width:100%"></div>'
+      +'</div>'
+      +'<div id="_pln_tiempos_box" style="display:none;margin-top:8px;font-size:11px;font-weight:700;color:var(--blue-l)"></div>'
+    +'</div>'
     +'<div class="g2">'
-      +'<div class="fl"><label>📅 Fecha de Llegada</label><input type="date" id="_pln_eta" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 9px;color:var(--text);font-size:13px;width:100%"></div>'
+      +'<div class="fl"><label>🏭 Fecha de Recepción (Bodega)</label><input type="date" id="_pln_eta" oninput="_plnCalcTiempos()" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 9px;color:var(--text);font-size:13px;width:100%"></div>'
       +'<div class="fl"><label>Estado</label><select id="_pln_status">'
         +'<option>Programado</option><option>Tránsito Marítimo</option><option>En aduana</option>'
         +'<option>Llegada a Puerto</option><option>En tránsito de Liq.</option>'
@@ -3999,6 +4011,23 @@ function _PLN_BUILD_HTML(){
       +'<button class="xbtn gn" onclick="_plnSaveEq()" style="flex:2;padding:9px;font-size:12px">💾 Guardar</button>'
       +'<button class="xbtn rd" id="_pln_del_btn" onclick="_plnDelEq()" style="display:none;padding:9px 14px;font-size:12px">🗑</button>'
       +'<button class="xbtn" onclick="_plnCloseEq()" style="flex:1;padding:9px;font-size:12px">Cancelar</button>'
+    +'</div>'
+  +'</div></div>'
+
+  // ── Modal Tiempos por Proveedor (Zona Libre) ──
+  +'<div class="mo" id="_pln_provmo"><div class="mc" style="max-width:380px">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
+      +'<div><div style="font-size:14px;font-weight:800">⏱️ Tiempos del Proveedor</div>'
+      +'<div style="font-size:10px;color:var(--muted);margin-top:2px" id="_pln_prov_nombre">—</div></div>'
+      +'<button style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;flex-shrink:0;margin-left:10px" onclick="_plnCloseProvTiempos()">×</button>'
+    +'</div>'
+    +'<div class="fl"><label>🧾 Fecha de Pedido</label><input type="date" id="_pln_prov_pedido" oninput="_plnCalcProvPreview()"></div>'
+    +'<div class="fl"><label>📦 Fecha de Despacho</label><input type="date" id="_pln_prov_despacho" oninput="_plnCalcProvPreview()"></div>'
+    +'<div class="fl"><label>🏭 Fecha de Recepción</label><input type="date" id="_pln_prov_recepcion" oninput="_plnCalcProvPreview()"></div>'
+    +'<div id="_pln_prov_preview" style="display:none;background:rgba(88,166,255,.06);border:1px solid rgba(88,166,255,.2);border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:11px;font-weight:700;color:var(--blue-l)"></div>'
+    +'<div style="display:flex;gap:8px">'
+      +'<button class="xbtn gn" onclick="_plnSaveProvTiempos()" style="flex:2;padding:9px;font-size:12px">💾 Guardar</button>'
+      +'<button class="xbtn" onclick="_plnCloseProvTiempos()" style="flex:1;padding:9px;font-size:12px">Cancelar</button>'
     +'</div>'
   +'</div></div>'
 
@@ -5343,7 +5372,7 @@ function _plnCubHtml(cub,di,ci,tab,mon){
       +'<th style="padding:6px 4px;text-align:right;color:var(--muted);font-size:10px;font-weight:700;text-transform:uppercase;border-bottom:1px solid var(--border);width:42px">Pzas</th>'
       +'<th style="padding:6px 3px;text-align:right;color:var(--muted);font-size:10px;font-weight:700;text-transform:uppercase;border-bottom:1px solid var(--border);width:30px">%</th>'
       +'</tr></thead><tbody>';
-    rows.forEach(function(r){
+    rows.forEach(function(r,ri){
       var nm=r.prov||'—';
       // Quitar prefijo S.I - para mostrar proveedor padre
       var nmClean=nm.replace(/^S\.I\s*[-–]\s*/i,'').replace(/^S\.I\.\s*[-–]\s*/i,'').trim();
@@ -5352,10 +5381,16 @@ function _plnCubHtml(cub,di,ci,tab,mon){
       var fobV=parseFloat(r.fob)||0;
       var pct=totFobRef>0?((fobV/totFobRef)*100).toFixed(0)+'%':'—';
       var orgBadge=r.tipo==='IMP'?'<span style="font-size:10px;font-weight:800;color:#f97316">IMP</span>':'<span style="font-size:10px;font-weight:800;color:#60a5fa">ZL</span>';
+      var _isZL=r.tipo!=='IMP';
+      var _provHasT=!!(r.fechaPedido||r.fechaDespacho||r.fechaRecepcion);
+      var _provCell=_isZL
+        ? '<td onclick="_plnOpenProvTiempos(\''+_plnESC(mon)+'\',\''+tab+'\','+di+','+ci+','+ri+')" title="'+_plnESC(nm)+' — clic para editar tiempos"'
+          +' style="padding:6px 4px;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:110px;max-width:110px;cursor:pointer;text-decoration:underline;text-decoration-style:dotted;color:'+(_provHasT?'#2dd4bf':'inherit')+'">'+(_provHasT?'⏱️ ':'')+_plnESC(nmS)+'</td>'
+        : '<td style="padding:6px 4px;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:110px;max-width:110px" title="'+_plnESC(nm)+'">'+_plnESC(nmS)+'</td>';
       h+='<tr style="border-bottom:1px solid rgba(255,255,255,.06)'+(r.matched?';background:rgba(63,185,80,.05)':'')+'">'
         +'<td style="padding:6px 4px;text-align:center;color:var(--muted);font-family:IBM Plex Mono,monospace;font-size:10px">'+(r.bultos||0)+'</td>'
         +'<td style="padding:6px 3px;text-align:center">'+orgBadge+'</td>'
-        +'<td style="padding:6px 4px;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:110px;max-width:110px" title="'+_plnESC(nm)+'">'+_plnESC(nmS)+'</td>'
+        +_provCell
         +'<td style="padding:6px 4px;color:var(--muted);font-size:10px;white-space:nowrap">'+(r.dept||'—')+'</td>'
         +'<td style="padding:6px 4px;text-align:right;color:var(--blue-l);font-family:IBM Plex Mono,monospace;font-weight:700;font-size:10px;white-space:nowrap">'+_plnF(fobV)+'</td>'
         +(isSabCub?'<td style="padding:6px 4px;text-align:right;color:'+(homolV>0?'var(--green-l)':'var(--muted)')+';font-family:IBM Plex Mono,monospace;font-weight:700;font-size:10px;white-space:nowrap">'+(homolV>0?_plnF(homolV):'—')+'</td>':'')
@@ -5381,6 +5416,19 @@ function _plnCubHtml(cub,di,ci,tab,mon){
         +(totHomR>0?'<span>Homol: <strong style="color:var(--green-l);font-family:IBM Plex Mono,monospace">'+_plnFF(totHomR)+'</strong></span>':'')
         +'<span>Landed: <strong style="color:var(--orange-l);font-family:IBM Plex Mono,monospace">'+_plnFF(totLndR)+'</strong></span>'
       +'</div>'
+      +(function(){
+        var dTrans=_plnDiasEntre(cub.etd,cub.etaPuerto);
+        var dLib=_plnDiasEntre(cub.etaPuerto,cub.eta);
+        var pedArr=[],desArr=[];
+        rows.forEach(function(r){ if(r.tipo!=='IMP'){ var p=_plnDiasEntre(r.fechaPedido,r.fechaDespacho); if(p!==null) pedArr.push(p); var d=_plnDiasEntre(r.fechaDespacho,r.fechaRecepcion); if(d!==null) desArr.push(d); } });
+        var avgPed=_plnAvg(pedArr), avgDes=_plnAvg(desArr);
+        var chips=[];
+        if(dTrans!==null) chips.push('<span style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:4px;padding:1px 6px;font-size:9px;font-weight:700">🚢 Tránsito: '+_plnFmtDias(dTrans)+'</span>');
+        if(dLib!==null) chips.push('<span style="background:rgba(45,212,191,.1);border:1px solid rgba(45,212,191,.3);color:#2dd4bf;border-radius:4px;padding:1px 6px;font-size:9px;font-weight:700">⚓→🏭 '+_plnFmtDias(dLib)+'</span>');
+        if(avgPed!==null) chips.push('<span style="background:rgba(240,136,62,.1);border:1px solid rgba(240,136,62,.3);color:var(--orange-l);border-radius:4px;padding:1px 6px;font-size:9px;font-weight:700">📋→📦 prom '+_plnFmtDias(avgPed)+'</span>');
+        if(avgDes!==null) chips.push('<span style="background:rgba(240,136,62,.1);border:1px solid rgba(240,136,62,.3);color:var(--orange-l);border-radius:4px;padding:1px 6px;font-size:9px;font-weight:700">📦→🏭 prom '+_plnFmtDias(avgDes)+'</span>');
+        return chips.length?'<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:2px">'+chips.join('')+'</div>':'';
+      }())
     +'</div>';
   }
   h+='</div>';
@@ -5390,7 +5438,14 @@ function _plnCubHtml(cub,di,ci,tab,mon){
 function _PLN_KPIS(wk){
   var days=wk[_PLN_TAB];
   var eq=0,pv=0,fob=0,lnd=0,hom=0,blt=0,pzs=0,mat=0,tot=0;
-  days.forEach(function(day){ (day.cubiculos||[]).forEach(function(cub){ eq+=parseInt(cub.nEquipos||1)||1; (cub.rows||[]).forEach(function(r){ pv++; tot++; fob+=parseFloat(r.fob)||0; lnd+=parseFloat(r.landed)||parseFloat(r.fob)||0; hom+=(parseFloat(r.homol)>0?parseFloat(r.homol):parseFloat(r.fob))||0; blt+=parseInt(r.bultos)||0; pzs+=parseInt(r.piezas)||0; if(r.matched) mat++; }); }); });
+  var _transArr=[],_libArr=[],_pedArr=[],_desArr=[];
+  days.forEach(function(day){ (day.cubiculos||[]).forEach(function(cub){ eq+=parseInt(cub.nEquipos||1)||1;
+    var _dt=_plnDiasEntre(cub.etd,cub.etaPuerto); if(_dt!==null) _transArr.push(_dt);
+    var _dl=_plnDiasEntre(cub.etaPuerto,cub.eta); if(_dl!==null) _libArr.push(_dl);
+    (cub.rows||[]).forEach(function(r){ pv++; tot++; fob+=parseFloat(r.fob)||0; lnd+=parseFloat(r.landed)||parseFloat(r.fob)||0; hom+=(parseFloat(r.homol)>0?parseFloat(r.homol):parseFloat(r.fob))||0; blt+=parseInt(r.bultos)||0; pzs+=parseInt(r.piezas)||0; if(r.matched) mat++;
+      if(r.tipo!=='IMP'){ var _pd=_plnDiasEntre(r.fechaPedido,r.fechaDespacho); if(_pd!==null) _pedArr.push(_pd); var _dr=_plnDiasEntre(r.fechaDespacho,r.fechaRecepcion); if(_dr!==null) _desArr.push(_dr); }
+    }); }); });
+  var _avgTrans=_plnAvg(_transArr), _avgLib=_plnAvg(_libArr), _avgPed=_plnAvg(_pedArr), _avgDes=_plnAvg(_desArr);
   function s(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; }
   s('_pln_keq',eq); s('_pln_kpv',pv); s('_pln_kfob',_plnF(fob)); s('_pln_klnd',_plnF(lnd)); s('_pln_kblt',blt.toLocaleString('es-PA')); s('_pln_kmat',tot>0?Math.round(mat/tot*100)+'%':'0%');
   // Stats summary panel (below calendar, above depts table)
@@ -5426,6 +5481,33 @@ function _PLN_KPIS(wk){
     // Make 6-col on wider screens
     if(window.innerWidth>=600) grid.style.gridTemplateColumns='repeat(6,1fr)';
     statsEl.appendChild(grid);
+    // ── Tiempos Promedio ──
+    if(_avgTrans!==null||_avgLib!==null||_avgPed!==null||_avgDes!==null){
+      var tiempoItems=[
+        {lbl:'🚢 Tránsito Prom. (ETD→ETA)',val:_plnFmtDias(_avgTrans),color:'#58a6ff'},
+        {lbl:'⚓→🏭 Liberación Prom. (ETA→Recep.)',val:_plnFmtDias(_avgLib),color:'#2dd4bf'},
+        {lbl:'📋→📦 ZL Pedido→Despacho Prom.',val:_plnFmtDias(_avgPed),color:'#f0883e'},
+        {lbl:'📦→🏭 ZL Despacho→Recepción Prom.',val:_plnFmtDias(_avgDes),color:'#f0883e'}
+      ];
+      var tWrap=document.createElement('div');
+      tWrap.style.cssText='padding:10px 14px;background:var(--s1);border-bottom:1px solid var(--border)';
+      var tTitle=document.createElement('div');
+      tTitle.style.cssText='font-size:8px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px';
+      tTitle.textContent='⏱️ Tiempos Promedio';
+      tWrap.appendChild(tTitle);
+      var tGrid=document.createElement('div');
+      tGrid.style.cssText='display:grid;grid-template-columns:repeat(2,1fr);gap:8px';
+      if(window.innerWidth>=600) tGrid.style.gridTemplateColumns='repeat(4,1fr)';
+      tiempoItems.forEach(function(it){
+        var cell=document.createElement('div');
+        cell.style.cssText='background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;text-align:center';
+        cell.innerHTML='<div style="font-size:8px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:3px">'+it.lbl+'</div>'
+          +'<div style="font-family:IBM Plex Mono,monospace;font-size:13px;font-weight:800;color:'+it.color+'">'+it.val+'</div>';
+        tGrid.appendChild(cell);
+      });
+      tWrap.appendChild(tGrid);
+      statsEl.appendChild(tWrap);
+    }
   }
 }
 
@@ -5481,6 +5563,9 @@ window._plnOpenEq=function(mon,di,ci,tab,via){
   // defaults
   var els=['_pln_nro','_pln_emb']; els.forEach(function(id){ var e=document.getElementById(id); if(e) e.value=''; });
   var etaEl=document.getElementById('_pln_eta'); if(etaEl) etaEl.value='';
+  var etdEl=document.getElementById('_pln_etd'); if(etdEl) etdEl.value='';
+  var etaPEl=document.getElementById('_pln_eta_puerto'); if(etaPEl) etaPEl.value='';
+  var tbox=document.getElementById('_pln_tiempos_box'); if(tbox){ tbox.style.display='none'; tbox.innerHTML=''; }
   var cantEl=document.getElementById('_pln_cant_eq'); if(cantEl) cantEl.value='1';
   var multiWr=document.getElementById('_pln_multi_eq_wr'); if(multiWr) multiWr.style.display='none';
   var vs=document.getElementById('_pln_via'); if(vs) vs.value=via||'SEA';
@@ -5500,6 +5585,9 @@ window._plnOpenEq=function(mon,di,ci,tab,via){
       var ne=document.getElementById('_pln_nro'); if(ne) ne.value=cub.nroCont||'';
       var ee=document.getElementById('_pln_emb'); if(ee){ ee.value=(cub.nroEmb||'').replace(/\(parcial\)/gi,'').trim(); if(ee.value){ var clr2=document.getElementById('_pln_emb_clr'); if(clr2) clr2.style.display='inline'; } }
       var etae=document.getElementById('_pln_eta'); if(etae) etae.value=cub.eta||'';
+      var etde=document.getElementById('_pln_etd'); if(etde) etde.value=cub.etd||'';
+      var etape=document.getElementById('_pln_eta_puerto'); if(etape) etape.value=cub.etaPuerto||'';
+      _plnCalcTiempos();
       if(ss) ss.value=cub.status||'Programado';
       var lre=document.getElementById('_pln_lugar_recep'); if(lre) lre.value=cub.lugarRecep||'';
       var ori=document.getElementById('_pln_origen'); if(ori) ori.value=cub.origen||'';
@@ -5717,10 +5805,23 @@ function _plnRenderParcial(){
     +'</label>';
   }).join('');
 }
+window._plnCalcTiempos=function(){
+  var g=function(id){var e=document.getElementById(id);return e?e.value:'';};
+  var etd=g('_pln_etd'), etaP=g('_pln_eta_puerto'), etaR=g('_pln_eta');
+  var box=document.getElementById('_pln_tiempos_box'); if(!box) return;
+  var dTrans=_plnDiasEntre(etd,etaP);
+  var dLib=_plnDiasEntre(etaP,etaR);
+  var parts=[];
+  if(dTrans!==null) parts.push('🚢 Tránsito (ETD→ETA): <strong>'+_plnFmtDias(dTrans)+'</strong>');
+  if(dLib!==null) parts.push('⚓→🏭 Liberación (ETA→Recepción): <strong>'+_plnFmtDias(dLib)+'</strong>');
+  if(parts.length){ box.style.display='block'; box.innerHTML=parts.join(' &nbsp;·&nbsp; '); }
+  else { box.style.display='none'; box.innerHTML=''; }
+};
 window._plnSaveEq=function(){
   var g=function(id){var e=document.getElementById(id);return e?e.value.trim():'';};
   var via=g('_pln_via'), tipoCarga=g('_pln_tipo'), nroCont=g('_pln_nro'), nroEmb=g('_pln_emb');
   var eta=g('_pln_eta'), status=g('_pln_status'), recep=g('_pln_recep'), lugarRecep=g('_pln_lugar_recep');
+  var etd=g('_pln_etd'), etaPuerto=g('_pln_eta_puerto');
   var origen=g('_pln_origen');
   var empaletado=document.getElementById('_pln_empalet')&&document.getElementById('_pln_empalet').value==='1';
   var tab=_PLN_CTX.tab, mon=_PLN_CTX.mon, di=_PLN_CTX.di, ci=_PLN_CTX.ci;
@@ -5770,7 +5871,7 @@ window._plnSaveEq=function(){
     rows=existingRows;
   }
 
-  var newCub={via:via,tipoCarga:tipoCarga,nroCont:nroCont,nroEmb:nroEmb,eta:eta,status:status,lugarRecep:lugarRecep,origen:origen,empaletado:empaletado,rows:rows};
+  var newCub={via:via,tipoCarga:tipoCarga,nroCont:nroCont,nroEmb:nroEmb,eta:eta,etd:etd,etaPuerto:etaPuerto,status:status,lugarRecep:lugarRecep,origen:origen,empaletado:empaletado,rows:rows};
   var wk=_plnMkWeek(mon);
 
   if(recep==='parcial'){
@@ -5795,6 +5896,48 @@ window._plnDelEq=function(){
   var wk=_plnMkWeek(_PLN_CTX.mon); wk[_PLN_CTX.tab][_PLN_CTX.di].cubiculos.splice(_PLN_CTX.ci,1);
   _PLN_SAVE(); _plnCloseEq(); _PLN_RENDER();
 };
+
+// ── Tiempos por proveedor (Zona Libre) ──
+var _PLN_PROV_CTX=null;
+window._plnOpenProvTiempos=function(mon,tab,di,ci,rowIdx){
+  try{
+    var cub=_PLN_DATA[mon][tab][di].cubiculos[ci];
+    if(!cub||!cub.rows||!cub.rows[rowIdx]) return;
+    var r=cub.rows[rowIdx];
+    _PLN_PROV_CTX={mon:mon,tab:tab,di:di,ci:ci,rowIdx:rowIdx};
+    var nm=document.getElementById('_pln_prov_nombre'); if(nm) nm.textContent=r.prov||'—';
+    var gp=document.getElementById('_pln_prov_pedido'); if(gp) gp.value=r.fechaPedido||'';
+    var gd=document.getElementById('_pln_prov_despacho'); if(gd) gd.value=r.fechaDespacho||'';
+    var gr=document.getElementById('_pln_prov_recepcion'); if(gr) gr.value=r.fechaRecepcion||'';
+    _plnCalcProvPreview();
+    var m=document.querySelector('#_PLN_OV #_pln_provmo'); if(m) m.classList.add('open');
+  }catch(e){}
+};
+window._plnCalcProvPreview=function(){
+  var g=function(id){var e=document.getElementById(id);return e?e.value:'';};
+  var ped=g('_pln_prov_pedido'), des=g('_pln_prov_despacho'), rec=g('_pln_prov_recepcion');
+  var box=document.getElementById('_pln_prov_preview'); if(!box) return;
+  var d1=_plnDiasEntre(ped,des), d2=_plnDiasEntre(des,rec);
+  var parts=[];
+  if(d1!==null) parts.push('Pedido→Despacho: <strong>'+_plnFmtDias(d1)+'</strong>');
+  if(d2!==null) parts.push('Despacho→Recepción: <strong>'+_plnFmtDias(d2)+'</strong>');
+  if(parts.length){ box.style.display='block'; box.innerHTML=parts.join(' &nbsp;·&nbsp; '); } else { box.style.display='none'; box.innerHTML=''; }
+};
+window._plnSaveProvTiempos=function(){
+  if(!_PLN_PROV_CTX) return;
+  var g=function(id){var e=document.getElementById(id);return e?e.value:'';};
+  var ctx=_PLN_PROV_CTX;
+  var wk=_plnMkWeek(ctx.mon);
+  var cub=wk[ctx.tab][ctx.di].cubiculos[ctx.ci];
+  if(cub&&cub.rows&&cub.rows[ctx.rowIdx]){
+    cub.rows[ctx.rowIdx].fechaPedido=g('_pln_prov_pedido');
+    cub.rows[ctx.rowIdx].fechaDespacho=g('_pln_prov_despacho');
+    cub.rows[ctx.rowIdx].fechaRecepcion=g('_pln_prov_recepcion');
+  }
+  _PLN_SAVE(); _plnCloseProvTiempos(); _PLN_RENDER();
+  if(typeof _showToast==='function') _showToast('✅ Tiempos de proveedor guardados','green',2000);
+};
+window._plnCloseProvTiempos=function(){ var m=document.querySelector('#_PLN_OV #_pln_provmo'); if(m) m.classList.remove('open'); _PLN_PROV_CTX=null; };
 
 // ── Export HTML ──
 window._plnAskTheme=function(){
@@ -5920,7 +6063,12 @@ window._plnCSV=function(){
         if(!_cubLandedOk) _cubLandedOk=_tryV(_cubSnap.landed)||_tryV(_cubTd&&_cubTd.landed)||0;
       }
       var _cubTotFobRaw=rows.reduce(function(s,r){return s+(parseFloat(r.fob)||0);},0);
-var cubData={nroEmb:cub.nroEmb||'',status:cub.status||'',lugarRecep:cub.lugarRecep||'',tipoCarga:cub.tipoCarga||'',eta:cub.eta||'',nEquipos:cub.nEquipos||1,nroCont:cub.nroCont||'',nroConts:Array.isArray(cub.nroConts)?cub.nroConts:(cub.nroCont?[cub.nroCont]:[]),origenes:Array.isArray(cub.origenes)?cub.origenes:(cub.origen?[cub.origen]:[]),origen:(function(){var _cp=cub.pais||'';var _cc=cub.ciudad||'';if(_cc||_cp)return [_cc,_cp].filter(Boolean).join(', ');if(cub.origen)return cub.origen;var _sn=(_cubTd&&_cubTd.snap)||{};var _cam=_sn.campos||{};var _p=_cam.s1_pais_emb||_sn.pais||(_cubTd&&_cubTd.pais)||'';var _c=_cam.s1_ciudad_emb||_sn.ciudad||(_cubTd&&_cubTd.ciudad)||'';return [_c,_p].filter(Boolean).join(', ');}()),hasSab:hasSab,fob:fob,lnd:lnd,hom:hom,btos:btos,pzas:pzas,rows:rows.map(function(r){return{prov:r.prov||'',tipo:r.tipo||'',dept:r.dept||'',numFact:r.numFact||r.nfac||r.factura||'',bultos:parseInt(r.bultos)||0,fob:parseFloat(r.fob)||0,homol:parseFloat(r.homol)||0,landed:(function(){if(_cubIsFused){return parseFloat(r.landed)||parseFloat(r.fob)||0;}var _fob=parseFloat(r.fob)||0;var _p=_cubTotFobRaw>0?_fob/_cubTotFobRaw:0;return _cubLandedOk>0?Math.round(_cubLandedOk*_p*100)/100:(parseFloat(r.landed)||_fob);}()),piezas:parseInt(r.piezas)||0};}),depts:deptEntries.map(function(e){return{dept:e[0],fob:e[1].fob,lnd:e[1].lnd};})};
+var _cubDiasTransito=_plnDiasEntre(cub.etd,cub.etaPuerto);
+      var _cubDiasLiberacion=_plnDiasEntre(cub.etaPuerto,cub.eta);
+      var _cubPedArr=[],_cubDesArr=[];
+      rows.forEach(function(r){ if(r.tipo!=='IMP'){ var _pd=_plnDiasEntre(r.fechaPedido,r.fechaDespacho); if(_pd!==null) _cubPedArr.push(_pd); var _dr=_plnDiasEntre(r.fechaDespacho,r.fechaRecepcion); if(_dr!==null) _cubDesArr.push(_dr); } });
+      var _cubAvgPed=_plnAvg(_cubPedArr), _cubAvgDes=_plnAvg(_cubDesArr);
+      var cubData={nroEmb:cub.nroEmb||'',status:cub.status||'',lugarRecep:cub.lugarRecep||'',tipoCarga:cub.tipoCarga||'',eta:cub.eta||'',etd:cub.etd||'',etaPuerto:cub.etaPuerto||'',diasTransito:_cubDiasTransito,diasLiberacion:_cubDiasLiberacion,avgPedidoDespacho:_cubAvgPed,avgDespachoRecepcion:_cubAvgDes,nEquipos:cub.nEquipos||1,nroCont:cub.nroCont||'',nroConts:Array.isArray(cub.nroConts)?cub.nroConts:(cub.nroCont?[cub.nroCont]:[]),origenes:Array.isArray(cub.origenes)?cub.origenes:(cub.origen?[cub.origen]:[]),origen:(function(){var _cp=cub.pais||'';var _cc=cub.ciudad||'';if(_cc||_cp)return [_cc,_cp].filter(Boolean).join(', ');if(cub.origen)return cub.origen;var _sn=(_cubTd&&_cubTd.snap)||{};var _cam=_sn.campos||{};var _p=_cam.s1_pais_emb||_sn.pais||(_cubTd&&_cubTd.pais)||'';var _c=_cam.s1_ciudad_emb||_sn.ciudad||(_cubTd&&_cubTd.ciudad)||'';return [_c,_p].filter(Boolean).join(', ');}()),hasSab:hasSab,fob:fob,lnd:lnd,hom:hom,btos:btos,pzas:pzas,rows:rows.map(function(r){return{prov:r.prov||'',tipo:r.tipo||'',dept:r.dept||'',numFact:r.numFact||r.nfac||r.factura||'',bultos:parseInt(r.bultos)||0,fob:parseFloat(r.fob)||0,homol:parseFloat(r.homol)||0,landed:(function(){if(_cubIsFused){return parseFloat(r.landed)||parseFloat(r.fob)||0;}var _fob=parseFloat(r.fob)||0;var _p=_cubTotFobRaw>0?_fob/_cubTotFobRaw:0;return _cubLandedOk>0?Math.round(_cubLandedOk*_p*100)/100:(parseFloat(r.landed)||_fob);}()),piezas:parseInt(r.piezas)||0};}),depts:deptEntries.map(function(e){return{dept:e[0],fob:e[1].fob,lnd:e[1].lnd};})};
       var cubJson=JSON.stringify(cubData).replace(/</g,'\\u003c').replace(/>/g,'\\u003e').replace(/&/g,'\\u0026');
       resumenRows.push({
         cubIdx:cubIdx,
@@ -5932,7 +6080,8 @@ var cubData={nroEmb:cub.nroEmb||'',status:cub.status||'',lugarRecep:cub.lugarRec
         sede:cub.lugarRecep||'',
         origen:cubData.origen||'',
         tramite:hasSab?'Local':'Liquidación',
-        fob:fob,hom:hom,lnd:lnd,btos:btos,pzas:pzas,facturas:rows.length
+        fob:fob,hom:hom,lnd:lnd,btos:btos,pzas:pzas,facturas:rows.length,
+        diasTransito:_cubDiasTransito,diasLiberacion:_cubDiasLiberacion,avgPedidoDespacho:_cubAvgPed,avgDespachoRecepcion:_cubAvgDes
       });
       var _sqStyle=(rows.length<=1?'aspect-ratio:1.6/1;':'');
       return '<div class="cub-card" style="background:#161b22;border:1px solid #30363d;border-radius:12px;margin-bottom:20px;overflow:hidden;'+_sqStyle+'">'
@@ -5944,6 +6093,10 @@ var cubData={nroEmb:cub.nroEmb||'',status:cub.status||'',lugarRecep:cub.lugarRec
         +(cub.nroEmb?'<span style="color:#f0883e;font-weight:800;font-size:14px">EMB '+esc(cub.nroEmb)+'</span>':'')
         +(cub.tipoCarga?'<span style="background:#21262d;color:#8b949e;font-size:11px;padding:3px 8px;border-radius:5px">'+esc(cub.tipoCarga)+'</span>':'')
         +(cub.eta?'<span style="color:#8b949e;font-size:12px">&#128197; '+_fmtEta(cub.eta)+'</span>':'')
+        +(_cubDiasTransito!==null?'<span style="background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.3);color:#58a6ff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px">&#128674; Tránsito: '+_cubDiasTransito+' d</span>':'')
+        +(_cubDiasLiberacion!==null?'<span style="background:rgba(45,212,191,.12);border:1px solid rgba(45,212,191,.3);color:#2dd4bf;font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px">&#9875; Liberación: '+_cubDiasLiberacion+' d</span>':'')
+        +(_cubAvgPed!==null?'<span style="background:rgba(240,136,62,.12);border:1px solid rgba(240,136,62,.3);color:#f0883e;font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px">Pedido→Despacho prom: '+_cubAvgPed+' d</span>':'')
+        +(_cubAvgDes!==null?'<span style="background:rgba(240,136,62,.12);border:1px solid rgba(240,136,62,.3);color:#f0883e;font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px">Despacho→Recepción prom: '+_cubAvgDes+' d</span>':'')
         +'</div>'
         +'<div style="background:#0d1117;padding:6px 14px;border-bottom:1px solid #30363d;display:flex;justify-content:flex-end">'
         +'<button onclick="_plnShowDet(\''+cubIdx+'\')" style="background:rgba(46,204,154,.18);border:1px solid rgba(46,204,154,.4);color:#2ecc9a;border-radius:6px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">🔍 Ver Detalle</button>'
@@ -5969,21 +6122,29 @@ var cubData={nroEmb:cub.nroEmb||'',status:cub.status||'',lugarRecep:cub.lugarRec
   // ── Vista Resumen: panel tipo ERP con KPIs + tabla agrupada por día ──
   var _rSab=resumenRows.filter(function(r){return r.corredor==='Sababa Imports';}).length;
   var _rCif=resumenRows.length-_rSab;
+  var _gAvgTrans=_plnAvg(resumenRows.map(function(r){return r.diasTransito;}).filter(function(v){return v!==null&&v!==undefined;}));
+  var _gAvgLib=_plnAvg(resumenRows.map(function(r){return r.diasLiberacion;}).filter(function(v){return v!==null&&v!==undefined;}));
+  var _gAvgPed=_plnAvg(resumenRows.map(function(r){return r.avgPedidoDespacho;}).filter(function(v){return v!==null&&v!==undefined;}));
+  var _gAvgDes=_plnAvg(resumenRows.map(function(r){return r.avgDespachoRecepcion;}).filter(function(v){return v!==null&&v!==undefined;}));
   var _miniStats=[
     {l:'Embarques',v:resumenRows.length,c:'#ffffff'},
     {l:'Sababa Imports',v:_rSab,c:'#f0883e'},
     {l:'CIF Express',v:_rCif,c:'#2ecc9a'},
     {l:'Bultos',v:tBTOS.toLocaleString(),c:'#2dd4bf'},
     {l:'Piezas',v:tPZAS.toLocaleString(),c:'#ffffff'},
-    {l:'Landed Total',v:fmt(tLND),c:'#ffffff'}
+    {l:'Landed Total',v:fmt(tLND),c:'#ffffff'},
+    {l:'Tránsito Prom.',v:_plnFmtDias(_gAvgTrans),c:'#58a6ff'},
+    {l:'Liberación Prom.',v:_plnFmtDias(_gAvgLib),c:'#2dd4bf'},
+    {l:'ZL Pedido→Despacho',v:_plnFmtDias(_gAvgPed),c:'#f0883e'},
+    {l:'ZL Despacho→Recepción',v:_plnFmtDias(_gAvgDes),c:'#f0883e'}
   ];
   var _miniStatsH=_miniStats.map(function(s){
     return '<div style="text-align:center;min-width:96px"><div style="font-size:9.5px;font-weight:700;color:rgba(255,255,255,.72);text-transform:uppercase;letter-spacing:.09em;margin-bottom:4px;white-space:nowrap">'+s.l+'</div><div style="font-family:\'IBM Plex Mono\',monospace;font-size:17px;font-weight:800;color:'+s.c+'">'+s.v+'</div></div>';
   }).join('<div style="width:1px;align-self:stretch;background:rgba(255,255,255,.18)"></div>');
 
   // Orden ERP: EMB · Tipo de Trámite · Corredor · Origen · FOB · Landed · Piezas · Bultos · Facturas · Sede · Tipo de Equipo
-  var _rCols=['Ver Detalle','EMB','Tipo de Trámite','Tipo de Embarque','Corredor','Origen','FOB','Landed','Piezas','Bultos','Facturas','Sede','N° Equipos','Tipo de Equipo'];
-  var _rAlign=['center','left','left','center','left','left','center','center','center','center','center','left','center','left'];
+  var _rCols=['Ver Detalle','EMB','Tipo de Trámite','Tipo de Embarque','Corredor','Origen','FOB','Landed','Piezas','Bultos','Facturas','Sede','N° Equipos','Tipo de Equipo','Tiempos'];
+  var _rAlign=['center','left','left','center','left','left','center','center','center','center','center','left','center','left','left'];
   var _rHead=_rCols.map(function(h,i){
     return '<th style="padding:14px 16px;text-align:'+_rAlign[i]+';color:#fff;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;white-space:nowrap;border-bottom:2px solid #0d1117">'+h+'</th>';
   }).join('');
@@ -6015,6 +6176,7 @@ var cubData={nroEmb:cub.nroEmb||'',status:cub.status||'',lugarRecep:cub.lugarRec
       +'<td style="padding:11px 16px;border-top:2px solid #21262d;border-bottom:1px solid #30363d"></td>'
       +'<td style="padding:11px 16px;border-top:2px solid #21262d;border-bottom:1px solid #30363d"></td>'
       +'<td style="padding:11px 16px;border-top:2px solid #21262d;border-bottom:1px solid #30363d"></td>'
+      +'<td style="padding:11px 16px;border-top:2px solid #21262d;border-bottom:1px solid #30363d"></td>'
       +'<td style="padding:11px 16px;border-top:2px solid #21262d;border-bottom:1px solid #30363d"></td></tr>';
     var rowsH=g.rows.map(function(r,i){
       var bg='#0d1117';
@@ -6038,6 +6200,15 @@ var cubData={nroEmb:cub.nroEmb||'',status:cub.status||'',lugarRecep:cub.lugarRec
         +'<td style="padding:12px 16px;color:#8b949e;font-size:12px;font-weight:600;border-bottom:1px solid #21262d;white-space:nowrap">'+esc(r.sede)+'</td>'
         +'<td style="padding:12px 16px;text-align:center;color:#e6edf3;font-family:\'IBM Plex Mono\',monospace;font-weight:700;font-size:13px;border-bottom:1px solid #21262d">'+(r.nEquipos||1)+'</td>'
         +'<td style="padding:12px 16px;color:#e6edf3;font-size:12px;font-weight:600;border-bottom:1px solid #21262d;white-space:nowrap">'+_equipIcon(r.tipoCarga)+' '+esc(r.tipoCarga)+(r.nEquipos>1?' &times;'+r.nEquipos:'')+'</td>'
+        +'<td style="padding:12px 16px;font-size:10px;border-bottom:1px solid #21262d;white-space:nowrap">'
+          +(function(){var tp=[];
+            if(r.diasTransito!==null&&r.diasTransito!==undefined) tp.push('<span style="background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.3);color:#58a6ff;border-radius:4px;padding:1px 6px;font-weight:700;white-space:nowrap">🚢 '+r.diasTransito+'d</span>');
+            if(r.diasLiberacion!==null&&r.diasLiberacion!==undefined) tp.push('<span style="background:rgba(45,212,191,.12);border:1px solid rgba(45,212,191,.3);color:#2dd4bf;border-radius:4px;padding:1px 6px;font-weight:700;white-space:nowrap">⚓→🏭 '+r.diasLiberacion+'d</span>');
+            if(r.avgPedidoDespacho!==null&&r.avgPedidoDespacho!==undefined) tp.push('<span style="background:rgba(240,136,62,.12);border:1px solid rgba(240,136,62,.3);color:#f0883e;border-radius:4px;padding:1px 6px;font-weight:700;white-space:nowrap">📋→📦 '+r.avgPedidoDespacho+'d</span>');
+            if(r.avgDespachoRecepcion!==null&&r.avgDespachoRecepcion!==undefined) tp.push('<span style="background:rgba(240,136,62,.12);border:1px solid rgba(240,136,62,.3);color:#f0883e;border-radius:4px;padding:1px 6px;font-weight:700;white-space:nowrap">📦→🏭 '+r.avgDespachoRecepcion+'d</span>');
+            return tp.length?'<div style="display:flex;flex-direction:column;gap:2px">'+tp.join('')+'</div>':'—';
+          }())
+        +'</td>'
         +'</tr>';
     }).join('');
     return gH+rowsH;
@@ -6052,7 +6223,10 @@ var cubData={nroEmb:cub.nroEmb||'',status:cub.status||'',lugarRecep:cub.lugarRec
     +'<td style="padding:14px 16px;border-top:2px solid #1a7a6e"></td>'
     +'<td style="padding:14px 16px;border-top:2px solid #1a7a6e"></td>'
     +'<td style="padding:14px 16px;border-top:2px solid #1a7a6e"></td>'
-    +'<td style="padding:14px 16px;border-top:2px solid #1a7a6e"></td></tr>';
+    +'<td style="padding:14px 16px;border-top:2px solid #1a7a6e"></td>'
+    +'<td style="padding:14px 16px;border-top:2px solid #1a7a6e;color:#fff;font-size:10px;font-weight:700;white-space:nowrap">'
+      +'Prom: 🚢 '+_plnFmtDias(_gAvgTrans)+' &middot; ⚓→🏭 '+_plnFmtDias(_gAvgLib)+' &middot; 📋→📦 '+_plnFmtDias(_gAvgPed)+' &middot; 📦→🏭 '+_plnFmtDias(_gAvgDes)
+    +'</td></tr>';
 
   var resumenH='<div style="background:linear-gradient(135deg,#1C2B4A 0%,#1a7a6e 100%);border-radius:14px 14px 0 0;padding:18px 22px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:18px">'
     +'<div style="font-size:14px;font-weight:800;color:#fff;letter-spacing:.12em;text-transform:uppercase">&#128203; Resumen Ejecutivo &middot; Semana</div>'
@@ -6298,7 +6472,7 @@ var cubData={nroEmb:cub.nroEmb||'',status:cub.status||'',lugarRecep:cub.lugarRec
     +'}).join("");'
     +'var ov=document.createElement("div");'
     +'ov.style.cssText="position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.8);display:flex;align-items:center;justify-content:center;padding:16px";'
-    +'ov.innerHTML="<div style=\\"background:#1a2530;border:1px solid #30363d;border-radius:14px;width:100%;max-width:820px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,.7)\\"><div style=\\"padding:12px 16px;background:#0d1117;border-bottom:1px solid #30363d;display:flex;align-items:center;gap:10px;flex-shrink:0\\"><div style=\\"flex:1\\"><div style=\\"font-size:16px;font-weight:800;color:#e6edf3\\">🔍 Detalle del Embarque</div><div style=\\"font-size:11px;color:#8b949e;margin-top:2px\\">"+(d.nroEmb?"EMB "+esc(d.nroEmb)+" · ":"")+(d.tipoCarga?esc(d.tipoCarga)+" · ":"")+(d.eta?d.eta+" · ":"")+d.rows.length+" prov · "+totBlt.toLocaleString()+" btos</div>"+(d.origen?"<div style=\\"display:inline-flex;align-items:center;gap:5px;margin-top:4px;background:rgba(88,166,255,.10);border:1px solid rgba(88,166,255,.25);border-radius:5px;padding:2px 8px\\"><span style=\\"font-size:9px;color:#8b949e;font-weight:700;text-transform:uppercase\\">Origen: </span><span style=\\"font-size:11px;color:#58a6ff;font-weight:700\\">"+esc(d.origen)+"</span></div>":"")+"</div><div style=\\"display:flex;gap:8px;flex-shrink:0\\"><button id=\\"_plnDetXLS\\" title=\\"Descargar Excel\\" style=\\"cursor:pointer;display:inline-flex;align-items:center;gap:4px;background:rgba(26,122,110,.12);border:1px solid rgba(26,122,110,.3);color:#2dd4bf;border-radius:6px;padding:4px 10px;font-size:10px;font-weight:700\\">📊 Excel</button><button id=\\"_plnDetCSV\\" title=\\"Descargar CSV\\" style=\\"cursor:pointer;display:inline-flex;align-items:center;gap:4px;background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);color:#58a6ff;border-radius:6px;padding:4px 10px;font-size:10px;font-weight:700\\">📄 CSV</button><button onclick=\\"_printModal(\'_plnDetOv\')\\" style=\\"cursor:pointer;display:inline-flex;align-items:center;gap:4px;background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.25);color:#3fb950;border-radius:6px;padding:4px 10px;font-size:10px;font-weight:700\\">🖨️ Imprimir</button><button id=\\"_plnDetOv_close\\" style=\\"cursor:pointer;display:inline-flex;align-items:center;gap:4px;background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.25);color:#f47067;border-radius:6px;padding:4px 10px;font-size:10px;font-weight:700\\">✕ Cerrar</button></div></div><div style=\\"display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px;padding:10px 16px;background:rgba(88,166,255,.04);border-bottom:1px solid #30363d;flex-shrink:0\\"><div style=\\"text-align:center\\"><div style=\\"font-size:8px;font-weight:700;color:#8b949e;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px\\">FOB Total</div><div style=\\"font-family:monospace;font-size:14px;font-weight:800;color:#e6edf3\\">"+fmt(totFob)+"</div></div><div style=\\"text-align:center\\"><div style=\\"font-size:8px;font-weight:700;color:#8b949e;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px\\">FOB Inventario</div><div style=\\"font-family:monospace;font-size:14px;font-weight:800;color:#3fb950\\">"+fmt(fobInvMostrar)+"</div></div><div style=\\"text-align:center\\"><div style=\\"font-size:8px;font-weight:700;color:#8b949e;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px\\">Landed Total</div><div style=\\"font-family:monospace;font-size:14px;font-weight:800;color:#f0883e\\">"+fmt(totLnd)+"</div></div><div style=\\"text-align:center\\"><div style=\\"font-size:8px;font-weight:700;color:#8b949e;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px\\">Bultos</div><div style=\\"font-family:monospace;font-size:14px;font-weight:800;color:#2dd4bf\\">"+totBlt.toLocaleString()+"</div></div><div style=\\"text-align:center\\"><div style=\\"font-size:8px;font-weight:700;color:#8b949e;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px\\">Piezas</div><div style=\\"font-family:monospace;font-size:14px;font-weight:800;color:#e6edf3\\">"+totPzs.toLocaleString()+"</div></div><div style=\\"text-align:center\\"><div style=\\"font-size:8px;font-weight:700;color:#8b949e;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px\\">Facturas</div><div style=\\"font-family:monospace;font-size:14px;font-weight:800;color:#e6edf3\\">"+d.rows.length+"</div></div></div><div style=\\"overflow:auto;flex:1;padding:12px 16px\\"><div style=\\\"border:1px solid #30363d;border-radius:10px;margin-bottom:16px;overflow:hidden\\\"><div style=\\\"overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:thin;scrollbar-color:#444d56 #21262d\\\"><table style=\\\"width:100%;border-collapse:collapse;font-size:12px;min-width:860px\\\"><thead><tr style=\\\"background:#0d1117\\\"><th style=\\\"padding:7px 6px;font-weight:500;font-size:11px;letter-spacing:.04em;border:1px solid #30363d;text-align:center;color:#8b949e;width:28px\\\">#</th><th style=\\\"padding:7px 6px;font-weight:500;font-size:11px;letter-spacing:.04em;border:1px solid #30363d;color:#8b949e;width:36px\\\">Org</th><th style=\\\"padding:7px 8px;font-weight:500;font-size:11px;letter-spacing:.04em;border:1px solid #30363d;text-align:left;color:#8b949e;min-width:210px\\\">Suplidor</th><th style=\\\"padding:7px 8px;font-weight:500;font-size:11px;letter-spacing:.04em;border:1px solid #30363d;text-align:left;color:#8b949e;width:84px\\\">N° Factura</th><th style=\\\"padding:7px 6px;font-weight:500;font-size:11px;letter-spacing:.04em;border:1px solid #30363d;text-align:center;color:#8b949e;width:72px\\\">Bultos</th><th style=\\\"padding:7px 8px;font-weight:500;font-size:11px;letter-spacing:.04em;border:1px solid #30363d;text-align:left;color:#8b949e;width:74px\\\">Dept</th><th style=\\\"padding:7px 8px;font-weight:500;font-size:11px;letter-spacing:.04em;border:1px solid #30363d;text-align:right;color:#8b949e;width:82px\\\">FOB</th>"+(isSab?"<th style=\\\"padding:7px 8px;font-weight:500;font-size:11px;letter-spacing:.04em;border:1px solid #30363d;text-align:right;color:#8b949e;width:82px\\\">FOB Inv.</th>":"")+"<th style=\\\"padding:7px 8px;font-weight:500;font-size:11px;letter-spacing:.04em;border:1px solid #30363d;text-align:right;color:#8b949e;width:82px\\\">Landed</th><th style=\\\"padding:7px 6px;font-weight:500;font-size:11px;letter-spacing:.04em;border:1px solid #30363d;text-align:right;color:#8b949e;width:64px\\\">Piezas</th><th style=\\\"padding:7px 6px;font-weight:500;font-size:11px;letter-spacing:.04em;border:1px solid #30363d;text-align:right;color:#8b949e;width:44px\\\">% Part.</th><th style=\\\"padding:7px 6px;font-weight:500;font-size:11px;letter-spacing:.04em;border:1px solid #30363d;text-align:right;color:#2ecc9a;width:56px\\\">% Imp.</th></tr></thead><tbody>"+rowsHtml+"</tbody></table></div></div><div style=\\\"background:#0d1117;border:1px solid #30363d;border-radius:10px;padding:14px\\\"><div style=\\\"font-size:10px;font-weight:600;color:#8b949e;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px\\\">📊 Participación por Departamento (Landed)</div>"+deptBars+"</div></div></div>";'
+    +'ov.innerHTML="<div style=\\"background:#1a2530;border:1px solid #30363d;border-radius:14px;width:100%;max-width:820px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,.7)\\"><div style=\\"padding:12px 16px;background:#0d1117;border-bottom:1px solid #30363d;display:flex;align-items:center;gap:10px;flex-shrink:0\\"><div style=\\"flex:1\\"><div style=\\"font-size:16px;font-weight:800;color:#e6edf3\\">🔍 Detalle del Embarque</div><div style=\\"font-size:11px;color:#8b949e;margin-top:2px\\">"+(d.nroEmb?"EMB "+esc(d.nroEmb)+" · ":"")+(d.tipoCarga?esc(d.tipoCarga)+" · ":"")+(d.eta?d.eta+" · ":"")+d.rows.length+" prov · "+totBlt.toLocaleString()+" btos</div>"+(d.origen?"<div style=\\"display:inline-flex;align-items:center;gap:5px;margin-top:4px;background:rgba(88,166,255,.10);border:1px solid rgba(88,166,255,.25);border-radius:5px;padding:2px 8px\\"><span style=\\"font-size:9px;color:#8b949e;font-weight:700;text-transform:uppercase\\">Origen: </span><span style=\\"font-size:11px;color:#58a6ff;font-weight:700\\">"+esc(d.origen)+"</span></div>":"")+"</div><div style=\\"display:flex;gap:8px;flex-shrink:0\\"><button id=\\"_plnDetXLS\\" title=\\"Descargar Excel\\" style=\\"cursor:pointer;display:inline-flex;align-items:center;gap:4px;background:rgba(26,122,110,.12);border:1px solid rgba(26,122,110,.3);color:#2dd4bf;border-radius:6px;padding:4px 10px;font-size:10px;font-weight:700\\">📊 Excel</button><button id=\\"_plnDetCSV\\" title=\\"Descargar CSV\\" style=\\"cursor:pointer;display:inline-flex;align-items:center;gap:4px;background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);color:#58a6ff;border-radius:6px;padding:4px 10px;font-size:10px;font-weight:700\\">📄 CSV</button><button onclick=\\"_printModal(\'_plnDetOv\')\\" style=\\"cursor:pointer;display:inline-flex;align-items:center;gap:4px;background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.25);color:#3fb950;border-radius:6px;padding:4px 10px;font-size:10px;font-weight:700\\">🖨️ Imprimir</button><button id=\\"_plnDetOv_close\\" style=\\"cursor:pointer;display:inline-flex;align-items:center;gap:4px;background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.25);color:#f47067;border-radius:6px;padding:4px 10px;font-size:10px;font-weight:700\\">✕ Cerrar</button></div></div><div style=\\"display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px;padding:10px 16px;background:rgba(88,166,255,.04);border-bottom:1px solid #30363d;flex-shrink:0\\"><div style=\\"text-align:center\\"><div style=\\"font-size:8px;font-weight:700;color:#8b949e;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px\\">FOB Total</div><div style=\\"font-family:monospace;font-size:14px;font-weight:800;color:#e6edf3\\">"+fmt(totFob)+"</div></div><div style=\\"text-align:center\\"><div style=\\"font-size:8px;font-weight:700;color:#8b949e;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px\\">FOB Inventario</div><div style=\\"font-family:monospace;font-size:14px;font-weight:800;color:#3fb950\\">"+fmt(fobInvMostrar)+"</div></div><div style=\\"text-align:center\\"><div style=\\"font-size:8px;font-weight:700;color:#8b949e;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px\\">Landed Total</div><div style=\\"font-family:monospace;font-size:14px;font-weight:800;color:#f0883e\\">"+fmt(totLnd)+"</div></div><div style=\\"text-align:center\\"><div style=\\"font-size:8px;font-weight:700;color:#8b949e;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px\\">Bultos</div><div style=\\"font-family:monospace;font-size:14px;font-weight:800;color:#2dd4bf\\">"+totBlt.toLocaleString()+"</div></div><div style=\\"text-align:center\\"><div style=\\"font-size:8px;font-weight:700;color:#8b949e;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px\\">Piezas</div><div style=\\"font-family:monospace;font-size:14px;font-weight:800;color:#e6edf3\\">"+totPzs.toLocaleString()+"</div></div><div style=\\"text-align:center\\"><div style=\\"font-size:8px;font-weight:700;color:#8b949e;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px\\">Facturas</div><div style=\\"font-family:monospace;font-size:14px;font-weight:800;color:#e6edf3\\">"+d.rows.length+"</div></div>"+((d.diasTransito!==null&&d.diasTransito!==undefined)||(d.diasLiberacion!==null&&d.diasLiberacion!==undefined)||(d.avgPedidoDespacho!==null&&d.avgPedidoDespacho!==undefined)||(d.avgDespachoRecepcion!==null&&d.avgDespachoRecepcion!==undefined)?"<div style=\\"text-align:center\\"><div style=\\"font-size:8px;font-weight:700;color:#8b949e;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px\\">⏱️ Tiempos</div><div style=\\"font-family:monospace;font-size:10px;font-weight:800;color:#58a6ff;line-height:1.5\\">"+((d.diasTransito!==null&&d.diasTransito!==undefined)?"🚢 "+d.diasTransito+"d<br>":"")+((d.diasLiberacion!==null&&d.diasLiberacion!==undefined)?"⚓→🏭 "+d.diasLiberacion+"d<br>":"")+((d.avgPedidoDespacho!==null&&d.avgPedidoDespacho!==undefined)?"📋→📦 "+d.avgPedidoDespacho+"d<br>":"")+((d.avgDespachoRecepcion!==null&&d.avgDespachoRecepcion!==undefined)?"📦→🏭 "+d.avgDespachoRecepcion+"d":"")+"</div></div>":"")+"</div><div style=\\"overflow:auto;flex:1;padding:12px 16px\\"><div style=\\\"border:1px solid #30363d;border-radius:10px;margin-bottom:16px;overflow:hidden\\\"><div style=\\\"overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:thin;scrollbar-color:#444d56 #21262d\\\"><table style=\\\"width:100%;border-collapse:collapse;font-size:12px;min-width:860px\\\"><thead><tr style=\\\"background:#0d1117\\\"><th style=\\\"padding:7px 6px;font-weight:500;font-size:11px;letter-spacing:.04em;border:1px solid #30363d;text-align:center;color:#8b949e;width:28px\\\">#</th><th style=\\\"padding:7px 6px;font-weight:500;font-size:11px;letter-spacing:.04em;border:1px solid #30363d;color:#8b949e;width:36px\\\">Org</th><th style=\\\"padding:7px 8px;font-weight:500;font-size:11px;letter-spacing:.04em;border:1px solid #30363d;text-align:left;color:#8b949e;min-width:210px\\\">Suplidor</th><th style=\\\"padding:7px 8px;font-weight:500;font-size:11px;letter-spacing:.04em;border:1px solid #30363d;text-align:left;color:#8b949e;width:84px\\\">N° Factura</th><th style=\\\"padding:7px 6px;font-weight:500;font-size:11px;letter-spacing:.04em;border:1px solid #30363d;text-align:center;color:#8b949e;width:72px\\\">Bultos</th><th style=\\\"padding:7px 8px;font-weight:500;font-size:11px;letter-spacing:.04em;border:1px solid #30363d;text-align:left;color:#8b949e;width:74px\\\">Dept</th><th style=\\\"padding:7px 8px;font-weight:500;font-size:11px;letter-spacing:.04em;border:1px solid #30363d;text-align:right;color:#8b949e;width:82px\\\">FOB</th>"+(isSab?"<th style=\\\"padding:7px 8px;font-weight:500;font-size:11px;letter-spacing:.04em;border:1px solid #30363d;text-align:right;color:#8b949e;width:82px\\\">FOB Inv.</th>":"")+"<th style=\\\"padding:7px 8px;font-weight:500;font-size:11px;letter-spacing:.04em;border:1px solid #30363d;text-align:right;color:#8b949e;width:82px\\\">Landed</th><th style=\\\"padding:7px 6px;font-weight:500;font-size:11px;letter-spacing:.04em;border:1px solid #30363d;text-align:right;color:#8b949e;width:64px\\\">Piezas</th><th style=\\\"padding:7px 6px;font-weight:500;font-size:11px;letter-spacing:.04em;border:1px solid #30363d;text-align:right;color:#8b949e;width:44px\\\">% Part.</th><th style=\\\"padding:7px 6px;font-weight:500;font-size:11px;letter-spacing:.04em;border:1px solid #30363d;text-align:right;color:#2ecc9a;width:56px\\\">% Imp.</th></tr></thead><tbody>"+rowsHtml+"</tbody></table></div></div><div style=\\\"background:#0d1117;border:1px solid #30363d;border-radius:10px;padding:14px\\\"><div style=\\\"font-size:10px;font-weight:600;color:#8b949e;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px\\\">📊 Participación por Departamento (Landed)</div>"+deptBars+"</div></div></div>";'
     +'ov.id="_plnDetOv";'
     +'ov.addEventListener("click",function(e){if(e.target===ov)ov.remove();});'
     +'document.body.appendChild(ov);'
