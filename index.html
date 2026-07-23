@@ -13940,8 +13940,23 @@ function _getFilteredTendData(){
         if(d.snap && d.snap.fechaEmb) return normFecha(d.snap.fechaEmb);
         if(d.snap && d.snap.fecha && typeof d.snap.fecha==='string')
           return normFecha(d.snap.fecha);
-        // Último recurso: usar d.fecha aunque sea timestamp
-        return normFecha(d.fecha);
+        // ── FIX CRÍTICO (jul-2026): el último recurso era `normFecha(d.fecha)`
+        //    crudo, que casi siempre da '' cuando d.fecha no calzó ninguna de
+        //    las formas de arriba — y un '' hace que el embarque NUNCA pueda
+        //    coincidir con ningún filtro de fecha/mes, aunque sí exista y sí
+        //    aparezca buscándolo por número. Eso es lo que hacía que un
+        //    embarque procesado correctamente "desapareciera" del mes
+        //    correspondiente en el Historial. Ahora se usa el mismo
+        //    respaldo que ya usa el propio Historial para agrupar por
+        //    Año/Mes: _fechaEmbarqueReal(), que como último paso reconstruye
+        //    la fecha a partir de d.ts (el timestamp que SIEMPRE se graba al
+        //    procesar). Así el filtro y el agrupado del Historial nunca se
+        //    contradicen entre sí. ──
+        if(typeof _fechaEmbarqueReal==='function'){
+          const _fr=_fechaEmbarqueReal(d);
+          if(_fr) return _fr;
+        }
+        return '';
       };
 
       const fEmb = getFechaReal(d);
@@ -14470,40 +14485,30 @@ function _asignSaltar(){
 
 
 // ══════════════════════════════════════════════════════════════
-//  Selector de fecha por Día/Mes/Año — FIX (jul-2026): reemplaza el
-//  <input type="date"> nativo en los modales de "Fecha del Embarque"
-//  al procesar. En algunos navegadores/WebView restringidos (ej. el
-//  visor content:// de algunas apps de archivos) el input type=date
-//  no dibuja su picker y su .value puede quedar vacío o no reflejar
-//  lo que el usuario intentó seleccionar — el embarque terminaba
-//  guardándose con fecha vacía o forzado silenciosamente a hoy.
-//  Tres <select> nativos siempre tienen un valor seleccionado (nunca
-//  pueden quedar "vacíos"), funcionan igual en cualquier navegador,
-//  y su valor se lee de forma 100% determinística. ──
+//  Selector de fecha — FIX (jul-2026): vuelve a usar el <input
+//  type="date"> NATIVO del dispositivo (el calendario propio del
+//  sistema/navegador, igual al que ya se usa en ETD/ETA) en los
+//  modales de "Fecha del Embarque" al procesar, en vez de los tres
+//  <select> independientes de Día/Mes/Año. Se mantiene el mismo
+//  nombre de función (_fechaSelectsHTML / _leerFechaSelects) para
+//  que ambos modales (procesarEmbarque y procesarUnico) lo hereden
+//  sin tener que tocar cada punto donde se llaman. ──
 // ══════════════════════════════════════════════════════════════
 function _fechaSelectsHTML(idPrefix, defaultStr){
-  var d = defaultStr ? new Date(defaultStr+'T00:00:00') : new Date();
-  if(isNaN(d.getTime())) d = new Date();
-  var dToday=d.getDate(), mToday=d.getMonth()+1, yToday=d.getFullYear();
-  var meses=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-  var diaOpts='', mesOpts='', yearOpts='';
-  for(var i=1;i<=31;i++){ diaOpts+='<option value="'+i+'"'+(i===dToday?' selected':'')+'>'+i+'</option>'; }
-  for(var i=0;i<12;i++){ mesOpts+='<option value="'+(i+1)+'"'+((i+1)===mToday?' selected':'')+'>'+meses[i]+'</option>'; }
-  var yNow=new Date().getFullYear();
-  for(var y=yNow+1;y>=yNow-6;y--){ yearOpts+='<option value="'+y+'"'+(y===yToday?' selected':'')+'>'+y+'</option>'; }
-  var selStyle='width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 4px;color:var(--text);font-size:13px;text-align:center;font-family:\'IBM Plex Mono\',monospace';
-  return '<div style="display:grid;grid-template-columns:0.85fr 1.15fr 1fr;gap:6px">'
-    +'<select id="'+idPrefix+'_d" style="'+selStyle+'">'+diaOpts+'</select>'
-    +'<select id="'+idPrefix+'_m" style="'+selStyle+'">'+mesOpts+'</select>'
-    +'<select id="'+idPrefix+'_y" style="'+selStyle+'">'+yearOpts+'</select>'
-  +'</div>';
+  var d = (defaultStr && /^\d{4}-\d{2}-\d{2}/.test(String(defaultStr))) ? String(defaultStr).slice(0,10) : '';
+  if(!d) d = new Date().toISOString().slice(0,10);
+  var yNow = new Date().getFullYear();
+  var minStr = (yNow-6)+'-01-01', maxStr = (yNow+1)+'-12-31';
+  return '<input type="date" id="'+idPrefix+'_native" value="'+d+'" min="'+minStr+'" max="'+maxStr+'" '
+    +'style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 10px;'
+    +'color:var(--text);font-size:15px;font-family:\'IBM Plex Mono\',monospace;box-sizing:border-box">';
 }
 function _leerFechaSelects(idPrefix){
-  var dEl=document.getElementById(idPrefix+'_d'), mEl=document.getElementById(idPrefix+'_m'), yEl=document.getElementById(idPrefix+'_y');
-  if(!dEl||!mEl||!yEl) return '';
-  var dd=parseInt(dEl.value,10), mm=parseInt(mEl.value,10), yy=parseInt(yEl.value,10);
-  if(!dd||!mm||!yy) return '';
-  return yy+'-'+String(mm).padStart(2,'0')+'-'+String(dd).padStart(2,'0');
+  var el=document.getElementById(idPrefix+'_native');
+  if(!el) return '';
+  var v=(el.value||'').trim();
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(v)) return '';
+  return v;
 }
 
 async function procesarEmbarque(){
