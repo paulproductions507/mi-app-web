@@ -405,7 +405,15 @@
       <label class="upload-label" for="genericFileInput" style="margin-top:10px;">Archivo Excel (.xlsx)</label>
       <input type="file" id="genericFileInput" accept=".xlsx" class="file-input"/>
       <div id="genericUploadStatus" class="upload-status"></div>
-      <div class="upload-note">Esto actualiza la vista en tu navegador al instante para revisar. Para que el cambio quede guardado de forma permanente, envíame el mismo Excel por chat y yo regenero el archivo.</div>
+      <button id="syncBtn" class="export-btn primary" style="margin-top:12px;" disabled>⟳ Sincronizar</button>
+      <div class="upload-note">Selecciona el archivo y pulsa <b>Sincronizar</b> para procesarlo. Antes de aplicar los cambios se guarda automáticamente un punto de restauración en la nube (visible para cualquiera que abra este mismo tablero). Esto actualiza la vista en tu navegador al instante para revisar. Para que el cambio quede guardado de forma permanente en el archivo, envíame el mismo Excel por chat y yo regenero el archivo.</div>
+    </div>
+    <div class="card" style="margin-top:16px;">
+      <div class="section-head" style="margin-bottom:10px;">
+        <div class="section-title" style="font-size:15px;">Historial de Sincronización (respaldo en la nube)</div>
+        <div class="section-note">Cada sincronización crea un punto de restauración. Restaura cualquiera si algo sale mal.</div>
+      </div>
+      <div id="syncHistoryList">Cargando historial…</div>
     </div>
   </section>
 
@@ -1528,41 +1536,185 @@ var AVAILABLE_YEARS = Array.from(new Set(CONTAINERS.map(function(c){return c.ani
   }
   populateYearSelects();
 
-  document.getElementById('genericFileInput').addEventListener('change', function(e){
-    var file = e.target.files[0]; if (!file) return;
-    var statusEl = document.getElementById('genericUploadStatus');
+  // ================= Selección manual + botón Sincronizar =================
+  var pendingFile = null;
+  var syncBtn = document.getElementById('syncBtn');
+  var genericFileInput = document.getElementById('genericFileInput');
+  var genericUploadStatus = document.getElementById('genericUploadStatus');
+
+  genericFileInput.addEventListener('change', function(e){
+    pendingFile = e.target.files[0] || null;
+    if (pendingFile) {
+      genericUploadStatus.textContent = 'Archivo listo: ' + pendingFile.name + ' — pulsa "Sincronizar" para procesarlo.';
+      syncBtn.disabled = false;
+    } else {
+      genericUploadStatus.textContent = '';
+      syncBtn.disabled = true;
+    }
+  });
+
+  function processWorkbookAndApply(wb, registerYear, type, filename, statusEl){
+    if (type === 'landed') {
+      var parsed = parseLandedWorkbook(wb).map(function(r){ r.anio = registerYear; return r; });
+      if (!parsed.length) { statusEl.textContent = '⚠ No se encontraron filas válidas.'; return null; }
+      LANDED_ROWS = LANDED_ROWS.filter(function(r){ return r.anio !== registerYear; }).concat(parsed);
+      statusEl.textContent = '✓ Costo Landed '+registerYear+' actualizado: ' + parsed.length + ' líneas desde ' + filename;
+      return { kind:'landed', count: parsed.length };
+    } else {
+      var result = parseContainerWorkbook(wb, registerYear);
+      if (!result.containers.length) { statusEl.textContent = '⚠ No se encontraron contenedores válidos.'; return null; }
+      CONTAINERS = CONTAINERS.filter(function(c){ return c.anio !== registerYear; }).concat(result.containers);
+      LANDED_ROWS = LANDED_ROWS.filter(function(r){ return r.anio !== registerYear; }).concat(result.landedRows);
+      statusEl.textContent = '✓ Cuadro de Contenedores '+registerYear+' actualizado: ' + result.containers.length + ' contenedores desde ' + filename;
+      return { kind:'containers', count: result.containers.length };
+    }
+  }
+
+  syncBtn.addEventListener('click', function(){
+    if (!pendingFile) return;
+    var file = pendingFile;
+    var statusEl = genericUploadStatus;
     var registerYear = parseInt(uploadYearSelect.value, 10);
     var type = uploadTypeSelect.value;
-    statusEl.textContent = 'Procesando ' + file.name + '...';
+    syncBtn.disabled = true;
+    statusEl.textContent = 'Creando punto de restauración...';
     var reader = new FileReader();
     reader.onload = function(evt){
-      try {
-        var data = new Uint8Array(evt.target.result);
-        var wb = XLSX.read(data, { type:'array', cellDates:true });
-        if (type === 'landed') {
-          var parsed = parseLandedWorkbook(wb).map(function(r){ r.anio = registerYear; return r; });
-          if (!parsed.length) { statusEl.textContent = '⚠ No se encontraron filas válidas.'; return; }
-          LANDED_ROWS = LANDED_ROWS.filter(function(r){ return r.anio !== registerYear; }).concat(parsed);
-          statusEl.textContent = '✓ Costo Landed '+registerYear+' actualizado: ' + parsed.length + ' líneas desde ' + file.name;
-        } else {
-          var result = parseContainerWorkbook(wb, registerYear);
-          if (!result.containers.length) { statusEl.textContent = '⚠ No se encontraron contenedores válidos.'; return; }
-          CONTAINERS = CONTAINERS.filter(function(c){ return c.anio !== registerYear; }).concat(result.containers);
-          LANDED_ROWS = LANDED_ROWS.filter(function(r){ return r.anio !== registerYear; }).concat(result.landedRows);
-          statusEl.textContent = '✓ Cuadro de Contenedores '+registerYear+' actualizado: ' + result.containers.length + ' contenedores desde ' + file.name;
+      (async function(){
+        try {
+          // 1) Punto de restauración con el estado ANTES de aplicar el nuevo Excel
+          await createSyncRestorePoint('Antes de sincronizar "' + file.name + '" (' + registerYear + ' / ' + (type==='landed' ? 'Costo Landed' : 'Contenedores') + ')');
+
+          // 2) Procesar el Excel y aplicar cambios
+          statusEl.textContent = 'Procesando ' + file.name + '...';
+          var data = new Uint8Array(evt.target.result);
+          var wb = XLSX.read(data, { type:'array', cellDates:true });
+          var outcome = processWorkbookAndApply(wb, registerYear, type, file.name, statusEl);
+          if (!outcome) { syncBtn.disabled = false; return; }
+
+          AVAILABLE_YEARS = Array.from(new Set(CONTAINERS.map(function(c){return c.anio;}).concat(LANDED_ROWS.map(function(r){return r.anio;})).filter(function(y){return !!y;}))).sort();
+          renderImportDashboard(registerYear);
+          renderLandedCards(registerYear);
+          renderYearTabs();
+          populateYearSelects();
+          renderComparativo();
+
+          // Reset selector para la próxima sincronización
+          pendingFile = null;
+          genericFileInput.value = '';
+        } catch (err) {
+          statusEl.textContent = '⚠ Error al procesar: ' + err.message;
+        } finally {
+          syncBtn.disabled = !pendingFile ? true : false;
         }
-        AVAILABLE_YEARS = Array.from(new Set(CONTAINERS.map(function(c){return c.anio;}).concat(LANDED_ROWS.map(function(r){return r.anio;})).filter(function(y){return !!y;}))).sort();
-        renderImportDashboard(registerYear);
-        renderLandedCards(registerYear);
-        renderYearTabs();
-        populateYearSelects();
-        renderComparativo();
-      } catch (err) {
-        statusEl.textContent = '⚠ Error al procesar: ' + err.message;
-      }
+      })();
     };
     reader.readAsArrayBuffer(file);
   });
+
+  // ================= Historial / puntos de restauración (nube compartida) =================
+  var SYNC_HISTORY_INDEX_KEY = 'sync-history-index';
+  var storageAvailable = (typeof window !== 'undefined' && window.storage && typeof window.storage.get === 'function');
+
+  function snapshotFilename(label){
+    var d = new Date();
+    return { id: 'sp_' + d.getTime() + '_' + Math.random().toString(36).slice(2,8), ts: d.toISOString(), label: label };
+  }
+
+  async function createSyncRestorePoint(label){
+    if (!storageAvailable) return null;
+    try {
+      var meta = snapshotFilename(label);
+      var snapshot = {
+        containers: CONTAINERS,
+        landedRows: LANDED_ROWS,
+        availableYears: AVAILABLE_YEARS
+      };
+      await window.storage.set('sync-snapshot:' + meta.id, JSON.stringify(snapshot), true);
+      var idxResult = await safeGet(SYNC_HISTORY_INDEX_KEY, true);
+      var idx = [];
+      try { idx = idxResult ? JSON.parse(idxResult.value) : []; } catch(e){ idx = []; }
+      idx.unshift({ id: meta.id, ts: meta.ts, label: label,
+        contCount: CONTAINERS.length, landedCount: LANDED_ROWS.length });
+      if (idx.length > 20) {
+        var removed = idx.slice(20);
+        idx = idx.slice(0, 20);
+        for (var i=0;i<removed.length;i++){
+          try { await window.storage.delete('sync-snapshot:' + removed[i].id, true); } catch(e){}
+        }
+      }
+      await window.storage.set(SYNC_HISTORY_INDEX_KEY, JSON.stringify(idx), true);
+      renderSyncHistoryList(idx);
+      return meta.id;
+    } catch (err) {
+      console.error('No se pudo crear el punto de restauración:', err);
+      return null;
+    }
+  }
+
+  async function safeGet(key, shared){
+    try { return await window.storage.get(key, shared); } catch(e){ return null; }
+  }
+
+  function fmtHistDate(iso){
+    try {
+      var d = new Date(iso);
+      return d.toLocaleString('es-PA', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+    } catch(e){ return iso; }
+  }
+
+  function renderSyncHistoryList(idx){
+    var wrap = document.getElementById('syncHistoryList');
+    if (!wrap) return;
+    if (!storageAvailable) {
+      wrap.innerHTML = '<div class="upload-note">El historial en la nube no está disponible en este entorno.</div>';
+      return;
+    }
+    if (!idx || !idx.length) {
+      wrap.innerHTML = '<div class="upload-note">Aún no hay puntos de restauración. Se creará uno automáticamente la primera vez que sincronices un Excel.</div>';
+      return;
+    }
+    wrap.innerHTML = '<table class="cmp-table"><thead><tr><th>Fecha</th><th>Detalle</th><th>Contenedores</th><th>Filas Landed</th><th></th></tr></thead><tbody>' +
+      idx.map(function(p){
+        return '<tr><td>'+fmtHistDate(p.ts)+'</td><td>'+p.label+'</td><td>'+p.contCount+'</td><td>'+p.landedCount+'</td>' +
+          '<td><button class="export-btn" data-restore-id="'+p.id+'">↺ Restaurar</button></td></tr>';
+      }).join('') + '</tbody></table>';
+    wrap.querySelectorAll('[data-restore-id]').forEach(function(btn){
+      btn.addEventListener('click', function(){ restoreSyncPoint(btn.getAttribute('data-restore-id')); });
+    });
+  }
+
+  async function loadSyncHistory(){
+    if (!storageAvailable) { renderSyncHistoryList(null); return; }
+    var idxResult = await safeGet(SYNC_HISTORY_INDEX_KEY, true);
+    var idx = [];
+    try { idx = idxResult ? JSON.parse(idxResult.value) : []; } catch(e){ idx = []; }
+    renderSyncHistoryList(idx);
+  }
+
+  async function restoreSyncPoint(id){
+    if (!storageAvailable) return;
+    if (!confirm('¿Restaurar el tablero a este punto? Se reemplazarán los datos actuales de contenedores y costo landed en tu vista.')) return;
+    try {
+      var res = await safeGet('sync-snapshot:' + id, true);
+      if (!res) { alert('No se encontró ese punto de restauración.'); return; }
+      var snap = JSON.parse(res.value);
+      CONTAINERS = snap.containers || [];
+      LANDED_ROWS = snap.landedRows || [];
+      AVAILABLE_YEARS = snap.availableYears || Array.from(new Set(CONTAINERS.map(function(c){return c.anio;}).concat(LANDED_ROWS.map(function(r){return r.anio;})).filter(function(y){return !!y;}))).sort();
+      var y = AVAILABLE_YEARS.length ? Math.max.apply(null, AVAILABLE_YEARS) : new Date().getFullYear();
+      renderImportDashboard(y);
+      renderLandedCards(y);
+      renderYearTabs();
+      populateYearSelects();
+      renderComparativo();
+      genericUploadStatus.textContent = '✓ Tablero restaurado al punto seleccionado.';
+    } catch (err) {
+      alert('Error al restaurar: ' + err.message);
+    }
+  }
+
+  loadSyncHistory();
 
   // ================= Comparativo Anual =================
   var cmpExportState = { filename:'comparativo', headers:[], rows:[] };
