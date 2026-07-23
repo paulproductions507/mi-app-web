@@ -672,7 +672,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
 .kpi-card.g .kpi-val{color:var(--text)!important;}
 .kpi-card.b::before{background:linear-gradient(90deg,#1f6feb,#58a6ff);}
 .kpi-card.o::before{background:linear-gradient(90deg,#d29922,#f08632);}
-.kpi-card.p::before{background:linear-gradient(90deg,#7c3aed,#a855f7);}
+.kpi-card.p::before{background:linear-gradient(90deg,#da3633,#ff6a5f);}
 .kpi-icon{font-size:22px;margin-bottom:8px;display:block;}
 .kpi-lbl{font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;}
 .kpi-val{font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:800;line-height:1;color:var(--text);}
@@ -1470,14 +1470,23 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
           <div id="multi-contenedores-list"></div>
           <p class="note" style="margin-top:4px;font-size:10px">Asigna las facturas a cada contenedor en la sección de Proveedores.</p>
         </div>
-        <!-- Tiempos en Tránsito (ETD / ETA Puerto) -->
-        <div class="r2" style="margin-bottom:10px">
+        <!-- Tiempos en Tránsito (ETD / ETA Puerto) — Importación, o Zona Libre no terrestre -->
+        <div class="r2" style="margin-bottom:10px" id="blk_etd_eta_row">
           <div class="field" style="margin-bottom:0"><label style="font-size:10px">🚢 ETD (Zarpe)</label>
             <input type="date" id="s1_etd" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
           </div>
           <div class="field" style="margin-bottom:0"><label style="font-size:10px">⚓ ETA (Puerto)</label>
             <input type="date" id="s1_eta_puerto" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
           </div>
+        </div>
+        <!-- Fecha de Despacho — solo Zona Libre + transporte terrestre (Camión/Furgón/Consolidado Terrestre).
+             La app ya maneja fecha de pedido por factura de proveedor; esta es la única fecha global
+             que falta capturar por embarque, y de aquí la toma Planeación de Carga al sincronizar. -->
+        <div class="r2" style="margin-bottom:10px;display:none" id="blk_despacho_row">
+          <div class="field" style="margin-bottom:0"><label style="font-size:10px">🚚 Fecha de Despacho</label>
+            <input type="date" id="s1_fecha_despacho" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
+          </div>
+          <div class="field" style="margin-bottom:0"><label style="font-size:9px;color:var(--muted2)">Aplica a todas las facturas del embarque — las fechas de pedido se manejan por factura en Proveedores.</label></div>
         </div>
         <!-- Lugar de Recepción + Notas -->
         <div class="r2" style="margin-bottom:10px">
@@ -4694,6 +4703,78 @@ function _PLN_SETVIEW(v, dayStr){
 }
 
 // ── VISTA RESUMEN ──
+// ── Tiempos por País de Origen — agrega TODOS los embarques ya recibidos
+//    (pestaña 'res') de todas las semanas en _PLN_DATA, no solo la semana
+//    en pantalla, porque el promedio de tiempos es una métrica histórica.
+//    Cada país se puede desplegar para ver el detalle por embarque. ──
+function _plnPaisTimesData(){
+  var out={};
+  Object.keys(_PLN_DATA||{}).forEach(function(mon){
+    (_PLN_DATA[mon].res||[]).forEach(function(day){
+      (day.cubiculos||[]).forEach(function(cub){
+        var _cp=cub.pais||''; var _cc=cub.ciudad||'';
+        var origen = (_cc||_cp) ? [_cc,_cp].filter(Boolean).join(', ') : (cub.origen||'');
+        if(!origen){
+          var _nro=(cub.nroEmb||'').split('+')[0].trim();
+          var _td=(window.tendData||[]).find(function(t){return (t.nro||'').trim().toUpperCase()===_nro.toUpperCase();});
+          if(_td){ origen=[_td.ciudad||'',_td.pais||''].filter(Boolean).join(', '); }
+        }
+        var _org=(origen||'').split(',');
+        var ciudad=(_org.length>1?_org.slice(0,-1).join(',').trim():'')||'';
+        var pais=(_org.length>1?_org[_org.length-1].trim():(_org[0]||'').trim())||'Sin origen';
+        var dTrans=_plnDiasEntre(cub.etd,cub.etaPuerto);
+        var dLib=_plnDiasEntre(cub.etaPuerto,cub.eta);
+        if(dTrans===null && dLib===null) return; // sin fechas suficientes, no aporta al promedio
+        if(!out[pais]) out[pais]={equipos:0,items:[]};
+        out[pais].equipos+=(parseInt(cub.nEquipos)||1);
+        out[pais].items.push({nroEmb:cub.nroEmb||'—',ciudad:ciudad,dTrans:dTrans,dLib:dLib,nEquipos:parseInt(cub.nEquipos)||1});
+      });
+    });
+  });
+  return out;
+}
+
+function _plnPaisTimesHTML(){
+  var data=_plnPaisTimesData();
+  var paises=Object.keys(data).sort(function(a,b){return data[b].items.length-data[a].items.length;});
+  if(!paises.length) return '';
+  var h='<div style="background:var(--s1);border:1px solid var(--border);border-radius:10px;margin-bottom:16px;overflow:hidden">'
+    +'<div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">'
+    +'<span style="font-size:14px">🌍</span><span style="font-size:13px;font-weight:800;color:var(--text)">Tiempos por País de Origen</span>'
+    +'<span style="font-size:10px;color:var(--muted)">— toca un país para ver el detalle por embarque</span>'
+    +'</div>';
+  paises.forEach(function(pais,pi){
+    var pd=data[pais];
+    var avgT=_plnAvg(pd.items.map(function(x){return x.dTrans;}).filter(function(v){return v!==null;}));
+    var avgL=_plnAvg(pd.items.map(function(x){return x.dLib;}).filter(function(v){return v!==null;}));
+    var accId='_pln_pais_acc_'+pi;
+    h+='<div style="border-bottom:1px solid rgba(255,255,255,.04)">'
+      +'<div style="padding:10px 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer" '
+      +'onclick="(function(el){var b=document.getElementById(\''+accId+'\');if(!b)return;var o=b.style.display!==\'none\';b.style.display=o?\'none\':\'block\';el.querySelector(\'.pais-chev\').textContent=o?\'▶\':\'▼\';})(this)">'
+      +'<div style="display:flex;align-items:center;gap:10px">'
+      +'<span class="pais-chev" style="color:var(--muted);font-size:11px">▶</span>'
+      +'<span style="font-size:12px;font-weight:800;color:var(--text)">'+pais+'</span>'
+      +'<span style="background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:5px;padding:1px 8px;font-size:10px;color:var(--muted)">'+pd.items.length+' emb · '+pd.equipos+' eq</span>'
+      +'</div>'
+      +'<div style="display:flex;gap:6px">'
+      +(avgT!==null?'<span style="background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px">🚢 '+avgT+'d prom.</span>':'')
+      +(avgL!==null?'<span style="background:rgba(45,212,191,.12);border:1px solid rgba(45,212,191,.3);color:#2dd4bf;font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px">⚓→🏭 '+avgL+'d prom.</span>':'')
+      +'</div></div>'
+      +'<div id="'+accId+'" style="display:none;background:var(--bg);padding:0 16px 10px 40px">'
+      +pd.items.map(function(it){
+        return '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px dashed var(--border);font-size:11px">'
+          +'<div style="color:var(--text);font-weight:700">EMB '+it.nroEmb+(it.ciudad?' <span style="color:var(--muted);font-weight:400">· '+it.ciudad+'</span>':'')+'</div>'
+          +'<div style="display:flex;gap:6px">'
+          +(it.dTrans!==null?'<span style="color:var(--blue-l);font-family:monospace">🚢 '+it.dTrans+'d</span>':'')
+          +(it.dLib!==null?'<span style="color:#2dd4bf;font-family:monospace">⚓→🏭 '+it.dLib+'d</span>':'')
+          +'</div></div>';
+      }).join('')
+      +'</div></div>';
+  });
+  h+='</div>';
+  return h;
+}
+
 function _PLN_RENDER_RESUMEN(container){
   var wk=_plnMkWeek(_PLN_CUR);
   var MESES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
@@ -4739,6 +4820,7 @@ function _PLN_RENDER_RESUMEN(container){
     }).join('')+'</div>';
 
   // Un card por día — colapsable con detalle
+  h+=_plnPaisTimesHTML();
   allDays.forEach(function(day, di){
     var dayDate=new Date(day.date+'T00:00:00');
     var cubs=(day.cubiculos||[]);
@@ -5992,6 +6074,15 @@ window._plnSincronizar=function(){
           var changed=false;
           if(found.etd && cub.etd!==found.etd){ cub.etd=found.etd; changed=true; }
           if(found.etaPuerto && cub.etaPuerto!==found.etaPuerto){ cub.etaPuerto=found.etaPuerto; changed=true; }
+          var _foundRecep=(found.fecha||found.fechaDoc||'').slice(0,10);
+          if(_foundRecep && cub.eta!==_foundRecep){ cub.eta=_foundRecep; changed=true; }
+          var _foundEquipos=parseInt(found.equipos)||0;
+          if(_foundEquipos && parseInt(cub.nEquipos)!==_foundEquipos){ cub.nEquipos=_foundEquipos; changed=true; }
+          if(found.fechaDespacho && cub.fechaDespacho!==found.fechaDespacho){ cub.fechaDespacho=found.fechaDespacho; changed=true; }
+          var _foundLugar=found.lugarRecep||'';
+          if(_foundLugar && cub.lugarRecep!==_foundLugar){ cub.lugarRecep=_foundLugar; changed=true; }
+          var _foundOrigen=(function(){var _p=found.pais||'';var _c=found.ciudad||'';return [_c,_p].filter(Boolean).join(', ');}());
+          if(_foundOrigen && cub.origen!==_foundOrigen){ cub.origen=_foundOrigen; cub.pais=found.pais||''; cub.ciudad=found.ciudad||''; changed=true; }
           var snap=found.snap||{};
           var lines=(snap.invLines||found.invLines||[]);
           if(lines.length && cub.rows && cub.rows.length){
@@ -6144,7 +6235,7 @@ var _cubDiasTransito=_plnDiasEntre(cub.etd,cub.etaPuerto);
       var _cubZlArr=[];
       rows.forEach(function(r){ if(r.tipo!=='IMP'){ var _pl=_plnRowDiasPedLleg(r); if(_pl!==null) _cubZlArr.push(_pl); } });
       var _cubAvgZL=_plnAvg(_cubZlArr);
-      var cubData={nroEmb:cub.nroEmb||'',status:cub.status||'',lugarRecep:cub.lugarRecep||'',tipoCarga:cub.tipoCarga||'',eta:cub.eta||'',etd:cub.etd||'',etaPuerto:cub.etaPuerto||'',diasTransito:_cubDiasTransito,diasLiberacion:_cubDiasLiberacion,avgPedidoLlegada:_cubAvgZL,nEquipos:cub.nEquipos||1,nroCont:cub.nroCont||'',nroConts:Array.isArray(cub.nroConts)?cub.nroConts:(cub.nroCont?[cub.nroCont]:[]),origenes:Array.isArray(cub.origenes)?cub.origenes:(cub.origen?[cub.origen]:[]),origen:(function(){var _cp=cub.pais||'';var _cc=cub.ciudad||'';if(_cc||_cp)return [_cc,_cp].filter(Boolean).join(', ');if(cub.origen)return cub.origen;var _sn=(_cubTd&&_cubTd.snap)||{};var _cam=_sn.campos||{};var _p=_cam.s1_pais_emb||_sn.pais||(_cubTd&&_cubTd.pais)||'';var _c=_cam.s1_ciudad_emb||_sn.ciudad||(_cubTd&&_cubTd.ciudad)||'';return [_c,_p].filter(Boolean).join(', ');}()),hasSab:hasSab,fob:fob,lnd:lnd,hom:hom,btos:btos,pzas:pzas,rows:rows.map(function(r){var _rPL=_plnRowDiasPedLleg(r);return{prov:r.prov||'',tipo:r.tipo||'',dept:r.dept||'',numFact:r.numFact||r.nfac||r.factura||'',bultos:parseInt(r.bultos)||0,fob:parseFloat(r.fob)||0,homol:parseFloat(r.homol)||0,fechaPedido:r.fechaPedido||'',fechaLlegada:r.fechaLlegada||r.fechaRecepcion||'',diasPedidoLlegada:_rPL,landed:(function(){if(_cubIsFused){return parseFloat(r.landed)||parseFloat(r.fob)||0;}var _fob=parseFloat(r.fob)||0;var _p=_cubTotFobRaw>0?_fob/_cubTotFobRaw:0;return _cubLandedOk>0?Math.round(_cubLandedOk*_p*100)/100:(parseFloat(r.landed)||_fob);}()),piezas:parseInt(r.piezas)||0};}),depts:deptEntries.map(function(e){return{dept:e[0],fob:e[1].fob,lnd:e[1].lnd};})};
+      var cubData={nroEmb:cub.nroEmb||'',status:cub.status||'',lugarRecep:cub.lugarRecep||'',tipoCarga:cub.tipoCarga||'',eta:cub.eta||'',etd:cub.etd||'',etaPuerto:cub.etaPuerto||'',fechaDespacho:cub.fechaDespacho||'',diasTransito:_cubDiasTransito,diasLiberacion:_cubDiasLiberacion,avgPedidoLlegada:_cubAvgZL,nEquipos:cub.nEquipos||1,nroCont:cub.nroCont||'',nroConts:Array.isArray(cub.nroConts)?cub.nroConts:(cub.nroCont?[cub.nroCont]:[]),origenes:Array.isArray(cub.origenes)?cub.origenes:(cub.origen?[cub.origen]:[]),origen:(function(){var _cp=cub.pais||'';var _cc=cub.ciudad||'';if(_cc||_cp)return [_cc,_cp].filter(Boolean).join(', ');if(cub.origen)return cub.origen;var _sn=(_cubTd&&_cubTd.snap)||{};var _cam=_sn.campos||{};var _p=_cam.s1_pais_emb||_sn.pais||(_cubTd&&_cubTd.pais)||'';var _c=_cam.s1_ciudad_emb||_sn.ciudad||(_cubTd&&_cubTd.ciudad)||'';return [_c,_p].filter(Boolean).join(', ');}()),hasSab:hasSab,fob:fob,lnd:lnd,hom:hom,btos:btos,pzas:pzas,rows:rows.map(function(r){var _rPL=_plnRowDiasPedLleg(r);return{prov:r.prov||'',tipo:r.tipo||'',dept:r.dept||'',numFact:r.numFact||r.nfac||r.factura||'',bultos:parseInt(r.bultos)||0,fob:parseFloat(r.fob)||0,homol:parseFloat(r.homol)||0,fechaPedido:r.fechaPedido||'',fechaLlegada:r.fechaLlegada||r.fechaRecepcion||'',diasPedidoLlegada:_rPL,landed:(function(){if(_cubIsFused){return parseFloat(r.landed)||parseFloat(r.fob)||0;}var _fob=parseFloat(r.fob)||0;var _p=_cubTotFobRaw>0?_fob/_cubTotFobRaw:0;return _cubLandedOk>0?Math.round(_cubLandedOk*_p*100)/100:(parseFloat(r.landed)||_fob);}()),piezas:parseInt(r.piezas)||0};}),depts:deptEntries.map(function(e){return{dept:e[0],fob:e[1].fob,lnd:e[1].lnd};})};
       var cubJson=JSON.stringify(cubData).replace(/</g,'\\u003c').replace(/>/g,'\\u003e').replace(/&/g,'\\u0026');
       resumenRows.push({
         cubIdx:cubIdx,
@@ -6311,6 +6402,52 @@ var _cubDiasTransito=_plnDiasEntre(cub.etd,cub.etaPuerto);
     +'</table></div>';
 
 
+  // ── Tiempos por País — agrupa resumenRows (ya trae origen "Ciudad, País",
+  //    diasTransito, diasLiberacion y avgPedidoLlegada por embarque) para
+  //    mostrar promedios de tránsito/liberación por país, con el detalle
+  //    de ciudades donde se reparten esos tiempos. ──
+  var _paisMap={};
+  resumenRows.forEach(function(r){
+    var _org=(r.origen||'').split(',');
+    var _ciudadR=(_org.length>1?_org.slice(0,-1).join(',').trim():'') || '';
+    var _paisR=(_org.length>1?_org[_org.length-1].trim():(_org[0]||'').trim()) || 'Sin origen';
+    if(!_paisMap[_paisR]) _paisMap[_paisR]={equipos:0,embarques:0,trans:[],lib:[],zl:[],ciudades:{}};
+    var pm=_paisMap[_paisR];
+    pm.embarques++;
+    pm.equipos+=(r.nEquipos||1);
+    if(r.diasTransito!==null&&r.diasTransito!==undefined) pm.trans.push(r.diasTransito);
+    if(r.diasLiberacion!==null&&r.diasLiberacion!==undefined) pm.lib.push(r.diasLiberacion);
+    if(r.avgPedidoLlegada!==null&&r.avgPedidoLlegada!==undefined) pm.zl.push(r.avgPedidoLlegada);
+    var _ck=_ciudadR||'—';
+    pm.ciudades[_ck]=(pm.ciudades[_ck]||0)+(r.nEquipos||1);
+  });
+  var _paisEntries=Object.keys(_paisMap).map(function(k){return [k,_paisMap[k]];}).sort(function(a,b){return b[1].equipos-a[1].equipos;});
+  var _paisCardsH=_paisEntries.map(function(e){
+    var pais=e[0], pm=e[1];
+    var _avgT=_plnAvg(pm.trans), _avgL=_plnAvg(pm.lib), _avgZ=_plnAvg(pm.zl);
+    var _ciudadesH=Object.keys(pm.ciudades).sort(function(a,b){return pm.ciudades[b]-pm.ciudades[a];})
+      .map(function(c){return '<span style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:#c9d1d9;font-size:10px;padding:2px 8px;border-radius:5px;margin:2px 4px 2px 0;display:inline-block">'+esc(c)+' &middot; '+pm.ciudades[c]+'</span>';}).join('');
+    return '<div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:12px 14px;min-width:220px;flex:1">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
+        +'<div style="font-size:12px;font-weight:800;color:#e6edf3">&#127758; '+esc(pais)+'</div>'
+        +'<div style="font-size:10px;color:#8b949e">'+pm.embarques+' emb &middot; '+pm.equipos+' eq</div>'
+      +'</div>'
+      +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">'
+        +(_avgT!==null?'<span style="background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.3);color:#58a6ff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px">&#128674; Tránsito prom: '+_avgT+'d</span>':'')
+        +(_avgL!==null?'<span style="background:rgba(45,212,191,.12);border:1px solid rgba(45,212,191,.3);color:#2dd4bf;font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px">&#9875; Puerto&rarr;Recep: '+_avgL+'d</span>':'')
+        +(_avgZ!==null?'<span style="background:rgba(240,136,62,.12);border:1px solid rgba(240,136,62,.3);color:#f0883e;font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px">📋&rarr;🏭 ZL: '+_avgZ+'d</span>':'')
+      +'</div>'
+      +'<div>'+_ciudadesH+'</div>'
+      +'</div>';
+  }).join('');
+  var paisH = !_paisEntries.length ? '' : '<div style="margin-top:22px">'
+    +'<div style="background:linear-gradient(135deg,#1C2B4A 0%,#1a7a6e 100%);border-radius:14px 14px 0 0;padding:14px 22px">'
+      +'<div style="font-size:13px;font-weight:800;color:#fff;letter-spacing:.1em;text-transform:uppercase">&#127760; Tiempos por País de Origen</div>'
+    +'</div>'
+    +'<div style="border:1px solid #30363d;border-top:none;border-radius:0 0 14px 14px;padding:14px;display:flex;gap:12px;flex-wrap:wrap">'
+    +_paisCardsH
+    +'</div></div>';
+
   var hdrCols=days.map(function(day){
     var df=sumF((day.cubiculos||[]).reduce(function(a,c){return a.concat(c.rows||[]);},[]));
     var dl=sumL((day.cubiculos||[]).reduce(function(a,c){return a.concat(c.rows||[]);},[]));
@@ -6450,6 +6587,7 @@ var _cubDiasTransito=_plnDiasEntre(cub.etd,cub.etaPuerto);
     +'<div id="_pln_vista_resumen">'
     +'<div style="border-radius:14px;overflow:hidden;margin-bottom:16px;box-shadow:0 4px 18px rgba(0,0,0,.35)">'
     +resumenH
+    +paisH
     +'</div>'
     +'</div>'
     +'<div id="_pln_vista_detalle" style="display:none">'
@@ -7541,6 +7679,7 @@ function setTipo(val, el){
   }
   updateSab2View();
   syncSC3fromSC1();
+  if(typeof _toggleFechasEmbarque==='function') _toggleFechasEmbarque();
   calc();
 }
 function setTermino(val,el){
@@ -12684,6 +12823,35 @@ function _corregirRubroUI(idx){
     +'<option value="Westland"'+(_lugarInit==='Westland'?' selected':'')+'>Westland</option>'
     +'</select></div>';
 
+  // ── Fechas y Tiempos — heredado del formulario de costeo (s1_etd/s1_eta_puerto)
+  //    y de la fecha de recepción del embarque (d.fecha). Editable aquí porque
+  //    hoy es el único punto de corrección posterior — de aquí lo toma
+  //    _plnSincronizar() para alimentar Planeación de Carga. ──
+  var _etdInit = d.etd || _campD.s1_etd || '';
+  var _etaPInit = d.etaPuerto || _campD.s1_eta_puerto || '';
+  var _recepInit = (d.fecha || d.fechaDoc || '').slice(0,10);
+  var _equiposInit = parseInt(d.equipos) || 1;
+  var _despachoInit = d.fechaDespacho || _campD.s1_fecha_despacho || '';
+  function _fixFechasHTML(tipo){
+    var camposImport = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">'
+      +'<div><label style="font-size:9px;color:var(--muted)">🚢 ETD (Zarpe)</label><input type="date" id="_fix_etd" value="'+_etdInit+'" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 9px;color:var(--text);font-size:12px;box-sizing:border-box"></div>'
+      +'<div><label style="font-size:9px;color:var(--muted)">⚓ ETA (Puerto)</label><input type="date" id="_fix_eta_puerto" value="'+_etaPInit+'" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 9px;color:var(--text);font-size:12px;box-sizing:border-box"></div>'
+      +'</div>';
+    var camposZL = '<div style="margin-bottom:8px">'
+      +'<label style="font-size:9px;color:var(--muted)">🚚 Fecha de Despacho (aplica a todo el embarque)</label>'
+      +'<input type="date" id="_fix_fecha_despacho" value="'+_despachoInit+'" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 9px;color:var(--text);font-size:12px;box-sizing:border-box">'
+      +'<div style="font-size:9px;color:var(--muted2);margin-top:4px">La fecha de pedido/entrega de cada factura se maneja en Proveedores.</div>'
+      +'</div>';
+    return '<div style="background:var(--bg);border:1px solid rgba(240,136,62,.3);border-radius:10px;padding:12px;margin-bottom:14px">'
+      +'<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:8px">📅 Fechas y Tiempos</div>'
+      +(tipo==='ZL' ? camposZL : camposImport)
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+      +'<div><label style="font-size:9px;color:var(--muted)">🏭 Fecha de Recepción (Bodega)</label><input type="date" id="_fix_fecha_recep" value="'+_recepInit+'" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 9px;color:var(--text);font-size:12px;box-sizing:border-box"></div>'
+      +'<div><label style="font-size:9px;color:var(--muted)">📦 Cantidad de Equipos</label><input type="number" min="1" step="1" id="_fix_equipos" value="'+_equiposInit+'" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 9px;color:var(--text);font-size:12px;box-sizing:border-box"></div>'
+      +'</div></div>';
+  }
+  var fechasHtml = _fixFechasHTML(tipoActual);
+
   // ── Vía de Transporte — LAND / SEA / AIR ──
   var viaActual = d.viaTransporte || 'SEA';
   var _viaBtn = function(val,ico,lbl,color){
@@ -12764,6 +12932,7 @@ function _corregirRubroUI(idx){
     +tipoZLHtml
     +'<div id="_fix_origen_wrap">'+origenHtml+'</div>'
     +lugarHtml
+    +'<div id="_fix_fechas_wrap">'+fechasHtml+'</div>'
     +viaHtml
     +finHtml
     +'<div style="display:flex;gap:6px;margin-bottom:12px;border-bottom:1px solid var(--border)">'
@@ -12802,8 +12971,22 @@ function _corregirRubroUI(idx){
     btnExt.style.background = _nuevoTipoZL==='EXT'? 'rgba(88,166,255,.15)' : 'var(--s2)';
     btnExt.style.color      = _nuevoTipoZL==='EXT'? '#58a6ff' : 'var(--muted)';
   }
-  btnZL.onclick  = function(){ _nuevoTipoZL='ZL';  _pintarTipoBtns(); _fixOrigenRefresh(); };
-  btnExt.onclick = function(){ _nuevoTipoZL='EXT'; _pintarTipoBtns(); _fixOrigenRefresh(); };
+  function _fixFechasRefresh(){
+    var wrap = ov.querySelector('#_fix_fechas_wrap');
+    if(!wrap) return;
+    // Preservar lo que el usuario ya haya tecleado antes de redibujar
+    var _eEtd=document.getElementById('_fix_etd'), _eEtaP=document.getElementById('_fix_eta_puerto'),
+        _eRecep=document.getElementById('_fix_fecha_recep'), _eEquipos=document.getElementById('_fix_equipos'),
+        _eDespacho=document.getElementById('_fix_fecha_despacho');
+    if(_eEtd) _etdInit=_eEtd.value||_etdInit;
+    if(_eEtaP) _etaPInit=_eEtaP.value||_etaPInit;
+    if(_eRecep) _recepInit=_eRecep.value||_recepInit;
+    if(_eEquipos) _equiposInit=parseInt(_eEquipos.value)||_equiposInit;
+    if(_eDespacho) _despachoInit=_eDespacho.value||_despachoInit;
+    wrap.innerHTML = _fixFechasHTML(_nuevoTipoZL);
+  }
+  btnZL.onclick  = function(){ _nuevoTipoZL='ZL';  _pintarTipoBtns(); _fixOrigenRefresh(); _fixFechasRefresh(); };
+  btnExt.onclick = function(){ _nuevoTipoZL='EXT'; _pintarTipoBtns(); _fixOrigenRefresh(); _fixFechasRefresh(); };
   function _fixOrigenRefresh(){
     var wrap = ov.querySelector('#_fix_origen_wrap');
     if(!wrap) return;
@@ -13006,6 +13189,38 @@ function _corregirRubroUI(idx){
         d.snap.ciudad = _nuevoCiudad || '';
       }
       cambios++;
+    }
+    // ── Fechas y Tiempos: guardar si cambiaron — esto es lo que
+    //    _plnSincronizar() lee luego para alimentar Planeación de Carga ──
+    var _inEtd = document.getElementById('_fix_etd');
+    var _inEtaP = document.getElementById('_fix_eta_puerto');
+    var _inRecep = document.getElementById('_fix_fecha_recep');
+    var _inEquipos = document.getElementById('_fix_equipos');
+    var _inDespacho = document.getElementById('_fix_fecha_despacho');
+    if(_inDespacho && _nuevoTipoZL==='ZL' && _inDespacho.value !== _despachoInit){
+      d.fechaDespacho = _inDespacho.value;
+      if(d.snap){ if(!d.snap.campos) d.snap.campos={}; d.snap.campos.s1_fecha_despacho = _inDespacho.value; }
+      cambios++;
+    }
+    if(_inEtd && _nuevoTipoZL!=='ZL' && _inEtd.value !== _etdInit){
+      d.etd = _inEtd.value;
+      if(d.snap){ if(!d.snap.campos) d.snap.campos={}; d.snap.campos.s1_etd = _inEtd.value; }
+      cambios++;
+    }
+    if(_inEtaP && _nuevoTipoZL!=='ZL' && _inEtaP.value !== _etaPInit){
+      d.etaPuerto = _inEtaP.value;
+      if(d.snap){ if(!d.snap.campos) d.snap.campos={}; d.snap.campos.s1_eta_puerto = _inEtaP.value; }
+      cambios++;
+    }
+    if(_inRecep && _inRecep.value && _inRecep.value !== _recepInit){
+      d.fecha = _inRecep.value;
+      d.fechaDoc = _inRecep.value;
+      if(d.snap) d.snap.fecha = _inRecep.value;
+      cambios++;
+    }
+    if(_inEquipos){
+      var _nEq = parseInt(_inEquipos.value)||1;
+      if(_nEq !== _equiposInit){ d.equipos = _nEq; cambios++; }
     }
     // ── Ahorro: guardar SIEMPRE (panel abierto o cerrado) ──
     var _faGlobal = parseFloat((document.getElementById('_fix_fin_ahorro')||{}).value);
@@ -14905,6 +15120,7 @@ async function procesarEmbarque(){
     lugarRecep: document.getElementById('s1_lugar_recep')?.value || '',
     etd: document.getElementById('s1_etd')?.value || '',
     etaPuerto: document.getElementById('s1_eta_puerto')?.value || '',
+    fechaDespacho: document.getElementById('s1_fecha_despacho')?.value || '',
     gastoComp: parseFloat(document.getElementById('s1_gasto_comp')?.value)||0,
     usoSistema: parseFloat(document.getElementById('s1_uso_sistema')?.value)||0
   };
@@ -15263,6 +15479,8 @@ function reabrirEmbarquePendiente(idx){
   if(s.lugarRecep !== undefined){ const lr=document.getElementById('s1_lugar_recep'); if(lr) lr.value=s.lugarRecep||''; }
   { const etdEl=document.getElementById('s1_etd'); if(etdEl) etdEl.value=s.etd||''; }
   { const etaPEl=document.getElementById('s1_eta_puerto'); if(etaPEl) etaPEl.value=s.etaPuerto||''; }
+  { const fdEl=document.getElementById('s1_fecha_despacho'); if(fdEl) fdEl.value=s.fechaDespacho||''; }
+  if(typeof _toggleFechasEmbarque==='function') _toggleFechasEmbarque();
   if(s.gastoComp){ const gc=document.getElementById('s1_gasto_comp'); if(gc) gc.value=s.gastoComp||''; }
   if(s.usoSistema){ const us=document.getElementById('s1_uso_sistema'); if(us) us.value=s.usoSistema||''; }
   // Restaurar selectores de origen país/ciudad
@@ -25183,6 +25401,24 @@ function _toggleContenedorField(val){
     if(lbl) lbl.textContent = 'N° Contenedor';
     if(inp) inp.placeholder = 'Ej: MSCU1234567';
   }
+  _toggleFechasEmbarque();
+}
+
+// ── Campos de fechas según los 3 criterios: método de embarque (vía),
+//    tipo de equipo/embarque, y tipo de proveedor (ZL/Importación).
+//    Importación → ETD/ETA (zarpe/puerto). Zona Libre + transporte
+//    terrestre (Camión/Furgón/Consolidado Terrestre) → Fecha de Despacho,
+//    porque el pedido ya se registra por factura en Proveedores. ──
+function _toggleFechasEmbarque(){
+  var tipoEmbEl = document.getElementById('s1_tipo_emb');
+  var val = tipoEmbEl ? tipoEmbEl.value : '';
+  var esTerrestre = val === 'Furgón' || val === 'Camión' || val === 'Consolidado Terrestre';
+  var esZL = (typeof tipo !== 'undefined' ? tipo : '') === 'ZL';
+  var rowEtd = document.getElementById('blk_etd_eta_row');
+  var rowDespacho = document.getElementById('blk_despacho_row');
+  var mostrarDespacho = esZL && esTerrestre;
+  if(rowEtd) rowEtd.style.display = mostrarDespacho ? 'none' : '';
+  if(rowDespacho) rowDespacho.style.display = mostrarDespacho ? '' : 'none';
 }
 
 // ═══════════════════════════════════════════════════════
