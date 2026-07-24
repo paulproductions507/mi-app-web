@@ -3711,6 +3711,33 @@ function _plnFmtDias(n){ return (n===null||n===undefined)?'—':(n+' d'); }
 function _plnRowDiasPedLleg(r){ if(!r) return null; var lleg=r.fechaLlegada||r.fechaRecepcion||''; return _plnDiasEntre(r.fechaPedido,lleg); }
 function _plnNormProv(s){ return String(s||'').toUpperCase().replace(/^S\.I\.?\s*[-–]\s*/,'').replace(/[^A-Z0-9]/g,''); }
 function _plnFmtFecha(d){ if(!d) return '—'; try{ var p=d.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; }catch(e){ return d; } }
+// ── Zona Libre viaja SIEMPRE por camión/SABABA (nunca contenedor) — por eso
+//    "camión" se usa como criterio de Zona Libre para las fechas del cubículo.
+//    Contenedor/LCL/Aéreo usan ETD(Zarpe)→ETA(Puerto)→Recepción; Camión/SABABA
+//    usan Recepción-Sababa(ZL)→Despacho-Sababa→Recepción-Bodega. ──
+function _plnEsCamionCub(cub){
+  var t=((cub&&(cub.tipoEmbarque||cub.via||cub.tipoCarga))||'').toString().toLowerCase();
+  return t.indexOf('cami')!==-1 || t.indexOf('sababa')!==-1 || t==='land';
+}
+function _plnTiemposCub(cub){
+  cub=cub||{};
+  if(_plnEsCamionCub(cub)){
+    return {
+      esCamion:true,
+      dTrans:_plnDiasEntre(cub.fechaSabRecibio,cub.fechaDespacho),
+      dLib:_plnDiasEntre(cub.fechaDespacho,cub.eta),
+      iconTrans:'📥',iconLib:'🚚',
+      lblTrans:'Recibo Sababa (ZL)',lblLib:'Sababa Despacho→Bodega'
+    };
+  }
+  return {
+    esCamion:false,
+    dTrans:_plnDiasEntre(cub.etd,cub.etaPuerto),
+    dLib:_plnDiasEntre(cub.etaPuerto,cub.eta),
+    iconTrans:'🚢',iconLib:'⚓',
+    lblTrans:'Tránsito (ETD→ETA)',lblLib:'Liberación (ETA→Recepción)'
+  };
+}
 // ── Tarjeta flotante (tooltip) para los chips de tiempos ──
 function _plnTipShow(html,evt){
   var tip=document.getElementById('_plnTipCard');
@@ -4708,8 +4735,9 @@ function _plnPaisTimesData(){
         var _org=(origen||'').split(',');
         var ciudad=(_org.length>1?_org.slice(0,-1).join(',').trim():'')||'';
         var pais=(_org.length>1?_org[_org.length-1].trim():(_org[0]||'').trim())||'Sin origen';
-        var dTrans=_plnDiasEntre(cub.etd,cub.etaPuerto);
-        var dLib=_plnDiasEntre(cub.etaPuerto,cub.eta);
+        var _tCub=_plnTiemposCub(cub);
+        var dTrans=_tCub.dTrans;
+        var dLib=_tCub.dLib;
         if(dTrans===null && dLib===null) return; // sin fechas suficientes, no aporta al promedio
         if(!out[pais]) out[pais]={equipos:0,items:[]};
         out[pais].equipos+=(parseInt(cub.nEquipos)||1);
@@ -5513,20 +5541,25 @@ function _plnCubHtml(cub,di,ci,tab,mon){
         +'<span>Landed: <strong style="color:var(--orange-l);font-family:IBM Plex Mono,monospace">'+_plnFF(totLndR)+'</strong></span>'
       +'</div>'
       +(function(){
-        var dTrans=_plnDiasEntre(cub.etd,cub.etaPuerto);
-        var dLib=_plnDiasEntre(cub.etaPuerto,cub.eta);
+        var _tCub=_plnTiemposCub(cub);
+        var dTrans=_tCub.dTrans;
+        var dLib=_tCub.dLib;
         var zlArr=[];
         rows.forEach(function(r){ if(r.tipo!=='IMP'){ var p=_plnRowDiasPedLleg(r); if(p!==null) zlArr.push(p); } });
         var avgZL=_plnAvg(zlArr);
         var chips=[];
         var hoverAttrs=' onmouseenter="_plnTipShow(this.getAttribute(\'data-tip\'),event)" onmouseleave="_plnTipHide()"';
         if(dTrans!==null){
-          var tipTrans=_plnESC('<div style="font-weight:800;margin-bottom:4px">🚢 Tiempo en Tránsito</div>ETD (Zarpe): <strong>'+_plnFmtFecha(cub.etd)+'</strong><br>ETA (Puerto): <strong>'+_plnFmtFecha(cub.etaPuerto)+'</strong><br>Duración: <strong>'+_plnFmtDias(dTrans)+'</strong>');
-          chips.push('<span data-tip="'+tipTrans+'"'+hoverAttrs+' style="cursor:help;background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:4px;padding:1px 6px;font-size:9px;font-weight:700">🚢 Tránsito: '+_plnFmtDias(dTrans)+'</span>');
+          var tipTrans=_tCub.esCamion
+            ? _plnESC('<div style="font-weight:800;margin-bottom:4px">📥 '+_tCub.lblTrans+'</div>Recibido Sababa: <strong>'+_plnFmtFecha(cub.fechaSabRecibio)+'</strong><br>Despacho Sababa: <strong>'+_plnFmtFecha(cub.fechaDespacho)+'</strong><br>Duración: <strong>'+_plnFmtDias(dTrans)+'</strong>')
+            : _plnESC('<div style="font-weight:800;margin-bottom:4px">🚢 Tiempo en Tránsito</div>ETD (Zarpe): <strong>'+_plnFmtFecha(cub.etd)+'</strong><br>ETA (Puerto): <strong>'+_plnFmtFecha(cub.etaPuerto)+'</strong><br>Duración: <strong>'+_plnFmtDias(dTrans)+'</strong>');
+          chips.push('<span data-tip="'+tipTrans+'"'+hoverAttrs+' style="cursor:help;background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:4px;padding:1px 6px;font-size:9px;font-weight:700">'+_tCub.iconTrans+' '+(_tCub.esCamion?'Sababa ZL':'Tránsito')+': '+_plnFmtDias(dTrans)+'</span>');
         }
         if(dLib!==null){
-          var tipLib=_plnESC('<div style="font-weight:800;margin-bottom:4px">⚓→🏭 Tiempo de Liberación</div>ETA (Puerto): <strong>'+_plnFmtFecha(cub.etaPuerto)+'</strong><br>Recepción (Bodega): <strong>'+_plnFmtFecha(cub.eta)+'</strong><br>Duración: <strong>'+_plnFmtDias(dLib)+'</strong>');
-          chips.push('<span data-tip="'+tipLib+'"'+hoverAttrs+' style="cursor:help;background:rgba(45,212,191,.1);border:1px solid rgba(45,212,191,.3);color:#2dd4bf;border-radius:4px;padding:1px 6px;font-size:9px;font-weight:700">⚓→🏭 '+_plnFmtDias(dLib)+'</span>');
+          var tipLib=_tCub.esCamion
+            ? _plnESC('<div style="font-weight:800;margin-bottom:4px">🚚 '+_tCub.lblLib+'</div>Despacho Sababa: <strong>'+_plnFmtFecha(cub.fechaDespacho)+'</strong><br>Recepción (Bodega): <strong>'+_plnFmtFecha(cub.eta)+'</strong><br>Duración: <strong>'+_plnFmtDias(dLib)+'</strong>')
+            : _plnESC('<div style="font-weight:800;margin-bottom:4px">⚓→🏭 Tiempo de Liberación</div>ETA (Puerto): <strong>'+_plnFmtFecha(cub.etaPuerto)+'</strong><br>Recepción (Bodega): <strong>'+_plnFmtFecha(cub.eta)+'</strong><br>Duración: <strong>'+_plnFmtDias(dLib)+'</strong>');
+          chips.push('<span data-tip="'+tipLib+'"'+hoverAttrs+' style="cursor:help;background:rgba(45,212,191,.1);border:1px solid rgba(45,212,191,.3);color:#2dd4bf;border-radius:4px;padding:1px 6px;font-size:9px;font-weight:700">'+_tCub.iconLib+' '+_plnFmtDias(dLib)+'</span>');
         }
         if(avgZL!==null){
           var detZL=zlArr.map(function(v,i){return '· '+_plnFmtDias(v);}).join('<br>');
@@ -5546,8 +5579,9 @@ function _PLN_KPIS(wk){
   var eq=0,pv=0,fob=0,lnd=0,hom=0,blt=0,pzs=0,mat=0,tot=0;
   var _transArr=[],_libArr=[],_zlArr=[];
   days.forEach(function(day){ (day.cubiculos||[]).forEach(function(cub){ eq+=parseInt(cub.nEquipos||1)||1;
-    var _dt=_plnDiasEntre(cub.etd,cub.etaPuerto); if(_dt!==null) _transArr.push(_dt);
-    var _dl=_plnDiasEntre(cub.etaPuerto,cub.eta); if(_dl!==null) _libArr.push(_dl);
+    var _tKpi=_plnTiemposCub(cub);
+    var _dt=_tKpi.dTrans; if(_dt!==null) _transArr.push(_dt);
+    var _dl=_tKpi.dLib; if(_dl!==null) _libArr.push(_dl);
     (cub.rows||[]).forEach(function(r){ pv++; tot++; fob+=parseFloat(r.fob)||0; lnd+=parseFloat(r.landed)||parseFloat(r.fob)||0; hom+=(parseFloat(r.homol)>0?parseFloat(r.homol):parseFloat(r.fob))||0; blt+=parseInt(r.bultos)||0; pzs+=parseInt(r.piezas)||0; if(r.matched) mat++;
       if(r.tipo!=='IMP'){ var _pl=_plnRowDiasPedLleg(r); if(_pl!==null) _zlArr.push(_pl); }
     }); }); });
@@ -6216,8 +6250,10 @@ window._plnCSV=function(){
         if(!_cubLandedOk) _cubLandedOk=_tryV(_cubSnap.landed)||_tryV(_cubTd&&_cubTd.landed)||0;
       }
       var _cubTotFobRaw=rows.reduce(function(s,r){return s+(parseFloat(r.fob)||0);},0);
-var _cubDiasTransito=_plnDiasEntre(cub.etd,cub.etaPuerto);
-      var _cubDiasLiberacion=_plnDiasEntre(cub.etaPuerto,cub.eta);
+var _cubTiempos=_plnTiemposCub(cub);
+      var _cubDiasTransito=_cubTiempos.dTrans;
+      var _cubDiasLiberacion=_cubTiempos.dLib;
+      var _cubEsCamion=_cubTiempos.esCamion;
       var _cubZlArr=[];
       rows.forEach(function(r){ if(r.tipo!=='IMP'){ var _pl=_plnRowDiasPedLleg(r); if(_pl!==null) _cubZlArr.push(_pl); } });
       var _cubAvgZL=_plnAvg(_cubZlArr);
@@ -6233,6 +6269,7 @@ var _cubDiasTransito=_plnDiasEntre(cub.etd,cub.etaPuerto);
         sede:cub.lugarRecep||'',
         origen:cubData.origen||'',
         tramite:hasSab?'Local':'Liquidación',
+        tipoEmbarque:/zona libre|panam[aá]/i.test(cubData.origen||'')?'Zona Libre':'Importación',
         fob:fob,hom:hom,lnd:lnd,btos:btos,pzas:pzas,facturas:rows.length,
         diasTransito:_cubDiasTransito,diasLiberacion:_cubDiasLiberacion,avgPedidoLlegada:_cubAvgZL
       });
@@ -6246,8 +6283,8 @@ var _cubDiasTransito=_plnDiasEntre(cub.etd,cub.etaPuerto);
         +(cub.nroEmb?'<span style="color:#f0883e;font-weight:800;font-size:14px">EMB '+esc(cub.nroEmb)+'</span>':'')
         +(cub.tipoCarga?'<span style="background:#21262d;color:#8b949e;font-size:11px;padding:3px 8px;border-radius:5px">'+esc(cub.tipoCarga)+'</span>':'')
         +(cub.eta?'<span style="color:#8b949e;font-size:12px">&#128197; '+_fmtEta(cub.eta)+'</span>':'')
-        +(_cubDiasTransito!==null?'<span style="background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.3);color:#58a6ff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px">&#128674; Tránsito: '+_cubDiasTransito+' d</span>':'')
-        +(_cubDiasLiberacion!==null?'<span style="background:rgba(45,212,191,.12);border:1px solid rgba(45,212,191,.3);color:#2dd4bf;font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px">&#9875; Liberación: '+_cubDiasLiberacion+' d</span>':'')
+        +(_cubDiasTransito!==null?'<span style="background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.3);color:#58a6ff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px">'+(_cubEsCamion?'&#128229; Recibo Sababa\u2192Despacho: ':'&#128674; Tránsito: ')+_cubDiasTransito+' d</span>':'')
+        +(_cubDiasLiberacion!==null?'<span style="background:rgba(45,212,191,.12);border:1px solid rgba(45,212,191,.3);color:#2dd4bf;font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px">'+(_cubEsCamion?'&#128666; Despacho\u2192Bodega: ':'&#9875; Liberación: ')+_cubDiasLiberacion+' d</span>':'')
         +(_cubAvgZL!==null?'<span style="background:rgba(240,136,62,.12);border:1px solid rgba(240,136,62,.3);color:#f0883e;font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px">ZL Pedido→Llegada prom: '+_cubAvgZL+' d</span>':'')
         +'</div>'
         +'<div style="background:#0d1117;padding:6px 14px;border-bottom:1px solid #30363d;display:flex;justify-content:flex-end">'
@@ -6339,7 +6376,7 @@ var _cubDiasTransito=_plnDiasEntre(cub.etd,cub.etaPuerto);
         +'<td style="padding:8px 12px;text-align:center;border-bottom:1px solid #21262d"><button onclick="_plnShowDet(\''+r.cubIdx+'\')" title="Ver Detalle" style="background:rgba(46,204,154,.18);border:1px solid rgba(46,204,154,.4);color:#2ecc9a;border-radius:6px;padding:5px 10px;font-size:13px;font-weight:700;cursor:pointer">&#128269;</button></td>'
         +'<td style="padding:12px 16px;color:#f0883e;font-weight:800;font-size:13px;border-bottom:1px solid #21262d;white-space:nowrap">'+esc(r.nroEmb)+'</td>'
         +'<td style="padding:12px 16px;font-size:12px;border-bottom:1px solid #21262d;white-space:nowrap">'+tramiteChip+'</td>'
-        +'<td style="padding:12px 16px;text-align:center;font-size:13px;font-weight:700;color:#e6edf3;white-space:nowrap;border-bottom:1px solid #21262d" title="'+(r.tramite==='Local'?'Zona Libre':'Importaci\u00f3n')+'">'+(r.tramite==='Local'?'&#128666; ZL':'&#128674; IMP')+'</td>'
+        +'<td style="padding:12px 16px;text-align:center;font-size:13px;font-weight:700;color:#e6edf3;white-space:nowrap;border-bottom:1px solid #21262d" title="'+esc(r.tipoEmbarque)+'">'+(r.tipoEmbarque==='Zona Libre'?'&#128666; ZL':'&#128674; IMP')+'</td>'
         +'<td style="padding:12px 16px;font-size:12px;border-bottom:1px solid #21262d;white-space:nowrap">'+corrChip+'</td>'
         +'<td style="padding:12px 16px;color:#58a6ff;font-size:12px;border-bottom:1px solid #21262d;white-space:nowrap">&#127758; '+esc(r.origen)+'</td>'
         +'<td style="padding:12px 16px;text-align:center;color:#e6edf3;font-family:\'IBM Plex Mono\',monospace;font-weight:700;font-size:13px;border-bottom:1px solid #21262d">'+fmt(r.fob)+'</td>'
@@ -6501,18 +6538,6 @@ var _cubDiasTransito=_plnDiasEntre(cub.etd,cub.etaPuerto);
     +'<title>Planeaci\u00f3n '+esc(_PLN_CUR)+'</title>'
     +'<style>@import url("https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap");*{box-sizing:border-box;margin:0;padding:0}body{background:#0d1117;color:#e6edf3;font-family:"72","Roboto","Noto Sans",Arial,sans-serif;font-size:13px;letter-spacing:.01em;padding:20px}table{border-collapse:collapse}@media print{.no-print{display:none}body>*{display:none!important}._pln_modal_print{display:block!important;position:static!important;width:100%!important;max-width:100%!important;max-height:none!important;overflow:visible!important;box-shadow:none!important}table{page-break-inside:auto}tr{page-break-inside:avoid}.cub-card{page-break-inside:avoid;break-inside:avoid}}</style>'
     +'</head><body>'
-    +'<div id="_pln_email_banner" style="background:linear-gradient(135deg,#f8d122,#f0883e);color:#1a1a1a;border-radius:12px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-family:Arial,sans-serif">'
-      +'<div style="font-size:24px;flex-shrink:0">⚠️</div>'
-      +'<div style="flex:1;min-width:220px">'
-        +'<div style="font-size:13px;font-weight:800;margin-bottom:2px">Para ver este reporte interactivo (gráficas, búsqueda por departamento, filtros)</div>'
-        +'<div style="font-size:12px;font-weight:500">Si lo estás viendo dentro de tu correo, los botones no van a responder. Descarga el archivo y ábrelo directamente en Chrome, Edge o tu navegador.</div>'
-      +'</div>'
-      +'<a href="data:text/html;charset=utf-8," download="Planeacion_'+esc(_PLN_CUR)+'.html" onclick="event.preventDefault();var b=new Blob([document.documentElement.outerHTML],{type:\'text/html\'});var u=URL.createObjectURL(b);var a=document.createElement(\'a\');a.href=u;a.download=\'Planeacion_'+esc(_PLN_CUR)+'.html\';document.body.appendChild(a);a.click();setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(u);},800);" '
-        +'style="background:#1a1a1a;color:#f8d122;border-radius:8px;padding:10px 18px;font-size:12px;font-weight:700;text-decoration:none;white-space:nowrap;flex-shrink:0">⬇️ Descargar y abrir</a>'
-    +'</div>'
-    +'<div class="no-print" style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:10px 14px;margin-bottom:16px;font-size:11px;color:#8b949e;font-family:Arial,sans-serif">'
-      +'💡 Si descargaste este archivo desde el correo, búscalo en tu carpeta de Descargas y ábrelo desde ahí (doble clic) en vez de dentro del visor del correo.'
-    +'</div>'
     +'<div style="background:#161b22;border:1px solid #30363d;border-radius:14px;padding:20px 24px;margin-bottom:16px">'
     +'<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:16px">'
     +'<div>'
@@ -6527,7 +6552,7 @@ var _cubDiasTransito=_plnDiasEntre(cub.etd,cub.etaPuerto);
     +'<div class="no-print" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;background:#161b22;border:1px solid #30363d;border-radius:10px;padding:8px 14px;margin-bottom:16px">'
     +'<button onclick="_printPage()" style="display:inline-flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-width:62px;min-height:52px;background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.3);color:#58a6ff;border-radius:6px;padding:6px 10px;font-size:10px;font-weight:700;line-height:1.2;cursor:pointer"><span style="font-size:15px;line-height:1">\uD83D\uDDA8\uFE0F</span><span>Imprimir</span></button>'
     +'<button onclick="_exportPlnXLS()" style="display:inline-flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-width:62px;min-height:52px;background:rgba(26,122,110,.12);border:1px solid rgba(26,122,110,.3);color:#2dd4bf;border-radius:6px;padding:6px 10px;font-size:10px;font-weight:700;line-height:1.2;cursor:pointer"><span style="font-size:15px;line-height:1">\uD83D\uDCCA</span><span>Excel</span></button>'
-    +'<button id="_btnVista" onclick="_plnToggleVista()" style="display:inline-flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-width:62px;min-height:52px;background:rgba(26,122,110,.12);border:1px solid rgba(26,122,110,.3);color:#2dd4bf;border-radius:6px;padding:6px 10px;font-size:10px;font-weight:700;line-height:1.2;cursor:pointer"><span style="font-size:15px;line-height:1">\uD83D\uDCC5</span><span>Vista</span><span>Detallada</span></button>'
+    +'<button id="_btnVista" onclick="_plnToggleVista()" style="display:inline-flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-width:62px;min-height:52px;background:rgba(26,122,110,.12);border:1px solid rgba(26,122,110,.3);color:#2dd4bf;border-radius:6px;padding:6px 10px;font-size:10px;font-weight:700;line-height:1.2;cursor:pointer"><span style="font-size:15px;line-height:1">\uD83D\uDCCB</span><span>Vista</span><span>Resumen</span></button>'
     +'<button id="_tog" onclick="_swTheme()" style="display:inline-flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-width:62px;min-height:52px;background:rgba(26,122,110,.12);border:1px solid rgba(26,122,110,.3);color:#2ecc9a;border-radius:6px;padding:6px 10px;font-size:10px;font-weight:700;line-height:1.2;cursor:pointer"><span id="_togIcon" style="font-size:15px;line-height:1">\u2600\uFE0F</span><span id="_togLbl">Claro</span></button>'
     +'</div>'
     +(function(){var allR=[];var allD=[];try{var wk2=_plnMkWeek(_PLN_CUR);var days2=wk2[_PLN_TAB||'res']||[];days2.forEach(function(day){(day.cubiculos||[]).forEach(function(cub){function fd(d){if(!d)return'';try{var p=d.split('-');var dt=new Date(parseInt(p[0]),parseInt(p[1])-1,parseInt(p[2]));return dt.toLocaleDateString('es-PA',{weekday:'long',day:'numeric',month:'long'});}catch(e){return d;}}var _dlRaw=fd(day.date||cub.eta||'');var dl=_dlRaw?(_dlRaw.charAt(0).toUpperCase()+_dlRaw.slice(1)):_dlRaw;var _hasSab=(cub.rows||[]).some(function(rr){return parseFloat(rr.homol)>0;});var _corredor=_hasSab?'Sababa Imports':'CIF Express';var _nEq=parseInt(cub.nEquipos)||1;var _tipoCargaStr=(cub.tipoCarga||'')+(_nEq>1?' (x'+_nEq+')':'');(cub.rows||[]).forEach(function(r){allR.push({prov:r.prov||'',tipo:r.tipo||'ZL',dept:(r.dept||'').toUpperCase(),fob:parseFloat(r.fob)||0,homol:parseFloat(r.homol)||0,landed:parseFloat(r.landed)||parseFloat(r.fob)||0,piezas:parseInt(r.piezas)||0,bultos:parseInt(r.bultos)||0,numFact:r.numFact||r.nfac||r.factura||'',nroEmb:cub.nroEmb||'',dateLabel:dl,origen:r.origen||'',tipoCarga:_tipoCargaStr,eta:cub.eta||day.date||'',corredor:_corredor,nEquipos:_nEq});});});});allD=[...new Set(allR.map(function(r){return r.dept;}).filter(Boolean))].sort();}catch(e){}var opts=allD.map(function(d){var s=d.replace(/&/g,'&amp;').replace(/</g,'&lt;');return '<option value="'+s+'">'+s+'</option>';}).join('');var adStr=JSON.stringify(allR).replace(/<\/script>/gi,'<\\/script>');return '<div style="background:#161b22;border:1px solid #30363d;border-radius:14px;padding:16px 20px;margin-bottom:16px">'+'<div style="font-size:11px;font-weight:700;color:#8b949e;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">&#128269; B&uacute;squeda por Departamento</div>'+'<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'+'<select id="_deptSel" style="background:#0d1117;border:1px solid #30363d;color:#e6edf3;border-radius:8px;padding:8px 12px;font-size:13px;font-weight:600;min-width:200px">'+'<option value="">-- Seleccione Departamento --</option>'+opts+'</select>'+'<button onclick="_searchDept()" style="background:#1a7a6e;border:none;color:#fff;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">&#128269; Ver Detalle</button>'+'</div></div>'+'<sc'+'ript>var _AD='+adStr+';</'+'script>'
@@ -6570,13 +6595,13 @@ var _cubDiasTransito=_plnDiasEntre(cub.etd,cub.etaPuerto);
     +'try{wb.xlsx.writeBuffer().then(function(buf){var blob=new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});var url=URL.createObjectURL(blob);var a=document.createElement("a");a.href=url;var hoy=new Date().toISOString().slice(0,10);a.download="Dashboard_ZLC_"+hoy+".xlsx";document.body.appendChild(a);a.click();setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url);},1000);});}catch(err){alert("Error al exportar: "+err.message);}'
     +'}'
     +'</'+'script>';}())
-    +'<div id="_pln_vista_resumen">'
+    +'<div id="_pln_vista_resumen" style="display:none">'
     +'<div style="border-radius:14px;overflow:hidden;margin-bottom:16px;box-shadow:0 4px 18px rgba(0,0,0,.35)">'
     +resumenH
     +paisH
     +'</div>'
     +'</div>'
-    +'<div id="_pln_vista_detalle" style="display:none">'
+    +'<div id="_pln_vista_detalle">'
     +'<div id="_mainTbl" style="overflow-x:auto;margin-bottom:16px"><table style="width:100%;border-collapse:separate;border-spacing:10px 0">'
     +'<thead><tr>'+hdrCols+'</tr></thead><tbody><tr>'+colsH+'</tr></tbody></table></div>'
     +'<div style="background:#161b22;border:1px solid #30363d;border-radius:14px;padding:16px 20px">'
@@ -6597,7 +6622,7 @@ var _cubDiasTransito=_plnDiasEntre(cub.etd,cub.etaPuerto);
       var cards='';
       if(cif_eq>0) cards+='<div style="background:transparent;border:2px solid #1a7a6e;border-radius:10px;padding:14px"><div style="font-size:10px;font-weight:700;color:#1a7a6e;text-transform:uppercase;margin-bottom:8px">CIF Express</div><div style="font-size:15px;font-weight:800;color:#e6edf3">'+cif_eq+' equipo(s)</div><div style="font-size:16px;font-weight:800;color:#2ecc9a;font-family:monospace">'+fmt(cif_lnd)+'</div></div>';
       if(sab_eq>0) cards+='<div style="background:transparent;border:2px solid #f0883e;border-radius:10px;padding:14px"><div style="font-size:10px;font-weight:700;color:#f0883e;text-transform:uppercase;margin-bottom:8px">Sababa Imports</div><div style="font-size:15px;font-weight:800;color:#e6edf3">'+sab_eq+' equipo(s)</div><div style="font-size:16px;font-weight:800;color:#f0883e;font-family:monospace">'+fmt(sab_lnd)+'</div></div>';
-      cards+='<div style="background:transparent;border:2px solid #c0392b;border-radius:10px;padding:14px"><div style="font-size:10px;font-weight:700;color:#c0392b;text-transform:uppercase;margin-bottom:8px">TOTAL</div><div style="font-size:15px;font-weight:800;color:#e6edf3">'+tot_eq+' equipo(s)</div><div style="font-size:16px;font-weight:800;color:#e53e3e;font-family:monospace">'+fmt(tot_lnd)+'</div></div>';
+      cards+='<div style="background:transparent;border:2px solid #ffffff;border-radius:10px;padding:14px"><div style="font-size:10px;font-weight:700;color:#ffffff;text-transform:uppercase;margin-bottom:8px">TOTAL</div><div style="font-size:15px;font-weight:800;color:#e6edf3">'+tot_eq+' equipo(s)</div><div style="font-size:16px;font-weight:800;color:#ffffff;font-family:monospace">'+fmt(tot_lnd)+'</div></div>';
       var sR='';
       if(cdf_eq>0) sR+='<tr style="background:#161b22">'
         +'<td style="padding:9px 14px;border:1px solid #30363d;font-weight:700;color:#e6edf3">&#127970; CDF</td>'
@@ -32028,6 +32053,38 @@ window._plnEditarCubInfo = function(key){
     return h;
   }
 
+  // Zona Libre viaja siempre por camión/SABABA (nunca contenedor): en ese caso
+  // las fechas relevantes son Sababa-Recibe(ZL) → Sababa-Despacha → Bodega-Recibe,
+  // en vez de ETD(Zarpe)/ETA(Puerto) que solo aplican a marítimo/aéreo.
+  function buildTiemposHTML(tipoV){
+    var info=getTipoInfo(tipoV||curTipo);
+    var esCamion=info.via==='land';
+    if(esCamion){
+      return '<div style="background:rgba(240,136,62,.06);border:1px solid rgba(240,136,62,.2);border-radius:10px;padding:10px 12px">'
+        +'<div style="font-size:9px;font-weight:700;color:var(--orange-l);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">⏱️ Tiempos en Tránsito · Zona Libre</div>'
+        +'<div style="margin-bottom:8px"><label style="font-size:9px;color:var(--muted);font-weight:700;display:block;margin-bottom:3px">📥 Fecha que Sababa recibió la mercancía (Zona Libre)</label>'
+          +'<input id="ce-sab-recibio" type="date" value="'+(cub.fechaSabRecibio||'')+'" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 9px;color:var(--text);font-size:12px;box-sizing:border-box"></div>'
+        +'<div style="margin-bottom:8px"><label style="font-size:9px;color:var(--muted);font-weight:700;display:block;margin-bottom:3px">🚚 Fecha que Sababa despachó la mercancía</label>'
+          +'<input id="ce-fecha-despacho" type="date" value="'+(cub.fechaDespacho||'')+'" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 9px;color:var(--text);font-size:12px;box-sizing:border-box"></div>'
+        +'<div><label style="font-size:9px;color:var(--muted);font-weight:700;display:block;margin-bottom:3px">🏭 Fecha de Recepción (Bodega)</label>'
+          +'<input id="ce-eta-recep" type="date" value="'+(cub.eta||'')+'" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 9px;color:var(--text);font-size:12px;box-sizing:border-box;margin-bottom:8px"></div>'
+        +'<div id="ce-tiempos-preview" style="display:none;font-size:11px;font-weight:700;color:var(--blue-l)"></div>'
+      +'</div>';
+    }
+    return '<div style="background:rgba(240,136,62,.06);border:1px solid rgba(240,136,62,.2);border-radius:10px;padding:10px 12px">'
+      +'<div style="font-size:9px;font-weight:700;color:var(--orange-l);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">⏱️ Tiempos en Tránsito</div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">'
+        +'<div><label style="font-size:9px;color:var(--muted);font-weight:700;display:block;margin-bottom:3px">🚢 ETD (Zarpe)</label>'
+          +'<input id="ce-etd" type="date" value="'+(cub.etd||'')+'" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 9px;color:var(--text);font-size:12px;box-sizing:border-box"></div>'
+        +'<div><label style="font-size:9px;color:var(--muted);font-weight:700;display:block;margin-bottom:3px">⚓ ETA (Puerto)</label>'
+          +'<input id="ce-eta-puerto" type="date" value="'+(cub.etaPuerto||'')+'" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 9px;color:var(--text);font-size:12px;box-sizing:border-box"></div>'
+      +'</div>'
+      +'<div><label style="font-size:9px;color:var(--muted);font-weight:700;display:block;margin-bottom:3px">🏭 Fecha de Recepción (Bodega)</label>'
+        +'<input id="ce-eta-recep" type="date" value="'+(cub.eta||'')+'" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 9px;color:var(--text);font-size:12px;box-sizing:border-box;margin-bottom:8px"></div>'
+      +'<div id="ce-tiempos-preview" style="display:none;font-size:11px;font-weight:700;color:var(--blue-l)"></div>'
+    +'</div>';
+  }
+
   ov.innerHTML='<div style="background:var(--s1);border:1px solid var(--border);border-radius:14px;width:100%;max-width:420px;overflow:hidden">'
     +'<div style="padding:12px 16px;background:var(--s2);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">'
       +'<span style="font-size:13px;font-weight:800;color:var(--text)">\u270f\ufe0f Editar Equipo</span>'
@@ -32051,18 +32108,7 @@ window._plnEditarCubInfo = function(key){
         +'<option value="CDF"'+(curLugar==='CDF'?' selected':'')+'>CDF</option>'
         +'<option value="Westland"'+(curLugar==='Westland'?' selected':'')+'>Westland</option>'
         +'</select></div>'
-      +'<div style="background:rgba(240,136,62,.06);border:1px solid rgba(240,136,62,.2);border-radius:10px;padding:10px 12px">'
-        +'<div style="font-size:9px;font-weight:700;color:var(--orange-l);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">⏱️ Tiempos en Tránsito</div>'
-        +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">'
-          +'<div><label style="font-size:9px;color:var(--muted);font-weight:700;display:block;margin-bottom:3px">🚢 ETD (Zarpe)</label>'
-            +'<input id="ce-etd" type="date" value="'+(cub.etd||'')+'" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 9px;color:var(--text);font-size:12px;box-sizing:border-box"></div>'
-          +'<div><label style="font-size:9px;color:var(--muted);font-weight:700;display:block;margin-bottom:3px">⚓ ETA (Puerto)</label>'
-            +'<input id="ce-eta-puerto" type="date" value="'+(cub.etaPuerto||'')+'" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 9px;color:var(--text);font-size:12px;box-sizing:border-box"></div>'
-        +'</div>'
-        +'<div><label style="font-size:9px;color:var(--muted);font-weight:700;display:block;margin-bottom:3px">🏭 Fecha de Recepción (Bodega)</label>'
-          +'<input id="ce-eta-recep" type="date" value="'+(cub.eta||'')+'" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 9px;color:var(--text);font-size:12px;box-sizing:border-box;margin-bottom:8px"></div>'
-        +'<div id="ce-tiempos-preview" style="display:none;font-size:11px;font-weight:700;color:var(--blue-l)"></div>'
-      +'</div>'
+      +'<div id="ce-tiempos-wrap">'+buildTiemposHTML(curTipo)+'</div>'
       +'<button id="ce-save" style="background:rgba(63,185,80,.15);border:1px solid rgba(63,185,80,.4);color:var(--green-l);border-radius:9px;padding:10px;font-size:13px;font-weight:700;cursor:pointer;width:100%">\u2713 Guardar</button>'
     +'</div>'
   +'</div>';
@@ -32070,30 +32116,46 @@ window._plnEditarCubInfo = function(key){
   ov.addEventListener('click',function(e){ if(e.target===ov) ov.remove(); });
   document.getElementById('_ceClose').addEventListener('click',function(){ ov.remove(); });
 
-  // Vista previa en vivo de días de tránsito / liberación
+  // Vista previa en vivo de días — cambia según sea camión/ZL (Sababa Recibe→Despacha→Bodega)
+  // o contenedor/marítimo (ETD→ETA Puerto→Bodega).
   function _ceUpdateTiempos(){
-    var etd=(document.getElementById('ce-etd')||{}).value||'';
-    var etaP=(document.getElementById('ce-eta-puerto')||{}).value||'';
-    var etaR=(document.getElementById('ce-eta-recep')||{}).value||'';
     var box=document.getElementById('ce-tiempos-preview'); if(!box) return;
-    var dT=_plnDiasEntre(etd,etaP), dL=_plnDiasEntre(etaP,etaR);
+    var esCamionNow=getTipoInfo(document.getElementById('ce-tipo').value).via==='land';
     var parts=[];
-    if(dT!==null) parts.push('🚢 Tránsito: <strong>'+_plnFmtDias(dT)+'</strong>');
-    if(dL!==null) parts.push('⚓→🏭 Liberación: <strong>'+_plnFmtDias(dL)+'</strong>');
+    if(esCamionNow){
+      var sabR=(document.getElementById('ce-sab-recibio')||{}).value||'';
+      var sabD=(document.getElementById('ce-fecha-despacho')||{}).value||'';
+      var etaR=(document.getElementById('ce-eta-recep')||{}).value||'';
+      var dT=_plnDiasEntre(sabR,sabD), dL=_plnDiasEntre(sabD,etaR);
+      if(dT!==null) parts.push('📥 Sababa (Recibo→Despacho): <strong>'+_plnFmtDias(dT)+'</strong>');
+      if(dL!==null) parts.push('🚚→🏭 Despacho→Bodega: <strong>'+_plnFmtDias(dL)+'</strong>');
+    } else {
+      var etd=(document.getElementById('ce-etd')||{}).value||'';
+      var etaP=(document.getElementById('ce-eta-puerto')||{}).value||'';
+      var etaR2=(document.getElementById('ce-eta-recep')||{}).value||'';
+      var dT2=_plnDiasEntre(etd,etaP), dL2=_plnDiasEntre(etaP,etaR2);
+      if(dT2!==null) parts.push('🚢 Tránsito: <strong>'+_plnFmtDias(dT2)+'</strong>');
+      if(dL2!==null) parts.push('⚓→🏭 Liberación: <strong>'+_plnFmtDias(dL2)+'</strong>');
+    }
     if(parts.length){ box.style.display='block'; box.innerHTML=parts.join(' &nbsp;·&nbsp; '); } else { box.style.display='none'; box.innerHTML=''; }
   }
-  ['ce-etd','ce-eta-puerto','ce-eta-recep'].forEach(function(id){
-    var el=document.getElementById(id); if(el) el.addEventListener('input',_ceUpdateTiempos);
-  });
+  function _ceBindTiemposInputs(){
+    ['ce-etd','ce-eta-puerto','ce-eta-recep','ce-sab-recibio','ce-fecha-despacho'].forEach(function(id){
+      var el=document.getElementById(id); if(el) el.addEventListener('input',_ceUpdateTiempos);
+    });
+  }
+  _ceBindTiemposInputs();
   _ceUpdateTiempos();
 
-  // Actualizar campo num al cambiar tipo
+  // Actualizar campo num y bloque de Tiempos en Tránsito al cambiar tipo
   document.getElementById('ce-tipo').addEventListener('change',function(){
     var info=getTipoInfo(this.value);
     var row=document.getElementById('ce-num-row');
     var lbl=document.getElementById('ce-num-lbl');
     if(row) row.style.display=info.hasNum?'':'none';
     if(lbl&&info.lbl) lbl.textContent=info.lbl;
+    var tw=document.getElementById('ce-tiempos-wrap');
+    if(tw){ tw.innerHTML=buildTiemposHTML(this.value); _ceBindTiemposInputs(); _ceUpdateTiempos(); }
   });
 
   // Actualizar campos dinámicos al cambiar cantidad de equipos
@@ -32138,9 +32200,16 @@ window._plnEditarCubInfo = function(key){
       c.origen=c.origenes[0]||'';
     }
     c.lugarRecep=(document.getElementById('ce-lugar').value||'').trim();
-    c.etd=(document.getElementById('ce-etd')||{}).value||'';
-    c.etaPuerto=(document.getElementById('ce-eta-puerto')||{}).value||'';
-    c.eta=(document.getElementById('ce-eta-recep')||{}).value||'';
+    var info3pre=getTipoInfo(tipoVal);
+    if(info3pre.via==='land'){
+      c.fechaSabRecibio=(document.getElementById('ce-sab-recibio')||{}).value||'';
+      c.fechaDespacho=(document.getElementById('ce-fecha-despacho')||{}).value||'';
+      c.eta=(document.getElementById('ce-eta-recep')||{}).value||'';
+    } else {
+      c.etd=(document.getElementById('ce-etd')||{}).value||'';
+      c.etaPuerto=(document.getElementById('ce-eta-puerto')||{}).value||'';
+      c.eta=(document.getElementById('ce-eta-recep')||{}).value||'';
+    }
     var info3=getTipoInfo(tipoVal);
     if(info3.via) c.via=info3.via;
     _PLN_SAVE(); _PLN_RENDER(); ov.remove();
