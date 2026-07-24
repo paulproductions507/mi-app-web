@@ -1395,6 +1395,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       <div style="display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border)">
         <span style="font-size:16px">📋</span>
         <span style="font-size:14px;font-weight:800;color:var(--text);flex:1">Información del Embarque</span>
+        <button onclick="_imprimirInfoEmbarque()" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;margin-right:6px">🖨️ Imprimir / PDF</button>
         <button onclick="_cerrarModalEmbarque()" style="background:rgba(218,54,51,.1);border:1px solid rgba(218,54,51,.25);color:var(--red-l);border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer">✕ Cerrar</button>
       </div>
       <!-- Body -->
@@ -1426,17 +1427,21 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
             </div>
           </div>
           <div class="field" style="margin-bottom:0"><label style="font-size:10px">País de Origen</label>
-            <input id="s1_pais_emb" list="_pais_list" placeholder="País…" oninput="_actualizarCiudades(this.value);_sincronizarOrigenEmb()" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px">
-            <datalist id="_pais_list">
-              <option value="Alemania">🇩🇪 Alemania</option><option value="Bangladesh">🇧🇩 Bangladesh</option><option value="Brasil">🇧🇷 Brasil</option><option value="Canada">🇨🇦 Canadá</option><option value="China">🇨🇳 China</option><option value="Colombia">🇨🇴 Colombia</option><option value="Costa Rica">🇨🇷 Costa Rica</option><option value="Espana">🇪🇸 España</option><option value="Guatemala">🇬🇹 Guatemala</option><option value="Honduras">🇭🇳 Honduras</option><option value="Hong Kong">🇭🇰 Hong Kong</option><option value="India">🇮🇳 India</option><option value="Indonesia">🇮🇩 Indonesia</option><option value="Italia">🇮🇹 Italia</option><option value="Japan">🇯🇵 Japón</option><option value="Korea">🇰🇷 Corea del Sur</option><option value="Malasia">🇲🇾 Malasia</option><option value="Mexico">🇲🇽 México</option><option value="Nicaragua">🇳🇮 Nicaragua</option><option value="El Salvador">🇸🇻 El Salvador</option><option value="Pakistan">🇵🇰 Pakistán</option><option value="Panamá">🇵🇦 Panamá</option><option value="Portugal">🇵🇹 Portugal</option><option value="Puerto Rico">🇵🇷 Puerto Rico</option><option value="Tailandia">🇹🇭 Tailandia</option><option value="Taiwan">🇹🇼 Taiwán</option><option value="Turkey">🇹🇷 Turquía</option><option value="USA">🇺🇸 Estados Unidos</option><option value="Vietnam">🇻🇳 Vietnam</option><option value="Otro">🌐 Otro</option>
-            </datalist>
+            <select id="s1_pais_emb" onchange="_actualizarCiudades(this.value);_sincronizarOrigenEmb();_toggleOtroPaisEmb()" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px">
+              <option value="">País…</option>
+              <option value="Alemania">🇩🇪 Alemania</option><option value="Bangladesh">🇧🇩 Bangladesh</option><option value="Brasil">🇧🇷 Brasil</option><option value="Canada">🇨🇦 Canadá</option><option value="China">🇨🇳 China</option><option value="Colombia">🇨🇴 Colombia</option><option value="Costa Rica">🇨🇷 Costa Rica</option><option value="Espana">🇪🇸 España</option><option value="Guatemala">🇬🇹 Guatemala</option><option value="Honduras">🇭🇳 Honduras</option><option value="Hong Kong">🇭🇰 Hong Kong</option><option value="India">🇮🇳 India</option><option value="Indonesia">🇮🇩 Indonesia</option><option value="Italia">🇮🇹 Italia</option><option value="Japan">🇯🇵 Japón</option><option value="Korea">🇰🇷 Corea del Sur</option><option value="Malasia">🇲🇾 Malasia</option><option value="Mexico">🇲🇽 México</option><option value="Nicaragua">🇳🇮 Nicaragua</option><option value="El Salvador">🇸🇻 El Salvador</option><option value="Pakistan">🇵🇰 Pakistán</option><option value="Panamá">🇵🇦 Panamá</option><option value="Portugal">🇵🇹 Portugal</option><option value="Puerto Rico">🇵🇷 Puerto Rico</option><option value="Tailandia">🇹🇭 Tailandia</option><option value="Taiwan">🇹🇼 Taiwán</option><option value="Turkey">🇹🇷 Turquía</option><option value="USA">🇺🇸 Estados Unidos</option><option value="Vietnam">🇻🇳 Vietnam</option>
+              <option value="__otro__">🌐 Otro (escribir)…</option>
+            </select>
+            <input id="s1_pais_emb_otro" type="text" placeholder="Escribe el país" oninput="_onOtroPaisEmbInput()" style="display:none;margin-top:6px;width:100%;box-sizing:border-box;background:var(--bg);border:1px solid rgba(167,113,247,.4);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px">
           </div>
         </div>
         <!-- Row 4 -->
         <div class="r2" style="margin-bottom:10px">
           <div class="field" style="margin-bottom:0"><label style="font-size:10px">Ciudad / Puerto Origen</label>
-            <input id="s1_ciudad_emb" list="_ciudad_list" placeholder="Ciudad…" oninput="_sincronizarOrigenEmb()" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;width:100%">
-            <datalist id="_ciudad_list"></datalist>
+            <select id="s1_ciudad_emb" onchange="_sincronizarOrigenEmb();_toggleOtroCiudadEmb()" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;width:100%">
+              <option value="">— Selecciona país primero —</option>
+            </select>
+            <input id="s1_ciudad_emb_otro" type="text" placeholder="Escribe la ciudad/puerto" oninput="_onOtroCiudadEmbInput()" style="display:none;margin-top:6px;width:100%;box-sizing:border-box;background:var(--bg);border:1px solid rgba(167,113,247,.4);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px">
           </div>
           <div class="field" style="margin-bottom:0"><label style="font-size:10px">Tipo de Embarque</label>
             <select id="s1_tipo_emb" onchange="_toggleContenedorField(this.value)" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px;width:100%">
@@ -15611,6 +15616,8 @@ function _clearFormSilent(){
   // Reset selectores de origen país/ciudad
   const paisEl=document.getElementById('s1_pais_emb');
   if(paisEl){ paisEl.value=''; if(typeof _actualizarCiudades==='function') _actualizarCiudades(''); }
+  const paisOtroEl=document.getElementById('s1_pais_emb_otro'); if(paisOtroEl){ paisOtroEl.value=''; paisOtroEl.style.display='none'; }
+  const ciudadOtroEl=document.getElementById('s1_ciudad_emb_otro'); if(ciudadOtroEl){ ciudadOtroEl.value=''; ciudadOtroEl.style.display='none'; }
   const ciudadEl=document.getElementById('s1_ciudad_emb');
   if(ciudadEl){ ciudadEl.innerHTML='<option value="">— Selecciona país primero —</option>'; }
   ['s1_ar','s1_itbms','s1_reng','s1_gzlc','s1_tasa','s2_form','s1_equipos','s1_uso_sistema'].forEach(id=>{
@@ -19448,6 +19455,29 @@ function _editarNumFactHistorial(embarqueIdx, lineKey, currentNfac){
 function _kpiAhorroClose(btn){ var ov=btn; while(ov&&ov.style&&ov.style.position!=='fixed')ov=ov.parentElement; if(ov)ov.remove(); }
 
 // ── KPI Ahorro desglose popup — tabla por corredor ──
+// ── Imprimir/Guardar como PDF el contenido de un popup/modal de Tendencias.
+//    Antes esta función NO existía en la app en vivo — solo dentro de la
+//    plantilla de texto del reporte exportado — por eso el botón "🖨️ PDF"
+//    de Ahorro Total (y cualquier otro popup que lo use) no hacía nada. ──
+window._printModal = function(id){
+  var ov = document.getElementById(id);
+  if(!ov){ if(typeof _showToast==='function') _showToast('No se encontró el contenido para imprimir.','red',3000); return; }
+  var inner = ov.querySelector('div') || ov;
+  var isLight = document.body.classList.contains('theme-light')
+    || (document.body.getAttribute('style')||'').indexOf('color-scheme: light')>=0;
+  var bg = isLight ? '#ffffff' : '#0d1117';
+  var txt = isLight ? '#111827' : '#e6edf3';
+  var w = window.open('', '_blank', 'width=960,height=720');
+  if(!w){ alert('El navegador bloqueó la ventana de impresión. Habilita ventanas emergentes e intenta de nuevo.'); return; }
+  var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Detalle</title>'
+    +'<style>*{box-sizing:border-box;margin:0;padding:0}body{background:'+bg+';color:'+txt+';font-family:Arial,sans-serif;font-size:13px;padding:20px}table{border-collapse:collapse}button{display:none!important}</style>'
+    +'</head><body>'+inner.innerHTML+'</body></html>';
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+  setTimeout(function(){ w.print(); }, 600);
+};
+
 function _kpiMostrarAhorro(){
   var all = _getFilteredTendData();
   if(!all.length){ _showToast&&_showToast('Sin embarques registrados','orange',2000); return; }
@@ -25421,6 +25451,72 @@ function _toggleFechasEmbarque(){
   if(rowDespacho) rowDespacho.style.display = mostrarDespacho ? '' : 'none';
 }
 
+// ── Imprimir / PDF de la Información del Embarque tal como quedó llenada.
+//    Usa el diálogo de impresión del navegador (Guardar como PDF) sobre
+//    una vista simple con todos los campos del formulario, en vez de
+//    intentar imprimir el modal con sus estilos de la app. ──
+function _imprimirInfoEmbarque(){
+  function v(id){ var el=document.getElementById(id); return el ? el.value : ''; }
+  function selTxt(id){
+    var el=document.getElementById(id);
+    if(!el) return '';
+    if(el.tagName==='SELECT' && el.selectedOptions && el.selectedOptions[0]) return el.selectedOptions[0].textContent;
+    return el.value||'';
+  }
+  var esZL = (typeof tipo !== 'undefined' ? tipo : '') === 'ZL';
+  var esTerrestre = (function(){ var val=v('s1_tipo_emb'); return val==='Furgón'||val==='Camión'||val==='Consolidado Terrestre'; })();
+  var termEl = document.querySelector('#termSeg .seg-btn.on');
+  var pais = selTxt('s1_pais_emb');
+  var paisOtro = v('s1_pais_emb_otro');
+  if(document.getElementById('s1_pais_emb')?.value==='__otro__' && paisOtro) pais = paisOtro;
+  var ciudad = selTxt('s1_ciudad_emb');
+  var ciudadOtro = v('s1_ciudad_emb_otro');
+  if(document.getElementById('s1_ciudad_emb')?.value==='__otro__' && ciudadOtro) ciudad = ciudadOtro;
+  var filas = [
+    ['N° Embarque', v('s1_nro_emb')],
+    ['ID / Factura Fiscal', v('s1_id_fiscal')],
+    ['Término', termEl ? termEl.textContent.trim() : ''],
+    ['Tipo de Mercancía', v('s1_desc_emb')],
+    ['Tipo de Proveedor', esZL ? 'Zona Libre' : 'Importación'],
+    ['País de Origen', pais],
+    ['Ciudad / Puerto Origen', ciudad],
+    ['Tipo de Embarque', selTxt('s1_tipo_emb')],
+    ['N° Contenedor / Placa', v('s1_nro_cont')],
+    ['Cartones / Bultos', v('s1_cartones')]
+  ];
+  if(esZL && esTerrestre){
+    filas.push(['Fecha de Despacho', v('s1_fecha_despacho')]);
+  } else {
+    filas.push(['ETD (Zarpe)', v('s1_etd')]);
+    filas.push(['ETA (Puerto)', v('s1_eta_puerto')]);
+  }
+  filas.push(['Lugar de Recepción', selTxt('s1_lugar_recep')]);
+  filas.push(['Notas', v('s1_notas')]);
+  filas.push(['Estatus', (document.getElementById('s1_estatus_txt')||{}).textContent || '']);
+
+  var filasHtml = filas.map(function(f){
+    return '<tr><td style="padding:8px 12px;border:1px solid #ccc;font-weight:700;background:#f2f2f2;width:220px">'+f[0]+'</td>'
+      +'<td style="padding:8px 12px;border:1px solid #ccc">'+(f[1]||'—')+'</td></tr>';
+  }).join('');
+
+  var win = window.open('', '_blank', 'width=800,height=900');
+  if(!win){ alert('El navegador bloqueó la ventana de impresión. Habilita ventanas emergentes e intenta de nuevo.'); return; }
+  win.document.write(
+    '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Información del Embarque</title>'
+    +'<style>body{font-family:Arial,Helvetica,sans-serif;padding:24px;color:#111}h1{font-size:18px;margin-bottom:2px}'
+    +'.sub{color:#666;font-size:12px;margin-bottom:18px}table{border-collapse:collapse;width:100%}'
+    +'@media print{button{display:none}}</style></head><body>'
+    +'<h1>📋 Información del Embarque</h1>'
+    +'<div class="sub">Generado '+new Date().toLocaleString('es-PA')+' — Gestión Integral de Compras y Costeo, ZLC Panamá</div>'
+    +'<table>'+filasHtml+'</table>'
+    +'<button onclick="window.print()" style="margin-top:20px;padding:10px 18px;font-size:13px;cursor:pointer">🖨️ Imprimir / Guardar como PDF</button>'
+    +'</body></html>'
+  );
+  win.document.close();
+  win.focus();
+  setTimeout(function(){ win.print(); }, 300);
+}
+
 // ═══════════════════════════════════════════════════════
 // ESCENARIO ÚNICO — cálculo completo en tiempo real
 // + persistencia automática en localStorage
@@ -26773,11 +26869,12 @@ async function cargarSesionNubeIdx(idx){
 
   // ── 4. Restaurar origen país/ciudad si vienen separados ──
   if(s.campos?.s1_pais_emb) {
-    const paisEl = document.getElementById('s1_pais_emb');
-    if(paisEl) { paisEl.value = s.campos.s1_pais_emb; _actualizarCiudades(paisEl.value); }
+    _selSetOrCustom('s1_pais_emb', s.campos.s1_pais_emb);
+    _actualizarCiudades(document.getElementById('s1_pais_emb').value);
+    _toggleOtroPaisEmb();
   }
   if(s.campos?.s1_ciudad_emb) {
-    setTimeout(()=>{ const el=document.getElementById('s1_ciudad_emb'); if(el) el.value=s.campos.s1_ciudad_emb; }, 50);
+    setTimeout(()=>{ _selSetOrCustom('s1_ciudad_emb', s.campos.s1_ciudad_emb); _toggleOtroCiudadEmb(); }, 50);
   }
 
   // ── 5. Restaurar snap y líneas de factura ──
@@ -27034,17 +27131,67 @@ window._CIUDADES_POR_PAIS = {
 };
 
 function _actualizarCiudades(pais){
-  const dl = document.getElementById('_ciudad_list');
-  if(!dl) return;
+  const sel = document.getElementById('s1_ciudad_emb');
+  if(!sel) return;
   const ciudades = _CIUDADES_POR_PAIS[pais] || [];
-  dl.innerHTML = ciudades.map(c=>'<option value="'+c+'">').join('');
-  // Clear ciudad field when country changes
-  const ciudadEl = document.getElementById('s1_ciudad_emb');
-  if(ciudadEl && ciudadEl.getAttribute('data-pais') !== pais){
-    ciudadEl.value = '';
-    ciudadEl.setAttribute('data-pais', pais);
-    ciudadEl.placeholder = ciudades.length ? 'Escribe o selecciona ciudad/puerto…' : 'Escribe ciudad o puerto…';
+  const prevVal = sel.value;
+  sel.innerHTML = (ciudades.length ? ciudades.map(c=>'<option value="'+c+'">'+c+'</option>').join('') : '<option value="">— Selecciona país primero —</option>')
+    + '<option value="__otro__">✏️ Otra (escribir)…</option>';
+  // Si la ciudad anterior sigue siendo válida para el país elegido, se conserva
+  if(prevVal && ciudades.indexOf(prevVal)!==-1) sel.value = prevVal;
+  else sel.value = ciudades.length ? '' : '';
+  const otro = document.getElementById('s1_ciudad_emb_otro');
+  if(otro){ otro.style.display='none'; otro.value=''; }
+}
+
+// ── Setter seguro para los <select> de País/Ciudad: si el valor guardado
+//    no coincide con ninguna opción de la lista (dato histórico libre),
+//    se crea una opción a medida en vez de perder el dato silenciosamente. ──
+function _selSetOrCustom(selId, val){
+  const sel = document.getElementById(selId);
+  if(!sel) return;
+  if(!val){ sel.value=''; return; }
+  sel.value = val;
+  if(sel.value !== val){
+    let opt = sel.querySelector('option[data-custom="1"]');
+    if(!opt){ opt = document.createElement('option'); opt.setAttribute('data-custom','1'); sel.appendChild(opt); }
+    opt.value = val; opt.textContent = val;
+    sel.value = val;
   }
+}
+
+function _toggleOtroPaisEmb(){
+  const sel = document.getElementById('s1_pais_emb'), otro = document.getElementById('s1_pais_emb_otro');
+  if(!sel || !otro) return;
+  otro.style.display = sel.value==='__otro__' ? 'block' : 'none';
+  if(sel.value==='__otro__') otro.focus();
+}
+function _onOtroPaisEmbInput(){
+  const sel = document.getElementById('s1_pais_emb'), otro = document.getElementById('s1_pais_emb_otro');
+  if(!sel || !otro) return;
+  const val = otro.value.trim();
+  let opt = sel.querySelector('option[data-custom="1"]');
+  if(!opt){ opt = document.createElement('option'); opt.setAttribute('data-custom','1'); sel.insertBefore(opt, sel.querySelector('option[value="__otro__"]')); }
+  opt.value = val; opt.textContent = val;
+  sel.value = val;
+  _actualizarCiudades(val);
+  _sincronizarOrigenEmb();
+}
+function _toggleOtroCiudadEmb(){
+  const sel = document.getElementById('s1_ciudad_emb'), otro = document.getElementById('s1_ciudad_emb_otro');
+  if(!sel || !otro) return;
+  otro.style.display = sel.value==='__otro__' ? 'block' : 'none';
+  if(sel.value==='__otro__') otro.focus();
+}
+function _onOtroCiudadEmbInput(){
+  const sel = document.getElementById('s1_ciudad_emb'), otro = document.getElementById('s1_ciudad_emb_otro');
+  if(!sel || !otro) return;
+  const val = otro.value.trim();
+  let opt = sel.querySelector('option[data-custom="1"]');
+  if(!opt){ opt = document.createElement('option'); opt.setAttribute('data-custom','1'); sel.insertBefore(opt, sel.querySelector('option[value="__otro__"]')); }
+  opt.value = val; opt.textContent = val;
+  sel.value = val;
+  _sincronizarOrigenEmb();
 }
 
 function _autoSumBultos(){
@@ -27400,13 +27547,9 @@ function _restaurarOrigenEmb(valor){
   const partes = valor.split(' · ');
   const pais   = partes[0] || '';
   const ciudad = partes[1] || '';
-  const paisEl = document.getElementById('s1_pais_emb');
-  if(paisEl){ paisEl.value = pais; _actualizarCiudades(pais); }
+  if(pais){ _selSetOrCustom('s1_pais_emb', pais); _actualizarCiudades(document.getElementById('s1_pais_emb').value); _toggleOtroPaisEmb(); }
   if(ciudad){
-    setTimeout(()=>{
-      const ciudadEl = document.getElementById('s1_ciudad_emb');
-      if(ciudadEl) ciudadEl.value = ciudad;
-    }, 30);
+    setTimeout(()=>{ _selSetOrCustom('s1_ciudad_emb', ciudad); _toggleOtroCiudadEmb(); }, 30);
   }
 }
 
