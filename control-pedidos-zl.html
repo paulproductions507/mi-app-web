@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Compras Zona Libre · Grupo Primavera Holding</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#0a1513;
+    --surface:#11201d;
+    --surface-2:#152823;
+    --surface-3:#1a322c;
+    --border:#1d3531;
+    --border-soft:#16282480;
+    --text:#eaf3f0;
+    --text-muted:#7fa39a;
+    --text-dim:#557a72;
+    --teal:#1f8f7f;
+    --teal-2:#145f55;
+    --gold:#d4a24c;
+    --navy:#3a5b8c;
+    --navy-2:#26406b;
+    --red:#c25450;
+    --red-glow:rgba(194,84,80,0.14);
+    --grad: linear-gradient(135deg,#1a7a6e,#145f55);
+    --glow-1: rgba(31,143,127,0.14);
+    --glow-2: rgba(212,162,76,0.07);
+    --radius:16px;
+    --mono: 'JetBrains Mono', ui-monospace, monospace;
+    --sans: 'Inter', system-ui, -apple-system, sans-serif;
+    --shadow: 0 1px 2px rgba(0,0,0,0.2), 0 8px 24px -8px rgba(0,0,0,0.35);
+  }
+  body.light{
+    --bg:#f5f2ea;
+    --surface:#ffffff;
+    --surface-2:#f1ece0;
+    --surface-3:#e9e1d0;
+    --border:#ddd3bd;
+    --border-soft:#e9e1d180;
+    --text:#1c2624;
+    --text-muted:#5c6d66;
+    --text-dim:#8a958f;
+    --teal:#0f7a6c;
+    --teal-2:#0c5f53;
+    --gold:#a9762a;
+    --navy:#2e4f7c;
+    --navy-2:#1f3a5e;
+    --red:#a83f3c;
+    --red-glow:rgba(168,63,60,0.09);
+    --grad: linear-gradient(135deg,#127a6c,#0c5f53);
+    --glow-1: rgba(15,122,108,0.08);
+    --glow-2: rgba(169,118,42,0.06);
+    --shadow: 0 1px 2px rgba(20,30,28,0.06), 0 8px 24px -8px rgba(20,30,28,0.12);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(circle at 12% -4%, var(--glow-1), transparent 42%),
+      radial-gradient(circle at 100% 14%, var(--glow-2), transparent 38%),
+      var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+    padding-bottom:60px;
+  }
+  body, body *{ transition: background-color .2s ease, border-color .2s ease, color .2s ease; }
+  .wrap{max-width:1080px;margin:0 auto;padding:24px 16px 0;}
+
+  .header-actions{position:absolute;top:0;right:0;display:flex;gap:8px;}
+  .icon-btn{
+    background:var(--surface); border:1px solid var(--border);
+    color:var(--text-muted); font-family:var(--mono); font-size:10.5px;
+    letter-spacing:.04em; padding:7px 12px; border-radius:20px;
+    cursor:pointer; display:flex; align-items:center; gap:6px;
+  }
+  .icon-btn:hover{ color:var(--teal); border-color:var(--teal); }
+
+  header{padding:6px 0 22px;position:relative;}
+  .eyebrow{
+    font-family:var(--mono); font-size:10.5px; letter-spacing:.13em; text-transform:uppercase;
+    color:var(--teal); display:flex;align-items:center;gap:9px; margin-bottom:12px;
+  }
+  .eyebrow::before{
+    content:''; width:6px;height:6px;border-radius:50%;
+    background:var(--grad); box-shadow:0 0 0 3px var(--glow-1); flex-shrink:0;
+  }
+  h1{font-size:clamp(22px,4vw,30px);font-weight:800;margin:0 0 7px;letter-spacing:-0.01em;max-width:80%;}
+  .subtitle{color:var(--text-muted);font-size:13.5px;max-width:600px;}
+  .subtitle b{color:var(--text);font-weight:600;}
+
+  /* ---------- KPI strip ---------- */
+  .kpi-grid{
+    display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:22px;
+  }
+  .kpi{
+    background:var(--surface);border:1px solid var(--border);border-radius:13px;
+    padding:13px 13px 12px;position:relative;overflow:hidden;box-shadow:var(--shadow);
+  }
+  .kpi-bar{position:absolute;top:0;left:0;right:0;height:3px;}
+  .kpi-icon{font-size:16px;line-height:1;margin-bottom:7px;}
+  .kpi-label{font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-dim);margin-bottom:6px;}
+  .kpi-value{font-family:var(--mono);font-size:21px;font-weight:700;color:var(--text);}
+  .kpi-value span{font-size:12px;color:var(--text-muted);font-weight:500;}
+  .kpi-foot{font-size:10.5px;color:var(--text-dim);margin-top:3px;}
+
+  @media(max-width:640px){
+    .kpi-grid{grid-template-columns:repeat(2,1fr);}
+    .kpi:nth-child(5){grid-column:span 2;}
+    .comm-grid{grid-template-columns:1fr;}
+  }
+
+  /* ---------- toolbar ---------- */
+  .toolbar{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center;}
+  .search-wrap{position:relative;flex:1;min-width:180px;}
+  .search-input{
+    width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);
+    font-family:var(--sans);font-size:13.5px;padding:11px 14px;border-radius:12px;
+    box-shadow:var(--shadow);
+  }
+  .search-input::placeholder{color:var(--text-dim);}
+  .search-input:focus{outline:none;border-color:var(--teal);}
+  .btn-primary{
+    background:var(--grad);color:#fff;border:none;font-family:var(--sans);font-weight:600;
+    font-size:13px;padding:11px 16px;border-radius:12px;cursor:pointer;white-space:nowrap;
+    box-shadow:var(--shadow);
+  }
+  .btn-primary:hover{opacity:.92;}
+  .filter-pills{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;}
+  .pill-btn{
+    background:var(--surface-2);border:1px solid var(--border);color:var(--text-muted);
+    font-family:var(--mono);font-size:10.5px;letter-spacing:.03em;padding:6px 12px;border-radius:20px;cursor:pointer;
+  }
+  .pill-btn.active{background:var(--grad);color:#fff;border-color:transparent;}
+
+  /* ---------- table ---------- */
+  .table-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;}
+  .ped-row{
+    display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;
+    padding:13px 14px;border-bottom:1px solid var(--border-soft);cursor:pointer;
+  }
+  .ped-row:last-child{border-bottom:none;}
+  .ped-row:hover{background:var(--glow-1);}
+  .ped-main{min-width:0;}
+  .ped-title{font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .ped-sub{font-family:var(--mono);font-size:10.5px;color:var(--text-dim);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .badge{
+    font-family:var(--mono);font-size:9.5px;letter-spacing:.04em;text-transform:uppercase;
+    padding:4px 9px;border-radius:20px;white-space:nowrap;font-weight:600;
+  }
+  .badge-pend{background:var(--glow-2);color:var(--gold);}
+  .badge-progress{background:var(--glow-1);color:var(--teal);}
+  .badge-done{background:var(--glow-1);color:var(--teal);}
+  .badge-alert{background:var(--red-glow);color:var(--red);}
+  .badge-cancel{background:var(--red-glow);color:var(--red);text-decoration:line-through;}
+  .badge-future{background:var(--glow-2);color:var(--navy);border:1px solid var(--navy);}
+  .ped-days{font-family:var(--mono);font-size:13px;font-weight:700;text-align:right;color:var(--text);}
+  .ped-days.warn{color:var(--red);}
+  .ped-days small{display:block;font-size:9px;font-weight:500;color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em;}
+
+  .empty-state{font-size:12.5px;color:var(--text-dim);font-style:italic;padding:30px 16px;text-align:center;}
+
+  footer{text-align:center;color:var(--text-dim);font-size:11px;margin-top:34px;font-family:var(--mono);letter-spacing:.03em;}
+
+  /* ---------- modal ---------- */
+  .modal-overlay{
+    position:fixed;inset:0;background:rgba(5,10,9,0.6);backdrop-filter:blur(2px);
+    display:flex;align-items:flex-end;justify-content:center;z-index:100;
+  }
+  .modal-overlay.hidden{display:none;}
+  .modal-box{
+    background:var(--surface);border:1px solid var(--border);border-radius:18px 18px 0 0;
+    width:100%;max-width:640px;max-height:90vh;display:flex;flex-direction:column;
+    box-shadow:0 -10px 40px rgba(0,0,0,0.4);
+  }
+  @media(min-width:680px){
+    .modal-overlay{align-items:center;padding:20px;}
+    .modal-box{border-radius:18px;max-height:88vh;}
+  }
+  .modal-head{
+    display:flex;align-items:center;gap:10px;padding:15px 16px;border-bottom:1px solid var(--border);flex-shrink:0;
+  }
+  .modal-title{font-size:13.5px;font-weight:700;color:var(--text);flex:1;min-width:0;}
+  .modal-title small{display:block;font-weight:500;color:var(--text-dim);font-size:10.5px;margin-top:1px;font-family:var(--mono);}
+  .modal-close{
+    background:none;border:none;color:var(--text-muted);font-size:16px;cursor:pointer;
+    width:30px;height:30px;border-radius:50%;flex-shrink:0;
+  }
+  .modal-close:hover{background:var(--glow-1);color:var(--text);}
+  .modal-body{padding:16px;overflow-y:auto;}
+  .modal-foot{padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0;}
+
+  .modal-section-title{
+    font-family:var(--mono);font-size:10px;letter-spacing:.07em;text-transform:uppercase;
+    color:var(--text-dim);margin:18px 0 9px;display:flex;align-items:center;gap:8px;
+  }
+  .modal-section-title:first-child{margin-top:0;}
+
+  .field-row{margin-bottom:12px;}
+  .field-row label{display:block;font-size:11.5px;font-weight:600;color:var(--text-muted);margin-bottom:5px;}
+  .field-row input, .field-row textarea, .field-row select{
+    width:100%;background:var(--surface-2);border:1px solid var(--border);color:var(--text);
+    border-radius:9px;padding:9px 11px;font-family:var(--sans);font-size:13px;
+  }
+  .field-row input:focus, .field-row textarea:focus, .field-row select:focus{outline:none;border-color:var(--teal);}
+  .field-row textarea{resize:vertical;min-height:52px;}
+  .field-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  @media(max-width:420px){.field-grid{grid-template-columns:1fr;}}
+
+  .timeline{list-style:none;margin:0;padding:0;}
+  .tl-item{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border-soft);}
+  .tl-item:last-child{border-bottom:none;}
+  .tl-dot-wrap{display:flex;flex-direction:column;align-items:center;flex-shrink:0;padding-top:2px;}
+  .tl-dot{width:10px;height:10px;border-radius:50%;background:var(--surface-3);border:2px solid var(--border);}
+  .tl-dot.filled{background:var(--teal);border-color:var(--teal);}
+  .tl-line{width:2px;flex:1;background:var(--border);margin-top:3px;min-height:14px;}
+  .tl-body{flex:1;min-width:0;padding-bottom:2px;}
+  .tl-label{font-size:12.5px;font-weight:700;color:var(--text);}
+  .tl-date{font-family:var(--mono);font-size:11.5px;color:var(--text-muted);margin-top:1px;}
+  .tl-date.empty{color:var(--text-dim);font-style:italic;}
+  .tl-delta{font-family:var(--mono);font-size:10.5px;color:var(--teal);margin-top:2px;}
+  .tl-delta.warn{color:var(--red);font-weight:700;}
+  .tl-motivo{font-size:11.5px;color:var(--text-dim);margin-top:3px;background:var(--surface-2);border-radius:7px;padding:6px 9px;}
+
+  .toast{
+    position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+    background:var(--surface-3);border:1px solid var(--border);color:var(--text);
+    padding:10px 18px;border-radius:12px;font-size:12.5px;box-shadow:var(--shadow);z-index:200;
+    display:flex;align-items:center;gap:8px;
+  }
+  .toast.error{border-color:var(--red);color:var(--red);}
+  .toast.hidden{display:none;}
+
+  .conn-dot{width:7px;height:7px;border-radius:50%;background:var(--text-dim);flex-shrink:0;}
+  .conn-dot.ok{background:var(--teal);box-shadow:0 0 0 3px var(--glow-1);}
+  .conn-dot.err{background:var(--red);box-shadow:0 0 0 3px var(--red-glow);}
+
+  /* ---------- export toolbar ---------- */
+  .export-toolbar{display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap;}
+  .export-btn{
+    display:flex;align-items:center;gap:5px;
+    background:var(--surface-2);border:1px solid var(--border);color:var(--text-muted);
+    font-family:var(--mono);font-size:10.5px;padding:7px 11px;border-radius:8px;cursor:pointer;flex:1;justify-content:center;
+    min-width:90px;
+  }
+  .export-btn:hover{color:var(--teal);border-color:var(--teal);}
+
+  /* ---------- tipo de embarque ---------- */
+  .tipo-badge{
+    font-family:var(--mono);font-size:9px;letter-spacing:.04em;text-transform:uppercase;
+    padding:2px 7px;border-radius:6px;font-weight:700;
+  }
+  .tipo-local{background:var(--glow-1);color:var(--teal);}
+  .tipo-liquidacion{background:var(--glow-2);color:var(--gold);}
+
+  /* ---------- bloque de datos comerciales ---------- */
+  .comm-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;margin-bottom:4px;}
+  .comm-item{padding:8px 0;border-bottom:1px solid var(--border-soft);}
+  .comm-item .comm-label{font-family:var(--mono);font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--text-dim);margin-bottom:3px;}
+  .comm-item .comm-val{font-size:13px;font-weight:700;color:var(--text);}
+  .comm-item .comm-val.muted{color:var(--text-dim);font-weight:500;font-style:italic;font-size:12px;}
+  .comm-item .comm-val.down{color:var(--red);}
+  .homolog-block{background:var(--glow-2);border:1px solid var(--border-soft);border-radius:10px;padding:10px 12px;margin-top:4px;}
+
+  @media print{
+    body{background:#fff !important;color:#111 !important;}
+    header, .toolbar, .export-toolbar, .filter-pills, footer{display:none !important;}
+    .ped-row{break-inside:avoid;border:1px solid #ccc;}
+    .table-card{box-shadow:none;border:1px solid #ccc;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="header-actions">
+      <button class="icon-btn" id="themeToggle">☼ Tema claro</button>
+    </div>
+    <div class="eyebrow">Zona Libre · Grupo Primavera Holding · Automatizado</div>
+    <h1>Compras Zona Libre</h1>
+    <div class="subtitle">Seguimiento de <b>pedido → aprobación → factura → orden de compra → Sábada → recepción</b>, con tiempos por etapa para detectar dónde se pierden los días.</div>
+  </header>
+
+  <div class="kpi-grid" id="kpiGrid"></div>
+
+  <div class="toolbar">
+    <div class="search-wrap">
+      <input class="search-input" id="searchInput" placeholder="Buscar por proveedor, # pedido o comprador...">
+    </div>
+    <button class="icon-btn" id="settingsBtn">⚙ Umbral: <span id="umbralLabel">20</span>d</button>
+    <button class="btn-primary" id="addBtn">＋ Agregar pedido</button>
+  </div>
+
+  <div class="filter-pills" id="filterPills"></div>
+
+  <div class="export-toolbar">
+    <button class="export-btn" id="exportExcelBtn">⬇ Excel</button>
+    <button class="export-btn" id="exportCsvBtn">⬇ CSV</button>
+    <button class="export-btn" id="exportPdfBtn">🖨 PDF</button>
+  </div>
+
+  <div class="table-card" id="tableCard">
+    <div class="empty-state">Cargando pedidos…</div>
+  </div>
+
+  <footer>Compras Zona Libre — Grupo Primavera Holding</footer>
+</div>
+
+<div class="modal-overlay hidden" id="detailModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div class="modal-title" id="detailTitle"></div>
+      <button class="modal-close" id="detailClose">✕</button>
+    </div>
+    <div class="modal-body" id="detailBody"></div>
+    <div class="modal-foot">
+      <button class="icon-btn" id="detailEditBtn" style="flex:1;justify-content:center;">✎ Editar</button>
+      <button class="icon-btn" id="detailDeleteBtn" style="flex:1;justify-content:center;color:var(--red);">🗑 Eliminar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay hidden" id="formModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div class="modal-title" id="formTitle">Agregar pedido<small>Completa lo que sepas — puedes editar luego</small></div>
+      <button class="modal-close" id="formClose">✕</button>
+    </div>
+    <div class="modal-body" id="formBody"></div>
+    <div class="modal-foot">
+      <button class="btn-primary" id="formSaveBtn" style="flex:1;">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay hidden" id="settingsModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div class="modal-title">Configuración</div>
+      <button class="modal-close" id="settingsClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field-row">
+        <label>Umbral de alerta (días totales, pedido → recepción)</label>
+        <input type="number" id="umbralInput" min="1">
+      </div>
+      <div class="field-row" style="margin-top:18px;">
+        <label>Conexión Supabase</label>
+        <div style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text-muted);">
+          <span class="conn-dot" id="connDot"></span><span id="connLabel">verificando…</span>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-primary" id="settingsSaveBtn" style="flex:1;">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<datalist id="prov-datalist"></datalist>
+
+<div class="toast hidden" id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ============ CONFIGURA AQUÍ TU PROYECTO SUPABASE ============
+  var SUPABASE_URL = "TU_SUPABASE_URL_AQUI";
+  var SUPABASE_ANON_KEY = "TU_SUPABASE_ANON_KEY_AQUI";
+  // ===============================================================
+
+  var supa = null;
+  try{
+    if(SUPABASE_URL.indexOf("http") === 0){
+      supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    }
+  }catch(e){ console.error(e); }
+
+  // ---------- etapas del flujo ----------
+  var ETAPAS = [
+    { key:"fecha_pedido",                 label:"Pedido enviado",                          icon:"📝", required:true, estado:"Nuevo pedido" },
+    { key:"fecha_aprobacion",             label:"Aprobación del comprador",                icon:"✅", motivo:"motivo_aprobacion", estado:"Aprobado por comprador" },
+    { key:"fecha_envio_documentacion",    label:"Documentación enviada a trámite",         icon:"📤", estado:"Documentación enviada" },
+    { key:"fecha_factura",                label:"Factura y traspaso recibidos",            icon:"🧾", estado:"Factura recibida" },
+    { key:"fecha_recepcion_bodega",       label:"Recibido en bodega Sábada (consolidación)", icon:"🏭", estado:"En bodega Sábada" },
+    { key:"fecha_orden_compra",           label:"Orden de compra entregada",               icon:"📄", motivo:"motivo_orden_compra", estado:"OC entregada" },
+    { key:"fecha_envio_sabada",           label:"Instrucciones enviadas al tramitador (carga a CDF)", icon:"🚚", estado:"En tránsito a CDF" },
+    { key:"fecha_factura_fiscal_sababa",  label:"Factura fiscal Sábada / OC homologada",   icon:"💳", estado:"OC homologada registrada" },
+    { key:"fecha_recepcion_final",        label:"Mercancía recibida en CDF",               icon:"🏁", estado:"Recibido" }
+  ];
+
+  var state = { pedidos:[], umbral:20, filter:"todos", search:"", editingId:null };
+
+  // ---------- listas maestras (comprador, departamento, proveedor) ----------
+  var COMPRADORES = ["Alberto Silvera","Nessim Salem","Alex Wasserman","Mario Ortiz","Soraya Domingo","Sugey Lasso","Jack Silvera","Luis Herazo","Isac Lalo"];
+  var DEPT_LIST = ["ACCESO. DE DAMAS","ACCESORIO PARA AUTOS","BEBES","BISUTERIA/JOYERIAS/ACCESORIOS","CABALLEROS","CALZADOS","COMESTIBLE","COSMÉTICOS Y FRAGANCIAS","DAMAS-NEW","DEPORTES","DEPTO. LOTES","ESCOLAR","FERRETERIA","FIESTA","HOGAR","JUGUETERIA","NAVIDAD","NIÑAS","NIÑOS","REGALOS","REGALIAS","ROPA INTERIOR - DAMAS","SUMINISTROS","TEMPORAL","VENTA DE PATIO"];
+  var PROV_NAMES = ["...........", "2 B CLOTHING", "2 BLUE DENIM CO LLC", "2.7 AUGUST APPAREL", "26 BLUE", "26 CALIFORNIA BAZAR INC.", "26 INTERNATIONAL INC.", "2B CLOTHING WHOLESALE & MANUFACTURE", "2GETHER", "2hope accessories, Inc", "3-G IMPORTS", "3M PANAMA S.A.", "4° DE LATITUDE", "5 STAR PRONTO MODA DI REN XIAOWU", "52 WEEKENDS", "5TH AVENUE PERFUMES, S.A:", "7 ISLANDS FASHION INC", "951 COMPANY LLC", "A & B WIPER SUPPLY", "A & R FURNITURE EXPORTER CO.", "A BASE IX CO LLC", "A TO Z CLOSEOUT GROUP", "A&C ALVAREZ & CARRASCO", "A-LIST WRAPPER", "A. BALUYUT CLAY", "A. BASIX", "A.B.B. MARKETING", "A.C.O. INC.", "A.E.A. PRODUCTS INC.", "A.G DISPLAY", "A.S GRAPHICS S.A.A", "A.T. DESIGN", "A.Y.R. APPAREL", "AB FORWARDING CORP PANAMA", "ABA USA TRADING CORP", "ABASTECEDORA TEXTIL, S.A.", "ABC IMPORTS AMERICAN", "ABC TRADING HOLDING S,A", "ABDALA  ZONA LIBRE,S.A.", "ABDALA ZONA LIBRE, S.A.", "ABI USA", "ABM LOGISTICS", "ABOLU, S.A.", "AC FASHION LLC", "AC PRINT, S.A.", "AC RACING S.A.", "AC2 GROUP", "ACADEMY PRESTIGE INTERNACIONAL, S.A.", "ACCESORIES PLUS LLC", "ACCESORY EXCHANGE", "ACCESS INTERNATIONAL CORP", "ACECO MILLS, INC.", "ACELIT YA YI MODA", "ACHIM IMPORTING", "ACHIM IMPORTING CO INC", "ACISA, S.A.", "ACME CORPORATION", "ACTIVE LABORATORIES INC", "ACTIVE LIFE PANAMA, S.A.", "ACUSCO ,INC", "ADDICTED 2 U INC", "ADITIVOS DE PANAMA S.A.", "ADMIISTRACION JUDICIAL SOHO CITY CENTER", "ADMINISTRACIÓN DE LA ZONA LIBRE DE COLÓN", "ADORABLE PILLOW", "ADORE KNIT WHOLESALE", "ADRIENNE VITTADINI (IKEDDI)", "ADUANA SANTOS, S.A.", "ADVANCE SALES GROUP,INC.", "ADVANTAGE WHOLESALE/MIZRAHI", "AEON INTERIOR S.RL.", "AEROSRVICIOS LOGISTECS CORP.", "AFISA ZONA LIBRE, S.A", "AFIVA DESIGNS", "AG STUDIO INC.", "AGAIN TRADING CORP", "AGENCIA INTERNACIONAL DE MARCAS, S.A.", "AGENCIA PAL LOPEZ, S.A.", "AGENCIA Y MERCADEO S.A", "AGENCIAS CLAFODAEN", "AGENCIAS CONTINENTAL,S.A", "AGENCIAS ESCOFFERY,S.A .", "AGENCIAS FEDURO, S.A.", "AGENCIAS LAS AMERICAS", "AGENCIAS MOTTA, S.A.", "AGENXIA, LLC", "AGGIE FASHION", "AGILEX EXPRESS SAS", "AGUNSA PANAMA, S.A.", "AHOY! WOMENS CLOTHING CO.", "AILEN ROCIO DAVILA LOPEZ", "AIMAR GROUP", "AIR SEA LAND LOGISTICS IN", "AIR SEA WORLDWIDE PANAMA, S.A", "AJ Fashion Group,INC", "AJANTA EXPORT HOUSE", "AL-DANTRADING L.A.", "ALAVARO LOPEZ", "ALBERTO SALEM (SPORT GALLERY CORP. S.A.)", "ALBERTO SILVERA", "ALBERTUS", "ALCO INDUSTRIES, INC", "ALDGATE WAREHOUSE", "ALEF STANDARD PACKAGING CO.", "ALEX NEW", "ALFA BAGS", "ALFA IMPORTER INC", "ALFA TRAVELGEAR,INC", "ALFOMBRAMUNDO, S.A.", "ALFREDO JAEN", "ALFREDO JAEN-PERFUMES", "ALHER INVESTMENTS PANAMA, S.A.", "ALIMENTOS CARNICOS DE PANAMA, S.A.", "ALISE SRL", "ALL CARGO LOGISTICS", "ALL WAYS SPORTSWEAR LTD.", "ALLES ESPUMAS E ESTOFADOS LTDA.", "ALLIANCE WHOLESALE CORP", "ALLIED CHEMICAL INDUSTRY DE PANAMA, S.A.", "ALLIED FOAM AND PACKAGING", "ALLIED IMEX, INC", "ALLO CYCLE REPORT LT APPAREL GROUP-LOLLYTOGS", "ALLURA IMPORTS INC.", "ALMA DIST ,S.A", "ALMACEN ELAMIN", "ALMACENES EL COSTO", "ALMAR SALES COMPANY", "ALMOST NOTHING INC.", "ALONSO FORWARDING PANAMA", "ALPHA TRADING", "ALRIVER EXPORT CORPORATION", "ALSASA", "ALTA MUN BIANCA CONF. LTDA. (SEDUCAO)", "AMAD LOGISTICS, S.A.", "AMADO A. BARRERA", "AMAN CLOTHING DBA APPAREL SOURCES", "AMANI LINENS INTERNACIONAL S.A.", "AMBIANCE", "AMBIENTAR -COM.ASS.REPRES.LTDA", "AMERICA FEITIAN HANDICRAFT", "America Garment, S.A", "AMERICA TRADING, S.A", "AMERICA ZONA LIBRE, S.A.", "AMERICAN APPAREL GLOBAL CORP.", "AMERICAN DREAM HOME GOODS INC", "AMERICAN EAGLE TRADE GROUP INC", "American Exchange Time LLC", "AMERICAN LINEN", "AMERICAN OFFPRICE APPAREL,INC.", "AMERICAN ONE", "AMERICAN PLASTIC TOYS INC.", "AMERICAN PLASTICS TOYS", "AMERICAN STUDIOS", "AMPARO BALLESTEROS", "AMPESA GROUP CORP", "AMRAPUR OVERSEAS", "ANA JULIA RIBA", "Ana Taborda", "ANABEL ATENCIO", "ANCHOR SALES & MKTG., INC.", "ANDREW & DAVID", "ANDY MILLER GLOBAL SALES LLC", "ANGEL COHEN RICHA Y ASOCIADOS", "ANGELINA INTERNACIONAL, S.A.", "ANGELS NEW YORK US, INC", "ANGI INTERNACIONAL, S.A.", "ANISA INTERNACIONAL", "ANKER LOGISTICA & CARGA S.A.", "ANN LORI INTIMATES,LLC", "ANNABELLE APPAREL", "ANNS TRADING CO.,INC.", "ANNY`S BRIDAL", "ANREL GROUP", "ANTILIA", "ANULADO VER HA -955", "ANY SPORT AND GIFT, S.A.", "APL DE PANAMA S.A.", "APM UNIVERSAL, INC.", "APOLO ZONA LIBRE, SA.", "APPAREL TRADING INTERNATIONAL, INC.", "APROPO", "AQUA FASHION, S. A.", "AQUALINDA PANAMA,S.A.", "Aquarius LTD", "AQUAVIVA BOTTLINGCOMPANY,INC", "AR. NEW YORK-ARNY", "ARACELLY GOMEZ VECES", "ARAMCO IMPORTS", "ARAMODU (ARAMODU LTDA)", "ARC IMPORTS INC.", "ARCADIA", "ARGAMAN PANAMA", "ARGELIA INTERNACIONAL. S", "ARMANI SHOES CORPORATION", "AROMAPHIL INDUSTRIES, INC", "ART & COR IND. E COM. DE CONF. LTDA", "ART & FRAME MART", "ART CRAFT CO.", "ARTESANIAS BAIX-EBRE", "ARTISTIC LINEN INC", "ARTURO ARAUZ TOCUMEN S.A", "ARWRIGHT", "ASB FASHION LLC", "ASEO CAPITAL,S.A.", "ASHFORD FINANCE LLC", "ASPEED DESIGN CORPORATION", "ASPEN CLOTHING COMPANY", "ASSOCIATED FOOTWEAR,INC", "ASTRIX DEVELOPMENT, S.A.", "AT LAST SPORTSWEAR, INC (BEACH LUNCH LOUNGE)", "ATARA INTERNACIONAL", "ATELIER NEW YORK (AMELIA)", "ATHENA BUSINESS GLOBAL INC.", "ATHLETIC SPORTSMAN,S.A", "ATLANTA ZONA LIBRE, S.A.", "ATLANTIC OPTICAL INTERNACIONAL", "ATLANTIC SHIPING PANAMA", "ATLAS WORLD FASHION CORP", "ATTITUDE KNITS", "AURORA PRONTO MODA", "AUTHENTIC WAREHOUSE, LLC", "AUTO SERVICIOS CAROLINA", "AUTO TALLER GIL", "AVANTGARDE S.R.L", "AVANTI", "AVANZATO (FOGANHOLO & FOGANHOLO LTDA)", "AZARI FACTORY  S.A.", "AZUL DE HORTENSIA S.L.", "AZUL HORTENSIA S.L.", "B  & V CORPORATION", "B & G SALES INC", "B G INTERNATIONAL (BK) CO.", "B&B OVERSEAS,S.A.", "B&G SALES, INC", "B.B. STAR INDUSTRIES LIMITED", "B.BOSTON & ASSOCIATES INC", "B.K. ENTERPRISE, S.A.", "B.L.K. INTERNATIONAL, INC.", "B.N.L. CLOTHING", "BABYTEX, S.A.", "BADR GROUP IMPORT& EXPORT", "BAGS & MORE, S.A.", "BAGUTA ZONA LIBRE", "BAI YOU FASHION SHI SHANG", "BALA NEW YORK INC", "BALANZAS ARANCIBIA", "BAMPO,S.A", "BANCO BILBAO VIZCAYA ARGENTINA(PANAMA),S,A(BBVA)", "BANCO CONTINENTAL", "BAND V CORPORATION", "BAOBO INTERNATIONAL TRADING LIMITED", "BARAJAS CASINO", "BARGAIN STOCKS INC", "BAROCCO ENTERPRISES CORP", "BARON DISTRIBUTORS, INC", "BARRAZA & CIA .S.A.", "BASAIDAI, S.A (CASIO)", "BASE ZONA LIBRE, S.A", "BASH CORPORATION, S.A.", "BASICLINE INTERNACIONAL LTD", "BASIX APPAREL INC.", "BASIX OF AMERICA LLC", "BATCH PANAMÁ, S.EP.", "BE CLOTHING LLC", "BE COOL MANUFACTURE", "BE STAGE", "BEAUTY HOME COLLECTION INC.", "BEAUTY SUPPLY INTERNATIONAL, S.A.", "BEBE MODA INTERNATIONAL", "Bebearti Tekstil", "BED BATH & BEYOND", "BEER LIMITED, S.A.", "BEETKO COMPANY, S.A.", "BEG  4 KLOTHING", "BEHACHE SA", "BELANOVA S.A/MAGIC TIME", "BELLA & COMPANY", "BELLA+ CANVAS, LLC", "BELLAGIO INTERPRISE PANAMA INC.", "BELLAVESTIR S.L", "BEN ELIAS INDUSTRIES, CORP", "BEN KAUFMANN SALES", "BENCO INT.", "BENJAMIN CORTES", "BENNY LALO", "BENNYS WHOLESALE (SERG FELIPE, INC.)", "BENSON MILLS,INC", "BERMO ENTERPRISES", "BERYAN INTERNACIONAL, S.A.", "Best Accessory Group", "BEST ALTERNATIVE CORP.", "BEST BRANDS OVERSEAS(BBO)", "BEST BUY IMPORTS", "BEST FIT INTERNATIONAL, INC", "BESTFUL H.K. TRADING LTD", "BESTWAY (HONG KONG) INTERNATIONAL LIMITED", "Bestwhip Intl.", "BETTER CHOICE LTD", "BETTER HOME PLASTICS CORPORATION", "BEVERLY HILLS SILVER", "BEVERLY INT´L , S.A", "BEYOND BORDERS INTERNATIONAL", "BEYOND RICH INTERNATIONAL LIMITED (MELODÍA HOME )", "BFIT ACTIVE WEAR", "BIAGGIO IMPORT INC.", "BIANCA CALCADOS", "BIENVENIDA FUENTES", "BIG TIME INTERNATIONAL", "BIG TREE TOYS INC.", "BIJOU INTERNATIONAL CORP.", "BIJOUX WORLD, INC.", "BINGO GLOBAL CO.K LTD", "BINGO OFF-PRICE INC", "BIOPLANET ,S.A.", "BISUTERIA , S.A .(COKETA FASHION , S.A)", "BIZ QUALITY CLOTHING CO.", "BIZAKA", "BIZZCUIT FASHIONS.A.", "BK IMPORT, S.A.", "BLASHE", "BLISS", "BLISS HAMMOCKS", "BLISS LINGERIE", "BLOSSOM FABRICS LTD (LUBAR)", "BLUE GALAXY  INC.", "BLUE SKY", "BMM INC B BRONSON", "BO BK.DESIGNS CORP", "BODY GLOVE, S.A.", "BODY TOUCH LINGERIE", "BOLONIA INC", "BOLSOS MADRID S.L.", "BOLSOS VALENTINA", "BOLSOS VALENTINA S.L.", "BOLTIO CORPORATION", "BON BINI", "BONDED APPAREL, INC.", "BOOKS INFORMATION & SERVICES, S.A.", "BORDADOS E IMPRESIONES C&G,S.A.", "BORDADOS Y UNIFORMES MODERNOS S.A.", "BORDAN SHOE COMPANY", "BORTON'S LAB,S.A", "BOULEVARD APPAREL", "BOULEVARD APPAREL GROUP", "BOUNTY TRADING CORP.", "BOYD STEAM SHIP CORP", "BOYS SPORTS", "BRANCO ENTERPRISES", "BRANDIX APPAREL LTD (LUBAR)", "BRANDS AND PRODUCTS PANAMA, S.A.", "BRANDSDIZTRIBUTION, S.A.", "BRASIL IMPORT & EXPORT,S.A.", "BRAVO ENTERPRISES PANAMA S.A.", "BRENTANO MIAMI", "BRENTWOOD ORIGINALS", "BREWSTER WALLCOVERING CO,", "BRIAN TRADING COMPANY", "BRIARA TRADING COMPANY", "BRILLANTE INTERNACIONAL, S.A.", "BRINK_x0092_S PANAMA, S.A.", "BRITISH DENIM LTD.", "BROADWAY FASHION, S.A.", "BRUCE INTERNATIONAL CO. LTD.", "BUBLOO BAG", "BUENAVISTA AMERICA CORPORATION", "BURANO HOME, LLC", "BUSINESSIT LATAM, S.A.", "BVL PANAMA", "BWACY TRADING", "BY DEEP LOS ANGELES,INC.", "BY DESIGN L.L.C.", "C&A SHOES", "C&B CORP.", "C&K IMPORT DESIGNS INC", "C-STORE SOLUTIONS", "C. VIAJA, S.A", "C.G. DE HASETH   CIA. S.A.", "C.I. PRODUCOL E.U. COMERCIALIZADORA INTERNATIONAL", "C.P CARGO ,S.A", "C.R. FASHION FACTORY LTDA.", "CA GLOBAL TRADING INC SA", "CA LIQUIDATORS", "CA PACIFIC GROUP INC.", "CABLE & WIRELESS", "CACTUS TRADING", "CADILLAC CURTAINS CORP.", "CAFE DURAN", "CALA PRODUCTS", "CALCADOS ARYETTA LTDA.", "CALCADOS CHINESINHA, S.A.", "CALCADOS PETÚNIA LTDA.", "CALCADOS ZEKET LTDA.", "CALIFORNIA 21", "CALIFORNIA OUTLET", "CALOX PANAMEÑA", "CALS COLLECTION", "CALVIN KEIDY", "CALYPSO INTERNACIONAL S.A", "Calzados Beira", "CALZAME FASHION, S.A.", "CALZATO S,A", "CAMBRIDGE FASHION INC.", "CAMISETAS PROMOCIONALES, S. A.", "CAMISETAS PUBLICITARIAS, S.A.", "CAMSCO PANAMA, S.A.", "CANADA FOOD SUPPLY, S.A.", "CANAM ZONA LIBRE, S.A.", "CANDLE LITE", "CANDY FACTORY CORP", "CANNING TOWN HOLDING CORP", "CANNON PILLOWS S.A.", "CANTATA FASHION, S.A.", "Capi", "CAPICO ACCESSORIES,LLC.", "CAPITAL (PANAMA), S.A", "CAPITAL BANK INC./PASSARELA", "CAPITAL PACIFICO, S.A.", "CAPITAL TRADING GROUP (CTG) LLC", "CAPRI INTERNACIONAL, S.A.", "CAPRICE INTERNACIONAL", "CAPSA PANAMA, S.A.", "CARAVAN LTD,S.A.", "CAREI IMPORTS, S.A.", "CARGO CELESTE LOGISTICS, LLC.", "CARGO ONE LOGISTIC,S.A.", "CARGO STAR", "CARIBBEAN SPORTSWEAR LTD,S.A.", "CARICOM(CARIBBEAN COMMON MARKET)", "CARIÑO  ESTEREO  S.A.", "CARLOS GAMARRA", "CARMEN GONZALEZ", "CARNIVAL DESIGN", "CARRIE AMBER INTIMATES, INC.", "CARTER INTERNACIONAL, S.A.", "CARTERAS COMPANY ALL FASHION", "CARVAJAL EDUCACION, S.A", "CASA FORMOSA", "CASA OSAKA", "CASA PETER", "CASA SHUNDA", "CASH & CARRY CORP.", "CASIOLANDIA PANAMA, S.A.", "CASUAL CHIC,  S.  A.", "CATENA DESIGN INC", "CAVALIER  SPORTSWEAR INC", "CAVALINI", "CAYCAT S.A.", "CEFERINO CASTILLO", "CELEBRITY PINK", "CENTRAL BRANDS LLC", "CENTRAL FIDUCIARIA, S.A.", "CENTRE ZONE LTD", "CENTRO DE PINTURAS GLIDEN, PROTECTO, S.A.", "Cery Tekstil", "CESAR ARROCHA GRAELL Y CIA., S.A.", "CESAR PAROS", "CEST TOI TOWNE", "CHAMPELES, INC.", "CHANCE OFF", "CHANO INTERNATIONAL INC", "CHAOAN YIJIA ART & CRAFT CO. LMT", "CHAOZHOU DEVELOPMENT ZONE FOREIGN TRADE CORP.", "CHAR BROIL LLC", "CHATEAU INTERNATIONAL INC.", "CHEF CRAFTCORPORATION", "CHENSON INTL (ZONA LIBRE)", "CHENSON, INC.", "CHERRY BLUE", "CHERRY STIX LTD", "CHESTER LINE", "CHEUNG YAN ENTERPRISE", "CHF INDUSTRIES, INC.", "CHI DA TOYS ENTERPRISES", "CHIC LADY LTD", "CHINA EXPORT BASES DEVELOPMENT", "CHINA SANDONG ZIBO ZHULIN CERAMICS CO. LTD", "CHINA SHIPPING AGENCY, S.A.", "CHINA TEXTILE MANCHINERY AND TECHNOLOGY", "CHINA WELL TEXTILE COMPANY LIMITED", "CHINA-BASE NINGBO FOREIGN TRADE CO. LTD.", "CHONGQING JUSTIT INDUSTRIES CO.LTD", "CHORUS GIRL, INC", "CHUMKY INTERNATIONAL S A", "CHW, INC.", "CIA. BTESH, S.A.", "CIA.CÒRSICO", "CICCI PRONTO MODA/FASHION MUJERES", "CIELO CREATIONS, INC. (REBON, INC)", "CIF EXPRESS, S.A. (TRAMITE DE", "CIGNAL INT.", "CIRCLE IMPORTS,INC.", "CIREVISION DE PANAMA  S. A.", "CITY TRIANGLES", "CKC INTERNATIONAL, L.L.C.", "CL LOGISTICS CORP", "CLADAMVIN S.A.", "CLANDESTINE INTERNATIONAL CORP.", "CLAUDIA MODISTERIA", "CLAUDIA RICHARD", "CLIMAX DE PANAMA ,S.A.", "CLOROS Y SIMILARES", "CLOSEOUT CENTER, INC.", "CLOSEOUT EXCHANGE", "CLOSURE INC.", "CLOTHING ILUSTRATED , INC", "CLOTHING MANAGEMENT INC.", "CLOVIS LA SHOW ROOM", "CLUB 408", "CMA CGM PANAMA,INC", "CN USA INTERNATIONAL", "COASTAL CLOSEOUTS, INC.", "COBRA TRADING INC", "CODE RED NOVELTIES", "CODECO DECORACION, S.L.", "CODECO DECORACON S.L.", "CODIGO", "CODIGO CEM", "COLCHONERIAS HERES Y HERES, S.A.", "COLOMBIA MODA, S.A.", "COLOMBIA SHOES FACTORY SAS", "COLON CONTAINER TERMINAL", "COLOSSAL JEWELRY & ACCESSORIES", "COLPA, S.A.", "COLUMBUS LIMITED, INC.", "COLUMBUS TRADING CORPORATION", "com", "COMEL INTERNATIONAL CORP", "COMERCIAL POZUELO PANAMÁ, S.A.", "COMERCIALES INTER- PROV, S.A", "COMERCIALIZADORA E INVERSIONES DEL CARIBE", "COMERCIALIZADORA NOCAL, S.A.", "COMERCIALIZADORA PUSA,S.A", "COMMODITIES ASSISTANCE CORP.", "COMP TRADING, LLC", "COMPAÑIA ATLAS, S.A.", "COMPAÑIA DASUAR, S.A.", "COMPAÑIA DE NOVEDADES ALIMENTICIAS S.A.", "COMPAÑIA INDUSTRIAL DE AZUERO, S.A.", "COMPAÑIA LEVAPAN DE PANAMA,S.A.", "COMPAÑIA SURAMERICANA DE COMERCIO S.A", "COMPESA", "COMUNICACIONES  MUSICALES", "CONCEPT APPAREL, IN", "CONCORD ENTERPRISE INC.", "CONCORD INT`L PRODUCTS, INC.", "CONEY ISLAND GROUP,CORPORATION", "CONFECCIONES ANGELITO", "CONFECCIONES BOSTON, S.A.", "CONFECCIONES D-BB", "CONFECCIONES DAN DAN, S.A", "CONFECCIONES DANEISY", "CONFECCIONES DANIFER LTDA. EPP", "CONFECCIONES DOR", "CONFECCIONES EL NIÑO", "CONFECCIONES MARGGIE, S.A.", "CONFECCIONES MARICRIS,S.A.", "CONFECCIONES MOAL, S.A.", "CONFECCIONES NILSA, S.A.", "CONFECCIONES SHIC ZONA LIBRE, S.A.", "CONFECCIONES SHIC, S.A.", "CONFECCIONES TRAINER, S.A.", "CONFECCIONES Y.E.B.Y.G.U.E, S.A.", "CONFECCOES AGASSI LTDA", "CONFECCOES BETELGEUSE LTDA.", "CONFECCOES MANY FIU LTDA.", "CONFECCOES SUZANA LTDA (GHEUPY)", "CONFECTIONERY AND SNACKS (PANAMA)INC.", "CONFORPLAS S.A.S.", "CONKLIN FASHION INC", "CONNECTION 18 BY SICURA INC.", "CONNEXION ZONA LIBRE", "CONTEMPO SPORTSWEAR INC.", "CONTIGO RENT A CAR, S.A.", "CONTINENT INT.", "CONTRATISTA ACOSTA", "CONTRAX INTERNATIONAL", "COOL COMPANY", "COOLGADGETS & CELLS", "COPLEY INTERNATIONAL", "COPOSA", "COPRODISA DE PANAMA", "CORIPSA", "CORNER 1 2 3", "CORPORACION  MEDCOM PANAMA S.A", "CORPORACION BERLIN", "CORPORACION CANARIAS, S.A.", "CORPORACION COSTA ATLANTICA S.A", "CORPORACION DE IMAGENES VISUALES, S.A.", "CORPORACION DOMI, S.A", "CORPORACION EXITO INTERNACIONAL, S.A.", "CORPORACION IMPA-DOEL, S.A.", "CORPORACION INTER S.A.", "CORPORACION INTERNACIONAL DE NEGOCIOS ,S.A.", "CORREAS PANAMA", "CORZO ZONA LIBRE S.A.", "COSCO PANAMÁ MARITIME, S.A.", "COSENCO, S.A.", "COSMETIC PLUS, S.A.", "COSMETICOS SELECTOS, S.A.", "COSMO TRADING, INC.", "COSMOS TEXTIL TRADING", "COSMOTEX, S.A", "COSTURA INFANTIL, S.A.", "COSTUREX INTERNACIONAL ,S.A", "COTTON VALLEY HOME, INC.", "COUNTRY GATE DESIGNS, INC.", "COUNTRY WIDE ACCESORIES & MORE INC.", "COURAGE CLOTHING,NY", "COVER UP", "CRANDON ZONA LIBRE , S.A.", "CRAYOLA", "CREACIONES BATSHEVA, S.A.", "CREACIONES J&M 507", "CREACIONES PERIQUITA LTDA.", "CREACIONES SEXY PUNTO LTDA.", "CREACIONES YOYI'S", "CREATIVE BATH PRODUCTS, INC", "CREATIVE CENTRE, S.A.", "CREATIVE ENERGIES, INC", "CREATIVE INTL TRADING LTD", "CREATIVE WORLD-INDIA", "CREDISAKS", "CREST HOME DESIGN", "CRETA", "CRICOES MAUBER IND. COM. CALCADOS LTDA.", "CRISTAL COMMERCIAL, S.A.", "CRISTINA ALVES IND. E COM. DE CALCADOS LTDA", "CRITTON", "CROSCILL HOME", "CRYPET PANAMA, S.A.", "CRYSTAL ART OF FLORIDA", "CRYSTAL PROMOTIONS,INC", "CSPS PLATECH INDUSTRIAL CO.,LTD", "CSS. INC", "CTS INTERNATIONAL LOGISTICS PANAMA INC", "CUADERNOS ESCOLARES, S.A.", "CUARZOS Y GRANITOS 507", "CUATRO ASES INTERNACIONAL", "CUTIE PATOOTIE", "CWC INVENTORIES , INC.", "CYBER TECH LIMITED", "CYRUS HOSIERY MFG, INC.", "CYRUS JM CORP.", "D & H LADIES APPAREL", "D&L APPAREL, LTD", "D-L INCentives", "D.CONNECTION, INC.", "D.K. FASHION", "D.O.L. CREATIONS, INC", "D.O.L.CREATION,INC", "D.T. INDUSTRIES", "DABLIU INDUSTRIA E COMERCIO DE CALCADOS LTDA", "DAC TRANSPORT, INC.", "DADOS S.R.L", "DAILY LATINOAMERICA, S.A.", "DAILY WEAR SPORTSWEAR CORP.", "DAINTY HOME DBA CASA ELITE", "DAKANG INTERNATIONAL CORP.", "DALBEZ,S.A.", "DALEPH CALZADOS LTDA", "DALIAN EVERTRUST TRADING CO. LTD", "DAMCO PANAMA, S.A.", "DAMO CLOTHING CO", "DANICO ENTERPRISES INC.", "DANIEL HOME", "DANIFER", "DANNY'S MERCHANDISE", "DANORIS,S.A/INTERNATIONAL EXPRESS", "DARGANI IMPEX INTERNATIONAL,INC.", "DARKINS SERVICENTRO, S.A.", "DASDADSAD", "Dash Clothing Inc", "DATING", "DATUM LIMITED", "DAVID ANGEL,S.A.", "DAVID'S PLACE", "DBA UNIVERSAL FASHION OUTLET", "DCG, CONTRATISTAS", "DE JUGUETES,S.A.", "DE MODA ZONA LIBRE", "DECO MC PHERSON", "DECO-MUEBLES", "DECOLLECTION INT.", "DECOOSCAR", "DEDITEX (BOMACA)", "DEDO DOCE", "DEIPSON INTERNACIONAL, S.A.", "DELAROSA COLECCION HOGAR, S.A.", "DELFIN RODRIGUEZ", "DELI MARKET CORP.", "DELLES", "DELTA ENTERPRISE CORP.", "DELUXE TRADING, INC.", "DENICE INC.", "DENIM DELUXE INDUSTRIES,LTD", "DENIM FEVER, INC.", "DEPORTES JIMMY,S.A", "DERBY HOME TEXTILES ,S.A.", "DERBY INTERCONTINENTAL TRADING COMPANY, S.A.", "DERBY, S.A.", "DESACTIVADO", "DESEN INC.", "DESIGN AND SOURCE", "DESIGN BY A&B", "DESIGN IDEAS, LTD.", "DESIGNERS WINDOW", "DESIRE SPORTWEAR,INC", "DESTAQUE CALCADOS LTDA", "DHL GLOBAL FORWARDING(PANAMA) S.A", "DHL PANAMA, S.A.", "DI MARJAN", "DI-ORO INTERNACIONAL, S.A.", "DIAMANTE FASHION", "DIAMOND CO, S.A.", "DIAMOND GROUP INTERNATIONAL, S.A.", "DIAMOND STAR CORP.", "DIAN PATRIS LTDA.", "DIANA GIRO", "DIANA INT'L, S.A.", "DIC,S.A.", "DIMUSA", "DINA K HIGH POINT/DIAMOND CO", "DINAMICA IMPORT S.A", "DINAMO INTERNATIONAL TRADING, S.A.", "DINAMO MC S.A.", "DIOPHI INTERNATIONAL , S.A", "DIORVETT INTERNACIONAL ZONA LIBRE, S.A.", "DIRECT DISTRIBUTION LTD., S.A.", "DISCAYCA", "DISCAYCA PANAMA,S.A", "DISCOTECA SOPHY,S.A.", "DISCOVERY CENTER   ( SEMFYL, S.A. )", "DISCOVERY SYSTEMS", "DISEÑA/SABADADELL", "DISEÑO DE ESTILO, S.A.", "DISEÑO TEPUY", "DISEÑO TEXTIL, S.A", "DISEÑOS EXCLUSIVOS LTDA.", "DISEÑOS PROMOCIONALES", "DISPLAY PANAMA", "DISTRIBUIDORA  MAYOR PTY INC.", "DISTRIBUIDORA AL-EXITO, S.A.", "DISTRIBUIDORA ALFA, S.A.", "DISTRIBUIDORA ANCEL, S.A.", "DISTRIBUIDORA AR. CE. LUR.", "DISTRIBUIDORA BERGUIDO, S.A.", "DISTRIBUIDORA BINATTI,S.A.", "DISTRIBUIDORA BRANDON, S.A.", "DISTRIBUIDORA CASH", "DISTRIBUIDORA CENTROAMERICANA, S.A.", "DISTRIBUIDORA DABAH, PANAMA", "DISTRIBUIDORA DE MARCAS PANAMA", "DISTRIBUIDORA ESTEFANO", "DISTRIBUIDORA FIBI S.A.", "DISTRIBUIDORA GIROMA PANAMA", "DISTRIBUIDORA GLOWLEY S.A", "DISTRIBUIDORA HAPPY", "DISTRIBUIDORA HENRY, S.A.", "DISTRIBUIDORA HUNTER,S.A.", "DISTRIBUIDORA IBELISSE,S.A.", "DISTRIBUIDORA JACOSAL S.A.", "DISTRIBUIDORA JHIRE", "DISTRIBUIDORA KOLAN, S.A", "DISTRIBUIDORA LA GRAN MURALLA", "DISTRIBUIDORA LEWIS,S.A.", "DISTRIBUIDORA LINMAR, S.A.", "DISTRIBUIDORA LUTY", "DISTRIBUIDORA MARINER , S.A", "DISTRIBUIDORA MAZAL 11, S.A.", "DISTRIBUIDORA MERCOPAN", "DISTRIBUIDORA NARJIES S.A", "DISTRIBUIDORA NATANEL, S. A", "DISTRIBUIDORA OFFICE TOTAL S.A", "DISTRIBUIDORA PANATEX, S.A.", "DISTRIBUIDORA PUNTO AZUL", "DISTRIBUIDORA RALI, S.A.", "DISTRIBUIDORA RAYMOND, S.A.", "DISTRIBUIDORA SADA 18,S.A.", "DISTRIBUIDORA SAREL", "DISTRIBUIDORA SHEMOT", "DISTRIBUIDORA SI, S.A.", "DISTRIBUIDORA SOFI", "DISTRIBUIDORA T-SHIRTS & MORE INC.", "DISTRIBUIDORA TOTAL", "DISTRIBUIDORA TOTAL MODA", "DISTRIBUIDORA UPIM,S.A.", "DISTRIBUIDORA VENUS, S.A.", "DISTRIBUIDORA VERDE AZUL, S.A.", "DISTRIBUIDORA VICTORY, S.A.", "DIVALESI(BERNARDI CALCADOS LTDA)", "DIVERTEX", "DIVINE INTERNACIONAL Z.L.S.A", "DIXIE SISNEROS", "DLM OFF-PRICE SPECIALISTS", "DNLA OFFPRICE APPAREL", "DNOD-DEAL OR NO DEAL", "DNT", "DOCUMENT EXPRESS S.A.", "DOIT CENTER", "DOLORES PINEDA", "DOMINGO CONCEPCION", "DON WASSERMAN INTERNATONAL", "DONALD W. DICKERSON, INC", "DONATO FASHION S.L", "DONNAMAX INC", "DONNAMAX INC.", "DORIANS", "DORITOS,S.A.", "DOTALI  INVESTMENT, S.A.", "DOUBLE ACE CARGO PTY S.A.", "DPORT S.A.", "DREAM ON ME", "DREAMS KYDS", "DRIZ CONNECTION", "DROGUERIA  RAMON  GONZALEZ  REVILLA S.A.", "DROSE", "DRYBRANCH/SPORTDESIGN INC.", "DS CLOTHING (EEY FASHION)", "DUCK RIVER TEXTILE INC", "DUNCAN GROUP CORPORATION", "DUOMODA S.A.", "DURA-KLEEN (USA) INC.", "DURMARY PRUEBA 01", "DUVET   EXPORTS CO .,LTD", "DYD PANAMA CORP", "DYNAMIK GROUP CORP.", "DYNAMITE DECORATORS", "DYNAMO INTERNATIONAL, S.A.", "DYNASTI FASHIONS, INC.", "D´VINNI, S.A.", "E & Y FASHION", "E.L.M FASHION INC", "E.M. LAWRENCE, LTD.", "E.S. SUTTON (JOLIE INTIMATES)", "EASEL", "ECO WATER SISTEMS CORP.", "ECOMODA", "ECU LINE DE PANAMÁ, S.A.", "EDDIE MARC & CO INC. (EMC GLOBAL INC", "EDGARDO ISAAC VEGA", "EDGARDO SANTAMARIA", "EDIKELIS NG", "EDIT BY NINE", "EDITORA  LA VICTORIA  S.A.", "EDITORA GEMINIS", "EDITORIAL OCEANO DE PANAMA", "EFANI CANO", "EGLAF FASHION S.L", "EGLAF FASHION S.L.", "EHL IMPORTS", "EILATAN, S.A.", "EL ARGENTINO", "EL CANON INTERNACIONAL, S.A.", "EL CUARA.COM", "EL GULA, S.A.", "EL MUNDO DE LA FANTASIA, S.A", "EL POLLO RAYTE  S.A", "ELBROS INTERNACIONAL(LINKINVEST)", "ELECTRITECSA", "ELECTRO MUEBLES RASMINA", "ELECTRONICA ANDES", "ELECTRONICA CARIBE", "ELEGANCE FIRENZE SRL", "ELEGANT GREEN FACTORY", "ELEKTRO MUSICA INTERNATIONAL S.A", "ELEVA PANAMA", "ELEVADORES GOLDSTAR", "ELI, S.A.", "ELICO LTD", "ELIMAR DISTRIBUIDOR, S.A.", "ELITE HOME PRODUCTS, INC.", "ELITE IMPORT & EXPORT CORP", "ELITE MED SCRUBS INC", "ELITE SKY(HON KONG) LTD.", "ELLEN EXPORTS (LUBAR)", "ELLERY HOMESTYLES LLC", "Elsan Global Lojistik Ve Dis Ticaret A.S.", "EMBARQUES ROAD RUNNER PANAMA, S.A.", "EMBER BY ORANGE", "EMEN EXPORT HOUSE", "EMERALD  B  INC", "EMMILA DISTRIBUTION", "EMPANADITAS RAQUELITA", "EMPIRE ACCESORIES CORP.", "EMPIRE APPAREL LLC", "EMPIRE BRANDS S.A", "EMPRESAS HOPSAS , S.A", "EMPRESAS TIO YEYO PANAMA,S.A.", "EMPRESAS TITANIC, S.A.", "EMPRESS COLLECTION", "EMS & CO,S.A.", "EMSEMURE S.A.C.", "EN LA FONDA TIPICA DE PANAMA", "ENA ,S FASHION", "ENC", "ENERGE TIC BY BAG", "ENERGIE", "ENERGY CONTROL & SUPPLY, INC", "ENTRADA COLLECTION, INC.", "ENTYVA S. DE R.L.", "EOLO TOYS LTD", "EPCOT ZONA LIBRE, S.A.", "EQUINOX LATIN AMERICA INC.", "ERICK OMAR CACERES", "ERICYAN II, INC.", "ESEM TEX, S.A.", "ESMO INTERNATIONAL, S.A.", "ESPARTAN GLOBAL INC.", "ESQUIRE (HOGAN IND COM DE ROUPAS LTDA", "ESSENTIAL COLLECTION , INC.", "ESSENTIAL GROUP USA LLC", "ESSENTIAL LINENS LLC", "ESTALUN CLOTHES, LU", "ESTAMPA (METRO TRADING)", "ESTEREO AZUL", "ESTEVAL INTERNATIONAL", "ESTHER INTERNATIONAL GROUP, S.A.", "ETERNITY INTL FREIGHT FORWARD", "ETHMIX", "ETNA PRODUCTS COMPANY, INC.", "Euro sportwear trading", "EURO TRADING INTERNACIONAL, S.", "EURO-LINE PANAMERICANA(PANAMA),S.A", "EUROHOGAR, S.A.", "EUROMODA INTERNATIONAL CORP.", "EUROPEAN FASHION CORP", "EV-4818", "EVAN ROBERTS", "EVARISTO REYES", "EVE INTERNATIONAL LLC", "EVENT", "EVGEN INTERNATIONAL, S.A.", "EVIDENCIA MOVEIS LTDA.", "EVOLUTION IND. CORP.", "EXCELHIGH,INC.", "EXCELL HOME FASHION", "EXCELLENCE PANAMA, S.A", "EXCELLENCE TRADING AND INVESTMENT CO.S.A", "EXCLUSIVE EXPRESSIONS", "EXPLORE SOURCING", "EXPORT & REEXPORT GOMEZ, S.A.", "EXPORTADORA LA PERLA S.A", "EXPORTADORA SUNNY, S.A.", "EXPOSE S.A.S.", "EXPOSITION IN LA.", "EXPOSIVAL IND. E XOM. LTDA", "EXPRESS SERVICE CARGO, S.A.", "EXPRESSIONS LINGERIE LLC", "EYDA LOPEZ", "EYE SUPPLY,S.A", "EZ DEALS", "EZCONY TRADING CORTP.", "EZRASONS, INC.", "EZRHY INVERSIONES", "F & F FOOD INC", "F&A FUTURE COLLECTION", "FABRICA MUEBLES ORIGINALES, S.A.", "FACE2FACE", "FACHADAS JOMARO", "FACTORY LIQUIDATORS", "FAIMSA, S.A.", "FALCO, S.A", "FALLANI AND COHN", "FAMILY PRICE, S.A.", "FAMOSA GROUP", "FANTASIA ACCESORIES LTD", "FANTASIAS MYLIN, S.A.", "FANTASY BIS S.L", "FANTASY IMPORT, S.A.", "FARMDALE CORP.", "FARREYS WHOLSALE", "FARRIS WHOLESALE OUTLET INC", "FASHION  BEAUTY S.A.", "FASHION 21 GROUP INC", "FASHION APPAREL", "FASHION BOX, S.A", "FASHION CONSUL (CIAS ZONA LIBR", "FASHION DIRECT INTERNATIONAL", "FASHION DISIGN INTERNATIONAL", "FASHION DISTRIBUTION CENTER", "FASHION DISTRICT, S.A.", "FASHION FOOTWEAR ALLIANCE CORP", "FASHION FOOTWEAR ALLIANCE CORP(COLON)", "FASHION FOOTWEAR UNLIMITED, S.A.", "FASHION FUSE, INC.", "FASHION GROUP, S.A.", "FASHION NOVIA", "FASHION REWIEV", "FASHION RIVER GROUP", "FASHION SPACE, INC", "FASHION SQUARE", "FASHION STAR CORP. S.A.", "FASHION STOP", "FASHION STREET", "FASHION STYLE GROUP LLC", "FASHION TREND", "FASHION TRENDS  LATIN AMERICA INC. (COLON)", "FASHION WELLBEING INC.", "FASHION WILDCAT", "FASHION XPERTS", "FAST TURN WHOLESALE", "FASTER BUY CORP", "FAUSTO SALAZAR", "FAZ IND e COM DE CONFECCOES LTDA", "FE FASHION ,INC .", "Fedex", "FELICITY", "FELIPE MOTTA , S.A.", "FELIX ANTONIO SUVERE", "FEMSA (COCA COLA)", "FERPAPRO, SA", "FERRETERIA TODO FACIL, S.A.", "FERRUCCI & CIA LTDA", "FERVAL PHARMACEUTICAL, S.A.", "FEVRIER", "FEXPRO INCORPORATED", "FICOSOTA", "FIDUCIE S.R.L.", "FIGALI PANAMA", "FINAL FOUR, S. A.", "FINATEX INT, S.A", "FINDU COLLECTION S.L", "FINTEK,S.A", "FIRE OUT DE PANAMA S.A", "FIRST IMPRESION GROUP, S.A.", "FLAG FOUR INTERNATIONAL INC", "FLAKS IMP e EXP", "FLAMINGO WHOLESALE & MANUFACTURE", "FLASH SALES INC", "FLETE DE MERCANCIA", "FLORA", "FLORA BUNDA INC", "FLORA EXPORTS (LUBAR)", "FLORENCE IMPORT AND EXPORT, INC.", "FLORIDA APPAREL, LLC", "FLORIDIAN FURNITURE", "FLORIO CARTA S.P.A.", "FOCUS 2000 / PRIME TIME INTL", "FOCUS PUBLICATION S.A", "FOR SALE ZONA LIBRE,S.A", "FOREVER BEAUTIFUL", "FOREVER KIDS, S.A.", "FORMULA EXPORT INT, S.A.", "FORTE INTERNATIONAL GROUP.", "FORTESA", "FORTUNE BABY ENTERPRISES CO., LTD.", "FORTUNE DYNAMIC", "FORTUNE FOOTWEAR INC.", "FOSTER INTERNATIONAL, CORP", "FOUR SEASONS", "FOUR SEASONS ACCESSORIES DBA I", "FOUR-J DE PANAMA, S.A.", "FRAESA, S.A.", "FRANBLY INTERNACIONAL S.A", "FRANCISCA MARIA FLORES", "FRANSHAW INC.", "FRAPOLL, S.A.", "FRATELLI GROUP", "Fratelli Group SA", "FRECUENCIA ASOCIADA S. A.", "FRED DAVID INTERNATIONAL USA INC", "FREIGHT CARGO SERVICES, INC.", "FREIGHT PANAMA,S.A", "FREIGHTNET PANAMA INC", "FROM A SOBER TEXTAIL LTD.", "FRONTLINE FREE ZONE PANAMA S.A.", "FRUTILLA COLLECTION", "Fuda Fashion, S.L.", "FUEL PANAMA SERVICES, S.A.", "FUJIAN FOREIGN ECONOMIC SERVICE TRADE CORPORATION", "FUJIAN MINHOU MINXING WEAVING CO., LTD.", "FUJIAN QUANZHOU FENGZE FOREIGN TRADE CO, LTD", "FULL SILVER(GAL 925,S.A)", "FUMICITY", "FUNKITIRIBE", "FUROR CLOTHING CO.", "FUZHOU GOLDEN ROSE ARTS & CRAFTS CO", "G COM NET TECHNOLOGIES AND IND SERVICES PMA. CORP.", "G&S OFF PRICE", "G&S OFF PRICE,INC", "G. DOULATRAM & SONS", "G.S ENTERPRISES CORP.", "G4S VALORES, S.A", "GABRIELLI INTERNATIONAL, S.A.", "GAD&S", "GADAKO Z.L., S.A.", "GADOL, S.A.", "GAMETRONICS (LA CLOSEOUT,INC.)", "GANESH TRADING", "GANGAS S.A.", "GARDEN LIFE", "GARMENT CENTRAL", "GARMENT DESIGN, S.A.", "GASTOS DE SAKS ZONA LIBRE", "GAZ ZONA LIBRE, S.A.", "GAZOZ", "GBM USA,LLC", "GBRANDS HOLDING LLC", "GC APPAREL GROUP", "GELATINE INTERNATIONAL INC.", "GEMINI SELECTIONS", "GEMINI TRADING INC.", "GEMMA INTERNACIONAL , S.A.", "GENCO MARKET PLACE,INC.", "GENERAL CARGO PANAMA, S A", "GENESIS GLOBAL INC.", "GEO. F. NOVEY, INC", "GEOCARGO ZONA LIBRE", "GEORGIANO INC.", "GESA INT, S.A.", "GHODOOSHIM & SON INC. ALL AXCESS", "GIANELY,S.A.", "GIANT CLOTHING COMPANY INC.", "GIBSON OVERSEAS", "GIDANI FASHION MANUFACTURE & WHOLESALE", "GILBAR TRADING", "GINA  GROUP CONCEPT LLC", "GINA HOSIERY", "GINGI ZONA LIBRE", "GIORDANO MADRID", "GIORGINNI INC.", "GIOVANA LEMOS", "GIOVANNA FASHION S.L.", "GLADIMAR INTERNACIONAL , S.A.", "GLAM", "GLARE", "GLENOIT CORPORATION", "GLF LOGISTICA, S.A.", "GLO INTERNATIONAL, INC", "GLOBAL ACCESSORIES", "GLOBAL ASIA EXPORTS LIMITED", "GLOBAL CARGO PANAMA, S.A.", "GLOBAL DESIGN SOLUTIONS", "GLOBAL FASHION/KALIFA FASHION SL", "GLOBAL IMPORT PANAMA INC. S.A", "GLOBAL PRODUCT Y LOGISTIC SERV", "Global Sports", "GLOBAL TECHNOLOGY GROUP CORP", "GLOBAL TRADING", "GLOBALTEK INTER CORP.", "GLOBEN CERAMICS INT'L. INC.", "GLOVAL SHIPPING PANAMA", "GLOWLEY INTERNACIONAL , S.A", "GM FASHION INC.", "GO LIQUIDATOR", "GO MAX INTERNATIONAL, INC.", "GOC GROUPS LLC", "GOLD GYM, S.A", "GOLDEN BABY CORPORATION/COTTON CANDY INT.", "GOLDEN GIFTS", "GOLDEN SEASON FASHION D/B/A", "GOLDEN STAR IMPORTS INC.", "GOLDEN WEST FOOTWEAR INC.", "GOLDSUN INTERNATIONAL TRADING TIANJIN CO. LTD", "GONZALEZ ASSOCIATES, INC.", "GONZALEZ SUPPLIES", "GOOD BUYS USA", "GOODSTUFF APPAREL", "GOTAS DE ORO", "GOURMET HOME PRODUCTS", "GPS LOGISTICS", "GQ WEAR", "GQ. WEAR INC", "GRACE ATTIE ARQUITECTURA", "GRACEFUL FLOWER CORP.", "GRAN CHINA TRADING LTD.", "GRAN EXITO S.A.", "GRANADA SALES CORP.", "GRANDAZ  MOVIES LTDA", "GRANDI KONFEKSIYON", "Grateful Clothing, Inc", "GRAYMAR", "Great Bay Home Ventures, LLC", "GREAT BAY HOME VENTURES, LLC", "GREAT BUY PRODUCTS", "GREAT DISCOUNTERS", "GREEN EVERALD  BUSINESS", "GREY PRODUCTIONS  S.A", "GRIFLIN PARIS", "GROOVY CLOTHING", "GROUP LOGISTIC PANAMA", "GRUP M E L INTERNACIONAL S A", "GRUPO AGUSTIN SERRANO ADUANERO , S.A", "GRUPO AJE", "GRUPO ALENTINO, S.A.", "GRUPO ARGAMAN,S.A.", "GRUPO BARI,S.A.", "GRUPO BEN BETESH", "GRUPO CONDOR, INTERMAK, S.A.", "GRUPO DIBIMAR", "GRUPO DIPCSA,S.S.", "GRUPO EXMA SAS", "Grupo Galaxy Internacional S.A.", "GRUPO GLAMOUR", "GRUPO INCOMAR, S.A.", "GRUPO LODENI", "GRUPO MIX HOLDING INC", "GRUPO MONAT, S.A.", "GRUPO NISSI  INTERNACIONAL S.A.", "GRUPO POCAHONTAS, S.A.", "GRUPO PRIMAVERA HOLDING, S.A.", "GRUPO PRIMAVERA HOLDING- ZONA LIBRE", "GRUPO QUEBEC PANAMA , S.A.", "GRUPO REINA, S.A.", "GRUPO ROCCO PRODUCTIONS S.A.", "GRUPO ROSMAR", "GRUPO SANTILLANA", "GRUPO SCARTON (PLASCARI INDUSTRIA PLASTICA LTDA)", "GRUPO TODO A DOLLAR, S.A.", "GRUPOSPORT PANAMA, S.A.", "GUANGDONG SHENGLONG TOYS INDUSTRY CO. LTD", "GUANGXI YULIN JIABAO METAL & PLASTIC CO. LTD", "GUANZHOU ANIMAL BY PRODUCTS IMPORT", "GUATEPLAST, S.A.", "H & A COUTURE", "H DAYA INTERNACIONAL", "H-DOS-O, S.A", "H. LUTIA MOVEIS/FIRST, S.A.", "H. SCHULTZ & SONS", "H. TZANETATOS, INC. S.A.", "H.A.S INDUSTRIES", "H.DAYA LOCAL", "H.LARAPHY CONFECCOES LTDA", "HADDA UNITED LIC", "HADDAD/GARMENTEX INTERNATIONAL LLC", "HALMODE (GONZALEZ)", "HALMODE DIRECTO", "HAMBURG SUD PANAMA,S.A.", "HAMPTON FORGE,LTD.", "HAMZI , S.A", "HANA  AND COMPANY, S.A.", "HANDBAGS CENTRAL", "HANG TEN (PANAMA), INC.", "HANGAR ZONA LIBRE", "HANGZHOU LIGHT INDUSTRIAL PRODUCTS", "HARBOUR INTL PANAMA, S.A.", "HARISONS & HARLAJ LTD.", "HARMONY PANAMA", "Harry Fashion S.A.", "HARRY HYMAN & SON, INC.", "HAS INDUSTRIES INC", "HASKY INTERNATIONAL, S.A.", "HAUT DE GAMME CORP.", "HAUTE MONDE", "HDS TRADING CORP", "HEART OF NEW YORK", "HEARTBEAT DESIGNS, S.A.", "Heat Swimwear Inc.", "HECTOR PEREZ", "HELLMANN", "HENAN YILONG IMPORT AND EXPORT CO.", "HENRY", "HERA COLLECTION", "HERMANOS LAM, S.A.", "HERMANOS PUNJABI, S. A", "Hermosa Style", "HERNAN SRL", "HERON SHUTTLE OVERSEAS CORP.", "HESSLHER BHAGWANDEEN", "HI PACK", "HIDROGENIO IND E COM DE ROUPAS LTDA", "HIGH FASHION, INC", "HIGH LINE DECOR CORP", "HIGHTLAND ENTERPRISES", "HILCO PANAMA S.A.", "HINENI, S.A.", "HIPACK TRAVELWARE", "HISA INTERNACIONAL", "HIT CONFECCOES", "HOC ACE-PALIWAL (LUBAR)", "HOGARTEX, S.A.", "HOLIGAN INTERNATIONAL, S.A.", "HOLLYWOOD Z.L.", "HOME DYNAMIX LLC", "HOME ESSENTIAL", "HOME FASHION DISTRIBUTORS", "HOME FASHIONS DISTRIBUTOR LLC", "HOME POINT INDUSTRIAL CO.", "HOME SOURCE INDUSTRIES, LLC", "HOMESTAR", "HONG KONG HAO FU LIMITED", "HONGKONG BENTA FASHION LIMITED", "Hookie Plastic Limited", "HOPE & HARLOW SPORTSWEAR", "HOPSA, S.A.", "HORMIX PEST CONTROL", "HOROKO GROUP INC.", "HOSIERY MILL INDUSTRI INC.", "HOT CHOCOLATE INC.", "HOTEL SOLUTION , S.A", "HOTEL SWANS CAY", "HOTTIE K.GARMENT CO.LTD", "HOUSE OF FASHION", "HOUSEWARE DISTRIBUTORS", "HOUSEWARES INTERNATIONAL", "HR TEXTIL , S.A", "HSBC BANK", "HT AUTOMOTRIZ E INDUSTRIAL", "HUANTAI FOREIGN TRADE CO.", "HUBEI ARTS & CRAFT CO.LTD", "HUDSON DRT CHEAP , LLC/DOPICO", "HUDSON WHOLESALE, INC", "HUNG'S CENTER", "HUZA KAPITAL S.A.", "HW INTL", "HYIPNOTEX MISSY", "HYMAN FAMILY INC", "I CONFESS", "I*ME", "I5 INC", "IBIZA PANAMA", "IBRAHIM INTERNACIONAL,S.A", "ICE TEA", "IDEA ALTERNATIVA,S.A", "IDEA NOVA INC", "IGLOO PRODUCTS CORP.", "IKEDDI IMPORTS LLC", "IKO IMPORTS LLC", "ILE CLOTHING LLC", "ILG LOGISTICS, S.A.", "ILLINOIS WHOLESALE", "ILLUMINATIONS", "ILUMINACIONES TECNICAS, S.A", "ILUMITEC", "IM. EXPORT AMERICAN,S.A", "IMANOL PINTO", "IMAR IMPORT, S.A.", "IMC. INDUSTRIA, S.A.", "IMCOTECA, S.A.", "IMCOTEXPA, S.A.", "Imp. y Expo. Marchell, SA", "IMPERIO DE LAS GAFAS Y MONTURAS INTL, S.A.", "IMPEXSA", "IMPHERSA S.A", "IMPORTACION Y EXPORTACION CARIBE,S.A.(IMEXCA, S.A)", "IMPORTACIONES BUSTOS, S.A.", "IMPORTACIONES TRIPLE A", "IMPORTADORA  AMJ S.A", "IMPORTADORA  Y EXPORTADORA ROSEN", "IMPORTADORA AMEGAR, S.A.", "IMPORTADORA AMIGO, S.A.", "IMPORTADORA CAPRICE, S.A.", "IMPORTADORA CARIOCA", "IMPORTADORA CHENG KUNG", "IMPORTADORA COPIHUE ,S.A.", "IMPORTADORA DANY S.A.", "IMPORTADORA DANY, S.A", "IMPORTADORA DEARBODY, S.A.", "IMPORTADORA DEL ESTE, S.A.", "IMPORTADORA EL TRIUNFO, S.A.", "IMPORTADORA GALAXY, S.A", "IMPORTADORA LA POLLERA, S.A.", "IMPORTADORA LOOK S.A.", "IMPORTADORA MADEN", "IMPORTADORA MADURO, S. A.", "IMPORTADORA MADURO, S.A.", "IMPORTADORA MAGIC, S.A.", "IMPORTADORA MUNDO FINO", "IMPORTADORA PABEL, S.A.", "IMPORTADORA PANAMA", "IMPORTADORA RICAMAR, S.A", "IMPORTADORA TRASMUNDI, S.A.", "IMPORTADORA UNIVERSAL", "IMPORTADORA VICTORIAMODA, S.A", "IMPORTADORES EXPORTADORES ARIAS, S.A.", "IMPORTRADE USA INC.", "IMPRESIONES S.A David", "IMPULSE OFF PRICE APPAREL", "IMPULSE WEAR INC.", "IMPULSO MODA JOVENS, S.A.", "IN & OUT FASHION, INC", "IN JOY CLOTHING", "IN MODA .COM", "IN MODA APPAREL", "IN STYLE ACCESSORIES", "INA", "INCALPA,S.A.", "INCHAPE SHIPING SERVICES S.A", "INCSA, S. A.", "INDEPENDENCE CARGO LOGISTICS", "INDIGO 18 FASHION GROUP", "INDO EXPORT CORPORATION", "INDOTEX DE PANAMA (ISSF INT.)", "INDUSTRIA CORSAN PANAMA", "INDUSTRIA PIRAQUIVE", "INDUSTRIAS ABC.S.A.", "INDUSTRIAS CATALINA, S.A.", "INDUSTRIAS CORREAGUA", "INDUSTRIAS CORSAN, S.A.", "INDUSTRIAS CUMBRE", "INDUSTRIAS EVERFIT, S.A.", "INDUSTRIAS EVERFIT, S.A. (ZONA LIBRE)", "INDUSTRIAS KIDS LTDA.", "INDUSTRIAS KING DE PANAMA, S.A.", "INDUSTRIAS LA PANAMEÑITA", "INDUSTRIAS MINEIRA", "INDUSTRIAS MODERNAS, S. A.", "INDUSTRIAS PANAM, S.A.", "INDUSTRIAS QUASAR S.A.", "INDUSTRIAS ST. EVEN S.A.", "INELECTRICA,S.A.(KUK DONG HOIST CO.LTD", "INFORMAT PANAMA", "INGAPARUCA LTDA", "INGENIERIA GQ", "INKINVEST, INC.(ELBROS) VER EL-644", "INMOBILIARIA VILLA LINDA, S.A.", "INNOCENCE (NEW TRINITY IND E COM DE ROUPAS LTDA)", "INNOVACION INTERNACIONAL, S.A.", "INNOVATION ART COMPANY", "INSTA SRL", "INSTANTE SOLUCIONES COMERCIALES S.A.S.", "INTEGRACIONES TECNOLOGICAS (ITSA)", "INTEGRAL SERVICE OF LOGISTICS", "INTEL CHOICES CO.,LTD", "INTERCARGO PANAMA S.A.", "INTERCARGO PANAMA, S.A.", "INTERCONTINENTAL EXPRESS CARGA", "INTERFASHION CORP., S.A.", "INTERGLOBAL MARKETING GROUP CORP.", "INTERKOPYTECH", "INTERMARKET (INDIA) PVT. LTD.", "INTERNACIONAL DE DISEÑO Y PROYECTOS, S.A.", "INTERNACIONAL NESS CORPORATION", "INTERNATIONAL BRANDS PANAMÁ, S.A.", "INTERNATIONAL CIERS,S.A.", "INTERNATIONAL CLOSEOUTS,LLC", "INTERNATIONAL INTIMATES", "INTERNATIONAL OFFICE SUPPLIES, INC", "International Tex Trade S.r.L", "INTERNATIONAL TRC. COMPANY", "INTEX DEVELOPMENT COMPANY LIMI", "INTEX INTERNACIONAL", "INTIMATECO LLC", "INTIMO", "INTRATEX, S.A.", "INTREND GLOBAL CORP.", "INT´L PRIVATE LABEL INC,/U.S. OFF PRICE", "INVADER INTERNACIONAL, S.A.", "INVERSIONES  QUERIC S.A.", "INVERSIONES AMERICAN BABY", "INVERSIONES CARIKY(MIZRATEX, S.A.)", "INVERSIONES DAHYAM", "INVERSIONES ECLAI S.A.", "INVERSIONES HODAYA", "INVERSIONES IDAVIGES", "INVERSIONES ORION TRADING CORP.", "INVERSIONES PM18,S.A.", "INVERSIONES RUTHY,S.A.", "INVERSIONES SAN REMO GRUOP, S.A", "INVERSIONES TEXTILES MUNDIALES", "INVERSIONES UNIQUE", "INVICTA S.A", "IRCADA, S.A.", "IRENE BAG", "IRIS", "IRMAOS TUDINO LTDA.", "ISAAC HERES RODRIGUEZ", "ISAAC LALO", "ISAAC SILVERA", "ISABELLA", "ISABELLE HANDBAGS", "ISAIS SERVITEL", "ISHOP PANAMÁ", "ISPO INTERNACIONAL", "ISSA INTERNACIONAL,S.A", "ISTAMBUL, S.A.", "ISTHMIAN TRADING CORPORACION, S.A.", "IVAN SILVERA(KALIANA) S.A)", "IXIA DIVISION OF ELLIKO INC.", "IZHAKET INTERNATIONAL,S.A.", "J & G INTERNACIONAL, S.A.", "J & J SPACE INC.", "J & L", "J & R WORLDWIDE, INC.", "J & S HOUSEWARES CORP.", "J & USA INC.", "J MICHELLE OF CALIFORNIA", "J&G FREIGHT FORWARDERS PANAMA, S.A.", "J. GEAN", "J. MALOUL E HIJOS, S.A.", "J. QUEEN NEW YORK", "J.CORPORATION", "J.R. & PAPER SALES, INC", "J.S INTERNACIONAL, INC. S.A", "J.T.S. INTERNATIONAL, INC.", "J3 FASHION (JULIA TRADING)", "JA-RU INC", "JABA USA, INC.", "JAC MOTORS", "JACKELINE QUIROS", "JACKY  ISAAC SILVERA", "JACKY SILVERA", "JACMAX INDUDTRIES ,LLC", "JAD CLOSEOUT INC.", "JADA LOGIST & TRANSPORTATION SERVICES,S.A", "JADE INTERNACIONAL", "JAG TRANSPORT LOGISTICS ,S.A.", "JAI MA CREATRION INC.", "JAIME PINO", "JAIME RICARDO FERNANDEZ URRIOLA", "JALMEX, S.A.", "JANETTE MANUFACTURE & WHOLESALE", "JANICE FASHION INC.", "JAP SUPPLIES, S.A.", "JAS WORLDWIDE PANAMA, S.A", "JASON KOREA (HOLANDA", "JASPE ROCK, S.A.", "JASSTEX INTERNATIONAL CORP.", "JAXI´S II INC", "JAY FRANCO", "JAYDAY INC", "JAYLYN SALES INC. (ATLANTIC HOSIERY, LLC)", "JAYMY INC.", "JDR APPAREL GROUP", "JEAN CENTER CORP, S.A", "JEANCARLOS XAVIER HERNANDEZ MARTINEZ", "JEANS & CO., INC", "JEANS & JEANS, S.A.", "JEEA TEXTILES PVT", "JEETISH IMPORTS, INC.", "JEFF GARMENTS INTERNACIONAL (LUBAR)", "JEKNIT LADIES APPAREL", "JEM ACCESSORIES", "JEMMA APPAREL", "JESSASH BY SOOFEE", "JESSICA HOWARD LTD.", "JESSICA McCUNTOCK", "JESSY INTERNATIONAL", "JEWEL SENCE (FASHION TRIP)", "JEWELRY PLAZA", "JGI SALES INC.", "JGMC CLOTHING INC.", "JIANGSU GLOBAL DEVELOPMENT INC.", "JIANGSU PROVINCE TONGSHAN CERAMIC GENERAL FACTORY", "JIANINI FASHION", "JIANYAN CITY FOREIGN TRADE", "JIEYANG HAIXING PLASTIC & RUBBER CO., LTD.", "JIHAN INTERNACIONAL,S.A.", "JML CONNECTION INC", "JMS CREATIONS,INC.", "JNJ S.R.L", "JO MARC, S. A.", "JOEL ABRAHAM DIAZ SOLORZANO", "JOHOROS", "JOIA HANDBAGS", "JOLIE INTIMATES", "JONATHAN K APPAREL", "JONATHAN MARTIN/CARIBEAN PACIFI SPORTWEAR INC.", "JORDAN BROUSES", "JORDAN CHATTANOGA", "JORGE BERNAL", "JOSE ALBA", "JOSE HERNANDEZ", "JOSEPH CLOTHING CO., INC.", "JOSEPHS ENTERPRISES, S.A.", "JOSIMON,S.A", "JOT TEXTIL Y COMPLEMENTOS S.L", "JOY & CO.", "JOY ENERGY S.A.", "JOY MARK, INC.", "JOYAS DI ORO, S.A.", "JOYFULL TRANDING INC.", "JOYLINE INC.", "JOYWEAR APPAREL, INC", "JRT SALES, LLC", "JS FIBER CO.,INC", "JUAN MIGUEL FARELO YANEZ", "JULIA TRADING INC", "JULIANA GARCIA DE MOJICA", "JULIETH FASHION,S.A.", "JULIO VOZ, S.A.", "JULIUS YOUNG", "JUMBO ZONA LIBRE", "JUMP APPAREL", "JUNAID APPARELS (LUBAR)", "JUNK KIM FASHION", "JUNO 2  LTD", "JUST COTTON INC.", "JWE TRADING,S.A.", "K TOO", "K.K. MERCHANDISE, NC.", "K18  S A", "KADI INTERNATIONAL  ZONA LIBRE S.A.", "KADI INTERNATIONAL S.A", "KAINOS USA,INC.", "KALED, S.A.", "KAMEL GROUP S.A.", "KAMS INTERNATIONAL INC.", "KAREN", "KAREN T.", "KARINA SILVERA", "KARLA AGUILAR", "KARLA DOYEN (KARELY)", "KASH TRADING  GROUP,INC", "KASHI ENTERPRISES INC.", "KASSATEX  INC", "KATHERYN TONDOLO", "KAY DEE DESIGNS", "KAYBEE EXIM", "KEDCO FASHION", "KELLWOOD COMPANY", "KENDY MOVIES", "KENNEDY STRUCTURES CORPORATION", "KENNETH MILLER CLOTHING INC.", "KENPO JEANS INC.", "KETCHUP ZONA LIBRE", "KIBE HOLDINGS, S.A.", "KIDDIELAND TOYS LIMITED", "KIDS APPAREL CLUB", "KIDS CREATION INC", "KIDZ WORLD INC DBA HIGH ENERGY USA", "KILOROCK ENTERPRISES LIMITED", "KING CARGO S.A.", "KING DAVID LINEN INC.", "KINLY, S.A.", "KISS ME FASHION", "KITTAMOR INTERNATIONAL, INC.", "KK ENTERPRISES WORLDWIDE LIMITED", "KLASSY COLLECTION", "KLG IMPORT & EXPORT,  S.A.", "KLOCKNER TEXTIL LTDA", "KMQ INTL INC. LOS ANGELES", "KMQ MODA S.A", "KMQ OPTICOS", "KNIT SOURCE (BD)LTD", "KOCAL TRADING", "KOKONET,S.A.", "KOLE IMPORTS", "KOMEX INTERNACIONAL", "KONG THAVORN GLASSWARE INDUSTRY CO.,LTD.", "KORET DRESS MISSY", "KRAZY KAT", "KRYSTAL LOGISTICS PANAMA", "KRYSTAL SALES", "KRYSTAL ZONA LIBRE, S.A", "KUEHNE NAGEL", "KULANA HOSPITALITY", "KURABO, S.A.", "L.A. FASHION HUB", "L.A. GRAND.INC.", "L.A. QUEEN", "L.A. RUG INCO", "LA BOMBA IMPORT&EXPORT S.A.", "LA CASA DE LAS OLLAS, S.A.", "LA CASA DEL DACRON", "LA CASA DEL MUEBLE", "LA CASA DEL ZINC  ( GRUPO DOMINGO, S.A. )", "LA CONFIANZA, S.A.", "LA DIOSA FASHION", "LA GRAND CLOTHING", "LA HOSPITALITY", "LA LINDA INTERNACIONAL, S.A", "LA MAIN CONNECTION", "LA MEGA  S.A.", "LA MODA JEWELRY", "LA PAZ INTERNACIONAL", "LA PRINCESA ZONA LIBRE", "LA STRADA FASHIONS NY LLC", "LA UNION PUBLICITARIA", "LA VANI INC", "LABORATORIO SELENE, S.A.", "LABORATORIOS INDUSTRIALES DE PRODUCTOS DE TOCADOR", "LABORATORIOS PALM,S.A", "LADY LORD WEST INC", "LADY SUMMER", "LAFAYETTE ZONA LIBRE ,S.A", "LAKUBO, INC", "LAMIAR S.R.L", "LAMPARAMA INTERNACIONAL,S.A.", "LANATEX ZONA LIBRE S.A.", "LANCO APPAREL LLC", "LANDMARK ENTERPRISES", "Lanver Mayorista S.L", "Laparkan Trading Limited", "LAS INTERNATIONAL CORPORATION", "LAS VEGAS  NEVADA  S.A", "LASSISTER", "LATEX UNICA", "LATIGO,S.A.", "LATIN AMERICAN ELECTRONICS COMPANY, S.A", "LATIN ASIA IMPORTS S.A.", "LATIN FITNESS GROUP INC", "LATIN IMPORT SRL, S.A.", "LATIN SHOE MASTER, S.A", "LATIN TRADING CO.", "LAUREN HAND BAG CO", "LAZY DAISY,INC.", "LAZZARO ZONA LIBRE COLON S.A.", "LB SERVICES", "LCA CALCADOS LTDA", "LCI LAY-CEE, INC", "LE MARKETING CORPORATION (LEMCO)", "LE MONDE FASHIONS", "LEATHER CLUB INC.", "LEE-ZA INTERNATIONAL", "LEGEND EXPRESS CO", "LEISURE LIFE IND, INC", "LEMON GRASS", "LEONA INTERNACIONAL, S.A.", "LEONOR DOMINGUEZ DE CRISTANCHO", "LES CHAMPS ELISEES S.A", "LES IMPORTATIONS VENETO LTEE.", "LESBIA GONZALEZ", "LETIZ MODA", "LETTE GROUP ,S.A", "LEVEX TRADING CORP.(ANN LORI INTIMATES)", "LEVINSON INTERNACIONAL,INC.", "LEXY HANDBAG INC.", "LIBANEX , S.A", "LIBBEY MEXICO, S. DE R.L. DE C", "LIBERO", "LIBERTY APPAREL CO. INC.", "LIBERTY DISTRIBUTORS", "LIBERTY SCRUBS INC", "LIBERTY TEXTILE GROUP", "LIBRA THECLOSEOUTSPECIALISTS-N", "LIDICE INVESTMENT CO.", "LIFE 4 KIDS S.A.", "LIFE&STYLE FASHIONS INC", "LIGA ENTERPRISE, S.A.", "LILA CROCOCO JOYEROS", "LILIANA DE REBOLLEDO", "LILLY & ASSOCIATES INTERNATIONAL", "LILY & PEONY", "LIMITED DESING CORP", "LIMON CON AZUCAR", "LINA CORPORATION INC.", "LINDA FASHION ACCESSORIES CORP.", "LINDA FURNITURE,S.A.", "LINDA MODA INTL, S.A.", "LINDA MODA S.A.", "LINDA MODA/ MODA LINHONG, S.L", "LINDO & MADURO", "LINE AND  ARTS", "LINE APPAREL LLC (ONE LEGEND)", "LINELI", "LINEN M.V.CORP.", "LINK IMPORT EXPORT", "LINKEAST WORLD LIMITED", "LINTEX BEDDING INC", "LIQUID COMERCIAL, S.A.", "LIQUIDIITY (SOUTHERN TEXTILE RECYCLING)", "LITHIUM TRADING ,S.A.", "LIZ SUITS MISSY", "LLANTERÍA Y MECÁNICA REINA CAR", "LLYCHELL INTERNACIONAL, S.A.", "LMJ TRADING", "LOCALES DEL ESTE S.A", "LOGISTIC MANAGEMENT & TRANSPORTATION CORP.", "LOGISTICA DE VALORES S.A.", "LOLTEC", "LOMAX", "LONDON SUPPLY GROUP, S.A.", "LORANI`S, S.A.", "LORATEX, S.A.", "LORENCY & COMPANY LLC", "LOREN´S ZONA LIBRE", "LOST HOLDINGS,LLC", "LOUIS GARCIA", "LOUISE PARIS, LTD", "LOULOU", "LOVE ME MORE LLC", "LOVE POEM (COMMON SENSE)", "LOVELY APPAREL CO INC", "LOW & SWEET-NO USAR CORRECTO AL-100", "LUBAR GROUP, INC.", "LUCAR INTERNATIONAL NC", "LUCKY STAR, S.A", "LUCNAT INTERNACIONAL T-SHIRT & GORRAS PROMOCIONALE", "LUIGI & SONS", "LUIGI BARETTA", "LUIS A CHIE-SERVICIO DE CARGA EN GENERAL", "LULUMARI/HYKU", "LUMICOLOR,S.A", "LUMINA MAYORISTA SL", "LUSH CLOTHING", "LUTESTIL", "LUXCESSORIES,INC.", "LUXURY HOME TEXTILES", "LUXXEL", "LUZ  G. DE LA TORRE, S.A.", "LUZAKA COMMERCIAL , S.A", "LX PANTOS PANAMA S.A", "M&J INTERNACIONAL COLON .S.A.", "M&R IMPORTS", "M. FACTORIAL", "M. HIDARY & COMPANY INC.", "M.M.S. CATUANA IND. e COM. DO VESTUARIA LTDA.", "M.P.J INTERNATIONAL ZONA LIBRE, S.A.", "M.S.H. CASUALS INC.", "M/S JIBE TRADING", "M/S SHINEST APPARELS LTD", "M6 VENTURES/ ROYAL STITCH", "MAAG CORE INC.", "MACKSON INC.", "MACRONITE, S.A.", "MAD PANDA, S.A.", "MADISON BRANDS", "MADISON INDUSTRIES, INC.", "MADISON PAIGE", "MADREPERLA CONFECCOES DE ROUPAS LTDA", "MADRID DISEÑO  IMPORT-EXPORT, S.L.", "MADRID DISEÑO IMPORT-EXPORT", "MAERSK SEALAND PANAMA, S.A.", "MAG APPAREL, INC", "MAGAZINE CLOTHING COL  INC", "MAGIC PRICE CLOTHING", "MAGIC SPORT INTERNACIONAL S.A.", "MAGIC TRADING ,S.A. (LOCAL)", "MAGIC TRADING, S. A.", "MAGID HANDBAG", "MAGNATEX INTERNACIONAL, S.A.", "MAIN DISPLAY & FIXTURES", "MAJESTIC FREIGHT FORWARDER SER", "MAJESTIC IMPORTS", "MAKERS SHOES DBA OF IMPEXSA", "MAKROTEX, S.A.", "MAKY S", "MAKYS BOUTIQUE", "MALIX INTERNATIONAL LTD, S. A.", "MANDARIN´S BEAUTY CENTER", "MANGO USA INC.", "MANHATTAN MARKETING", "MANHATTAN TRADING CORP", "MANKOFSKY SHOE CO.", "MANLEY TOYS LTD", "MANOS DE ALGODON", "MANTEX DE PANAMA, S.A.", "MANUEL LOPEZ", "MANUFACTURERAS ELIOT S.A.", "MANZANILLO INTERNATIONAL TERMI", "MAPEC,S.A.", "MARACUARIO LTDA", "MARBLE ARCH HOLDING CORP.", "MARCHAR INTERNACIONAL", "MARIA GUERRERO", "MARIA LUISA DE LA CRUZ", "MARIANA FACHION, S.A.", "MARINEBLU", "MARINELLI, S.A.", "MARISOL CREACIONES", "MARKET SECURITY", "MARKET SECURITY,INC", "MARKSMAN LATIN AMERICA,S.A", "MARLIN LOGISTIC, S.A.", "MARSUTEX, S.A.", "MARTHA YAMILETH GARCIA SALAZAR", "MARTYS INTERNACIONAL LYD.,", "MARTYS PANAMA, S.A.", "MARUJA ECUADOR", "MARUTI  INT.", "MARÍA BONITA, S.A.", "MASAL ZONA LIBRE", "MASC GLOBAL IMPORTS.S.A.", "MASSAWA INTERNACIONAL, S.A", "MASTEFE", "MASTER DIRECT PANAMA, S.A.", "MASTER VALUE, S.A.", "MASTERLINE GROUP PANAMA", "MATISSE A & A WHOLESALE INC.", "MATRIX 26, INC.", "MATRIX ZONA LIBRE, S.A.", "MATSLIAJ, S.A.", "MATURIN INTL,SA", "MAUI AND SONS", "MAUTOYS", "MAX-TOUCH", "MAXIMA WATCH PANAMÁ", "MAXIMS ZONA LIBRE, S.A.", "MAXS WHOLESALE IMPORT EXPORT INC", "MAXTRON INTERNACIONAL, S.A.", "MAXZ WHOLESALE IMP. EXP. INC", "MAYBE WANG CLOTHING", "MAYOR INTERNACIONAL, S.A.", "MAYRICH COMPANY", "MAYS ZONA LIBRE, S.A./PARIGI", "MAZC WHOLESALE", "MAZE COLLECTION INC", "MC  SUNRISE INVESTMENT INC", "MC CORPORATION", "ME UNDERWEAR ZONA LIBRE, S.A.", "MECAB", "MEDIMEX, S. A.", "MEDITERRANEAN SHIPPING COMPANY", "MEETING", "MEETU MAGIC , INC.", "MEGA CLUB FASHION", "MEGA IMPRESIONES, A.P.", "MEGA MODA ZL S.A.", "MEGA PUBLICIDAD  IMPRESA NACIONAL", "MEGA SHOP PTY", "MEGABYTE INTERNACIONAL, INC", "MEGACOLOR", "MEGATEX , S.A", "MELBROOK ZONA LIBRE, S.A", "MELCO ZONA LIBRE", "MELISA CORTEZ", "MELO FARMA  S.A", "MELODY IMPORT CO.", "MEMORY DI HU CIWEI", "MENDEZ INTERNATIONAL INC", "MENTA ZONA LIBRE, S.A.", "MERCADO INTERNO GPH", "MERCURE LOGISTIC GROUP", "MERCURY PANAMA", "MERENGADA,S.A.", "MERMAID SWINWEAR INC", "MERRY FOODS INC.", "MET TRADERS INTERNATIONAL, INC", "METALES, S.A.", "METRO FASHION, S.A.", "METROPOLIS  LATINOAMERICANA", "MF INDUSTRY & TRADE LTD.", "MHM MISSY", "MHM WOMEN'S", "MIA BAG FASHION S,L", "MIA FASHION", "MICHEL", "MICHEL FASHION", "MICHEL FASHION MANUFACTURER & W.L.A.", "MIDWAY OCEAN AGENCIES/BESTWAI", "MIGLIO SRL", "MIGO CERAMIC LIMITED", "MIGREEN", "MIGUEL ANDRÉS PRIETO MAYA", "MIKA ACCESSORIES", "Mika Firenze Di Zhao Baoquan", "MIKA-EL CLOTHING,LLC", "MIL SERVICIOS", "MILAN IMPORT, INC", "MILCO INDUSTRIES INC.", "MILENIUM IMPORT & EXPORT,S.A", "MILLENIUM CLOTHING, INC", "MILLENNIUM PET GROUP LLC", "MIMI", "MIMOA FASHIONS", "MINIMI", "MINT GREEN INC.", "MINUET", "MIRABELLA IMPORT INC.", "MISS ERIKA INC.", "MISS FASHION S.A./CAP", "MISS GIRASOL", "MISS KELLY 1999", "MISS SPORTSWEAR INC", "MISTIC FASHION", "MITCAN SOLUTIONS", "MOA COLLECTION", "MOA INTERNACIONAL", "MOA INTERNATIONAL CORP.", "MOCA BONITA IK AHN IND. E COM. DE MODAS LTDA.", "MODA BOTELI S.L", "MODA HAO XI HAO S.L.", "MODA I DI SUN JINGUANG", "MODA IN S,A (ZONA LIBRE, S.A.)", "MODA INN BY STAFF", "MODA INN BY STAFF (CONF. SIMON LTDA)", "MODA JINYUELIANG S.L", "MODA MARKET /AURORA CREATIONS S.L.", "MODA ROPA TIRAMISU S.L.", "MODA STUDIO S A", "MODA WEST BY DAVIS WHOLESALE", "MODA YOMI JOVEN, S.L", "Moda-Paris Madrid S.L (Victoria)", "MODAS DELEES LTDA.", "MODAS MODERNAS, S.A.", "MODAS MUNDIALES, S.A.", "MODAS VISION LTDA", "MODAS Y DEPORTES EL DORADO, S.A", "MODISTERIA SUSANBAL", "MOES WEAR", "MOHAMMAD ASHRAF & BROTHERS", "MOISES ZEBEDE/LIDICE", "MOJADITO PANAMA", "MOJADITOS PANAMA", "MOL PANAMA,INC", "MOMO BABY INC.", "MONDIAL FASHION PRONTO MODA S.R.L.", "MONICA DIAZ", "MONTREAL INT., S.A.", "MORADO IMPORTS", "MOREL, S.A", "MORELLI CALCADOS", "MOSHE OFF PRICE COMPANY", "MOSS APPAREL GROUP", "MOSTAZA INTERNACIONAL, S.A.", "MOTTA INTERNACIONAL", "MOVEIS KAPPESBERG LTDA.", "MOVEIS NINO LTDA.", "MOVEIS SUL INDUSTRIA E COMERCIO LTDA", "MOVIES DORIPEL LTDA EPP", "MR SOLUTION", "MR. POCKETBOOK, INC.", "MRS. SUPAVEE JARIYAVILASKUL", "MS.X", "MSP COLLECTION (FALANTE MODAS LTDA)", "MUKHI IMPEX,S.A.", "MULITEX", "MULTI MARKETING, S.A.", "MULTI-GROUP, INC.", "MULTIMODA IMPORT, INC.", "MULTIMODAL LOGISTICS, Z.L. CORP.", "MULTISERVICE MC", "MULTISERVICE SHIPING FORWARDER", "MULTISERVICIOS L. VARGAS", "MULTISERVICIOS LA DESPENSA, S.A.", "MULTIVARIOS INTERNACIONAL", "MULTIVISION PANAMA", "MUNDO FINO", "MUNDO LITOGRAFICO Y EDUCATIVO KING KOLOR, S.A", "MUNDO PROMOCIONAL GO", "MUNMO FASHION SL/SHINE", "MUR", "MUTITONE CORP.", "MY MICHELLE", "MY NAME IS PANAMA", "MYSTERY", "MYSTIC WEAVES U.S.A. INC", "N & A INTERNATIONAL, S.A.", "N & N LINENS", "N.K. EXPORTACOES LTDA", "N.Y.ENTERPRISE (BARYLKA)", "NABIL INTERNACIONAL, S.A.", "NADIR FIGUEIREDO", "NAFA ZONA LIBRE , S.A", "NAGUIT POTTERY", "NAHMANY INC,", "NAKED ZEBRA", "NALI COLLECTION INC", "NANHAI NATIVE PRODUCE IMPORT AND EXPORT COMPANY", "NAPPA PROPERTIES FINANCE INC.", "NASA ZONA LIBRE PANAMA, S.A.", "NASDEK INDUSTRIES, INC.", "NAT CORP", "NATHAN FOODS CORPORATION", "NATION AMERICA OUTFITTERS LLC", "NATIONAL CURTAIN", "NATIONAL DISTRIBUTORS", "NATIONAL MILL INDUSTRY INC.", "NATIONWIDE WHOLESALE", "NATURAL COLLECTION CORP", "NAVIN INT.", "NB MULTISERVICES", "NEESO JEANS", "NEKI IMPEX, S.A.", "NEMO TRADERS", "Nestlé Panamá, S. A.", "NETSOFT AMERICA LATINA SA", "NEUTRAL CARGO PANAMA, S.A.", "NEW APPAREL, S.A.", "NEW CHANCE IMPEX PVT. LTD", "NEW CONCEPTS", "NEW IN BOX", "NEW LINE FASHION", "NEW MOA", "NEW OCEAN INDUSTRAIL", "NEW PORT INC.", "NEW SPIRIT INTERNATIONAL LIMITED", "NEW STAR HOUSEWARES CORP.", "NEW STYLE DI LIU DAOSONG", "NEW TOWER FASHION, INC", "NEW VERSE S.A.", "NEW YORK ELEGANCE ENTERPRISES INC", "NEW YORK FANTASY", "NEW YORK FASHION", "NEW YORK INTER, ENTERPRICE INC.", "New York Wholesale Distribuitors Corp.", "NEW YORKER S APPAREL", "NEWPORT FASHIONS, S.A.", "NEWTIMES (HK) LTD.", "NEXTEX APPAREL GROUP", "NEXUS SPORTS SA", "NICOLE FASHIONS", "NIDICO GROUP INC", "NILKO TECNOLOGIA LTDA", "NINA AUSTIN", "NINGBO LATAM INTERNATIONAL TRADE CO.,LTD", "NINGBO NINGFENG IMPORT & EXPORT CO,LTD.", "Ningbo Yaohui Plastic Co. Ltd", "NINGBO YINXIAN FREIGN TRADE CO,", "NIPTUCK INC.", "NIT CORPORATION", "NIZA", "NO USAR", "NO USAR VER CO-414", "Noam Trading Corp.", "NOBLE SKY ENTERPRISES LIMITED", "NOEMITEX S.LU", "NORCA SERVICES, S.A.", "NORTON LILLY INTERNACIONAL (PANAMA), S.A.", "NOSTRUM INTERPRISES S.A.", "NOTTING HILL READYMADE GARMENTS TRADING LLC.", "NOUR INTERNACIONAL", "NOURISON", "NOVA MODA INTERNACIONAL, S.A.", "NOVA ZONA LIBRE, S.A.", "NOVATEX INTERNACIONAL, S.A.", "NOVATRON PANAMA, S.A.", "NOVATRON ZONA LIBRE,S.A", "NOVEDADES ANTONIO,S.A.", "NOVEDADES FRIDA, S.A.", "NOVEDADES Y ACCESORIO YOLYS, S.A.", "NOVO TEMPO MOVIES LTDA.", "NUEVO HUNG SHENG INT'L", "NUKAN TEKSTIL", "NUMBER 1 LIQUIDATION LLC", "NURI IMPORT INC", "NYLON APPAREL", "OBAN TRADING, S.A.", "OBER, S.A. INDUSTRIA COMERCIO", "OBOLY BAG, S.L.", "OCEANIC TRADING (SCAASIS ORIGINAL)", "OCEANICA INTERCONTINENTAL", "Odin Fashion Corp.", "OFF PRICE NETWORK, LLC", "OFF PRICE TRADING , LLC", "OFF-PRICE CONNECTION,INC.", "OFICA", "OFIMAYOR.COM,S.A.", "OG CONSTRUCCIONES", "OKISS INTERNACIONAL , S.A.", "OLEG CASSINI, INC", "OLEM SHOES CORP", "OLGA - MEXICO", "OLIMPUS COMMERCIAL CORPORATION", "OM EXPORTS, S.A.", "OMEGA APPAREL LTD", "ON LINE INTEROCEANIC, S.A.", "ONE OCEAN NETWORK EXPRESS", "ONE STEPUP", "ONE STOP SHOP (KARMIN)", "ONE WAY FASHION INC.", "ONIX NITE", "ONIX TRADING COMPANY", "ONLY CALCADOS LTDA.", "OPHIR FASHION, S.A.", "OPTIMA CIA - DE SEGUROS, S.A", "ORACLE AMERICA INC.", "ORANGE FASHION", "ORANGE ZONE INC.", "OREN'S REPLAY, INC.", "ORENS OULET", "ORIENTAL IMPORTS", "ORILAT", "ORION DIGITAL", "ORLANDO CASTRO SAAVEDRA", "ORLY SHOE CO.", "OROTEX, INC.", "OSC DEALS", "OSM", "OSTROW WHOLESALE", "OUTLET FOR EXPORT INC", "OVA FASHION INC", "OXFORD URUGUAY, S.A.", "OXO INTERNACIONAL", "P & S USA", "P-STAR-T-INC DBA PACIFIC STAR TRADING", "P.B ZANZINI & CIA LTDA.", "P.H. CENTRO COMERCIAL LOS ANDES", "P.H.CENTRO COMERCIAL LOS PUEBL", "PACIFIC BLUE TRADING CO., INC.", "PACIFIC CONECTIONS", "PACIFIC RIM.", "PACIFIC TRADING", "PACORA MARKETING CORP.", "PAILAS LA CHORRERANA", "PALEY PRODUCTS LLC", "PAMELA", "PAN Y SAL, S.A.", "PANADERIA LMCP S.A.", "PANAFOTO, S.A.", "PANAMA AUTOS, S.A.", "PANAMA COLD AGENCY CORP", "PANAMA CONSOLIDATION SERVICES, INC.", "PANAMA FAST SERVICES GROUP, S.A.", "PANAMA FLYER CORP", "PANAMA LINE AERO MARITIME/PEARLTEX", "PANAMA OIL CORPORATON", "PANAMA PORT COMPANY, S. A.", "PANAMA TOYS", "PANAMENA DE COSTURAS,S.A.", "PANAMERA.GROUP", "PANAMERICA IMPORT EXPORT S. A", "PANAMERICANA DE DISTRIBUCIÓN, S.A.", "PANAMEX SPORT S.A", "PANASAL,S.A.", "PANDORA IMPORTS CORP", "PANTIES PLUS INC.", "PAOLA MOLINA", "PAPEIS AMALIA (MECAB)", "PAPELERIA COMERCIAL", "PAPELERIA NORMA, S.A.", "PAR INTERNATIONAL,INC.", "PARADISE BARGAIN CLOTHING", "PARISSEO", "PARTNERS LOGISTICS INC.", "PASHA`S FASHION INC.", "PASHION CLOTHING", "PASSO FIRME FRANCA CALCADOS LTDA", "PATRICIA DONAHOUE", "PEACE APPAREL INC", "PEACH LOVER CALIFORNIA", "PEBO LLC.", "PECA'S COLLECTION", "PEDRO VALENCIA", "PEERLESS CARPET PALACE", "PEGASUS HOME FASHIONS, INC", "PEMCO", "PENGUIN KIDS WEAR", "PENNYLANE TRADING INTERNATIONAL", "PENSA", "PEOPLE TREND INC", "PERCEPTIONS/ARYA LLC", "PEREZ PANAMA S.A", "PERFECT IMAGE LLC.", "PERFORMANCE SPORT ,INC.", "PERU MODA", "PETALO FASHION", "PETOSILVER", "PFC", "PH PLAZA REGENCY", "PHI PHI TOYS", "PIANO", "PIAZZA INTERNATIONAL,S.A", "PICASSO (TAMIRA GENERAL TRADING FZE)", "PICK GIRL", "PICO STORE EQUIPMENT CO., INC.", "PIER 17 PANAMA, INC.", "PIER ONE FASHION INC", "PIKOPAY", "PILSAN", "PINK APPLE", "PINK BY ELE", "PINK OCEAN INC.", "PINKY", "PINTOP MARKET INC", "PIONEER IMPORTS INC", "PISCES SPORTS,INC", "PIXIE JEWELRY INC.", "PLANET GOLD CLOTHING CO. INC", "PLASTICOS RIMAX, S.A.", "PLASTIFOM.S,A.", "PLASVALE IND. DE PLASTICOS", "PLATINUM TRADING, INC.", "PLAZA SOUTH MISSY", "PLAZATEX IMPORT EXPORT", "PLS CARGO SERVICES , INC", "PLUS LABELS", "PLUXEE PANAMA S.A.", "POINT FASHION INC.", "POLLEN IND. COM ROUPAS LTDA", "POOF APPAREL CORP", "POONAM ZONA LIBRE", "POPULAR 21", "POPULAR BATH PRODUCTS", "POR USAR", "PORT FOLIO APPAREL (ISIS)", "PORTEX LOGISTICS S.A.", "PORTLAND MERCHANDISE CORP.", "PORTLO, INC.", "POSITIVE ATTITUDE", "POSTER ZONA LIBRE, S.A.", "POTTERY BARN KIDS", "POULETT MORALES", "POWER USA", "PREMIER BRANDS GROUP,INC", "PREMIER ELECTRIC(JAPAN) CORP.", "PREMIER HOME IMPORTS LLC", "PRENDAS INTIMAS INTERNACIONAL (COLON)S.A.", "PRENDAS INTIMAS, S.A.", "PRESTIGE CUTLERY& GIFTS", "PRESTIGE FASHION,S.A.", "PRESTIGE ZONA LIBRE CORP.", "PRICE POWER INTL, INC.", "PRIDE & JOY", "PRIMA ASIA EXPORT CORPORATION", "PRIMAVERA MANUFACTURING,S.A.", "PRIME GARMENT", "PRIME TIME CLOTHING", "PRIMORUP PLAST", "PRINCE HOME FASHIONS", "PRINCESS ACCESORIO, S. A.", "PRINCESS COLLECTION CORP", "PRINT CREATIVOS", "PRINT PLUS S.A.", "PRINTEX", "PRO OFF PRICE INC", "PRO SET, S.A.", "PRO STAR SPORT,S.A.", "PRODTEX CLOTHES S.L (GLOBAL FASHION)", "PRODTEX CLOTHES S.L.", "PRODUCTOS ALIMENTICIOS PASCUAL, S.A.", "PRODUCTOS COSMETICOS, S.A.", "PRODUCTOS DE PRESTIGIO, S.A.", "PRODUCTOS DIVERSOS S.A.", "PRODUCTOS LUX S.A", "PRODUCTOS PANAMEÑOS", "PRODUCTOS PARAISO DEL PERU S.A.C", "PRODUCTOS SUPERIORES, S.A.", "PROFESSIONAL CLEANING", "PROFILE INDUSTRIES INC.", "PROFOAM, S.A.", "PROMEDIAS, S.A.", "PROMESA USA", "PROMO POWER GROUP LLC", "PROMOCIONES Y ACCESORIOS DORITO(COLON)", "Pronta Moda, S.A.", "PRONTO MODA CHIC LADY", "PROSPERO INC.", "Proveedor de prueba Editado 2", "PROVEEDORA ELECTRICA DE PANAMA", "PROVEEDORA TABASARA,S.A.", "PROYECTOS COMERCIALES", "PRUEBA CODIGO POSTAL", "PRUEBA-DESARROLLO", "PSA PANAMA INTERNACIONAL TERMI", "PSL CARGO SERVICES, INC", "PTY BRANDS,S.A.", "PUBLI EXPRESS  ROLANDO REY F.", "PUNEHA, INC", "PURA MODA (GLORIA VANDELBILT)", "PUREPRO S A", "PURPLE RAIN MANUFACTURE & WHOLESALE", "PURSE SENSATION", "PUZZLES ENTERPRISES, INC.", "QSTONE PRIVATE LIMITED", "QUALITY GROUP DE PANAMA S A", "QUANTUM CARGA S.A.", "QUARTER INDUSTRIES", "QUETICO LLC", "QUIUBO  FM ESTEREO", "QZZ TRADING", "R & M RICHARDS", "R.M.R NIETOS, S.A.", "R.SISKIND & COMPANY INC", "RADA INTERNACIONAL, S.A.", "RAENCO INTERNACIONAL , S.A.", "RAFAC INTERNATIONAL", "RAFAELLA SPORTWEAR", "RAFKAS IMP& EXP", "RAINBOW DISTRIBUTORS S.A.", "RAINBOW/LEI DA TERRA", "RAMALLAH TRADINGCO., INC.", "RAMON REINA", "RANDY ARMANDO GALVIS SANTANA", "RAPID PRINT PANAMA, S.A.", "RATTAN ZONA LIBRE, S.A.", "RAVI INTERNATIONAL CO.LTD.", "RAVIYA INC.", "RAY PANAMA IMPORT & EXPORT, S.A", "RAYMOND SILVA", "RCJ ENTERPRISES,CORP", "RCM MULTISERVICIOS", "RCN INTERNATIONAL", "RED LEAF GROUP IN", "RED TOOLBOX LTD", "REDPOINT ZONA LIBRE", "REFRISTORE, S.A.", "REGAL HOME COLLECTIONS INC", "REGAL INTERNATIONAL(FREE CORP.INT'L S.A.)", "REGALOS B.G.S.A.", "REGINE PERFECTION IN FASHION", "RELACAO DE ESTOQUE", "RENAISSANCE S.A.", "REPRESENTACIONES  AJA,S.A.", "REPRESENTACIONES ARTISTICAS", "REPRESENTACIONES DIAZ, S.A.", "REPRESENTACIONES IDEALES S.A", "REPRESENTACIONES MODA INTERNACIONAL LTDA.", "REPRESENTACIONES Y DISTRIBUIDORA CRISNOEBAR", "REPRICO , S,A.", "REPUBLIC IMPORT CO.", "RETAIL LOGIC ,", "REVI GREEN, INC.", "REVICCI MANUFACTURE & WHOLESALE LADIES CLOTHING", "REVIEW GROUP, INC", "REX CARGO", "REX DISTRIBUTOR INC.", "REXTER", "RGA", "RH RENHE INTERNACIONAL TRADING CORP.", "RICARICA INC.", "RICH ECHO INDUSTRIES LIMITED", "RICKY IMPORT & EXPORT INC.", "RIMATEX, S.A", "RINA TEX S.A", "RISHON TRADING(LOCAL)", "RISHON TRADING, S.A.", "RITA CAMARENA", "RIVERSIDE TRADING INC,", "RIVIERA CLAY PHILS., INC.", "RJ IMPORTS", "RJ´DISCOUNT SALES,INC.", "RLK& CO S.A.", "RM MANUFACTURING", "RNK JEWELRY,  INC.", "ROBERO SANTAMARIA", "ROBERTO DE ALBA", "ROBERTO YAU", "ROCAS TRADING", "ROCK FASHION", "ROCKET INTL.S.A.", "RODELAG", "RODEO DEPOT", "RODEO IMPORTS, S.A.", "RODEO SPORT", "RODOLFO MORENO Y CIA ,S.A.", "RODRIGUEZ ANA", "ROLLING, S.A.", "ROMANCE SPORTSWEAR INC.", "ROMANI INTERNATIONAL CORP.", "RONDAN, S.A.", "RONI TIBI", "ROPACAL", "ROSA APPAREL", "ROSEE CONCEPT STUDIO INC/ROSEE FASHION", "ROUSSO APPAREL GROUP LLC", "ROYAL DELUXE ACCESSORIES LLC", "ROYAL KINGDOM INDUSTRY CORP.", "ROYAL OFFICE SUPPLIER", "ROYAL WEAR", "ROYAUMANN CO, LTD", "ROYCO, S.A.", "RRHL.,S.A.", "RS EXPORTS", "RS SALES GROUP", "RUBICON", "RUBIENN", "RUFFINI INTERNATIONAL, INC.", "RUNNER ATHLETIC, S.A.", "RUNWAY S.A.", "RÓTULOS Y LETREROS BARCASA", "S & S SCOTISH TRADERS", "S MAYA & SON, INC", "S. MAYA & SONS, INC", "S.D.A. COMERCIO EXTERIOR LTDA.", "S.E DISPLAY FIXTURE & DISTRIBUTION, INC", "S.I -  26 CALIFORNIA  WHOLESALE", "S.I -  H DAYA INTERNACIONAL/VMD DAYA/YIWU", "S.I - 2 BLUE DENIM CO LLC", "S.I - 5 STAR PRONTO MODA DI REN XIAOWU", "S.I - 7 ISLANDS FASHION INC", "S.I - 951 COMPANY LLC", "S.I - A TO Z CLOSEOUT GROUP", "S.I - A.G DISPLAY", "S.I - ABDALA ZONA LIBRE, S.A.", "S.I - AC2 GROUP", "S.I - ADDICTED 2 U INC", "S.I - ADORABLE PILLOW", "S.I - ADRIENNE VITTADINI (IKEDDI)", "S.I - ADVANTAGE WHOLESALE/MIZRAHI", "S.I - AEON INTERIOR S.RL.", "S.I - AFISA ZONA LIBRE, S.A", "S.I - AJ Fashion Group,INC", "S.I - ALISE SRL", "S.I - ALMOST NOTHING INC.", "S.I - America Garment, S.A", "S.I - AMERICA TRADING, S.A", "S.I - American Exchange Time LLC", "S.I - ANGELINA INTERNACIONAL, S.A.", "S.I - ANREL GROUP", "S.I - AQUA FASHION S.A.", "S.I - AR. NEW YORK-ARNY", "S.I - ARAMCO IMPORTS", "S.I - ARGELIA INTERNACIONAL. S", "S.I - ARKWRIGHT", "S.I - ASB FASHION LLC", "S.I - ASSOCIATED FOOTWEAR,INC", "S.I - AT LAST SPORTSWEAR, INC (BEACH LUNCH LOUNGE)", "S.I - ATLAS WORLD FASHION CORP", "S.I - AUTHENTIC WAREHOUSE, LLC", "S.I - AVANTGARDE S.R.L", "S.I - AZZ TRADING", "S.I - B&G SALES, INC", "S.I - B.K. ENTERPRISE, S.A.", "S.I - BAGS & MORE, S.A.", "S.I - BAGUTA ZONA LIBRE", "S.I - BAOBO INTERNATIONAL TRADING LIMITED", "S.I - BAROCCO ENTERPRISES CORP", "S.I - BARON DISTRIBUTORS, INC", "S.I - BASH CORPORATION, S.A.", "S.I - BASIX APPAREL INC.", "S.I - BASIX OF AMERICA LLC", "S.I - BE CLOTHING LLC", "S.I - BELLA+ CANVAS, LLC", "S.I - BENCO INTERNACIONAL", "S.I - BENSON MILLS,INC", "S.I - BEST BRANDS OVERSEAS(BBO)", "S.I - BESTWAY (HONG KONG) INTERNATIONAL LIMITED", "S.I - BEYOND BORDERS INTERNATIONAL", "S.I - BINGO GLOBAL CO.K LTD", "S.I - BINGO OFF-PRICE INC", "S.I - BISUTERIA , S.A .(COKETA FASHION , S.A)", "S.I - BIZZCUIT FASHIONS.A.", "S.I - BLASHE", "S.I - BLISS", "S.I - BLUE GALAXY  INC.", "S.I - BODY GLOVE, S.A", "S.I - BOLONIA INC", "S.I - BOLSOS MADRID S.L.", "S.I - BOLSOS VALENTINA", "S.I - BRIARA TRADING COMPANY", "S.I - BROADWAY FASHION, S.A.", "S.I - BURANO HOME, LLC", "S.I - C&B CORP.", "S.I - CA GLOBAL TRADING INC SA", "S.I - CALVIN KEIDY", "S.I - CALZAME FASHION, S.A.", "S.I - CAPITAL TRADING GROUP", "S.I - CARNIVAL DESIGN", "S.I - CARTER INTERNACIONAL, S.A.", "S.I - CASUAL CHIC,  S.  A.", "S.I - CATENA DESIGN INC", "S.I - CAVALIER  SPORTSWEAR INC", "S.I - CELEBRITY PINK", "S.I - CENTRAL BRANDS LLC", "S.I - CHANCE OFF", "S.I - CHERRY BLUE", "S.I - CHIC LADY LTD", "S.I - CIGNAL INTERNATIONAL CORP.", "S.I - CLADAMVIN S.A.", "S.I - CLOSEOUT CENTER, INC.", "S.I - COBRA TRADING INC", "S.I - CODE RED NOVELTIES", "S.I - COMEL INTERNATIONAL CORP", "S.I - COMPAÑIA SURAMERICANA DE COMERCIO S.A", "S.I - CONEY ISLAND GROUP,CORPORATION", "S.I - CONFECCIONES SHIC ZONA LIBRE, S.A.", "S.I - CONTRAX INTERNATIONAL", "S.I - COOL COMPANY", "S.I - CORNER 1 2 3", "S.I - CORZO ZONA LIBRE S.A.", "S.I - COSMO TRADING, INC.", "S.I - COSMOS TEXTIL TRADING", "S.I - COTTON VALLEY HOME, INC.", "S.I - CRAYOLA", "S.I - CRETA", "S.I - CRYSTAL PROMOTIONS,INC", "S.I - CSS. INC", "S.I - CYBER TECH LIMITED", "S.I - D&L APPAREL, LTD", "S.I - D-L INCentives", "S.I - D.K. FASHION", "S.I - D.O.L. CREATIONS, INC", "S.I - Dash Clothing Inc", "S.I - DBA UNIVERSAL FASHION OUTLET", "S.I - DEDITEX (BOMACA)", "S.I - DENICE INC.", "S.I - DENIM DELUXE INDUSTRIES,LTD", "S.I - DENIM FEVER, INC.", "S.I - DERBY INTERCONTINENTAL TRADING COMPANY, S.A.", "S.I - DESEN INC.", "S.I - DESIGN BY A&B", "S.I - DI-ORO INTERNACIONAL, S.A.", "S.I - DINAMO INTERNATIONAL TRADING, S.A.", "S.I - DISPLAY BUSINESS", "S.I - DONNAMAX INC", "S.I - DONNAMAX INC.", "S.I - DPORT S.A.", "S.I - DRYBRANCH/SPORTDESIGN INC.", "S.I - DS CLOTHING (EEY FASHION)", "S.I - DUOMODA S.A.", "S.I - DURA-KLEEN (USA) INC.", "S.I - DUVET EXPORTS CO., LTD.", "S.I - E.L.M FASHION INC", "S.I - E.S. SUTTON (JOLIE INTIMATES)", "S.I - EDIT BY NINE", "S.I - ELBROS INTERNACIONAL(LINKINVEST)", "S.I - ELEGANCE FIRENZE SRL", "S.I - ELICO LTD", "S.I - ELITE MED SCRUBS INC", "S.I - EMERALD  B  INC", "S.I - EMPIRE APPAREL LLC", "S.I - EOLO TOYS LTD", "S.I - EPCOT ZONA LIBRE, S.A.", "S.I - EQUINOX LATIN AMERICA INC.", "S.I - ESPARTAN GLOBAL INC.", "S.I - ESSENTIAL GROUP USA LLC", "S.I - EURO TRADING INTERNACIONAL, S.", "S.I - EXPORTADORA LA PERLA S.A", "S.I - EZ DEALS", "S.I - EZRASONS, INC.", "S.I - FACE2FACE", "S.I - FACTORY LIQUIDATORS", "S.I - FARRIS WHOLESALE OUTLET INC", "S.I - FASHION 21 GROUP INC", "S.I - FASHION APPAREL", "S.I - FASHION GROUP, S.A.", "S.I - FASHION SQUARE", "S.I - FASHION STREET", "S.I - FASHION STYLE GROUP LLC", "S.I - FAST TURN WHOLESALE", "S.I - FEXPRO INCORPORATED", "S.I - FICOSOTA", "S.I - FIDUCIE S.R.L.", "S.I - FINAL FOUR, S. A.", "S.I - FLASH SALES INC", "S.I - FLORA", "S.I - FLORIDA APPAREL, LLC", "S.I - FORMULA EXPORT INT, S.A.", "S.I - FORTUNE DYNAMIC, INC", "S.I - FOUR SEASONS", "S.I - FRATELLI GROUP", "S.I - FRED DAVID INTERNATIONAL USA INC", "S.I - Fuda Fashion, S.L.", "S.I - FUNKITIRIBE", "S.I - FUROR CLOTHING CO.", "S.I - G&S OFF PRICE,INC", "S.I - GADAKO Z.L., S.A.", "S.I - GBRANDS HOLDING LLC", "S.I - GIBSON OVERSEAS", "S.I - GILBAR TRADING", "S.I - GIORDANO MADRID", "S.I - GIOVANNA FASHION S.L.", "S.I - GLADIMAR INTERNACIONAL , S.A.", "S.I - GLOBAL ACCESSORIES", "S.I - GO LIQUIDATOR", "S.I - GOC GROUPS LLC", "S.I - GOOD BUYS USA", "S.I - GOODSTUFF APPAREL", "S.I - GOURMET GRILL", "S.I - GOURMET HOME PRODUCTS", "S.I - GQ. WEAR INC.", "S.I - Grateful Clothing, Inc", "S.I - Great Bay Home Ventures, LLC", "S.I - GREAT BUY PRODUCTS", "S.I - GREAT DISCOUNTERS", "S.I - GRUP M E L INTERNACIONAL S A", "S.I - GRUPO DIBIMAR", "S.I - GRUPO QUEBEC PANAMA , S.A.", "S.I - GUANGDONG SHENGLONG TOYS INDUSTRY CO. LTD", "S.I - HADDA UNITED LIC", "S.I - HADDAD/GARMENTEX INTERNATIONAL LLC", "S.I - HAMZI , S.A", "S.I - HANA  AND COMPANY, S.A.", "S.I - HANG TEN (PANAMA), INC.", "S.I - HAS INDUSTRIES INC", "S.I - HAUTE MONDE", "S.I - HDS TRADING CORP", "S.I - HEARTBEAT DESIGNS, S.A.", "S.I - HERNAN SRL", "S.I - HILCO PANAMA S.A.", "S.I - HOGARTEX, S.A.", "S.I - HOLIGAN INTERNATIONAL, S.A.", "S.I - HONGKONG BENTA FASHION LIMITED", "S.I - HOUSEWARES INTERNATIONAL INC.", "S.I - ILUMINACIONES TECNICAS, S.A", "S.I - IMCOTEXPA, S.A.", "S.I - IMPORTADORA  Y EXPORTADORA ROSEN", "S.I - IMPORTADORA PANAMA", "S.I - IMPULSE OFF PRICE APPAREL", "S.I - INCSA, S. A.", "S.I - INDIGO 18 FASHION GROUP", "S.I - INSTA SRL", "S.I - INTERNATIONAL INTIMATES", "S.I - International Tex Trade S.r.L", "S.I - INTEX DEVELOPMENT COMPANY LIMI", "S.I - INTRATEX, S.A.", "S.I - INTREND GLOBAL CORP.", "S.I - INVERSIONES HODAYA", "S.I - IRIS", "S.I - J MICHELLE OF CALIFORNIA", "S.I - J. QUEEN NEW YORK", "S.I - JA-RU INC", "S.I - JAD CLOSEOUT INC.", "S.I - JASSTEX INTERNATIONAL CORP.", "S.I - JAYLYN SALES INC. (ATLANTIC HOSIERY, LLC)", "S.I - JEAN CENTER CORP, S.A", "S.I - JEANS & CO., INC", "S.I - JEANS & JEANS, S.A.", "S.I - JEMMA APPAREL", "S.I - JMS CREATIONS,INC.", "S.I - JNJ S.R.L", "S.I - JOT TEXTIL Y COMPLEMENTOS S.L", "S.I - JOYWEAR APPAREL, INC", "S.I - JRT SALES, LLC", "S.I - JUMBO ZONA LIBRE", "S.I - KAMEL GROUP S.A.", "S.I - KASSATEX  INC", "S.I - KENNEDY STRUCTURES CORPORATION", "S.I - KIBE HOLDINGS, S.A.", "S.I - KIDDIELAND TOYS LIMITED", "S.I - KIDZ WORLD INC DBA HIGH ENERGY USA", "S.I - KINLY, S.A.", "S.I - KLG IMPORT & EXPORT,  S.A.", "S.I - KMQ MODA S.A", "S.I - KMQ OPTICOS", "S.I - KOCAL TRADING", "S.I - LADY LORD WEST INC", "S.I - LADY SUMMER", "S.I - LAMIAR S.R.L", "S.I - LANCO APPAREL LLC", "S.I - Lanver Mayorista S.L", "S.I - LAS INTERNATIONAL CORPORATION", "S.I - LATEX UNICA", "S.I - LAZZARO ZONA LIBRE COLON S.A.", "S.I - LES CHAMPS ELISEES S.A", "S.I - LETIZ MODA", "S.I - LIBBEY MEXICO, S. DE R.L. DE C", "S.I - LIBERTY SCRUBS INC", "S.I - LIBRA THECLOSEOUTSPECIALISTS-N", "S.I - LILY & PEONY", "S.I - LINDA FASHION ACCESSORIES CORP.", "S.I - LINDA MODA/ MODA LINHONG, S.L", "S.I - LINE APPAREL LLC", "S.I - LINTEX BEDDING INC", "S.I - LOST HOLDINGS,LLC", "S.I - LOUISE PARIS, LTD", "S.I - LOVE ME MORE LLC", "S.I - LOVE POEM (COMMON SENSE)", "S.I - LULUMARI/HYKU", "S.I - LUMINA MAYORISTA SL", "S.I - LUXURY HOME TEXTILES", "S.I - LUXXEL", "S.I - M&J INTERNACIONAL COLON .S.A.", "S.I - M.P.J INTERNATIONAL ZONA LIBRE, S.A.", "S.I - MAD PANDA, S.A.", "S.I - MAG APPAREL, INC", "S.I - MAGIC PRICE CLOTHING", "S.I - MAGIC TRADING.S.A", "S.I - MAIN DISPLAY & FIXTURES", "S.I - MAPEC,S.A.", "S.I - MAYS ZONA LIBRE, S.A./PARIGI", "S.I - MAZE COLLECTION INC", "S.I - MC  SUNRISE INVESTMENT INC", "S.I - MEMORY DI HU CIWEI", "S.I - MIA BAG FASHION S,L", "S.I - MICHEL", "S.I - MIGLIO SRL", "S.I - MIKA ACCESSORIES", "S.I - Mika Firenze Di Zhao Baoquan", "S.I - MILLENIUM CLOTHING, INC", "S.I - MILLENNIUM PET GROUP LLC", "S.I - MINUET", "S.I - MISS KELLY 1999", "S.I - MISS SPORTSWEAR INC", "S.I - MODA BOTELI S.L", "S.I - MODA I DI SUN JINGUANG", "S.I - MODA JINYUELIANG S.L", "S.I - MODA MARKET /AURORA CREATIONS S.L.", "S.I - MODA ROPA TIRAMISU S.L.", "S.I - MODA STUDIO S A", "S.I - MODA YOMI JOVEN, S.L", "S.I - Moda-Paris Madrid S.L (Victoria)", "S.I - MOES WEAR", "S.I - MONDIAL FASHION PRONTO MODA S.R.L.", "S.I - MOREL, S.A", "S.I - MOSHE OFF PRICE COMPANY", "S.I - MOVEIS TREVISUL LTDA.", "S.I - MULTIMODA IMPORT, INC.", "S.I - NAHMANY INC,", "S.I - NAKED ZEBRA", "S.I - NAPPA PROPERTIES FINANCE INC./KENNEDY CENTER", "S.I - NASA ZONA LIBRE PANAMA, S.A.", "S.I - NATION AMERICA OUTFITTERS LLC", "S.I - NATIONAL MILL INDUSTRY INC.", "S.I - NATIONWAIDE WHOLESALE", "S.I - NAVIN INTERNACIONAL, S.A.", "S.I - NEMO TRADERS", "S.I - NEW SPIRIT INTERNATIONAL LIMITED", "S.I - NEW STYLE DI LIU DAOSONG", "S.I - NEW VERSE S.A.", "S.I - New York Wholesale Distribuitors Corp.", "S.I - NEWTIMES (HK) LTD.", "S.I - NEXTEX APPAREL GROUP", "S.I - NINGBO LATAM INTERNATIONAL TRADE CO.,LTD", "S.I - Ningbo Yaohui Plastic Co. Ltd", "S.I - Noam Trading Corp.", "S.I - NOURISON", "S.I - NOVEDADES ANTONIO,S.A.", "S.I - NUMBER 1 LIQUIDATION LLC", "S.I - OBOLY BAG, S.L.", "S.I - Odin Fashion Corp.", "S.I - OFIMAYOR.COM,S.A.", "S.I - ONE STEPUP", "S.I - ONE STOP SHOP (KARMIN)", "S.I - ONE WAY FASHION INC.", "S.I - ONIX TRADING COMPANY", "S.I - ORILAT", "S.I - OSC DEALS", "S.I - OVA FASHION INC", "S.I - PAMELA", "S.I - PASHION CLOTHING", "S.I - PETALO FASHION", "S.I - PETOSILVER", "S.I - PHI PHI TOYS", "S.I - PINK BY ELE", "S.I - PLANET GOLD CLOTHING CO. INC", "S.I - POPULAR 21", "S.I - PREMIER HOME IMPORTS LLC", "S.I - PRESTIGE ZONA LIBRE CORP.", "S.I - PRODTEX CLOTHES S.L (GLOBAL FASHION)", "S.I - Pronta Moda, S.A.", "S.I - PRONTO MODA CHIC LADY", "S.I - PROYECTOS COMERCIALES", "S.I - PUZZLES ENTERPRISES, INC.", "S.I - QUARTER INDUSTRIES", "S.I - R.SISKIND & COMPANY INC", "S.I - RAMALLAH TRADING CO, INC", "S.I - RED TOOLBOX LTD", "S.I - REDPOINT ZONA LIBRE", "S.I - REGAL HOME COLLECTION", "S.I - REGAL INTERNATIONAL(FREE CORP.INT'L S.A.)", "S.I - RENAISSANCE S.A.", "S.I - REVIEW GROUP, INC", "S.I - REX DISTRIBUTOR INC.", "S.I - RICARICA INC.", "S.I - RJ IMPORTS", "S.I - ROCAS TRADING", "S.I - ROCKET INTL.S.A.", "S.I - RODEO IMPORT,S.A.", "S.I - ROPACAL", "S.I - ROUSSO APPAREL GROUP LLC", "S.I - ROYAL DELUXE ACCESSORIES LLC", "S.I - ROYAL WEAR", "S.I - ROYAUMANN CO, LTD", "S.I - ROYCO, S.A.", "S.I - RRHL.,S.A.", "S.I - RS EXPORTS", "S.I - RUBIENN", "S.I - SABABA IMPORT, S.A.", "S.I - SAIPH BY JAMJAS SRL", "S.I - SANSIM INC", "S.I - SAPMAN SPORTSWEAR", "S.I - SARA BOLSOS / SARA BAG S.L.", "S.I - SARA EXPRESS INC.", "S.I - SARAMAX APPAREL GROUP, INC.", "S.I - SASHA ACCESSORIES LLC", "S.I - SASHA HANDBAGS, INC", "S.I - Seasonal Off Price, LLC", "S.I - SEVEN SEAS ENTERPRISE", "S.I - SHOPIRISBASIC", "S.I - SIEGFRIED PANAMERICAN CORP.", "S.I - SILHOUETTE", "S.I - SIMEX TRADING CO., INC./ GRIP COLLECTION", "S.I - SIMPLE WALLET", "S.I - SINAY MODEL INC.", "S.I - SKI ESSENTIAL LLC", "S.I - SKKY APPAREL INC", "S.I - SKYLINE APPAREL, INC", "S.I - SMILES FASHION CORP.", "S.I - SOB CLOTHING", "S.I - SONA INTERNACIONAL", "S.I - SPARKLINE TRADING INC.", "S.I - SPLASH INTERNATIONAL , S.A.", "S.I - SPORT GALLERY CORP., S.A.", "S.I - SPORTLIFE BRANDS LLC", "S.I - SPORTWORLD APPAREL", "S.I - SPRING IMPORT", "S.I - SR Shirts and Stuff LLC", "S.I - STARZONE INTERNATIONAL PTE LTD", "S.I - STEAL DEAL INC", "S.I - STELLAR BRANDS", "S.I - STYLE MELODY INC DBA LOVE TREE", "S.I - STYLE REVOLUTION", "S.I - STYLISH WHOLESALE INC", "S.I - STYLO MODA IN FASHION INTERNATIONAL, S.A.", "S.I - SULTAN´S LINENS, INC.", "S.I - TABLETOPS  UNLIMITED,  INC.", "S.I - TANGO INTERNATIONAL CORP.", "S.I - TASHA  OFF PRICE", "S.I - TEMPO INTERNACIONAL, S.A.", "S.I - TEX INTERNATIONAL", "S.I - TEXAS INTERNACIONAL, S.A.", "S.I - THE BUZZ FASHION", "S.I - TODEKA , S.A  (PUNTO MODA)", "S.I - TOMHANKS S.L./LEMUS SPAIN", "S.I - TOP LABELS, S.A.", "S.I - TRADE LINKER INTERNATIONAL INC", "S.I - TRADING EXPRESS SUPPLY S DE RL", "S.I - TRADION ENTERPRISES INC", "S.I - TREASURE HUNT GROUP LLC", "S.I - TRENDMAKERS, S.A", "S.I - TRENDY IMPORT EXPORT S.A", "S.I - TRIPLE SSS", "S.I - TUFF COOKIES INC", "S.I - TUNANA.COM S.A", "S.I - U.P. FASHION CORP.", "S.I - ULTIMATE OFFPRICE", "S.I - UNI HOSIERY CO., INC.", "S.I - UNI WORLD DI CAI HUANMEI", "S.I - UNION ZONA LIBRE, S.A.", "S.I - UNITED APPAREL GROUP", "S.I - UNIVERSAL", "S.I - UNIVERSAL DISTRIBUTION CENTER", "S.I - UNIVERSAL FASHION OULET", "S.I - UNLIMITED  FASHION & STYLE INC", "S.I - VANILLA SRL - NAIF", "S.I - VANIS SRL", "S.I - VENETTO", "S.I - VENUS ACCESSORY CORP", "S.I - VERTIGO ZONA LIBRE, S.A.", "S.I - VESTIRAMA, S.A.", "S.I - VIA TRADING", "S.I - VICTORIA CLASSICS", "S.I - VOLUME DISTRIBUTORS", "S.I - VOON MODA , S.A.", "S.I - W GROUP WORLDWIDE", "S.I - W.I. OFF-PRICE APPAREL LTD", "S.I - WHOLESALE STORE #2", "S.I - WIDOO CORPORATION", "S.I - WINFUN", "S.I - WORLDWIDE BUSINESS AND TRADING INC", "S.I - Y&S HANDBAGS", "S.I - Y.C.T TRADING", "S.I - Y.M.F. CARPET, INC", "S.I - Y.M.I. JEANSWEAR, INC", "S.I - YA YI MODA S.L", "S.I - YEM CORPORATION", "S.I - YI MEIREN DI ZHENG ALICE", "S.I - ZAC & RACHEL KNITS DIV OF ELO", "S.I - ZAFARI GLOBAL INCORPORATED S. A", "S.I - ZONA  JOVEN", "S.I - ZONA 888 PRONTO MODA , S.L.", "S.L FASHIONS", "S.L WOMENS", "S.LICHTENBERG & CO. INC.", "S.O.D.", "S.R.FASHION INC.", "S.Y DANIELS INC", "SABABA IMPORT, S.A.", "SAFA , S.A", "SAG HARBOR", "SAG HARBOR MISSY", "SAG HARBOR PETITE", "SAGE FASHION INC", "SAHAWN´S DESIGN,INC", "SAI INTERNACIONAL", "SAIPH BY JAMJAS SRL", "SAIRAM INT.S.A", "SAKS ZONA LIBRE, S.A.", "SALLY TEXTILES INC.", "SALVAGE TRADERS", "SAM HEDAYA CORP.", "SAM HEDAYA LINENS", "SAM LAVI", "SAM PANAMA TRADING CO. LTD.,S.A.", "SAM SALEM.", "SAMEWAY GLOBAL CO. LTD", "SAMMY I FERGAN", "SAMSUNG C&T AMERICA, INC.", "SAMUEL ADAMS LTDA.", "SAN JULIAN", "SANCHEZ Y SANCHEZ, S.A.", "SANDRA VILLARROEL", "SANDREA COLLECTION", "SANI PLASTIC INDUSTRIAL CO. LTD.", "SANMING FOREING TRADE CORP FUJIAN CHINA.", "SANSCO", "SANSIM INC", "SAP TRADING INC.", "SAPIA CI SAS", "SAPMAN SPORTSWEAR", "SARA BOLSOS / SARA BAG S.L.", "SARA EXPRESS INC.", "SARAMAX APPAREL GROUP, INC.", "SAS GROUP LLC", "SASA CORPORATION", "SASCO TRADING, INC", "SASHA ACCESSORIES LLC", "SASHA HANDBAGS, INC", "SAVANA COSMETICS, S.A.", "SAVANTE", "SAVINO DEL BENE PANAMA S.A", "SB DESIGNS", "SC RESOURCES INC.", "SCARLETT JR.", "SCHAFER", "SCHENKER PANAMA, S.A.", "SEA CARGO LOGISTICS PANAMA, S.A.", "SEA COAST CALCADOS", "Seasonal Off Price, LLC", "SECOND GENERATION", "SECRET LACE", "SEEKETING PANAMA S.A.", "SEIKI CONFECCOES DE ROUPAS LTDA.", "SELECT CLOTHING CO.,INC.", "SELECTED TRADING CORPORATION", "SENSEMILL", "SERCARM", "SERPIL MOVIES LTDA.", "SERRUCHI", "SERVICARGA, S.A.", "SERVICIO DE CARGA VIEJO, S.A.", "SERVICIO E INVERSIONES ELIM OVERSEAS S.A.", "SERVICIO INTERNACIONAL DE CARGA", "SERVICIOS GRAN FORTUNA", "SERVICIOS INTEGRALES CORTÉS", "SERVICIOS NACIONAL DE VENTAS S.A", "SERVICIOS Y MECANICA JAROS", "SERVICIOS Y REMODELACIONES VARGAS", "SERVICIOS Y TRANSPORTES  INTERNACIONALES,S.A.", "SERVICOM SYSTEM COMPUTER", "SERVIO BUCKERIDGE(CORREDORES DE ADUANA MORENO)", "Setu Tekstil", "SEVEN LIONS INC.", "SEVEN SEAS ENTERPRISE", "SEVEN SEAS LOGISTICS PANAMA, S.A.", "SEYOUNG TRUST  INC.", "SHADDAI EXPRESS CARGO, S.A.", "SHAF INC.", "SHALOM INTERNATIONAL", "SHALOM LOGISTIC CORP.", "SHANGAHI INTERNATIONAL TRADE", "SHANGHAI SHEN HANG IMP. & EXP.CO,LTD.", "SHAOGUAN MACHINERY IMP & EXP COMPANY", "SHEM TOV GROUP, S.A.", "SHENZHEN FOREIGN TRADE XINGYE TRADINGO. CO", "SHENZHEN TIANBAOLAI INDUSTRY AND COMMERCE", "SHERI MARTIN MISSY", "SHILAT CLOTHING LLC", "SHINESTAR", "SHOPIRISBASIC", "SHOWTIME", "SI, ES NATURAL, S.A.", "SIAM CORRAL CO.,LTD.", "SIDDHI", "SIEGFRIED PANAMERICAN CORP.", "SIGN SERVICE", "SILHOUETTE", "SILVER CROWN  INTERNACIONAL,S.A.", "SILVER RIVER TEX, S.A.", "SILVERA S.A", "SILVERTEX INTERNACIONAL, S.A.", "SIMEX TRADING CO., INC.", "SIMPLE ELEGANCE -SABBSONS", "SIMPLE WALLET", "SIN PROVEEDOR", "sin usar", "SINAY MODEL INC.", "SINDRELLA DIST LLC", "SIRENA INTERNACIONAL, S.A.", "SISTEMAS AEREOS DE PANAMA, S.A.", "SIVANI TRADING, S.A.", "SK SOLUTIONS", "SKECHERS PANAMA LLC", "SKI ESSENTIAL LLC", "SKKY APPAREL INC", "SKY LAND INTERNATIONAL LIMITED", "SKYLINE APPAREL, INC", "SLOOPY L.M.A. CALCADOS LTDA.", "SMAC, INC", "SMART COOL PANAMA", "SMILES FASHION CORP.", "SNAP APPREL NY,NY 10013", "SOB CLOTHING", "SOBRE AS AGUAS CONFECCIONES LTD", "SOC. COOP.DEL CALZADO COSDAM", "SOCIETY HILL HOME FASHIONS", "SOFIA BAZBAZ", "SOFT ONE S, S.A.", "SOFT ONE'S, S.A.", "SOFTEE SUPREME CORPORATION", "Soho S Qiu Wang", "SOIMCSA PANAMA, S.A.", "SOL CLOTHING", "SOLIMAR JUNIOR WEAR", "SOLO MARCAS S.A.", "SONA INTERNACIONAL", "SONAKI CORP", "SONNETI INTERNACIONAL, S.A.", "SONOMA DESIGN CO.INC.", "SORRENTO", "SOS FURNITURE", "SOUHAIL MUSBAH HALWANY CIGARRUISTA", "SOUTH OCEAN INTL.(H.K) LTD.", "SOUVENIR TEXTIL INTERNACIONAL SAS", "SPACE DESIGN & DECORATION S.A.", "SPARKLE WAY LIMITED", "SPARKLINE TRADING INC.", "SPEEDINK S. A.", "SPLASH INTERNATIONAL, S.A.", "SPORT CITY, S.A", "SPORT FANS", "SPORT GALLERY CORP. S A", "SPORT SUPPLY & DISTRIBUTION", "SPORTIV INC. LA GEAR", "SPORTLIFE BRANDS LLC", "SPORTONI , S.A", "SPORTWORLD APPAREL", "SPRING IMPORT", "SPRINT ENTERPRISES LIMITED", "SPRINT TEX", "SQUEEZE/MARAN INC.", "SR Shirts and Stuff LLC", "SREE RAJKONDAL EXPORT ENTERPRISES", "SSB BRANDS, S.A.", "SSL ALL INTERNATIONAL CORP", "STACY", "STACY KAREN DESIGNS ,INC.", "STACY MILLER", "STANDARD TEXTILE CO., INC.", "STANDARD UNIVERSAL INTERNATIONAL CO.,LTD.", "STAR CITY SPORTSWEAR, INC.", "STAR GARMENT LIMITED (LUBAR)", "STAR MARKET GROUP , S.A", "STARSHIP COMMERCIAL IC.", "START BRAND,S.A.", "STARWEAR INTERNATIONAL, S.A.", "STARZONE INTERNATIONAL PTE LTD", "STAY BEAUTIFUL PANAMA S.A", "STC PANAMA", "STEAL DEAL INC", "STELLAR BRANDS", "STEVANO WEAR CO.", "STOCKLOTS USA, INC", "STUDIO 1", "STUDIO C", "STUDIO SILVERSMITH INC.", "STYLE MELODY INC DBA LOVE TREE", "STYLE REVOLUTION", "STYLES YOU LOVE", "STYLISH SWIMWEAR", "STYLISH WHOLESALE INC", "STYLO MODA IN FASHION INTERNATIONAL, S.A.", "SUANSA & BUATONG CO.,LTD.", "SUBLIIDEAS", "SUBLIME", "SUETERES IMPORTADOS, S.A.", "SUIZO LATINOAMERICA, S.A.", "SUKKAH DEPOT", "SULTAN´S LINENS, INC.", "SUMMER RIO CORP.", "SUN CHAIN ENTERPRISE, INC.", "SUN TRADING WORLDWIDE, S.A.", "SUNAMI, S.A.", "SUNBURST INTERNATIONAL TRADING COL.", "SUNDANCE FASHIONS, S.A.", "SUNNY NAMES LIMITED", "SUNSET WHOLESALE", "SUNTEX, S.A", "SUNVISTA INTL. INC", "SUPER GRUAS", "SUPER Q", "SUPERCONT PANAMA S.A", "SUPERIOR INTERNATIONAL INC.", "SUPERIOR PARTNERS, INC.", "SUPERIOR RETAIL PANAMA INC.", "SUPERLINE", "SUPERLINE, INC", "Supli Clean Panamá S. A.", "SUPREME AIR FREIGHT DE PANAMA, S.A.", "SUPREME FASHION", "SUPREME OVERSEAS CORP.", "SURTIDORA ZULY", "SURTITELA,S.A.", "SURYTEX INTERNACIONAL/LIDICE INVESTMENT.CORP", "SUSAETA", "SUSANA SANTOS", "SUZYS INC.", "SWEET LIFE", "SWISS AMERICAN, S.A.", "SYLVIA IMPORTED LADIES APPAREL", "T-SHIRT BUSINESS, S.A.", "T-SHIRT INTERAMERICA, S.A.", "T-SHIRTS MAX,S.A.", "T-SHIRTS MODERNOS, S.A. (E)", "TABLETOPS  UNLIMITED,  INC.", "TAG APPAREL", "TAGAROPULOS, S.A.", "TAGLIARE MOVIES LTDA", "TAIFANA INTERNATIONAL LTD.", "TALLER DASUAR, S.A. (SRA FREDDY)", "TALLER JUNIER Y EL PRIMO", "TALLER MAGNOLIA  ( OMARCO, S.A. )", "TANGO CREATIONS, INC.", "TANGO HOME CO.,S.A.", "TANGO INTERNATIONAL CORP, S.A.", "TANGSHAN YIDA INDUSTRIAL CORP.", "TARJETERIA PERSA, S.A.", "TASHA  OFF PRICE", "TAWIL ASSOCIATES", "TAYLOR ALBROOK", "TCB IMPORTS, INC.", "TEAM CREATION GROUP, INC.", "TEC TRADE, S.A.", "TECH & HOUSE", "TECNICARD", "TEIC INTERNATIONAL S.A", "TEJIDOS NIDIA", "TEJIDOS Y CONFECCIONES, S.A.", "TEMA MANTENIMIENTO, S.A", "TEMMA FREIGTH LOGISTICS INC.", "TEMPO INTERNACIONAL, S.A.", "TEMPTED INV.", "TEN WEST APPAREL", "TERCOR INC.", "TERILA INTERNATIONAL, S.A.", "TESORO NACIONAL", "TESSONE, S.A.", "TEX INTERNATIONAL", "TEX TELA, Z.L.", "TEX-HOGAR, S.A.", "TEXAS INTERNACIONAL, S.A.", "TEXDECOR,S.A", "TEXMADI", "TEXTILES DIANA, S.A.", "TEXTILES INDUSTRIALES INTERNACIONAL , S.A.", "TGD WORLDWIDE,INC", "THAT JEAN SHOP", "THE BEAUTY COMPANY", "THE BUZZ FASHION", "THE CLEANOUT GROUP", "THE CLOSEOUT CLUB", "THE FACTORY HKA CORP.", "THE JEANS SHOP, CORP", "THE MAZEL COMPANY", "THE RESOURCE CLUB", "THE SIN CO, LTD.", "THERMOVITAL CORP", "THOMAS INTERNACIONAL S A", "THREE HANDS CORPORATION", "TIBA PANAMA, S.A.", "TIGER WHOLESALE", "TIGO", "TIKITO, S.A.", "TINDER USA CO. INC.", "TIRTICH CORPORATION", "TIRZA GONZALES", "TMES SQUARE PRODUCTIONS, S.A.", "TODEKA, S.A.", "TOMAS M. ESPINOSA", "TOMAS M.ESPINOSA", "TOMHANKS S.L./LEMUS SPAIN", "TOP BRANDS INTERNATIONAL", "TOP INNOVATION LAB, S.A.", "TOP LABELS, S.A.", "TOP SHOES INTERNATIONAL", "TOP TOP CLOTHING,INC", "TOP TOP CORP", "TOP TOPS U.S.A.", "TOPIA", "TOPSON DOWNS OF CALIFORNIA , INC.", "TOTAL ALBROOK", "TOTAL TRADERS CORPORATION", "TOUCH 9", "TOULOUSE INTIMATE", "TOV LEV ENTERPRISES", "TOVA,S.A.", "TRADE EXPRESS PANAMA, S.A.", "TRADE LINKER INTERNATIONAL INC", "TRADEWINDS CLOTHING INC", "TRADEX EXPRESS PANAMA,S.A.", "TRADING EXPRESS SUPPLY S DE RL", "TRADION ENTERPRISE", "TRADION ENTERPRISES INC", "TRAMP INC.", "TRANSPAC IMPORT INC", "TRANSPORTE A.J.M", "TRANSPORTE ADE", "TRANSPORTE ALLARD", "TRANSPORTE BL NESTOR IVAN BORJA BARRERA", "TRANSPORTE BRAURICH", "TRANSPORTE C&A", "TRANSPORTE EDUAR", "TRANSPORTE ERIC EDUARDO MUÑOZ", "TRANSPORTE EYDA", "TRANSPORTE G.S.S. INC.", "TRANSPORTE GONZABELL", "TRANSPORTE GREGORIO MENTIETA K.", "TRANSPORTE IAN-MARY", "TRANSPORTE JAVIER GOMEZ", "TRANSPORTE JUAN CHERIGO", "TRANSPORTE LOPEZ, S.A.", "TRANSPORTE MACARACAS", "TRANSPORTE MONROY", "TRANSPORTE NIETO", "TRANSPORTE PAOLA O.", "TRANSPORTE QUINTERO", "TRANSPORTE RADA , S.A", "TRANSPORTE RASEG, S.A.", "TRANSPORTE SAAVEDRA", "TRANSPORTE Y MANTENIMIENTO JULIO MONTAÑO", "TRASEWINS CLOTHING INC.", "TRAVEL AND BAGS", "TRAVEL GEAR PANAMÁ", "TREASURE HUNT GROUP LLC", "TRENDAMAKERS, S.A.", "TRENDY IMPORT EXPORT S.A", "TRENDYWEAR (PVT) LTD (LUBAR)", "TREVISUL EXPORTACAO E IMPORTACAO LTDA", "TRINITY INTERNACIONAL ZONA LIBRE, S.A.", "TRIPLE SSS", "TRISHVI IMPEX S.A", "TROPIC FASHION CORP", "TROPICAL COSMETIC, INC., S.A.", "TROPICAL DEGIL DE PANAMA, S.A.", "TROPICAL WEAR", "TROPICS ZONA LIBRE, S.A.", "TRUE SUPPLY S.A", "TRUELIGHT", "TTC. ELECTRIC. CORP", "TUFF COOKIES INC", "TUNANA.COM S.A", "TURBO ZONA LIBRE", "TURTLE KING CORPORATION", "TV. RADIO PRODUCTION  S.A", "TW BEST DEALS TRADING INC", "TWD TRADING CORP.", "TWIST INTIMATE LLC", "U.P. FASHION CORP.", "U.S.TOP IMPORTER,INC", "ULTIMATE B2B.COM (TERESA N.J)", "ULTIMATE OFFPRICE", "ULTIMATE SPORTS", "UMGEE USA INC.", "UNGER FABRIK", "UNI HOSIERY CO., INC.", "UNI WORLD DI CAI HUANMEI", "UNICLIMA PANAMA. S.A.", "UNIGREEN MARINE, S.A.", "UNILEVER DE CENTROAMERICA, S.A.", "UNIMARCA INTERNACIONA, S.A.", "UNIMAX HOUSEWARE CORP.", "UNION APPARELS (PVT) LTD (LUBAR)", "UNION PAK DE PANAMA, S.A. (UPS)", "UNION ZONA LIBRE, S.A.", "UNIPLAS INDUSTRY, S.A.", "UNIQUE CLOTHING COMPANY , S.A", "UNIQUE COLLECTION S.A.", "UNIQUE CORPORATION", "UNIQUE OFF PRICE", "UNISON GIFTS, INC.", "UNIT FASHION INC.", "UNITED APPAREL GROUP", "UNITED DISTRIBUTORS 26 IC", "UNITED LINENS CORP.", "UNITRADE MARKETING GROUP, INC.", "UNITY INTERNATIONAL INC.", "UNIVERSAL", "UNIVERSAL COLOR,S.A.", "UNIVERSAL DISTIBUTION CENTER", "UNIVERSAL FASHION OULET", "UNIVERSO DE ILUSIONES, S.A.", "UNIVERSO,S.A", "UNLIMITED GROUP. S.A.", "UNLIMITED  FASHION & STYLE INC", "UNO CLOTHING, INC", "UNO MANUFACTURING", "UPCARGO,INC.", "UPS FREIGHT SERVICES PANAMA IN", "US APPAREL GROUP", "US SHOPLINE INC (ANNVA FASHION)", "USA INDUSTRIAS  S.A.", "USAFLEX", "USEFUL INDUSTRIAL LIMITED", "VAI TRADING CORPORATION", "VAKKO JEANS (BELLINGTON CONFECCOES)", "VAL BARAHONA", "VALI BROTHER", "VAN DIOR, S.A. DE C.V.", "VANDALE INDUSTRIES", "VANESA REAL, S.A.", "VANESSA L. FRANCO", "VANI IMPEX", "VANI LEATHER GOODS", "VANILLA SRL - NAIF", "VANIS SRL", "VANORA FASHIONS, S.A.", "VANTAGE TEXTILES", "VAPORES BOYD S.A BOYD STEAMSHIP CORP.", "VARELA Y RODRIGUEZ,CIA.LTDA.", "VASILIKI GEANNAPOULOS, S.A.", "VEN XIANG USA , INC", "VENDELA, S.A.", "VENECIA MANUFACTURE & WHOLESALE", "VENECIAN INTERNATIONAL INC.", "VENETTO", "VENPROGEN INTERNACIONAL, S.A.", "VENTAS ALDRID", "VENTAS BETTY", "VENTAS Y DISTRIBUCION LUZ DE VIDA S A", "VENTAS Y SERVICIOS CHRISDAN, S.A.", "VENTAS Y SERVICIOS JIMENEZ", "VENUS ACCESSORY CORP", "VENUS GROUP", "VENUS OVERSEAS, INC.", "VER  IN-4102  ZIAD, S.A.", "VERDAN PLAZA S.A", "VERSATA CAPITAL INC", "VERTIGO ZONA LIBRE, S.A.", "VESTE BELLY CONFECCOES", "VESTE BRASIL CONF. ZINA LTDA (TAE-SOON-LEE)", "VESTIRAMA, S.A.", "VETRO", "VIA SCARPA", "VIA TRADING CORPORATION", "VIA VAI", "VICTOR HANONO", "VICTORIA CLASSICS", "VICTORIA ROMERO", "VICTORIA VILA", "VICTORIANO PEREZ", "VIDATEX INTERNACIONAL, S.A.", "VIDOEMARK, S.A.", "VIET LIEN HOA CO., LTD", "VILLALAZ DEL MAR INC.", "VINYL FOOM, S.A", "VIOLETS CO.INTL, S.A.", "VISA BANCO GENERAL 0304", "VISA BANCO GENERAL 0569", "VISA BANCO GENERAL 0902", "VISA BANCO GENERAL 3769", "VISA BANCO GENERAL 7416", "VISA CREDICORP 2178", "VISA CREDICORP 4812", "VISA CREDICORP 7061", "VISA CREDICORP 7932", "VISA CREDICORP 9013", "VISA GLOBAL BANK 0302", "VISA GLOBAL BANK 1999", "VISA GLOBAL BANK 3120", "VISION TEX, S.A.", "VISSION MANUFACTURER", "VITAMINA", "VIVALDI INTL.", "VIVATEX HOME COLLECTIONS INC", "VOCABULARIO (IND E COM DE CONFECCOES)", "VOGUE COSMETICS, INC.", "VOLTRANC", "VOLUME APPAREL GROUP", "VOLUME DISTRIBUTORS INC", "VOON MODA, S.A.", "VS AFFILIATES LLC", "VS AFFILIATES, LLC", "VULCAN MATERIAL PLASTICO LTDA", "W GROUP WORLDWIDE", "W.I. OFF-PRICE APPAREL LTD", "WAC LOGISTICS LTD.", "WAJDY SHALABY", "WALL PAPER CO., INC.", "WARNER LAMBERT DE PANAMA, S.A.", "WATCH FACTORY INC.", "WAXED CLOTHING", "WENZHOU SUCCESS GROUP CO. LTD", "WEST COAST JOBBERS ,INC.", "WESTMINSTER PET PRODUCTS", "WESTPORT CORPORATION", "WHALE CLOTHING, INC.", "WHITMOR, INC", "WHO SAYS INC", "WHOLE SALER USA CORP", "WHOLESALE STORE #2", "WHYS CONSULTING", "WIDOO CORPORATION", "WIKIWA GROUP, S.A.", "WILMAR CORPORATION,S.A", "WINFUN", "WINGAR INDUSTRIAL INC.", "WINSTON INTERNATIONAL CORP", "WK APPAREL CORP", "WORLD ASIA INTERNACIONAL, S.A.", "WORLD CARGO EXPRESS LOGISTIC,CORP.", "WORLDSILK PANAMA", "WORLDSILK PANAMA, S.A.", "WORLDWIDE BUSINESS AND TRADING INC", "WORLDWIDE DREAMS, LLC", "WORLDWIDE EXPORTS INC.", "WORLDWIDE LOGISTIC SERVICES INC", "WORLDWIDE MERCHANDISE RESOURCES", "WORLDWIDE TRADE INC.", "WORLDWISE TEXTILES", "WORLWIDE LOGIST SERVICES", "WORTH IMPORTS LLC", "WOW COUTURE", "WOW TRENDS", "WSI TRADING S.A", "WTF DEALS CORP", "XCC LOGISTICS", "XL PRINT DE PANAMA, S.A.", "XTAREN", "XTI FOOTWEAR, S.L", "Y & FUNG GARMENT CO. LTD", "Y T INDUSTRIAL CO.,LTD", "Y&S FASHION DI ZHU AIQIN", "Y.C.T TRADING", "Y.M.F. CARPET, INC (CREATIVE HOME IDEAS)", "Y.M.I. JEANSWEAR, INC", "Y.M.I. JEANSWEAR, INC.", "YA YI MODA S.L", "YAAFAR INTERNACIONAL (ROYAL ALLIGATORE)", "YAAL,S.A.", "YANG MING", "YANTAI ARTEX TRADING CO. LTD", "YAZ ENTERPRISES OCM.", "YCL PANAMA, S.A", "YELLOWSTONE IMPORTS INC.", "YEM CORPORATION", "YEPES ZONA LIBRE, S.A.", "YI MEIREN DI ZHENG ALICE", "YICHENG LOGISTIC", "YIWU SKYWAY IMP.& EXP.CO.,LTD", "YMI JEANS ,INC", "YOHROS", "YOLY'S", "YUYAO GREAT LEISURE MANUFACTORY CO. LTD.", "YVEL SAITTA", "ZAAR-INDUSTRIA, COMERCIO, MOVIES EM GENERAL,", "ZAC & RACHEL KNITS DIV OF ELO", "ZAFARI GLOBAL INCORPORATED S. A", "ZAGA PUBLICIDAD", "ZAHEEN KNIT WEARS LTD", "ZAKALI INT´L, S.A.", "ZAKOR, S.A.", "ZAP COLLECTION", "ZAT ENTERPRISES, INC", "ZEBEDE GROUP PANAMA, S.A", "ZEBETEX, S.A.", "ZEN", "ZHAOQING NATIVE PRODUCE AND EXPORT CO.", "ZHEJIANG DIDA IMPORT & EXPORT CO,LTD.", "ZHI CHEN DE COLON INTERNACIONAL ,S.A", "ZHUHAI CEREALS AND OILS", "ZIAD, S.AI  (INTIMATES FASHION/)", "ZIBO BUILDING MATERIAL", "ZIBO ZHONGYI LIGHT INDUSTRIAL PRODUCTS CO,LTD.", "ZIM PANAMA, S.A.", "ZIPI INC.", "ZONA  JOVEN", "ZONA 888 PRONTO MODA , S.L.", "ZOOMPY WHOLESALE", "ZULEMA MAITE HERRERA"];
+
+  // ---------- utilidades ----------
+  function $(id){ return document.getElementById(id); }
+  function esc(s){ return (s==null?"":String(s)).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+  function fmtDate(d){
+    if(!d) return null;
+    var parts = d.split("-");
+    if(parts.length!==3) return d;
+    return parts[2]+"/"+parts[1]+"/"+parts[0];
+  }
+  function daysBetween(a,b){
+    if(!a || !b) return null;
+    var da = new Date(a+"T00:00:00"), db = new Date(b+"T00:00:00");
+    return Math.round((db-da)/86400000);
+  }
+  function todayISO(){ return new Date().toISOString().slice(0,10); }
+  function fmtUSD(n){
+    if(n==null || n==="" || isNaN(n)) return null;
+    return "$"+Number(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+  }
+  function showToast(msg, isError){
+    var t = $("toast");
+    t.textContent = msg;
+    t.className = "toast" + (isError ? " error" : "");
+    clearTimeout(showToast._h);
+    showToast._h = setTimeout(function(){ t.className = "toast hidden"; }, 3200);
+  }
+
+  function lastFilledStageIndex(p){
+    var idx = -1;
+    ETAPAS.forEach(function(e,i){ if(p[e.key]) idx = i; });
+    return idx;
+  }
+  function estadoPedido(p){
+    if(p.cancelado) return { label:"Cancelado", cls:"badge-cancel", closed:true };
+    var idx = lastFilledStageIndex(p);
+    if(idx === ETAPAS.length-1) return { label:"Recibido", cls:"badge-done", closed:true };
+    if(idx < 0) return { label:"Sin fecha", cls:"badge-pend", closed:false };
+    return { label:ETAPAS[idx].estado, cls:"badge-progress", closed:false };
+  }
+  function diasTotales(p){
+    if(p.cancelado) return daysBetween(p.fecha_pedido, p.fecha_cancelacion||todayISO());
+    var idx = lastFilledStageIndex(p);
+    if(idx < 0 || !p.fecha_pedido) return null;
+    var hasta = p[ETAPAS[idx].key];
+    var fin = idx === ETAPAS.length-1 ? hasta : todayISO();
+    return daysBetween(p.fecha_pedido, fin);
+  }
+
+  function pedidoExcedeTiempo(p){
+    if(estadoPedido(p).closed) return false;
+    if(p.tipo_pedido === "futuro"){
+      if(p.fecha_estimada_llegada) return todayISO() > p.fecha_estimada_llegada;
+      return false; // futuro sin fecha estimada: no se marca demora automática
+    }
+    var d = diasTotales(p);
+    return d!=null && d > state.umbral;
+  }
+
+  // ---------- carga de datos ----------
+  function loadConfig(){
+    if(!supa) return Promise.resolve();
+    return supa.from("zl_configuracion").select("*").eq("id",1).maybeSingle().then(function(r){
+      if(r.data) state.umbral = r.data.umbral_dias;
+      $("umbralLabel").textContent = state.umbral;
+      $("umbralInput").value = state.umbral;
+    });
+  }
+  function loadPedidos(){
+    if(!supa){
+      $("tableCard").innerHTML = '<div class="empty-state">⚠ No hay conexión configurada a Supabase.<br>Edita las constantes SUPABASE_URL / SUPABASE_ANON_KEY al inicio del archivo.</div>';
+      renderKpis();
+      return Promise.resolve();
+    }
+    return supa.from("pedidos_zona_libre").select("*").order("fecha_pedido",{ascending:false}).then(function(r){
+      if(r.error){ showToast("Error cargando pedidos: "+r.error.message, true); return; }
+      state.pedidos = r.data || [];
+      renderAll();
+    });
+  }
+
+  // ---------- render KPIs ----------
+  function renderKpis(){
+    var activos = state.pedidos.filter(function(p){ return !estadoPedido(p).closed; });
+    var cerrados = state.pedidos.filter(function(p){ return estadoPedido(p).closed; });
+    var conDemora = state.pedidos.filter(pedidoExcedeTiempo);
+    var avgTotal = cerrados.length ? Math.round(cerrados.reduce(function(s,p){ return s + (diasTotales(p)||0); },0) / cerrados.length) : null;
+    var thisMonth = new Date().toISOString().slice(0,7);
+    var recibidosMes = cerrados.filter(function(p){ return p.fecha_recepcion_final && p.fecha_recepcion_final.slice(0,7)===thisMonth; }).length;
+
+    var valorActivo = activos.reduce(function(s,p){
+      var m = (p.monto_ajustado!=null && p.monto_ajustado!=="") ? p.monto_ajustado : p.monto_pedido;
+      return s + (Number(m)||0);
+    },0);
+
+    var cards = [
+      { label:"Pedidos activos", value:activos.length, foot:state.pedidos.length+" en total", color:"var(--teal)" },
+      { label:"Valor activo", value:(valorActivo?fmtUSD(valorActivo):"—"), foot:"suma de montos en tránsito", color:"var(--navy-2)" },
+      { label:"Tiempo promedio total", value:(avgTotal!=null?avgTotal+"d":"—"), foot:"pedido → recepción, cerrados", color:"var(--navy)" },
+      { label:"Fuera de plazo", value:conDemora.length, foot:"activos por encima del umbral / fecha estimada", color: conDemora.length ? "var(--red)" : "var(--gold)" },
+      { label:"Recibidos este mes", value:recibidosMes, foot:"liquidados en el mes en curso", color:"var(--gold)" }
+    ];
+    $("kpiGrid").innerHTML = cards.map(function(k){
+      return '<div class="kpi"><div class="kpi-bar" style="background:'+k.color+'"></div>'+
+        '<div class="kpi-label">'+k.label+'</div>'+
+        '<div class="kpi-value">'+k.value+'</div>'+
+        '<div class="kpi-foot">'+k.foot+'</div></div>';
+    }).join("");
+  }
+
+  // ---------- render filtros ----------
+  function renderFilterPills(){
+    var opts = [
+      {key:"todos", label:"Todos"},
+      {key:"activos", label:"Activos"},
+      {key:"demora", label:"Fuera de plazo"},
+      {key:"futuro", label:"Futuro"},
+      {key:"recibidos", label:"Recibidos"},
+      {key:"cancelados", label:"Cancelados"}
+    ];
+    $("filterPills").innerHTML = opts.map(function(o){
+      return '<button class="pill-btn'+(state.filter===o.key?' active':'')+'" data-filter="'+o.key+'">'+o.label+'</button>';
+    }).join("");
+    $("filterPills").querySelectorAll(".pill-btn").forEach(function(btn){
+      btn.addEventListener("click", function(){ state.filter = btn.dataset.filter; renderAll(); });
+    });
+  }
+
+  // ---------- render tabla ----------
+  function filteredPedidos(){
+    var q = state.search.trim().toLowerCase();
+    return state.pedidos.filter(function(p){
+      var e = estadoPedido(p);
+      if(state.filter==="activos" && e.closed) return false;
+      if(state.filter==="recibidos" && !(e.closed && !p.cancelado)) return false;
+      if(state.filter==="cancelados" && !p.cancelado) return false;
+      if(state.filter==="demora" && !pedidoExcedeTiempo(p)) return false;
+      if(state.filter==="futuro" && p.tipo_pedido!=="futuro") return false;
+      if(q){
+        var hay = ((p.proveedor||"")+" "+(p.numero_pedido||"")+" "+(p.numero_factura||"")+" "+(p.comprador||"")+" "+(p.departamento||"")).toLowerCase();
+        if(hay.indexOf(q)===-1) return false;
+      }
+      return true;
+    });
+  }
+  function renderTable(){
+    var list = filteredPedidos();
+    if(!list.length){
+      $("tableCard").innerHTML = '<div class="empty-state">No hay pedidos que coincidan. Prueba otro filtro o agrega un pedido nuevo.</div>';
+      return;
+    }
+    $("tableCard").innerHTML = list.map(function(p){
+      var e = estadoPedido(p);
+      var d = diasTotales(p);
+      var warn = pedidoExcedeTiempo(p);
+      var esFuturo = p.tipo_pedido === "futuro";
+      var badgeCls = warn ? "badge-alert" : e.cls;
+      var badgeLbl = warn && esFuturo ? "Futuro · fuera de plazo" : e.label;
+      var monto = (p.monto_ajustado!=null && p.monto_ajustado!=="") ? p.monto_ajustado : p.monto_pedido;
+      var tipoLbl = p.tipo_embarque==="liquidacion" ? "Liquidación" : "Local";
+      var tipoCls = p.tipo_embarque==="liquidacion" ? "tipo-liquidacion" : "tipo-local";
+      return '<div class="ped-row" data-id="'+p.id+'">'+
+        '<div class="ped-main">'+
+          '<div class="ped-title"><span class="tipo-badge '+tipoCls+'">'+tipoLbl+'</span>'+(esFuturo?' <span class="tipo-badge badge-future" style="background:none;">Futuro</span>':'')+' '+esc(p.proveedor)+(p.numero_pedido?' · Ped. '+esc(p.numero_pedido):'')+(p.numero_factura?' · Fact. '+esc(p.numero_factura):'')+'</div>'+
+          '<div class="ped-sub">'+(p.comprador?esc(p.comprador)+' · ':'')+(p.departamento?esc(p.departamento)+' · ':'')+'Pedido '+fmtDate(p.fecha_pedido)+(monto?' · '+fmtUSD(monto):'')+'</div>'+
+        '</div>'+
+        '<div><span class="badge '+badgeCls+'">'+(warn?'⚠ ':'')+badgeLbl+'</span></div>'+
+        '<div class="ped-days'+(warn?' warn':'')+'">'+(d!=null?d:'—')+'<small>días</small></div>'+
+      '</div>';
+    }).join("");
+    $("tableCard").querySelectorAll(".ped-row").forEach(function(row){
+      row.addEventListener("click", function(){ openDetail(row.dataset.id); });
+    });
+  }
+
+  function renderAll(){
+    renderKpis();
+    renderFilterPills();
+    renderTable();
+  }
+
+  // ---------- detalle / timeline ----------
+  function openDetail(id){
+    var p = state.pedidos.find(function(x){ return x.id===id; });
+    if(!p) return;
+    state.editingId = id;
+    $("detailTitle").innerHTML = esc(p.proveedor)+(p.numero_pedido?' · '+esc(p.numero_pedido):'')+
+      '<small>'+(p.comprador?esc(p.comprador):'Sin comprador asignado')+'</small>';
+
+    var tipoLbl = p.tipo_embarque==="liquidacion" ? "Liquidación" : "Local";
+    var tipoCls = p.tipo_embarque==="liquidacion" ? "tipo-liquidacion" : "tipo-local";
+    var montoDown = (p.monto_ajustado!=null && p.monto_ajustado!=="" && Number(p.monto_ajustado) < Number(p.monto_pedido||0));
+
+    var html = '<div class="comm-grid">';
+    html += '<div class="comm-item"><div class="comm-label">Tipo de embarque</div><div class="comm-val"><span class="tipo-badge '+tipoCls+'">'+tipoLbl+'</span></div></div>';
+    html += '<div class="comm-item"><div class="comm-label">Departamento</div><div class="comm-val">'+(p.departamento?esc(p.departamento)+(p.categoria_departamento?' <span class="muted">('+esc(p.categoria_departamento)+')</span>':''):'<span class="muted">Sin registrar</span>')+'</div></div>';
+    html += '<div class="comm-item"><div class="comm-label">Clasificación</div><div class="comm-val">'+(p.tipo_pedido==='futuro'?'Futuro'+(p.fecha_estimada_llegada?' <span class="muted">(esperado '+fmtDate(p.fecha_estimada_llegada)+')</span>':''):'Presente')+'</div></div>';
+    html += '<div class="comm-item"><div class="comm-label">Monto pedido</div><div class="comm-val">'+(p.monto_pedido?fmtUSD(p.monto_pedido):'<span class="muted">Sin registrar</span>')+'</div></div>';
+    html += '<div class="comm-item"><div class="comm-label">Monto ajustado</div><div class="comm-val'+(montoDown?' down':'')+'">'+(p.monto_ajustado?fmtUSD(p.monto_ajustado):'<span class="muted">= monto pedido</span>')+'</div></div>';
+    html += '<div class="comm-item"><div class="comm-label">N° recibo</div><div class="comm-val">'+(p.numero_recibo?esc(p.numero_recibo):'<span class="muted">Sin registrar</span>')+'</div></div>';
+    html += '<div class="comm-item"><div class="comm-label">N° de factura</div><div class="comm-val">'+(p.numero_factura?esc(p.numero_factura):'<span class="muted">Sin registrar</span>')+'</div></div>';
+    html += '<div class="comm-item"><div class="comm-label">N° OC madre</div><div class="comm-val">'+(p.numero_oc_madre?esc(p.numero_oc_madre):'<span class="muted">Sin registrar</span>')+'</div></div>';
+    html += '<div class="comm-item"><div class="comm-label">N° embarque</div><div class="comm-val">'+(p.numero_embarque?esc(p.numero_embarque):'<span class="muted">Sin registrar</span>')+'</div></div>';
+    html += '<div class="comm-item"><div class="comm-label">Costo landed</div><div class="comm-val">'+(p.costo_landed?fmtUSD(p.costo_landed):'<span class="muted">Sin registrar</span>')+'</div></div>';
+    html += '</div>';
+    if(p.tipo_embarque!=="liquidacion" && (p.numero_oc_homologada || p.monto_oc_homologada)){
+      html += '<div class="homolog-block"><div class="comm-label" style="margin-bottom:6px;">Orden de compra homologada (Sábada)</div>'+
+        '<div class="comm-grid" style="margin-bottom:0;">'+
+        '<div class="comm-item" style="border:none;padding:0;"><div class="comm-label">N° OC homologada</div><div class="comm-val">'+(p.numero_oc_homologada?esc(p.numero_oc_homologada):'<span class="muted">—</span>')+'</div></div>'+
+        '<div class="comm-item" style="border:none;padding:0;"><div class="comm-label">Monto homologado</div><div class="comm-val">'+(p.monto_oc_homologada?fmtUSD(p.monto_oc_homologada):'<span class="muted">—</span>')+'</div></div>'+
+        '</div></div>';
+    }
+
+    if(p.cancelado){
+      html += '<div class="modal-section-title" style="color:var(--red);">Pedido cancelado</div>'+
+        '<div class="field-row"><div class="comm-val">'+(p.fecha_cancelacion?fmtDate(p.fecha_cancelacion)+' — ':'')+(p.motivo_cancelacion?esc(p.motivo_cancelacion):'<span class="muted">Sin motivo registrado</span>')+'</div></div>';
+    }
+
+    html += '<div class="modal-section-title">Línea de tiempo</div>';
+    html += '<ul class="timeline">';
+    var prevDate = null;
+    ETAPAS.forEach(function(e, i){
+      var val = p[e.key];
+      var filled = !!val;
+      var delta = (val && prevDate) ? daysBetween(prevDate, val) : null;
+      var warnDelta = delta!=null && delta > Math.ceil(state.umbral/2);
+      html += '<li class="tl-item">'+
+        '<div class="tl-dot-wrap"><div class="tl-dot'+(filled?' filled':'')+'"></div>'+(i<ETAPAS.length-1?'<div class="tl-line"></div>':'')+'</div>'+
+        '<div class="tl-body">'+
+          '<div class="tl-label">'+e.icon+' '+e.label+'</div>'+
+          '<div class="tl-date'+(filled?'':' empty')+'">'+(filled?fmtDate(val):'Sin registrar')+'</div>'+
+          (delta!=null ? '<div class="tl-delta'+(warnDelta?' warn':'')+'">'+(warnDelta?'⚠ ':'')+delta+' día(s) desde la etapa anterior</div>' : '')+
+          (e.motivo && p[e.motivo] ? '<div class="tl-motivo">'+esc(p[e.motivo])+'</div>' : '')+
+        '</div>'+
+      '</li>';
+      if(filled) prevDate = val;
+    });
+    html += '</ul>';
+    if(p.notas){
+      html += '<div class="modal-section-title">Notas</div><div style="font-size:12.5px;color:var(--text-muted);">'+esc(p.notas)+'</div>';
+    }
+    $("detailBody").innerHTML = html;
+    $("detailModal").classList.remove("hidden");
+  }
+  $("detailClose").addEventListener("click", function(){ $("detailModal").classList.add("hidden"); });
+  $("detailModal").addEventListener("click", function(e){ if(e.target===$("detailModal")) $("detailModal").classList.add("hidden"); });
+  $("detailEditBtn").addEventListener("click", function(){ $("detailModal").classList.add("hidden"); openForm(state.editingId); });
+  $("detailDeleteBtn").addEventListener("click", function(){
+    if(!confirm("¿Eliminar este pedido? Esta acción no se puede deshacer.")) return;
+    if(!supa) return;
+    supa.from("pedidos_zona_libre").delete().eq("id", state.editingId).then(function(r){
+      if(r.error){ showToast("Error al eliminar: "+r.error.message, true); return; }
+      $("detailModal").classList.add("hidden");
+      showToast("Pedido eliminado");
+      loadPedidos();
+    });
+  });
+
+  // ---------- formulario agregar/editar ----------
+  function openForm(id){
+    state.editingId = id || null;
+    var p = id ? state.pedidos.find(function(x){ return x.id===id; }) : {};
+    p = p || {};
+    $("formTitle").innerHTML = (id?"Editar pedido":"Agregar pedido")+'<small>Completa lo que sepas — puedes editar luego</small>';
+
+    var html = '';
+    html += '<div class="field-row"><label>Proveedor / Compañía *</label><input id="f_proveedor" list="prov-datalist" value="'+esc(p.proveedor||'')+'" placeholder="Nombre del proveedor en Zona Libre"></div>';
+    html += '<div class="field-grid">'+
+      '<div class="field-row"><label># Pedido / Proforma</label><input id="f_numero" value="'+esc(p.numero_pedido||'')+'"></div>'+
+      '<div class="field-row"><label>Comprador</label><select id="f_comprador"><option value="">— Seleccione —</option>'+
+        COMPRADORES.map(function(c){ return '<option value="'+esc(c)+'"'+(p.comprador===c?' selected':'')+'>'+esc(c)+'</option>'; }).join("")+
+      '</select></div>'+
+    '</div>';
+    html += '<div class="field-grid">'+
+      '<div class="field-row"><label>Departamento</label><select id="f_departamento"><option value="">— Seleccione —</option>'+
+        DEPT_LIST.map(function(d){ return '<option value="'+esc(d)+'"'+(p.departamento===d?' selected':'')+'>'+esc(d)+'</option>'; }).join("")+
+      '</select></div>'+
+      '<div class="field-row"><label>Categoría <span id="catToggle" style="cursor:pointer;color:var(--teal);font-weight:600;">'+((p.categoria_departamento)?'':'(+ agregar)')+'</span></label>'+
+        '<input id="f_categoria" value="'+esc(p.categoria_departamento||'')+'" placeholder="Ej: Carteras" style="'+(p.categoria_departamento?'':'display:none;')+'"></div>'+
+    '</div>';
+    html += '<div class="field-row"><label>Descripción / referencia</label><input id="f_descripcion" value="'+esc(p.descripcion||'')+'" placeholder="Ej: contenedor de juguetes navideños"></div>';
+
+    html += '<div class="modal-section-title">Datos comerciales</div>';
+    html += '<div class="field-grid">'+
+      '<div class="field-row"><label>Tipo de embarque</label><select id="f_tipo_embarque">'+
+        '<option value="local"'+((p.tipo_embarque||'local')==='local'?' selected':'')+'>Local (Sábada · Traspaso · Homologación)</option>'+
+        '<option value="liquidacion"'+(p.tipo_embarque==='liquidacion'?' selected':'')+'>Liquidación (Salida · Monto original)</option>'+
+      '</select></div>'+
+      '<div class="field-row"><label>N° recibo</label><input id="f_numero_recibo" value="'+esc(p.numero_recibo||'')+'" placeholder="Recibo generado al postear la factura"></div>'+
+    '</div>';
+    html += '<div class="field-grid">'+
+      '<div class="field-row"><label>Clasificación de compra</label><select id="f_tipo_pedido">'+
+        '<option value="presente"'+((p.tipo_pedido||'presente')==='presente'?' selected':'')+'>Presente (traer de inmediato)</option>'+
+        '<option value="futuro"'+(p.tipo_pedido==='futuro'?' selected':'')+'>Futuro (programado / temporada)</option>'+
+      '</select></div>'+
+      '<div class="field-row" id="estimadaRow" style="'+(p.tipo_pedido==='futuro'?'':'display:none;')+'"><label>Fecha estimada de llegada</label><input type="date" id="f_fecha_estimada_llegada" value="'+(p.fecha_estimada_llegada||'')+'"></div>'+
+    '</div>';
+    html += '<div class="field-grid">'+
+      '<div class="field-row"><label>Monto pedido (USD)</label><input type="number" step="0.01" id="f_monto_pedido" value="'+(p.monto_pedido!=null?p.monto_pedido:'')+'"></div>'+
+      '<div class="field-row"><label>Monto ajustado (USD)</label><input type="number" step="0.01" id="f_monto_ajustado" value="'+(p.monto_ajustado!=null?p.monto_ajustado:'')+'" placeholder="Si bajó por faltante/pago/etc."></div>'+
+    '</div>';
+
+    html += '<div class="modal-section-title">Fechas por etapa</div>';
+    html += '<div class="field-grid">'+
+      '<div class="field-row"><label>📝 Pedido enviado *</label><input type="date" id="f_fecha_pedido" value="'+(p.fecha_pedido||'')+'"></div>'+
+      '<div class="field-row"><label>✅ Aprobación del comprador</label><input type="date" id="f_fecha_aprobacion" value="'+(p.fecha_aprobacion||'')+'"></div>'+
+    '</div>';
+    html += '<div class="field-row"><label>Motivo de demora en aprobación (si aplica)</label><input id="f_motivo_aprobacion" value="'+esc(p.motivo_aprobacion||'')+'" placeholder="Ej: cambio de precio no acordado"></div>';
+    html += '<div class="field-grid">'+
+      '<div class="field-row"><label>📤 Documentación enviada a trámite</label><input type="date" id="f_fecha_envio_documentacion" value="'+(p.fecha_envio_documentacion||'')+'"></div>'+
+      '<div class="field-row"><label>🧾 Factura y traspaso recibidos</label><input type="date" id="f_fecha_factura" value="'+(p.fecha_factura||'')+'"></div>'+
+    '</div>';
+    html += '<div class="field-row"><label>N° de factura</label><input id="f_numero_factura" value="'+esc(p.numero_factura||'')+'" placeholder="N° de factura del proveedor, para relacionar con el N° de pedido"></div>';
+    html += '<div class="field-grid">'+
+      '<div class="field-row"><label>🏭 Recibido en bodega Sábada</label><input type="date" id="f_fecha_recepcion_bodega" value="'+(p.fecha_recepcion_bodega||'')+'"></div>'+
+      '<div class="field-row"><label>📄 Orden de compra entregada</label><input type="date" id="f_fecha_orden_compra" value="'+(p.fecha_orden_compra||'')+'"></div>'+
+    '</div>';
+    html += '<div class="field-row"><label>N° orden de compra madre</label><input id="f_numero_oc_madre" value="'+esc(p.numero_oc_madre||'')+'"></div>';
+    html += '<div class="field-row"><label>Motivo de demora en orden de compra (si aplica)</label><input id="f_motivo_orden_compra" value="'+esc(p.motivo_orden_compra||'')+'" placeholder="Ej: presupuesto pendiente de aprobación gerencial"></div>';
+
+    html += '<div class="modal-section-title" id="homologTitle">Orden de compra homologada (solo embarques Local / Traspaso / Sábada)</div>';
+    html += '<div class="field-grid" id="homologFields">'+
+      '<div class="field-row"><label>N° OC homologada (hija)</label><input id="f_numero_oc_homologada" value="'+esc(p.numero_oc_homologada||'')+'"></div>'+
+      '<div class="field-row"><label>Monto homologado (USD)</label><input type="number" step="0.01" id="f_monto_oc_homologada" value="'+(p.monto_oc_homologada!=null?p.monto_oc_homologada:'')+'" placeholder="Valor tras el ajuste de Sábada"></div>'+
+    '</div>';
+
+    html += '<div class="modal-section-title">Envío y recepción</div>';
+    html += '<div class="field-grid">'+
+      '<div class="field-row"><label>🚚 Instrucciones enviadas al tramitador (carga a CDF)</label><input type="date" id="f_fecha_envio_sabada" value="'+(p.fecha_envio_sabada||'')+'"></div>'+
+      '<div class="field-row"><label>💳 Factura fiscal Sábada (fecha)</label><input type="date" id="f_fecha_factura_fiscal_sababa" value="'+(p.fecha_factura_fiscal_sababa||'')+'"></div>'+
+    '</div>';
+    html += '<div class="field-row"><label>N° factura fiscal Sábada</label><input id="f_numero_factura_fiscal_sababa" value="'+esc(p.numero_factura_fiscal_sababa||'')+'" placeholder="Factura con la suma global de los proveedores cargados"></div>';
+    html += '<div class="field-row"><label>🏁 Mercancía recibida en CDF</label><input type="date" id="f_fecha_recepcion_final" value="'+(p.fecha_recepcion_final||'')+'"></div>';
+
+    html += '<div class="modal-section-title">Costeo</div>';
+    html += '<div class="field-grid">'+
+      '<div class="field-row"><label>N° embarque (sistema index)</label><input id="f_numero_embarque" value="'+esc(p.numero_embarque||'')+'" placeholder="Para heredar el costeo más adelante"></div>'+
+      '<div class="field-row"><label>Costo landed (USD)</label><input type="number" step="0.01" id="f_costo_landed" value="'+(p.costo_landed!=null?p.costo_landed:'')+'"></div>'+
+    '</div>';
+
+    html += '<div class="modal-section-title">Cancelación</div>';
+    html += '<div class="field-row"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;">'+
+      '<input type="checkbox" id="f_cancelado" style="width:auto;"'+(p.cancelado?' checked':'')+'> Marcar pedido como cancelado</label></div>';
+    html += '<div id="canceladoFields" style="'+(p.cancelado?'':'display:none;')+'">'+
+      '<div class="field-grid">'+
+        '<div class="field-row"><label>Fecha de cancelación</label><input type="date" id="f_fecha_cancelacion" value="'+(p.fecha_cancelacion||todayISO())+'"></div>'+
+        '<div class="field-row"><label>Motivo de cancelación</label><input id="f_motivo_cancelacion" value="'+esc(p.motivo_cancelacion||'')+'" placeholder="Ej: comprador ya no lo requiere"></div>'+
+      '</div>'+
+    '</div>';
+
+    html += '<div class="modal-section-title">Notas</div>';
+    html += '<div class="field-row"><textarea id="f_notas" placeholder="Cualquier detalle adicional...">'+esc(p.notas||'')+'</textarea></div>';
+
+    $("formBody").innerHTML = html;
+    $("formModal").classList.remove("hidden");
+
+    function toggleHomolog(){
+      var esLocal = $("f_tipo_embarque").value !== "liquidacion";
+      $("homologTitle").style.display = esLocal ? "flex" : "none";
+      $("homologFields").style.display = esLocal ? "grid" : "none";
+    }
+    $("f_tipo_embarque").addEventListener("change", toggleHomolog);
+    toggleHomolog();
+
+    $("f_tipo_pedido").addEventListener("change", function(){
+      $("estimadaRow").style.display = this.value === "futuro" ? "block" : "none";
+    });
+
+    $("f_cancelado").addEventListener("change", function(){
+      $("canceladoFields").style.display = this.checked ? "block" : "none";
+      if(this.checked && !$("f_fecha_cancelacion").value) $("f_fecha_cancelacion").value = todayISO();
+    });
+
+    var catToggle = $("catToggle");
+    if(catToggle){
+      catToggle.addEventListener("click", function(){
+        $("f_categoria").style.display = "block";
+        catToggle.style.display = "none";
+        $("f_categoria").focus();
+      });
+    }
+  }
+  $("addBtn").addEventListener("click", function(){ openForm(null); });
+  $("formClose").addEventListener("click", function(){ $("formModal").classList.add("hidden"); });
+  $("formModal").addEventListener("click", function(e){ if(e.target===$("formModal")) $("formModal").classList.add("hidden"); });
+
+  $("formSaveBtn").addEventListener("click", function(){
+    var proveedor = $("f_proveedor").value.trim();
+    var fechaPedido = $("f_fecha_pedido").value;
+    if(!proveedor || !fechaPedido){
+      showToast("Proveedor y fecha de pedido son obligatorios", true);
+      return;
+    }
+    if(!supa){ showToast("No hay conexión a Supabase configurada", true); return; }
+    function num(id){ var v = $(id).value; return v===""?null:parseFloat(v); }
+    var payload = {
+      proveedor: proveedor,
+      numero_pedido: $("f_numero").value.trim() || null,
+      comprador: $("f_comprador").value.trim() || null,
+      departamento: $("f_departamento").value.trim() || null,
+      categoria_departamento: $("f_categoria").value.trim() || null,
+      descripcion: $("f_descripcion").value.trim() || null,
+      tipo_embarque: $("f_tipo_embarque").value || "local",
+      tipo_pedido: $("f_tipo_pedido").value || "presente",
+      fecha_estimada_llegada: $("f_tipo_pedido").value === "futuro" ? ($("f_fecha_estimada_llegada").value || null) : null,
+      monto_pedido: num("f_monto_pedido"),
+      monto_ajustado: num("f_monto_ajustado"),
+      numero_recibo: $("f_numero_recibo").value.trim() || null,
+      fecha_pedido: fechaPedido,
+      fecha_aprobacion: $("f_fecha_aprobacion").value || null,
+      motivo_aprobacion: $("f_motivo_aprobacion").value.trim() || null,
+      fecha_envio_documentacion: $("f_fecha_envio_documentacion").value || null,
+      fecha_factura: $("f_fecha_factura").value || null,
+      numero_factura: $("f_numero_factura").value.trim() || null,
+      fecha_orden_compra: $("f_fecha_orden_compra").value || null,
+      numero_oc_madre: $("f_numero_oc_madre").value.trim() || null,
+      motivo_orden_compra: $("f_motivo_orden_compra").value.trim() || null,
+      numero_oc_homologada: $("f_numero_oc_homologada").value.trim() || null,
+      monto_oc_homologada: num("f_monto_oc_homologada"),
+      fecha_envio_sabada: $("f_fecha_envio_sabada").value || null,
+      fecha_recepcion_bodega: $("f_fecha_recepcion_bodega").value || null,
+      fecha_factura_fiscal_sababa: $("f_fecha_factura_fiscal_sababa").value || null,
+      numero_factura_fiscal_sababa: $("f_numero_factura_fiscal_sababa").value.trim() || null,
+      fecha_recepcion_final: $("f_fecha_recepcion_final").value || null,
+      numero_embarque: $("f_numero_embarque").value.trim() || null,
+      costo_landed: num("f_costo_landed"),
+      cancelado: $("f_cancelado").checked,
+      fecha_cancelacion: $("f_cancelado").checked ? ($("f_fecha_cancelacion").value || todayISO()) : null,
+      motivo_cancelacion: $("f_cancelado").checked ? ($("f_motivo_cancelacion").value.trim() || null) : null,
+      notas: $("f_notas").value.trim() || null,
+      updated_at: new Date().toISOString()
+    };
+    var req = state.editingId
+      ? supa.from("pedidos_zona_libre").update(payload).eq("id", state.editingId)
+      : supa.from("pedidos_zona_libre").insert(payload);
+    req.then(function(r){
+      if(r.error){ showToast("Error al guardar: "+r.error.message, true); return; }
+      showToast(state.editingId ? "Pedido actualizado" : "Pedido agregado");
+      $("formModal").classList.add("hidden");
+      loadPedidos();
+    });
+  });
+
+  // ---------- configuración ----------
+  $("settingsBtn").addEventListener("click", function(){
+    $("umbralInput").value = state.umbral;
+    var dot = $("connDot"), lbl = $("connLabel");
+    if(!supa){ dot.className="conn-dot err"; lbl.textContent="sin configurar"; }
+    else { dot.className="conn-dot ok"; lbl.textContent="conectado"; }
+    $("settingsModal").classList.remove("hidden");
+  });
+  $("settingsClose").addEventListener("click", function(){ $("settingsModal").classList.add("hidden"); });
+  $("settingsModal").addEventListener("click", function(e){ if(e.target===$("settingsModal")) $("settingsModal").classList.add("hidden"); });
+  $("settingsSaveBtn").addEventListener("click", function(){
+    var v = parseInt($("umbralInput").value, 10);
+    if(!v || v<1){ showToast("Ingresa un número de días válido", true); return; }
+    state.umbral = v;
+    $("umbralLabel").textContent = v;
+    $("settingsModal").classList.add("hidden");
+    renderAll();
+    if(supa){
+      supa.from("zl_configuracion").update({umbral_dias:v}).eq("id",1).then(function(r){
+        if(r.error) showToast("No se pudo guardar el umbral en la nube: "+r.error.message, true);
+      });
+    }
+  });
+
+  // ---------- exportación ----------
+  var EXPORT_COLS = [
+    {h:"Tipo", f:function(p){ return p.tipo_embarque==="liquidacion"?"Liquidación":"Local"; }},
+    {h:"Clasificación", f:function(p){ return p.tipo_pedido==="futuro"?"Futuro":"Presente"; }},
+    {h:"Fecha estimada llegada", f:function(p){ return p.fecha_estimada_llegada||""; }},
+    {h:"Proveedor", f:function(p){ return p.proveedor||""; }},
+    {h:"# Pedido", f:function(p){ return p.numero_pedido||""; }},
+    {h:"Comprador", f:function(p){ return p.comprador||""; }},
+    {h:"Departamento", f:function(p){ return p.departamento||""; }},
+    {h:"Categoría", f:function(p){ return p.categoria_departamento||""; }},
+    {h:"Descripción", f:function(p){ return p.descripcion||""; }},
+    {h:"Monto pedido", f:function(p){ return p.monto_pedido!=null?p.monto_pedido:""; }},
+    {h:"Monto ajustado", f:function(p){ return p.monto_ajustado!=null?p.monto_ajustado:""; }},
+    {h:"Fecha pedido", f:function(p){ return p.fecha_pedido||""; }},
+    {h:"Fecha aprobación", f:function(p){ return p.fecha_aprobacion||""; }},
+    {h:"Motivo demora aprobación", f:function(p){ return p.motivo_aprobacion||""; }},
+    {h:"Fecha envío documentación", f:function(p){ return p.fecha_envio_documentacion||""; }},
+    {h:"Fecha factura", f:function(p){ return p.fecha_factura||""; }},
+    {h:"N° factura", f:function(p){ return p.numero_factura||""; }},
+    {h:"N° recibo", f:function(p){ return p.numero_recibo||""; }},
+    {h:"Fecha recepción bodega", f:function(p){ return p.fecha_recepcion_bodega||""; }},
+    {h:"Fecha OC", f:function(p){ return p.fecha_orden_compra||""; }},
+    {h:"N° OC madre", f:function(p){ return p.numero_oc_madre||""; }},
+    {h:"Motivo demora OC", f:function(p){ return p.motivo_orden_compra||""; }},
+    {h:"N° OC homologada", f:function(p){ return p.numero_oc_homologada||""; }},
+    {h:"Monto OC homologada", f:function(p){ return p.monto_oc_homologada!=null?p.monto_oc_homologada:""; }},
+    {h:"Fecha envío tramitador", f:function(p){ return p.fecha_envio_sabada||""; }},
+    {h:"Fecha factura fiscal Sábada", f:function(p){ return p.fecha_factura_fiscal_sababa||""; }},
+    {h:"N° factura fiscal Sábada", f:function(p){ return p.numero_factura_fiscal_sababa||""; }},
+    {h:"Fecha recepción final", f:function(p){ return p.fecha_recepcion_final||""; }},
+    {h:"N° embarque", f:function(p){ return p.numero_embarque||""; }},
+    {h:"Costo landed", f:function(p){ return p.costo_landed!=null?p.costo_landed:""; }},
+    {h:"Estado", f:function(p){ return estadoPedido(p).label; }},
+    {h:"Días totales", f:function(p){ var d=diasTotales(p); return d!=null?d:""; }},
+    {h:"Cancelado", f:function(p){ return p.cancelado?"Sí":"No"; }},
+    {h:"Fecha cancelación", f:function(p){ return p.fecha_cancelacion||""; }},
+    {h:"Motivo cancelación", f:function(p){ return p.motivo_cancelacion||""; }},
+    {h:"Notas", f:function(p){ return p.notas||""; }}
+  ];
+  function buildExportRows(){
+    var list = filteredPedidos();
+    var rows = [EXPORT_COLS.map(function(c){ return c.h; })];
+    list.forEach(function(p){ rows.push(EXPORT_COLS.map(function(c){ return c.f(p); })); });
+    return rows;
+  }
+  function downloadBlob(content, filename, mime){
+    var blob = new Blob([content], {type:mime});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+  $("exportExcelBtn").addEventListener("click", function(){
+    if(!window.XLSX){ showToast("No se pudo cargar el motor de Excel", true); return; }
+    var rows = buildExportRows();
+    var ws = XLSX.utils.aoa_to_sheet(rows);
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Pedidos ZL");
+    XLSX.writeFile(wb, "pedidos-zona-libre-"+todayISO()+".xlsx");
+  });
+  $("exportCsvBtn").addEventListener("click", function(){
+    var rows = buildExportRows();
+    var csv = rows.map(function(r){
+      return r.map(function(v){
+        var s = String(v==null?"":v);
+        if(s.indexOf(",")>-1 || s.indexOf('"')>-1 || s.indexOf("\n")>-1){ s = '"'+s.replace(/"/g,'""')+'"'; }
+        return s;
+      }).join(",");
+    }).join("\n");
+    downloadBlob("\uFEFF"+csv, "pedidos-zona-libre-"+todayISO()+".csv", "text/csv;charset=utf-8;");
+  });
+  $("exportPdfBtn").addEventListener("click", function(){
+    window.print();
+  });
+
+  // ---------- búsqueda ----------
+  $("searchInput").addEventListener("input", function(){
+    state.search = this.value;
+    renderTable();
+  });
+
+  // ---------- tema ----------
+  $("themeToggle").addEventListener("click", function(){
+    document.body.classList.toggle("light");
+    var isLight = document.body.classList.contains("light");
+    this.innerHTML = isLight ? "☾ Tema oscuro" : "☼ Tema claro";
+  });
+
+  // ---------- init ----------
+  (function initProvDatalist(){
+    var dl = $("prov-datalist");
+    if(!dl) return;
+    dl.innerHTML = PROV_NAMES.map(function(n){
+      return '<option value="'+esc(n)+'">';
+    }).join("");
+  })();
+  loadConfig().then(loadPedidos);
+
+})();
+</script>
+
+</body>
+</html>
