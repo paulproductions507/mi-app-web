@@ -528,6 +528,52 @@ body[style*="color-scheme: light"] #portal-content tr td[style*="background:#1c2
 .splash-btn:active{transform:translateY(-1px);}
 .splash-ver{margin-top:16px;font-size:11px;color:var(--muted2);letter-spacing:.08em;}
 
+/* ===== Fix: pantalla de inicio (hero) y panel KPI (nav) nunca deben verse superpuestos ===== */
+#splash-hero{z-index:2;}
+#splash-hero.hero-gone{display:none!important;}
+#splash-nav.zlh-panel{z-index:3;visibility:hidden;pointer-events:none;}
+#splash-nav.zlh-panel.nav-visible{visibility:visible;pointer-events:auto;}
+/* El hologram (erp-circuit) y las partículas de fondo viven FUERA del hero (son hermanos),
+   por eso ocultar solo el hero no bastaba: se veían asomados (franja azul) detrás del panel
+   verde. Al entrar al panel se marca #splash con .app-mode y se ocultan del todo. */
+#splash.app-mode .erp-circuit{display:none!important;}
+#splash.app-mode .splash-bg{display:none!important;}
+
+/* ===== Tema verde aplicado también a la pantalla de inicio (antes era azul) ===== */
+#splash{background:linear-gradient(135deg,#050f0d 0%,#0b1f1a 50%,#050f0d 100%);}
+.erp-circuit svg{filter:hue-rotate(-52deg) saturate(1.05);}
+.splash-icon{background:linear-gradient(135deg,#3fb950,#1f8f7f);box-shadow:0 0 80px rgba(31,143,127,.4);}
+.splash-btn{background:linear-gradient(135deg,#3fb950,#1f8f7f);box-shadow:0 4px 32px rgba(31,143,127,.35);}
+.splash-btn:hover{box-shadow:0 10px 40px rgba(31,143,127,.5);}
+#splash-loading{background:linear-gradient(135deg,#050f0d 0%,#0b1f1a 50%,#050f0d 100%);}
+
+/* Variante clara del panel KPI / hero / carga — activada por "Modo Claro" (body.theme-light) */
+body.theme-light #splash-nav.zlh-panel{
+  --zbg:#f2f8f6; --zsurf:#ffffff; --zsurf2:#eaf4f1; --zborder:#d5e6e0;
+  --ztext:#0d211c; --zmuted:#4f6d64; --zdim:#6c8880;
+  --zt:#127a5f; --zt2:#0d5a46; --zg:#a9761f; --znavy:#2f5f92;
+}
+body.theme-light #splash{background:linear-gradient(135deg,#eef6f3 0%,#e3f1ec 50%,#eef6f3 100%)!important;}
+body.theme-light .erp-circuit svg{filter:hue-rotate(-52deg) saturate(.9) brightness(1.3); opacity:.08;}
+body.theme-light .splash-title{color:#0d2b22;}
+body.theme-light .splash-ver{color:#4f6d64;}
+body.theme-light #splash-loading{background:linear-gradient(135deg,#eef6f3 0%,#e3f1ec 50%,#eef6f3 100%)!important;}
+body.theme-light #splash-loading .sl-title{color:#0d2b22;}
+
+/* ===== Pantalla intermedia de carga (branding Compras & Costeo) al ingresar ===== */
+#splash-loading{
+  position:fixed; inset:0; z-index:20;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  background:linear-gradient(135deg,#0a0f1a 0%,#0d1f35 50%,#0a0f1a 100%);
+  opacity:0; pointer-events:none; transition:opacity .35s ease;
+}
+#splash-loading.active{opacity:1; pointer-events:auto;}
+#splash-loading .sl-art{width:min(78vw,320px);height:min(78vw,320px);margin-bottom:22px;filter:drop-shadow(0 0 40px rgba(63,185,80,.25));}
+#splash-loading .sl-title{font-size:15px;font-weight:700;color:#e6edf3;letter-spacing:.02em;margin-bottom:14px;font-family:'Inter',sans-serif;}
+#splash-loading .sl-bar{width:160px;height:4px;border-radius:4px;background:rgba(255,255,255,.12);overflow:hidden;}
+#splash-loading .sl-bar-fill{height:100%;width:30%;border-radius:4px;background:linear-gradient(90deg,var(--green-l),var(--blue-l));animation:slFill 1.1s ease-in-out infinite;}
+@keyframes slFill{0%{transform:translateX(-100%);}100%{transform:translateX(340%);}}
+
 /* SPLASH NAV BUTTONS */
 .splash-nav-btn{display:flex;align-items:center;gap:14px;background:var(--cb);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:14px 16px;cursor:pointer;text-align:left;width:100%;transition:transform .15s,border-color .15s;}
 .splash-nav-btn:hover{transform:translateX(4px);border-color:var(--c);}
@@ -594,6 +640,47 @@ body[style*="color-scheme: light"] .prov-name { color: #111827 !important; font-
 .sidebar-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:299;display:none;backdrop-filter:blur(2px);}
 .sidebar-overlay.open{display:block;}
 .sidebar-overlay.pinned{display:none!important;}
+/* ── Modo Costeo: pantalla completa sin sidebar legacy ── */
+body.costeo-mode #sidebar,
+body.costeo-mode #sidebar-overlay{display:none!important;}
+body.costeo-mode .btn-inicio{display:inline-flex!important;}
+/* Ancho completo real — ya no hay sidebar ni columna angosta */
+body.costeo-mode .page{max-width:100%!important;padding-left:14px;padding-right:14px;}
+@media(min-width:1000px){body.costeo-mode .page{padding-left:28px;padding-right:28px;}}
+@media(min-width:1500px){body.costeo-mode .page{padding-left:48px;padding-right:48px;}}
+/* Fila de íconos de categoría — scroll horizontal con botones de esquina */
+#_costeoIconRow{display:flex;gap:8px;overflow-x:auto;scroll-behavior:smooth;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
+#_costeoIconRow::-webkit-scrollbar{display:none;}
+#_costeoIconRow > button{flex:0 0 122px;}
+.costeo-scrollbtn{position:absolute;top:50%;transform:translateY(-50%);width:24px;height:24px;border-radius:50%;border:1px solid var(--cst-border, var(--border));background:var(--cst-surface, var(--s1));color:var(--cst-teal, var(--green-l));font-size:11px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.2);z-index:2;display:flex;align-items:center;justify-content:center;opacity:.85;}
+.costeo-scrollbtn:hover{opacity:1;}
+.costeo-scrollbtn.l{left:2px;}
+.costeo-scrollbtn.r{right:2px;}
+/* ── Nueva piel — inspirada en "Cuadro de Importación Estadístico": tarjetas
+   blancas/suaves sobre fondo crema-verdoso (claro) o verde muy oscuro (oscuro).
+   Solo cambia fondo/bordes/radios/sombras — NO toca colores por tipo de dato
+   ni ningún cálculo. ── */
+body.costeo-mode{
+  --cst-bg:#0a1513; --cst-surface:#11201d; --cst-surface2:#152823; --cst-border:#1d3531;
+  --cst-teal:#1f8f7f; --cst-teal2:#145f55; --cst-shadow:0 1px 2px rgba(0,0,0,.2),0 8px 24px -8px rgba(0,0,0,.35); --cst-radius:16px;
+}
+body.costeo-mode.theme-light{
+  --cst-bg:#f5f2ea; --cst-surface:#ffffff; --cst-surface2:#f1ece0; --cst-border:#ddd3bd;
+  --cst-teal:#0f7a6c; --cst-teal2:#0c5f53; --cst-shadow:0 1px 2px rgba(20,30,28,.06),0 8px 24px -8px rgba(20,30,28,.12); --cst-radius:16px;
+}
+body.costeo-mode #tab-sim,body.costeo-mode #tab-cifexp,body.costeo-mode #tab-sababa,body.costeo-mode #tab-facturas{
+  background:
+    radial-gradient(circle at 12% -4%, rgba(31,143,127,.10), transparent 42%),
+    radial-gradient(circle at 100% 14%, rgba(212,162,76,.06), transparent 38%),
+    var(--cst-bg);
+  min-height:100vh;
+}
+body.costeo-mode #tab-sim .card,body.costeo-mode #tab-cifexp .card,body.costeo-mode #tab-sababa .card,body.costeo-mode #tab-facturas .card{
+  background:var(--cst-surface)!important;border:1px solid var(--cst-border)!important;border-radius:var(--cst-radius)!important;box-shadow:var(--cst-shadow)!important;
+}
+body.costeo-mode #tab-sim .card-hd,body.costeo-mode #tab-cifexp .card-hd,body.costeo-mode #tab-sababa .card-hd,body.costeo-mode #tab-facturas .card-hd{
+  background:var(--cst-surface2)!important;border-bottom:1px solid var(--cst-border)!important;
+}
 /* When sidebar is pinned, shift app content */
 body.sidebar-pinned #app-wrapper{margin-left:310px;transition:margin-left .3s cubic-bezier(.25,.46,.45,.94);}
 body:not(.sidebar-pinned) #app-wrapper{margin-left:0;transition:margin-left .3s cubic-bezier(.25,.46,.45,.94);}
@@ -768,6 +855,108 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
 .menu-card-icon{font-size:25px;line-height:1;margin-bottom:1px;}
 .menu-card-title{font-size:12px;font-weight:700;color:rgb(var(--a));letter-spacing:-.01em;}
 .menu-card-sub{font-size:10px;color:var(--muted);line-height:1.4;}
+
+/* ================= ZLH — pantalla de inicio con sidebar (estilo Compras Zona Libre) ================= */
+#splash-nav.zlh-panel{
+  --zt:#1f8f7f; --zt2:#145f55; --zg:#d4a24c; --znavy:#5b8fd4;
+  --zbg:#0a1513; --zsurf:#11201d; --zsurf2:#152823; --zborder:#1d3531;
+  --ztext:#eaf3f0; --zmuted:#7fa39a; --zdim:#557a72;
+  --zmono:'JetBrains Mono','IBM Plex Mono',ui-monospace,monospace;
+  position:fixed; inset:0; left:0; top:0; transform:translateY(100%);
+  width:100%; max-width:none; max-height:none; height:100dvh;
+  background:
+    radial-gradient(circle at 10% -6%, rgba(31,143,127,.16), transparent 42%),
+    radial-gradient(circle at 100% 10%, rgba(212,162,76,.08), transparent 38%),
+    var(--zbg);
+  border-top:none; border-radius:0; box-shadow:none; padding:0;
+  display:flex; flex-direction:column; overflow:hidden;
+}
+/* -- full-width header banner (título + KPIs), arriba de todo -- */
+.zlh-header-full{
+  flex-shrink:0; width:100%; box-sizing:border-box;
+  padding:22px 22px 16px; border-bottom:1px solid var(--zborder);
+}
+.zlh-shell{display:flex; width:100%; flex:1; min-height:0; overflow:hidden;}
+
+/* -- sidebar rail: lista vertical con ícono + nombre SIEMPRE visibles
+      (antes dependía de :hover/tap para mostrar el nombre en un flyout,
+      y en pantallas táctiles eso no queda claro — ahora cada fila ya
+      dice qué es, sin necesidad de tocarla primero). -- */
+.zlh-rail{
+  flex-shrink:0; width:250px; height:100%; background:var(--zsurf);
+  border-right:1px solid var(--zborder); display:flex; flex-direction:column;
+  align-items:stretch; padding:16px 10px; gap:2px; overflow-y:auto; overflow-x:hidden;
+  -webkit-overflow-scrolling:touch;
+}
+.zlh-rail-brand{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--zt),var(--zt2));display:flex;align-items:center;justify-content:center;font-size:18px;margin:0 0 14px 6px;flex-shrink:0;}
+/* Antes había un espaciador enorme (clamp 160-300px) para alinear los íconos
+   con la tarjeta de "Resumen" cuando el sidebar corría a lo largo de TODO el
+   contenido (título+KPIs incluidos). Ahora el título/KPIs/resumen viven en su
+   propio header de ancho completo arriba, así que el sidebar ya arranca a la
+   altura correcta y no necesita empujar sus íconos hacia abajo. */
+.zlh-rail-spacer{display:none;}
+
+.zlh-nav-section{margin-top:16px;}
+.zlh-nav-section:first-of-type{margin-top:0;}
+.zlh-nav-section-lbl{font-family:var(--zmono); font-size:9.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--zdim); padding:0 8px 6px;}
+.zlh-nav-item{
+  display:flex; align-items:flex-start; gap:10px; width:100%; text-align:left;
+  background:none; border:none; color:var(--ztext); padding:8px 8px; border-radius:10px;
+  cursor:pointer; font-family:'Inter',sans-serif;
+}
+.zlh-nav-item:hover{background:rgba(31,143,127,.14);}
+.zlh-nav-item .zlh-nav-ico{font-size:17px; line-height:1.3; flex-shrink:0; width:20px; text-align:center; margin-top:1px;}
+.zlh-nav-item b{display:block; font-size:12.5px; font-weight:700;}
+.zlh-nav-item small{display:block; font-size:10px; color:var(--zdim); font-weight:500; margin-top:1px; line-height:1.3;}
+
+/* -- main content -- */
+.zlh-main{flex:1; min-width:0; height:100%; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:22px; display:flex; align-items:center; justify-content:center;}
+.zlh-main-empty{text-align:center; max-width:340px;}
+.zlh-main-empty .ico{font-size:38px; margin-bottom:10px;}
+.zlh-main-empty h2{font-size:17px; font-weight:800; color:var(--ztext); margin:0 0 6px; font-family:'Inter',sans-serif;}
+.zlh-main-empty p{font-size:12.5px; color:var(--zmuted); line-height:1.5; font-family:'Inter',sans-serif; margin:0;}
+.zlh-topbar{display:flex; justify-content:flex-end; align-items:center; gap:8px; margin-bottom:10px;}
+.zlh-theme-btn{background:rgba(255,255,255,.06); border:1px solid var(--zborder); border-radius:20px; padding:6px 13px; font-size:11px; color:var(--zmuted); cursor:pointer; display:flex; align-items:center; gap:6px; font-family:'Inter',sans-serif;}
+.zlh-eyebrow{font-family:var(--zmono); font-size:10.5px; letter-spacing:.13em; text-transform:uppercase; color:var(--zt); display:flex; align-items:center; gap:9px; margin-bottom:12px;}
+.zlh-eyebrow::before{content:''; width:6px; height:6px; border-radius:50%; background:linear-gradient(135deg,var(--zt),var(--zt2)); box-shadow:0 0 0 3px rgba(31,143,127,.14); flex-shrink:0;}
+.zlh-title{font-size:clamp(21px,4vw,28px); font-weight:800; color:var(--ztext); margin:0 0 7px; letter-spacing:-.01em; line-height:1.2; font-family:'Inter',sans-serif;}
+.zlh-sub{color:var(--zmuted); font-size:13px; max-width:560px; margin-bottom:20px; font-family:'Inter',sans-serif;}
+
+.zlh-kpi-strip{display:grid !important; grid-template-columns:repeat(auto-fit,minmax(118px,1fr)); gap:9px; margin-bottom:22px;}
+.zlh-kpi-strip .splash-kpi-chip{
+  background:var(--zsurf) !important; border:1px solid var(--zborder) !important; border-radius:13px !important;
+  padding:12px 12px 10px !important; text-align:left !important; min-width:0 !important;
+  position:relative; overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,.2), 0 8px 24px -8px rgba(0,0,0,.35);
+}
+.zlh-kpi-strip .splash-kpi-chip::before{content:''; position:absolute; top:0; left:0; right:0; height:3px; background:linear-gradient(90deg,var(--zt),var(--zg));}
+.zlh-kpi-strip .splash-kpi-chip-val{font-family:var(--zmono) !important; font-size:18px !important; color:var(--ztext) !important;}
+.zlh-kpi-strip .splash-kpi-chip-lbl{font-family:var(--zmono) !important; font-size:9px !important; letter-spacing:.06em; text-transform:uppercase; color:var(--zdim) !important; margin-top:5px !important;}
+
+.zlh-section-lbl{font-family:var(--zmono); font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--zdim); margin:4px 0 10px;}
+.zlh-month-strip{display:flex; gap:6px; overflow-x:auto; scrollbar-width:none; padding-bottom:2px; margin-bottom:22px;}
+.zlh-month-strip::-webkit-scrollbar{display:none;}
+.zlh-month-chip{flex-shrink:0; min-width:52px; background:var(--zsurf); border:1px solid var(--zborder); border-radius:10px; padding:8px 6px; text-align:center;}
+.zlh-month-chip-val{font-family:var(--zmono); font-size:15px; font-weight:800; color:var(--ztext);}
+.zlh-month-chip-lbl{font-family:var(--zmono); font-size:9px; letter-spacing:.05em; text-transform:uppercase; color:var(--zdim); margin-top:3px;}
+
+.zlh-reminder-row{display:grid; grid-template-columns:1.3fr 1fr; gap:10px;}
+.zlh-reminder-card{background:var(--zsurf); border:1px solid var(--zborder); border-radius:14px; padding:16px; box-shadow:0 1px 2px rgba(0,0,0,.2), 0 8px 24px -8px rgba(0,0,0,.35);}
+.zlh-reminder-eyebrow{font-family:var(--zmono); font-size:9.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--zdim); margin-bottom:9px;}
+.zlh-reminder-empty{color:var(--zmuted); font-size:12.5px; font-family:'Inter',sans-serif;}
+.zlh-reminder-title{color:var(--ztext); font-size:15px; font-weight:700; margin-bottom:3px; font-family:'Inter',sans-serif;}
+.zlh-reminder-sub{color:var(--zmuted); font-size:11.5px; font-family:'Inter',sans-serif; margin-bottom:12px;}
+.zlh-reminder-btn{background:rgba(31,143,127,.16); border:1px solid rgba(31,143,127,.35); color:var(--zt); font-size:11.5px; font-weight:700; padding:7px 12px; border-radius:9px; cursor:pointer; font-family:'Inter',sans-serif;}
+.zlh-reminder-btn:hover{background:rgba(31,143,127,.28);}
+.zlh-trend-card{display:flex; flex-direction:column;}
+.zlh-trend-delta{font-size:12px; color:var(--zmuted); font-family:'Inter',sans-serif; margin-bottom:8px;}
+.zlh-trend-card canvas{width:100%; height:64px; margin-top:auto;}
+@media(max-width:640px){ .zlh-reminder-row{grid-template-columns:1fr;} }
+
+@media(max-width:680px){
+  .zlh-header-full{padding:18px 14px 14px;}
+  .zlh-main{padding:18px 14px 34px;}
+  .zlh-rail{width:210px;}
+}
 </style>
 <!-- OVERRIDE FINAL — max-width forzado en todo -->
 <style>
@@ -988,122 +1177,271 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
     <div class="splash-ver">Simulación · Ahorro · Desembolso · Análisis · ZLC Panamá</div>
   </div>
 
+  <!-- PANTALLA INTERMEDIA: imagen de marca al ingresar (Compras & Costeo) -->
+  <div id="splash-loading">
+    <svg class="sl-art" viewBox="0 0 260 260" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="slG1" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#3fb950"/>
+          <stop offset="100%" stop-color="#58a6ff"/>
+        </linearGradient>
+        <linearGradient id="slG2" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#1f8f7f"/>
+          <stop offset="100%" stop-color="#145f55"/>
+        </linearGradient>
+        <radialGradient id="slGlow" cx="50%" cy="45%" r="55%">
+          <stop offset="0%" stop-color="#3fb950" stop-opacity=".18"/>
+          <stop offset="100%" stop-color="#3fb950" stop-opacity="0"/>
+        </radialGradient>
+      </defs>
+      <circle cx="130" cy="128" r="118" fill="url(#slGlow)"/>
+      <!-- contenedor de carga -->
+      <g transform="translate(38,120)">
+        <rect x="0" y="10" width="112" height="60" rx="6" fill="url(#slG2)" opacity=".95"/>
+        <rect x="0" y="10" width="112" height="14" rx="6" fill="#ffffff" opacity=".08"/>
+        <line x1="14" y1="10" x2="14" y2="70" stroke="#0a1513" stroke-width="1.4" opacity=".35"/>
+        <line x1="42" y1="10" x2="42" y2="70" stroke="#0a1513" stroke-width="1.4" opacity=".35"/>
+        <line x1="70" y1="10" x2="70" y2="70" stroke="#0a1513" stroke-width="1.4" opacity=".35"/>
+        <line x1="98" y1="10" x2="98" y2="70" stroke="#0a1513" stroke-width="1.4" opacity=".35"/>
+      </g>
+      <!-- edificio aduanal -->
+      <g transform="translate(150,86)">
+        <rect x="0" y="0" width="70" height="94" rx="4" fill="#0e2a24" stroke="#1f8f7f" stroke-width="1.5"/>
+        <path d="M -4 0 L 35 -22 L 74 0 Z" fill="#145f55" stroke="#1f8f7f" stroke-width="1.2"/>
+        <rect x="10" y="16" width="12" height="16" rx="1.5" fill="#58a6ff" opacity=".55"/>
+        <rect x="29" y="16" width="12" height="16" rx="1.5" fill="#58a6ff" opacity=".55"/>
+        <rect x="48" y="16" width="12" height="16" rx="1.5" fill="#58a6ff" opacity=".55"/>
+        <rect x="10" y="40" width="12" height="16" rx="1.5" fill="#58a6ff" opacity=".4"/>
+        <rect x="29" y="40" width="12" height="16" rx="1.5" fill="#58a6ff" opacity=".4"/>
+        <rect x="48" y="40" width="12" height="16" rx="1.5" fill="#58a6ff" opacity=".4"/>
+        <rect x="26" y="64" width="18" height="30" rx="2" fill="#0a1513"/>
+      </g>
+      <!-- barras de tendencia ascendente -->
+      <g transform="translate(30,190)">
+        <rect x="0"  y="26" width="14" height="20" rx="2" fill="url(#slG1)" opacity=".85"/>
+        <rect x="20" y="16" width="14" height="30" rx="2" fill="url(#slG1)" opacity=".9"/>
+        <rect x="40" y="2"  width="14" height="44" rx="2" fill="url(#slG1)"/>
+      </g>
+      <!-- símbolo de costeo -->
+      <g transform="translate(196,26)">
+        <circle cx="16" cy="16" r="16" fill="url(#slG1)"/>
+        <text x="16" y="22" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="16" font-weight="700" fill="#08130f">$</text>
+      </g>
+    </svg>
+    <div class="sl-title">Preparando tu panel de Compras &amp; Costeo…</div>
+    <div class="sl-bar"><div class="sl-bar-fill"></div></div>
+  </div>
+
   <!-- PHASE 2: Modern Nav Panel -->
-  <div id="splash-nav" style="position:absolute;bottom:0;left:50%;transform:translateX(-50%) translateY(100%);width:100%;max-width:var(--content-max);background:var(--s1);border-top:1px solid var(--border);border-radius:20px 20px 0 0;padding:0;transition:transform .45s cubic-bezier(.25,.46,.45,.94);box-shadow:0 -20px 60px rgba(0,0,0,.5);max-height:92vh;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+  <div id="splash-nav" class="zlh-panel">
 
-    <!-- Dark/Light toggle + handle -->
-    <div style="padding:14px 20px 0;display:flex;align-items:center;justify-content:space-between">
-      <div style="width:40px;height:4px;background:var(--border);border-radius:2px;margin:0 auto;position:absolute;left:50%;transform:translateX(-50%)"></div>
-      <div style="width:40px"></div>
-      <button onclick="toggleTheme()" id="theme-toggle-btn"
-        style="background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:20px;padding:5px 12px;font-size:11px;color:var(--muted);cursor:pointer;display:flex;align-items:center;gap:6px;transition:all .2s">
-        <span id="theme-icon">☀️</span><span id="theme-lbl">Modo Claro</span>
-      </button>
+    <!-- FULL-WIDTH HEADER: título, KPIs, embarques por mes y resumen — todo lo que NO es navegación va aquí, a lo ancho -->
+    <div class="zlh-header-full">
+      <div class="zlh-topbar">
+        <button onclick="_tendToggleFmt()" class="zlh-theme-btn _tend-fmt-btn zlh-fmt-btn" title="Cambiar formato de montos">$k</button>
+        <button onclick="toggleTheme()" id="theme-toggle-btn" class="zlh-theme-btn">
+          <span id="theme-icon">☀️</span><span id="theme-lbl">Modo Claro</span>
+        </button>
+      </div>
+
+      <div style="position:relative;overflow:hidden;">
+        <canvas id="nav-trend-canvas" style="position:absolute;top:0;left:0;width:100%;height:80px;opacity:.10;pointer-events:none"></canvas>
+        <div class="zlh-eyebrow">Grupo Primavera Holding · Automatizado</div>
+      </div>
+      <h1 class="zlh-title">Gestión Integral de<br>Compras y Costeo</h1>
+      <div class="zlh-sub">Simulación, ahorro y desembolso de importaciones y compras Zona Libre de Colón, con KPIs y tendencias en tiempo real.</div>
+
+      <div class="splash-kpi-strip zlh-kpi-strip" id="splash-kpi-strip">
+        <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-embarques">—</div><div class="splash-kpi-chip-lbl">Emb. Mes</div></div>
+        <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-ahorro">—</div><div class="splash-kpi-chip-lbl">Ahorro Total</div></div>
+        <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-cif">—</div><div class="splash-kpi-chip-lbl">Compras Mes</div></div>
+        <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-landed">—</div><div class="splash-kpi-chip-lbl">Landed Mes</div></div>
+        <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-fac-merc">—</div><div class="splash-kpi-chip-lbl">Fact. Merc.</div></div>
+        <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-fac-serv">—</div><div class="splash-kpi-chip-lbl">Fact. Serv.</div></div>
+        <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-piezas">—</div><div class="splash-kpi-chip-lbl">Piezas</div></div>
+        <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-costo-inv" style="color:var(--zg)">—</div><div class="splash-kpi-chip-lbl">Costo Inventario</div></div>
+      </div>
+
+      <div class="zlh-section-lbl">Embarques por Mes — <span id="zlh-month-year"></span></div>
+      <div class="zlh-month-strip" id="zlh-month-strip"></div>
+
+      <div class="zlh-section-lbl">Resumen</div>
+      <div class="zlh-reminder-row">
+        <div class="zlh-reminder-card" id="zlhLastShip">
+          <div class="zlh-reminder-eyebrow">Último embarque trabajado</div>
+          <div class="zlh-reminder-empty">Sin actividad reciente todavía.</div>
+        </div>
+        <div class="zlh-reminder-card zlh-trend-card">
+          <div class="zlh-reminder-eyebrow">Ahorro · últimos meses</div>
+          <div id="home-trend-delta" class="zlh-trend-delta">—</div>
+          <canvas id="home-trend-canvas" height="64"></canvas>
+        </div>
+      </div>
     </div>
 
-    <!-- Mini KPI Stats -->
-    <div style="padding:14px 20px 4px;position:relative;overflow:hidden">
-      <canvas id="nav-trend-canvas" style="position:absolute;top:0;left:0;width:100%;height:80px;opacity:.12;pointer-events:none"></canvas>
-      <div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px;text-align:center;position:relative">¿Qué deseas hacer?</div>
-    </div>
+    <div class="zlh-shell">
 
-    <!-- KPI CHIPS -->
-    <div style="padding:0 16px 6px;text-align:right"><button id="kpi-toggle-btn" onclick="_showKpis()" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:var(--muted);border-radius:8px;padding:4px 12px;font-size:10px;cursor:pointer;font-weight:600">&#128202; Ver KPIs</button></div>
-    <div class="splash-kpi-strip" id="splash-kpi-strip" style="display:none">
-      <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-embarques">—</div><div class="splash-kpi-chip-lbl">Emb. Mes</div></div>
-      <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-ahorro">—</div><div class="splash-kpi-chip-lbl">Ahorro Total</div></div>
-      <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-cif">—</div><div class="splash-kpi-chip-lbl">Compras Mes</div></div>
-      <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-landed">—</div><div class="splash-kpi-chip-lbl">Landed Mes</div></div>
-      <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-fac-merc">—</div><div class="splash-kpi-chip-lbl">Fact. Merc.</div></div>
-      <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-fac-serv">—</div><div class="splash-kpi-chip-lbl">Fact. Serv.</div></div>
-      <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-costo-inv" style="color:var(--blue-l)">—</div><div class="splash-kpi-chip-lbl">Costo Inventario</div></div>
-    </div>
+      <!-- SIDEBAR — lista completa, ícono + nombre siempre visibles (nada
+           escondido detrás de un hover/tap), todos los módulos dentro. -->
+      <aside class="zlh-rail" id="zlhRail">
+        <div class="zlh-rail-brand">🛃</div>
 
-    <!-- 10 Menu cards: 2×5 grid -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;padding:4px 16px 20px">
-      <button class="menu-card" style="--a:63,185,80" onclick="iniciarApp('sim')">
-        <span class="menu-card-icon">🧮</span>
-        <div class="menu-card-title">Calcular Costo</div>
-        <div class="menu-card-sub">3 escenarios aduanales</div>
-      </button>
-      <button class="menu-card" style="--a:88,166,255" onclick="iniciarApp('dashboard')">
-        <span class="menu-card-icon">📊</span>
-        <div class="menu-card-title">Dashboard</div>
-        <div class="menu-card-sub">KPIs · Gráficas · Tendencias</div>
-      </button>
-      <button class="menu-card" style="--a:163,113,247" onclick="iniciarApp('histprovs');setTimeout(function(){var s=document.getElementById('histprov-filter-tipo');if(s){s.value='Mercancia';if(typeof _histProvSearch==='function')_histProvSearch();}},400)">
-        <span class="menu-card-icon">📦</span>
-        <div class="menu-card-title">Hist. Prov. Mercancía</div>
-        <div class="menu-card-sub">Facturas de mercancía registradas</div>
-      </button>
-      <button class="menu-card" style="--a:240,136,62" onclick="iniciarApp('aranceles')">
-        <span class="menu-card-icon">🔎</span>
-        <div class="menu-card-title">Aranceles Ítem</div>
-        <div class="menu-card-sub">Factor arancelario detallado</div>
-      </button>
-      <button class="menu-card" style="--a:245,158,11" onclick="iniciarApp('histfact')">
-        <span class="menu-card-icon">🧾</span>
-        <div class="menu-card-title">Historial Embarques</div>
-        <div class="menu-card-sub">Facturas por embarque</div>
-      </button>
-      <button class="menu-card" style="--a:20,184,166" onclick="iniciarApp('unico')">
-        <span class="menu-card-icon">🔒</span>
-        <div class="menu-card-title">Esc. Aduanal</div>
-        <div class="menu-card-sub">Sin comparación alternativa</div>
-      </button>
-      <button class="menu-card" style="--a:20,184,166" onclick="window.open('AjusteProrrateo_v4-2.html','_blank')">
-        <span class="menu-card-icon">📉</span>
-        <div class="menu-card-title">Ajuste de Prorrateo</div>
-        <div class="menu-card-sub">Distribución de costos · Embarques</div>
-      </button>
-      <button class="menu-card" style="--a:251,191,36" onclick="iniciarApp('facturas')">
-        <span class="menu-card-icon">🏪</span>
-        <div class="menu-card-title">Proveedores</div>
-        <div class="menu-card-sub">Facturas del embarque</div>
-      </button>
-      <button class="menu-card" style="--a:248,209,34" onclick="window.open('cuadro-importacion-estadistico-2025.html','_blank')">
-        <span class="menu-card-icon">🗃️</span>
-        <div class="menu-card-title">Cuadro Importación</div>
-        <div class="menu-card-sub">Equipos, puertos, departamentos 2025</div>
-      </button>
-      <button class="menu-card" style="--a:240,136,62" onclick="window.open('corregir-fecha.html','_blank')">
-        <span class="menu-card-icon">📅</span>
-        <div class="menu-card-title">Corregir Fecha</div>
-        <div class="menu-card-sub">Ajustar fecha de un embarque en la nube</div>
-      </button>
-      <button class="menu-card" style="--a:45,212,191" onclick="abrirTransito()">
-        <span class="menu-card-icon">🚢</span>
-        <div class="menu-card-title">Mercancía en Tránsito</div>
-        <div class="menu-card-sub">Control logístico en ruta</div>
-      </button>
-      <button class="menu-card" style="--a:248,209,34" onclick="iniciarApp('planeacion')">
-        <span class="menu-card-icon">📋</span>
-        <div class="menu-card-title">Planeación de Carga</div>
-        <div class="menu-card-sub">Plan semanal · Cruce embarques</div>
-      </button>
-      <button class="menu-card" style="--a:168,85,247" onclick="iniciarApp('factdisp')">
-        <span class="menu-card-icon">🗂️</span>
-        <div class="menu-card-title">Facturas Disponibles</div>
-        <div class="menu-card-sub">Gastos pendientes · Análisis mensual</div>
-      </button>
-      <button class="menu-card" style="--a:31,143,127" onclick="window.open('control-pedidos-zl.html','_blank')">
-        <span class="menu-card-icon">🚚</span>
-        <div class="menu-card-title">Control Pedidos ZL</div>
-        <div class="menu-card-sub">Seguimiento de pedidos · Zona Libre</div>
-      </button>
-      <button class="menu-card" style="--a:34,197,94" onclick="iniciarApp('plantillas')">
-        <span class="menu-card-icon">📁</span>
-        <div class="menu-card-title">Plantillas</div>
-        <div class="menu-card-sub">Plantillas Excel compartidas</div>
-      </button>
-      <button class="menu-card" style="--a:139,148,158" onclick="iniciarApp('config')">
-        <span class="menu-card-icon">⚙️</span>
-        <div class="menu-card-title">Configuración</div>
-        <div class="menu-card-sub">Aranceles · Temas · Datos</div>
-      </button>
+        <div class="zlh-nav-section">
+          <div class="zlh-nav-section-lbl">Calcular Costo</div>
+          <button class="zlh-nav-item" onclick="iniciarApp('sim')"><span class="zlh-nav-ico">🧮</span><span><b>Calcular Costo</b><small>3 escenarios aduanales</small></span></button>
+          <button class="zlh-nav-item" onclick="iniciarApp('unico')"><span class="zlh-nav-ico">🔒</span><span><b>Escenario Único</b><small>Sin comparación alternativa</small></span></button>
+          <button class="zlh-nav-item" onclick="iniciarApp('plantillas')"><span class="zlh-nav-ico">📁</span><span><b>Plantillas</b><small>Plantillas Excel compartidas</small></span></button>
+        </div>
+
+        <div class="zlh-nav-section">
+          <div class="zlh-nav-section-lbl">Reportes &amp; Tendencias</div>
+          <button class="zlh-nav-item" onclick="iniciarApp('dashboard')"><span class="zlh-nav-ico">📊</span><span><b>Dashboard</b><small>KPIs · Gráficas · Tendencias</small></span></button>
+          <button class="zlh-nav-item" onclick="iniciarApp('histfact')"><span class="zlh-nav-ico">🧾</span><span><b>Historial Embarques</b><small>Facturas por embarque</small></span></button>
+          <button class="zlh-nav-item" onclick="iniciarApp('histprovs');setTimeout(function(){var s=document.getElementById('histprov-filter-tipo');if(s){s.value='Mercancia';if(typeof _histProvSearch==='function')_histProvSearch();}},400)"><span class="zlh-nav-ico">📦</span><span><b>Hist. Prov. Mercancía</b><small>Facturas de mercancía registradas</small></span></button>
+        </div>
+
+        <div class="zlh-nav-section">
+          <div class="zlh-nav-section-lbl">Proveedores</div>
+          <button class="zlh-nav-item" onclick="iniciarApp('facturas')"><span class="zlh-nav-ico">🏪</span><span><b>Proveedores</b><small>Facturas del embarque</small></span></button>
+        </div>
+
+        <div class="zlh-nav-section">
+          <div class="zlh-nav-section-lbl">Sistema</div>
+          <button class="zlh-nav-item" onclick="iniciarApp('config')"><span class="zlh-nav-ico">⚙️</span><span><b>Configuración</b><small>Aranceles · Temas · Datos</small></span></button>
+        </div>
+
+        <div class="zlh-nav-section">
+          <div class="zlh-nav-section-lbl">Otras Aplicaciones</div>
+          <button class="zlh-nav-item" onclick="window.open('cuadro-importacion-estadistico-2025.html','_blank')"><span class="zlh-nav-ico">🗃️</span><span><b>Cuadro Importación</b><small>Equipos, puertos, deptos 2025</small></span></button>
+          <button class="zlh-nav-item" onclick="window.open('https://darling-sunflower-e59d17.netlify.app','_blank')"><span class="zlh-nav-ico">🚚</span><span><b>Compras Zona Libre</b><small>Control Pedidos ZL</small></span></button>
+          <button class="zlh-nav-item" onclick="iniciarApp('planeacion')"><span class="zlh-nav-ico">📋</span><span><b>Planeación de Carga</b><small>Semanal por contenedor</small></span></button>
+          <button class="zlh-nav-item" onclick="iniciarApp('factdisp')"><span class="zlh-nav-ico">🗂️</span><span><b>Facturas Disponibles</b><small>Gastos pendientes · Análisis mensual</small></span></button>
+          <button class="zlh-nav-item" onclick="iniciarApp('aranceles')"><span class="zlh-nav-ico">🔎</span><span><b>Aranceles Ítem</b><small>Factor arancelario detallado</small></span></button>
+          <button class="zlh-nav-item" onclick="abrirTransito()"><span class="zlh-nav-ico">🚢</span><span><b>Mercancía en Tránsito</b><small>Control logístico en ruta</small></span></button>
+          <button class="zlh-nav-item" onclick="window.open('AjusteProrrateo_v4-2.html','_blank')"><span class="zlh-nav-ico">📉</span><span><b>Ajuste de Prorrateo</b><small>Distribución de costos</small></span></button>
+          <button class="zlh-nav-item" onclick="window.open('corregir-fecha.html','_blank')"><span class="zlh-nav-ico">📅</span><span><b>Corregir Fecha</b><small>Ajustar fecha de un embarque</small></span></button>
+        </div>
+      </aside>
+
+      <!-- MAIN — placeholder de bienvenida; toda la información en vivo
+           (KPIs, embarques por mes, resumen) ya vive arriba, a lo ancho. -->
+      <main class="zlh-main">
+        <div class="zlh-main-empty">
+          <div class="ico">📦🚚</div>
+          <h2>Gestión Integral de Compras y Costeo</h2>
+          <p>Selecciona un módulo en el menú lateral para comenzar.</p>
+        </div>
+      </main>
+
     </div>
   </div>
 </div>
+<script>
+  // ---------- Widget de inicio: recordatorio ligero (sin recargar el tráfico) ----------
+  function _zlhPopulateReminder(){
+    var box = document.getElementById('zlhLastShip');
+    if(!box || !window.tendData || !tendData.length) return;
+    // Ordenar por "último trabajado" (d.ts, el timestamp real de guardado)
+    // y NO por d.fecha/d.date — esa es la fecha de proceso del embarque, que
+    // puede quedar vacía o mal guardada (bug conocido de fecha año 2000),
+    // y hacía que apareciera un embarque distinto al que en verdad se tocó último.
+    var withIdx = tendData.map(function(d,i){ return {d:d, i:i}; })
+      .filter(function(o){ return o.d.ts || o.d.fecha || o.d.date; });
+    withIdx.sort(function(a,b){
+      return (b.d.ts||0)-(a.d.ts||0)
+        || (new Date(b.d.fecha||b.d.date||0) - new Date(a.d.fecha||a.d.date||0));
+    });
+    if(!withIdx.length) return;
+    var d = withIdx[0].d;
+    var dIdx = withIdx[0].i;
+    var prov = (d.proveedor || d.nombre || '').trim();
+    if(!prov){
+      // Fallback: los embarques no siempre tienen un proveedor único a nivel raíz —
+      // se derivan de las líneas de factura (campo real: l.prov)
+      var _ln = (d.snap && d.snap.invLines) || d.invLines || [];
+      var _provSet = new Set();
+      _ln.forEach(function(l){ var p=(l.prov||l.proveedor||'').trim(); if(p) _provSet.add(p); });
+      if(_provSet.size===1) prov = Array.from(_provSet)[0];
+      else if(_provSet.size>1) prov = _provSet.size+' proveedores';
+      else prov = 'Sin proveedor registrado';
+    }
+    var nro = d.nro || d.numero || '';
+    var ts = d.ts || 0;
+    var fecha = d.fecha || d.date || '';
+    var fechaFmt = fecha ? new Date(fecha).toLocaleDateString('es-PA',{day:'2-digit',month:'short',year:'numeric'}) : '';
+    var esc = d.esc || (d.modoUnico || d.tipoEsc==='unico' ? 'Escenario Único' : '');
+    var nroSafe = nro.toString().replace(/'/g,"\\'");
+    box.innerHTML =
+      '<div class="zlh-reminder-eyebrow">Último embarque trabajado</div>' +
+      '<div class="zlh-reminder-title">'+(nro?('#'+nro+' · '):'')+prov+'</div>' +
+      '<div class="zlh-reminder-sub">'+(esc?esc+' · ':'')+fechaFmt+'</div>' +
+      '<button class="zlh-reminder-btn" onclick="_zlhAbrirUltimoEmbarque(\''+nroSafe+'\','+ts+')">Ver en Dashboard →</button>';
+  }
+  // Abre directamente el embarque de la tarjeta (con sus proveedores/facturas).
+  // FIX (jul-2026): antes se guardaba el ÍNDICE del embarque dentro de tendData
+  // en el momento de pintar la tarjeta de inicio. Pero la sincronización con la
+  // nube corre en segundo plano justo después de cargar la app y REEMPLAZA
+  // tendData por un arreglo nuevo con otro orden (dedup + merge) — ese índice
+  // guardado quedaba apuntando a un embarque distinto al que mostraba la
+  // tarjeta (por eso abría otro proveedor en vez del embarque real). Ahora se
+  // busca el embarque correcto en el momento del clic, por su número (nro),
+  // que es un identificador estable — mismo patrón que window._abrirPorNro.
+  function _zlhAbrirUltimoEmbarque(nro, ts){
+    iniciarApp('dashboard');
+    setTimeout(function(){
+      if(typeof abrirFacturasEmbarque!=='function' || !window.tendData) return;
+      var idx = -1;
+      if(nro){
+        idx = tendData.findIndex(function(x){ return (x.nro||'').toString().trim() === nro.toString().trim(); });
+      }
+      if(idx < 0 && ts){
+        idx = tendData.findIndex(function(x){ return (x.ts||0) === ts; });
+      }
+      if(idx >= 0) abrirFacturasEmbarque(idx);
+    }, 450);
+  }
+  function drawHomeTrend(){
+    var canvas=document.getElementById('home-trend-canvas');
+    var deltaEl=document.getElementById('home-trend-delta');
+    if(!canvas||!canvas.offsetParent) return;
+    var td=window.tendData||[];
+    var ctx=canvas.getContext('2d');
+    var W=canvas.offsetWidth||220, H=64;
+    canvas.width=W; canvas.height=H;
+    ctx.clearRect(0,0,W,H);
+    var byMonth={};
+    td.forEach(function(r){ if(!r.fecha||!r.ahorro) return; var m=r.fecha.slice(0,7); byMonth[m]=(byMonth[m]||0)+(parseFloat(r.ahorro)||0); });
+    var keys=Object.keys(byMonth).sort().slice(-6);
+    if(keys.length<2){ if(deltaEl) deltaEl.textContent='Aún no hay suficientes meses para comparar'; return; }
+    var vals=keys.map(function(k){ return byMonth[k]; });
+    var max=Math.max.apply(null,vals)||1;
+    var pts=vals.map(function(v,i){ return {x:6+(i/(keys.length-1))*(W-12), y:H-6-(v/max)*(H-14)}; });
+    ctx.strokeStyle='#1f8f7f'; ctx.lineWidth=2.2; ctx.beginPath();
+    pts.forEach(function(p,i){ i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y); }); ctx.stroke();
+    ctx.lineTo(pts[pts.length-1].x,H); ctx.lineTo(pts[0].x,H); ctx.closePath();
+    var grad=ctx.createLinearGradient(0,0,0,H);
+    grad.addColorStop(0,'rgba(31,143,127,.35)'); grad.addColorStop(1,'rgba(31,143,127,0)');
+    ctx.fillStyle=grad; ctx.fill();
+    ctx.fillStyle='#1f8f7f';
+    pts.forEach(function(p){ ctx.beginPath(); ctx.arc(p.x,p.y,2.6,0,Math.PI*2); ctx.fill(); });
+    if(deltaEl){
+      var last=vals[vals.length-1], prev=vals[vals.length-2];
+      if(prev>0){
+        var pct=((last-prev)/prev*100);
+        var up=pct>=0;
+        deltaEl.innerHTML='<span style="color:'+(up?'#3fd6a0':'#e78a86')+'">'+(up?'▲':'▼')+' '+Math.abs(pct).toFixed(0)+'%</span> vs. mes anterior';
+      } else {
+        deltaEl.textContent='Ahorro del mes: $'+last.toFixed(0);
+      }
+    }
+  }
+</script>
+  // Tap-to-toggle para el sidebar de inicio (además de :hover en escritorio)
+  // (El viejo _zlhToggle/hover-flyout del riel ya no aplica: ahora cada
+  //  módulo es un botón de navegación directa, siempre visible con su
+  //  nombre — no hay submenús que abrir/cerrar.)
+
+</script>
 
 <!-- SIDEBAR OVERLAY -->
 <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
@@ -1323,19 +1661,12 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
 <!-- TAB 1: ESCENARIO #1 (compara vs #2 CIF Express o #3) -->
 <!-- ===================================================== -->
 <div id="tab-sim" class="tab-pane on">
-<div style="padding:8px 16px 5px;max-width:900px;margin:0 auto;display:flex;align-items:center;gap:10px;background:rgba(88,166,255,.07);border-bottom:1px solid rgba(88,166,255,.15)">
-  <span style="font-size:13px;font-weight:800;color:var(--blue-l);letter-spacing:.06em">📋 SIMULADOR ZLC</span>
-  <span style="font-size:11px;font-weight:500;color:var(--muted)">— Referencia · no refleja desembolso real</span>
-</div>
-<div style="padding:10px 16px 0;max-width:900px;margin:0 auto;display:none">
-  <button onclick="volverInicio()" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer">← Menú Principal</button>
-</div>
 <div class="page">
 
-  <!-- HEADER CARD: Datos del Embarque + Impuestos · Honorarios · Equipo -->
+  <!-- HEADER CARD: Datos del Embarque + Impuestos · Honorarios · Equipo · Escenarios -->
   <div class="card" style="margin-bottom:10px">
-    <div style="padding:10px 12px">
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px">
+    <div style="padding:10px 30px 10px 30px;position:relative">
+      <div id="_costeoIconRow">
 
         <!-- BOTÓN EMBARQUE -->
         <button onclick="_abrirModalEmbarque()" style="background:rgba(63,185,80,.08);border:1px solid rgba(63,185,80,.28);border-radius:10px;padding:9px 8px;text-align:left;cursor:pointer;transition:background .15s" onmouseenter="this.style.background='rgba(63,185,80,.15)'" onmouseleave="this.style.background='rgba(63,185,80,.08)'">
@@ -1365,7 +1696,30 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
           <div id="_equipo_summary_lbl" style="font-size:10px;color:var(--muted);margin-top:2px;font-family:'IBM Plex Mono',monospace">—</div>
         </button>
 
+        <!-- BOTÓN SABABA IMPORTS (escenario · misma dimensión) -->
+        <button onclick="switchTab('sababa',document.querySelector('#unified-nav-row .tab[onclick*=\'sababa\']'))" style="background:rgba(240,136,62,.08);border:1px solid rgba(240,136,62,.28);border-radius:10px;padding:9px 8px;text-align:left;cursor:pointer;transition:background .15s" onmouseenter="this.style.background='rgba(240,136,62,.15)'" onmouseleave="this.style.background='rgba(240,136,62,.08)'">
+          <div style="font-size:16px;margin-bottom:3px">🤝</div>
+          <div style="font-size:11px;font-weight:700;color:var(--orange-l)">Sababa</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px;font-family:'IBM Plex Mono',monospace">Imports</div>
+        </button>
+
+        <!-- BOTÓN CIF EXPRESS (escenario · misma dimensión) -->
+        <button onclick="switchTab('cifexp',document.querySelector('#unified-nav-row .tab[onclick*=\'cifexp\']'))" style="background:rgba(240,136,62,.08);border:1px solid rgba(240,136,62,.28);border-radius:10px;padding:9px 8px;text-align:left;cursor:pointer;transition:background .15s" onmouseenter="this.style.background='rgba(240,136,62,.15)'" onmouseleave="this.style.background='rgba(240,136,62,.08)'">
+          <div style="font-size:16px;margin-bottom:3px">⚡</div>
+          <div style="font-size:11px;font-weight:700;color:var(--orange-l)">CIF Express</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px;font-family:'IBM Plex Mono',monospace">Escenario</div>
+        </button>
+
+        <!-- BOTÓN FACTURAS / PROVEEDORES (misma dimensión) -->
+        <button onclick="switchTab('facturas',document.querySelector('#unified-nav-row .tab[onclick*=\'facturas\']'))" style="background:rgba(63,185,80,.08);border:1px solid rgba(63,185,80,.28);border-radius:10px;padding:9px 8px;text-align:left;cursor:pointer;transition:background .15s" onmouseenter="this.style.background='rgba(63,185,80,.15)'" onmouseleave="this.style.background='rgba(63,185,80,.08)'">
+          <div style="font-size:16px;margin-bottom:3px">🧾</div>
+          <div style="font-size:11px;font-weight:700;color:var(--green-l)">Facturas</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px;font-family:'IBM Plex Mono',monospace">Proveedores</div>
+        </button>
+
       </div>
+      <button class="costeo-scrollbtn l" onclick="document.getElementById('_costeoIconRow').scrollBy({left:-140,behavior:'smooth'})" title="Atrás">◀</button>
+      <button class="costeo-scrollbtn r" onclick="document.getElementById('_costeoIconRow').scrollBy({left:140,behavior:'smooth'})" title="Más opciones">▶</button>
     </div>
   </div>
 
@@ -7498,6 +7852,19 @@ function abrirUnicoModulo(){
     }catch(e){}
   });
 }
+var _COSTEO_ORDER = ['sim','cifexp','sababa','facturas'];
+var _COSTEO_LBLS = {sim:'Esc. Regular',cifexp:'CIF Express',sababa:'Sababa Imports',facturas:'Facturas'};
+function _costeoNav(dir){
+  var cur = _COSTEO_ORDER.indexOf(window._costeoActiveTab||'sim');
+  if(cur===-1) cur=0;
+  var next = (cur+dir+_COSTEO_ORDER.length)%_COSTEO_ORDER.length;
+  switchTab(_COSTEO_ORDER[next], document.querySelector('#unified-nav-row .tab[onclick*="\''+_COSTEO_ORDER[next]+'\'"]'));
+}
+function _costeoUpdateArrows(id){
+  window._costeoActiveTab = id;
+  var lbl = document.getElementById('_costeoArrowLbl');
+  if(lbl) lbl.textContent = (_COSTEO_LBLS[id]||id) + ' · ◀ ▶ para moverte';
+}
 function switchTab(id,el){
   if(window._unicoModeActive && (id==='cifexp'||id==='sababa')){
     alert('🔒 Modo Único activo: CIF Express y Sababa Imports bloqueados.');
@@ -7521,17 +7888,19 @@ function switchTab(id,el){
     else _restaurarModoFacturaSab();
   }
   if(id==='facturas'){ renderInvLines(); }
-  // Open sidebar when entering main simulator tabs (if not already pinned)
-  if(['sim','cifexp','sababa','aduanal'].indexOf(id) !== -1){
+  // ── Modo Costeo — pantalla completa: Simulador, CIF Express, Sababa y
+  // Facturas viven en la misma "dimensión" sin depender del sidebar legacy
+  // (el menú principal ya tiene sus propios íconos). El sidebar se fuerza
+  // cerrado y aparecen flechitas de esquina para moverse entre estos 4.
+  var _COSTEO_TABS = ['sim','cifexp','sababa','facturas'];
+  if(_COSTEO_TABS.indexOf(id) !== -1){
+    document.body.classList.add('costeo-mode');
+    closeSidebar();
+    if(typeof _costeoUpdateArrows==='function') _costeoUpdateArrows(id);
+  } else {
+    document.body.classList.remove('costeo-mode');
     var _sb_el = document.getElementById('sidebar');
-    if(_sb_el && !_sb_el.classList.contains('pinned') && !_sb_el.classList.contains('open')){
-      setTimeout(openSidebar, 150);
-    }
-  }
-  // Close sidebar when going to analysis tabs (unless pinned)
-  if(['tendencias','facturas','aranceles','config','histprov'].indexOf(id) !== -1){
-    var _sb_el2 = document.getElementById('sidebar');
-    if(_sb_el2 && !_sb_el2.classList.contains('pinned') && _sb_el2.classList.contains('open')){
+    if(_sb_el && !_sb_el.classList.contains('pinned') && _sb_el.classList.contains('open')){
       setTimeout(closeSidebar, 100);
     }
   }
@@ -8437,6 +8806,7 @@ function applyTheme(name){
   r.style.setProperty('--muted',t.muted);
   r.style.setProperty('--muted2',t.muted2);
   document.body.style.colorScheme=t.scheme;
+  document.body.classList.toggle('theme-light', t.scheme==='light');
   _isDark=(name!=='light');
   document.querySelectorAll('.theme-icon-el').forEach(el=>el.textContent=_isDark?'☀️':'🌙');
   document.querySelectorAll('.theme-lbl-el').forEach(el=>el.textContent=_isDark?'Modo Claro':'Modo Oscuro');
@@ -8578,20 +8948,56 @@ function addDeptInput(){
 
 // ── DEPT DETAIL POPUP ──
 
+// ── Antes esta función calculaba en vivo la altura de un espaciador para
+//    empujar los íconos del riel lateral hacia abajo, hasta alinearlos con
+//    la tarjeta de "Resumen" (cuando el riel corría junto a TODO el
+//    contenido, título y KPIs incluidos). Ahora el título/KPIs viven en su
+//    propio header de ancho completo arriba, y el riel arranca ya a la
+//    altura correcta desde su propia fila — no queda espacio de sobra que
+//    alinear, así que ya no hace falta el cálculo. Se deja como no-op (en
+//    vez de borrar todas sus llamadas) por si algo más del código la invoca. ──
+function _zlhAlignRailIcons(){ /* no-op: el riel ya no necesita espaciador dinámico */ }
+window.addEventListener('resize', function(){
+  var nav=document.getElementById('splash-nav');
+  if(nav && nav.classList.contains('nav-visible')) _zlhAlignRailIcons();
+});
+
 function showSplashNav(){
   const hero=document.getElementById('splash-hero');
   const nav=document.getElementById('splash-nav');
+  const loading=document.getElementById('splash-loading');
   if(hero){ hero.style.opacity='0'; hero.style.transform='translateY(-30px)'; }
-  // Populate KPI chips from tendData
-  const fmt=n=>{ if(!n)return'—'; if(n>=1000000)return'$'+(n/1000000).toFixed(1)+'M'; if(n>=1000)return'$'+(n/1000).toFixed(0)+'k'; return'$'+n.toFixed(0); };
+  if(loading) loading.classList.add('active');
+  // Ocultar por completo el hero (evita que quede "montado" detrás del panel)
+  setTimeout(()=>{ if(hero) hero.classList.add('hero-gone'); const _sp=document.getElementById('splash'); if(_sp) _sp.classList.add('app-mode'); }, 420);
+  // Populate KPI chips + monthly breakdown from tendData (fuente única, respeta toggle $k/$Completo)
+  _zlhPopulateKPIs();
+  _zlhPopulateMonthly();
+  setTimeout(()=>{
+    if(nav){ nav.classList.add('nav-visible'); nav.style.transform='translateY(0)'; }
+    requestAnimationFrame(()=>{ if(typeof _zlhAlignRailIcons==='function') _zlhAlignRailIcons(); });
+    setTimeout(()=>{
+      const loading2=document.getElementById('splash-loading');
+      if(loading2) loading2.classList.remove('active');
+      drawNavTrend(); drawSplashChart(); _zlhPopulateReminder(); drawHomeTrend();
+      if(typeof _zlhAlignRailIcons==='function') _zlhAlignRailIcons();
+    }, 300);
+  }, 900);
+}
+
+// ── KPIs de la pantalla de inicio (splash-nav) — YTD 2026 ──
+// Extraído de showSplashNav() para poder refrescarse también al volver al
+// inicio (volverInicio) y al cambiar el toggle $k / $Completo, sin quedar
+// "helado" con datos de la última vez que se abrió la app.
+function _zlhPopulateKPIs(){
+  if(!window.tendData) return;
   const _isUnicoD = d => !!(d.modoUnico || d.tipoEsc==='unico'
     || (d.esc||'').toLowerCase().includes('único') || (d.esc||'').toLowerCase().includes('unico')
     || (d.snap && d.snap.sc1 && !d.snap.sc2 && !d.snap.sc3));
-  const _nonUnico=tendData.filter(d=>!_isUnicoD(d));
   const totalAhorro=_calcAhorroTotalGlobal();
-  // Mes actual — compras de mercancía
-  const _now=new Date(); const _curY=_now.getFullYear(); const _curM=_now.getMonth();
-  const _mesRaw=tendData.filter(d=>{ if(!d.fecha&&!d.date) return false; const fd=new Date(d.fecha||d.date); return fd.getFullYear()===_curY&&fd.getMonth()===_curM; });
+  // Acumulado del año en curso (YTD: enero → mes actual) — antes era solo el mes actual
+  const _now=new Date(); const _curY=_now.getFullYear();
+  const _mesRaw=tendData.filter(d=>{ if(!d.fecha&&!d.date) return false; const fd=new Date(d.fecha||d.date); return fd.getFullYear()===_curY; });
   // Deduplicar por nro — evitar que embarques duplicados inflen los conteos
   const _mesDedup=new Map();
   _mesRaw.forEach(d=>{ const k=(d.nro||'').trim().toUpperCase()||('_ts_'+(d.ts||Math.random())); const ex=_mesDedup.get(k); if(!ex||(d.ts||0)>(ex.ts||0)) _mesDedup.set(k,d); });
@@ -8610,7 +9016,7 @@ function showSplashNav(){
     if(isUnicoD) return s+(sn.sc1?.landed||0);
     return s+(sn.sc1?.landedG||sn.sc1?.landed1||0);
   },0);
-  // Facturas mercancía vs servicio del mes — conteo de números únicos, sin duplicados
+  // Facturas mercancía vs servicio del año — conteo de números únicos, sin duplicados
   const _allLines=_mesData.reduce((a,d)=>a.concat(d.snap?.invLines||d.invLines||[]),[]);
   const _mercL=_allLines.filter(l=>(l.tipoFac||'mercancia')==='mercancia');
   const _servL=_allLines.filter(l=>l.tipoFac&&l.tipoFac!=='mercancia');
@@ -8621,16 +9027,21 @@ function showSplashNav(){
   const _servFactSet=new Set(); let _servSinNum=0;
   _servL.forEach(l=>{ const n=(l.numFact||l.nfac||'').trim(); if(n) _servFactSet.add(n.toUpperCase()); else _servSinNum++; });
   const facServ=_servFactSet.size + _servSinNum;
-  const _mesStr=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][_curM];
+  const _mesStr=String(_curY);
   const skE=document.getElementById('sk-embarques'); if(skE) skE.textContent=_mesData.length||'0';
   const skEChip=skE?.closest('.splash-kpi-chip'); if(skEChip){const lbl=skEChip.querySelector('.splash-kpi-chip-lbl');if(lbl)lbl.textContent='Emb. '+_mesStr;}
-  const skA=document.getElementById('sk-ahorro'); if(skA) skA.textContent=totalAhorro>0?fmt(totalAhorro):'—';
-  const skC=document.getElementById('sk-cif'); if(skC){ skC.textContent=totalMesMerc>0?fmt(totalMesMerc):'$0'; }
+  const skA=document.getElementById('sk-ahorro'); if(skA) skA.textContent=totalAhorro>0?window._fmtMoney(totalAhorro):'—';
+  const skC=document.getElementById('sk-cif'); if(skC){ skC.textContent=totalMesMerc>0?window._fmtMoney(totalMesMerc):'$0'; }
   const skCChip=skC?.closest('.splash-kpi-chip'); if(skCChip){const lbl=skCChip.querySelector('.splash-kpi-chip-lbl');if(lbl)lbl.textContent='Compras '+_mesStr;}
-  const skL=document.getElementById('sk-landed'); if(skL) skL.textContent=totalLanded>0?fmt(totalLanded):'—';
+  const skL=document.getElementById('sk-landed'); if(skL) skL.textContent=totalLanded>0?window._fmtMoney(totalLanded):'—';
   const skLChip=skL?.closest('.splash-kpi-chip'); if(skLChip){const lbl=skLChip.querySelector('.splash-kpi-chip-lbl');if(lbl)lbl.textContent='Landed '+_mesStr;}
   const skFM=document.getElementById('sk-fac-merc'); if(skFM) skFM.textContent=facMerc||'0';
   const skFS=document.getElementById('sk-fac-serv'); if(skFS) skFS.textContent=facServ||'0';
+  // Piezas totales (mismo alcance YTD que facturas merc/serv) — parseInt defensivo:
+  // algunas líneas guardan piezas como texto ("120") y una suma sin parseInt
+  // concatena strings en vez de sumar, dejando el KPI clavado en 0.
+  const totalPiezasKPI=_allLines.reduce((s,l)=>s+(parseInt(l.piezas)||0),0);
+  const skPz=document.getElementById('sk-piezas'); if(skPz) skPz.textContent=totalPiezasKPI>0?totalPiezasKPI.toLocaleString('en-US'):'0';
   // Costo Inventario = suma de: 
   //   - Embarques Sababa: mercHomol (valor homologado que entra al inventario)
   //   - Otros escenarios (CIF Express, Único, etc.): costo original CIF/FOB
@@ -8661,7 +9072,6 @@ function showSplashNav(){
     }
 
     // Fallback si no hay invLines (embarques muy antiguos)
-    const mercLines2 = [];
     const cifOriginal = 0;
     const mercInv = isSabD && (sn.sc3?.mercHomol||0) > 0 ? (sn.sc3.mercHomol) : cifOriginal;
     const isUnicoD2 = !!(d.modoUnico || d.tipoEsc==='unico'
@@ -8676,10 +9086,25 @@ function showSplashNav(){
   if(skCI) skCI.textContent = costoInventario > 0 ? window._fmtMoney(costoInventario) : '—';
   const skCIChip = skCI?.closest('.splash-kpi-chip');
   if(skCIChip){const lbl=skCIChip.querySelector('.splash-kpi-chip-lbl');if(lbl)lbl.textContent='Inventario '+_mesStr;}
-  setTimeout(()=>{
-    if(nav) nav.style.transform='translateX(-50%) translateY(0)';
-    setTimeout(()=>{ drawNavTrend(); drawSplashChart(); }, 300);
-  }, 200);
+  if(typeof _syncFmtBtns==='function') _syncFmtBtns();
+}
+
+// ── Tarjeta "Embarques por Mes" del inicio — YTD, mismo criterio de dedup que los KPIs ──
+function _zlhPopulateMonthly(){
+  const strip=document.getElementById('zlh-month-strip');
+  if(!strip || !window.tendData) return;
+  const _now=new Date(); const _curY=_now.getFullYear(); const _curM=_now.getMonth();
+  const yEl=document.getElementById('zlh-month-year'); if(yEl) yEl.textContent=_curY;
+  const _raw=tendData.filter(d=>{ if(!d.fecha&&!d.date) return false; const fd=new Date(d.fecha||d.date); return fd.getFullYear()===_curY; });
+  const _dedup=new Map();
+  _raw.forEach(d=>{ const k=(d.nro||'').trim().toUpperCase()||('_ts_'+(d.ts||Math.random())); const ex=_dedup.get(k); if(!ex||(d.ts||0)>(ex.ts||0)) _dedup.set(k,d); });
+  const _data=Array.from(_dedup.values());
+  const counts=new Array(_curM+1).fill(0);
+  _data.forEach(d=>{ const fd=new Date(d.fecha||d.date); const m=fd.getMonth(); if(m>=0 && m<=_curM) counts[m]++; });
+  const meses=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  strip.innerHTML = counts.map((c,i)=>
+    '<div class="zlh-month-chip"><div class="zlh-month-chip-val">'+c+'</div><div class="zlh-month-chip-lbl">'+meses[i]+'</div></div>'
+  ).join('');
 }
 function drawNavTrend(){
   const canvas=document.getElementById('nav-trend-canvas');
@@ -8758,6 +9183,10 @@ function iniciarApp(tab){
       document.querySelectorAll('.tab-pane').forEach(function(p){ p.classList.remove('on'); });
       var simPane = document.getElementById('tab-sim'); if(simPane) simPane.classList.add('on');
       document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('on'); if(t.textContent.trim().includes('Simulador')) t.classList.add('on'); });
+      // Modo Costeo: pantalla completa, sin sidebar legacy, flechas de esquina
+      document.body.classList.add('costeo-mode');
+      if(typeof closeSidebar==='function') closeSidebar();
+      if(typeof _costeoUpdateArrows==='function') _costeoUpdateArrows('sim');
       // ── Mostrar selector de embarques en proceso, solo la primera vez en esta sesión ──
       // Lista los embarques pendiente/parcial/reabierto para que el usuario elija
       // continuar uno existente o empezar uno nuevo, en vez de tener que ir a buscarlo
@@ -8818,6 +9247,7 @@ function volverInicio(){
   const app=document.getElementById('app-wrapper');
   const hero=document.getElementById('splash-hero');
   const nav=document.getElementById('splash-nav');
+  document.body.classList.remove('costeo-mode');
   // Slide app out
   app.style.transition='opacity .3s ease, transform .3s ease';
   app.style.opacity='0';
@@ -8828,15 +9258,26 @@ function volverInicio(){
     splash.style.opacity='0';
     splash.style.transform='translateX(60px)';
     splash.style.transition='opacity .35s ease, transform .35s ease';
-    // Go directly to nav panel — skip hero
-    if(hero){ hero.style.opacity='0'; hero.style.transform='translateY(-30px)'; hero.style.transition='none'; }
-    if(nav){ nav.style.transform='translateX(-50%) translateY(0)'; nav.style.transition='none'; }
+    // Go directly to nav panel — skip hero (y asegurar que quede totalmente oculto, sin superponerse)
+    if(hero){ hero.style.opacity='0'; hero.style.transform='translateY(-30px)'; hero.style.transition='none'; hero.classList.add('hero-gone'); }
+    if(nav){ nav.classList.add('nav-visible'); nav.style.transform='translateY(0)'; nav.style.transition='none'; }
+    splash.classList.add('app-mode');
+    // Refrescar KPIs / recordatorio / tendencia — evita que el inicio se
+    // quede "helado" mostrando datos del embarque que se trabajó antes de entrar.
+    if(typeof _zlhPopulateKPIs==='function') _zlhPopulateKPIs();
+    if(typeof _zlhPopulateMonthly==='function') _zlhPopulateMonthly();
+    if(typeof _zlhPopulateReminder==='function') _zlhPopulateReminder();
+    if(typeof drawNavTrend==='function') drawNavTrend();
+    if(typeof drawSplashChart==='function') drawSplashChart();
+    if(typeof drawHomeTrend==='function') drawHomeTrend();
+    requestAnimationFrame(()=>{ if(typeof _zlhAlignRailIcons==='function') _zlhAlignRailIcons(); });
     setTimeout(()=>{
       splash.style.opacity='1';
       splash.style.transform='none';
       // Restore hero transitions for next time
       if(hero){ setTimeout(()=>{ hero.style.transition=''; },400); }
       if(nav){ setTimeout(()=>{ nav.style.transition=''; },400); }
+      if(typeof _zlhAlignRailIcons==='function') _zlhAlignRailIcons();
     }, 20);
   }, 300);
 }
@@ -19237,6 +19678,9 @@ window._tendFmtFull = (typeof localStorage!=='undefined' && localStorage.getItem
 function _syncFmtBtns(){
   document.querySelectorAll('._tend-fmt-btn').forEach(function(btn){
     btn.textContent = window._tendFmtFull ? '$Completo' : '$k';
+    // El botón del inicio (zlh-fmt-btn) usa el mismo estilo neutro que "Modo
+    // Claro" — sin resaltar azul — para que no destaque distinto entre sí.
+    if(btn.classList.contains('zlh-fmt-btn')) return;
     btn.style.color = window._tendFmtFull ? 'var(--blue-l)' : 'var(--muted)';
     btn.style.borderColor = window._tendFmtFull ? 'rgba(88,166,255,.4)' : 'var(--border)';
     btn.style.background = window._tendFmtFull ? 'rgba(88,166,255,.1)' : 'rgba(139,148,158,.1)';
@@ -19252,6 +19696,7 @@ function _tendToggleFmt(){
   if(typeof renderTend==='function') renderTend();
   if(typeof renderDashboardKPIs==='function') renderDashboardKPIs();
   if(typeof renderTopProvs==='function') renderTopProvs();
+  if(typeof _zlhPopulateKPIs==='function') _zlhPopulateKPIs();
   // Re-render informe if active
   var informeActive = document.querySelector('[data-informe]');
   if(informeActive && typeof renderResumenRapido==='function') renderResumenRapido();
