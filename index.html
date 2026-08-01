@@ -13111,17 +13111,46 @@ function _corregirEmbarque(nro, nuevoEsc){
 }
 
 // Guarda tendData en localStorage (siempre) y en Supabase (si conectado).
+// ── FIX CRÍTICO (jul-2026, egress): cada saveTendData() antes disparaba una
+//    sincronización COMPLETA con la nube — descarga del maestro entero +
+//    reunión + subida entera — sin importar si el cambio era editar un
+//    campo de texto o procesar un embarque completo. Con decenas de
+//    llamadas por sesión (cada tecla, cada oninput, cada recálculo), eso
+//    multiplicaba el tráfico de salida de Supabase muchas veces por encima
+//    de lo necesario y agotó el plan gratuito. Ahora: el guardado local
+//    (localStorage) sigue siendo INMEDIATO y sin depender de la nube, pero
+//    la subida a Supabase se AGRUPA — varios saveTendData() seguidos en
+//    pocos segundos (ej. editando 5 campos de un embarque) generan UNA
+//    sola sincronización real, no una por cada llamada. ──
 var _syncChain = Promise.resolve();
+var _saveDebounceTimer = null;
+var _SAVE_DEBOUNCE_MS = 6000; // agrupa ediciones seguidas en una sola subida a la nube
+
 function saveTendData(){
-  // localStorage — siempre, sin depender de Supabase
+  // localStorage — siempre, inmediato, sin depender de Supabase
   try { localStorage.setItem('_tendData_v2', JSON.stringify(tendData||[])); } catch(e){}
-  // Supabase — solo si conectado. Encadenado: si ya hay una sincronización
-  // en curso, esta espera a que termine antes de empezar — dos guardados
-  // seguidos (o guardar mientras el anterior aún viaja por la red) ya NO
-  // corren en paralelo, que era lo que abría la puerta a perder cambios.
+  if(window._sb){
+    if(_saveDebounceTimer) clearTimeout(_saveDebounceTimer);
+    _saveDebounceTimer = setTimeout(function(){
+      _saveDebounceTimer = null;
+      _syncChain = _syncChain.then(function(){ return _syncTendToCloud(); }).catch(function(e){ console.error('Cloud sync chain error:', e); });
+    }, _SAVE_DEBOUNCE_MS);
+  }
+}
+
+// Fuerza la subida inmediata a la nube — usar después de acciones que SÍ
+// deben quedar en la nube de una vez (procesar un embarque, cerrar/salir).
+function _flushSaveTendData(){
+  if(_saveDebounceTimer){ clearTimeout(_saveDebounceTimer); _saveDebounceTimer=null; }
   if(window._sb){
     _syncChain = _syncChain.then(function(){ return _syncTendToCloud(); }).catch(function(e){ console.error('Cloud sync chain error:', e); });
   }
+}
+if(typeof window!=='undefined'){
+  window.addEventListener('beforeunload', function(){ if(_saveDebounceTimer) _flushSaveTendData(); });
+  document.addEventListener('visibilitychange', function(){
+    if(document.visibilityState==='hidden' && _saveDebounceTimer) _flushSaveTendData();
+  });
 }
 
 // Corrige la FECHA de un embarque por número y guarda en nube
@@ -13247,7 +13276,12 @@ function _corregirRubroUI(idx){
     }
     var _paisSelNorm = _sinAcentos(paisSel||'').toLowerCase();
     var _paisMatch = _PAISES_FULL.find(function(p){ return _sinAcentos(p[0]).toLowerCase()===_paisSelNorm; });
-    var optsPais = _PAISES_FULL.map(function(p){ return '<option value="'+p[0]+'"'+((_paisMatch?p[0]===_paisMatch[0]:p[0]===paisSel)?' selected':'')+'>'+p[1]+'</option>'; }).join('');
+    // FIX (jul-2026): si no hay país guardado, antes no se marcaba NINGUNA
+    // opción como "selected" — el <select> del navegador cae automáticamente
+    // en la PRIMERA opción de la lista (Alemania), aparentando un dato que
+    // nunca se guardó. Ahora se antepone un placeholder honesto.
+    var optsPais = '<option value=""'+(!paisSel?' selected':'')+'>— Sin país registrado —</option>'
+      + _PAISES_FULL.map(function(p){ return '<option value="'+p[0]+'"'+((_paisMatch&&p[0]===_paisMatch[0])?' selected':'')+'>'+p[1]+'</option>'; }).join('');
     if(paisSel && !_paisMatch) optsPais += '<option value="'+paisSel.replace(/"/g,'&quot;')+'" selected>'+paisSel+'</option>';
     var _ciudadesKey = _paisMatch ? _paisMatch[0] : paisSel;
     var ciudadesPais = (window._CIUDADES_POR_PAIS && (window._CIUDADES_POR_PAIS[_ciudadesKey]||window._CIUDADES_POR_PAIS[paisSel])) || [];
@@ -13305,7 +13339,17 @@ function _corregirRubroUI(idx){
   var fechasHtml = _fixFechasHTML(tipoActual);
 
   // ── Vía de Transporte — LAND / SEA / AIR ──
-  var viaActual = d.viaTransporte || 'SEA';
+  // FIX (jul-2026): antes por defecto 'SEA' siempre — embarques de Zona Libre
+  // por camión (procesados con el bug de arriba) se veían como "Marítimo".
+  // Mientras no se resuelva el arrastre histórico, se infiere del mismo modo
+  // que ahora hace procesarEmbarque(), en vez de asumir Marítimo a ciegas.
+  var viaActual = d.viaTransporte || (function(){
+    var te = d.tipoEquipo || '';
+    if(te === 'Avión') return 'AIR';
+    if(te === 'Camión' || te === 'Furgón' || te === 'Consolidado Terrestre') return 'LAND';
+    if(tipoActual === 'ZL') return 'LAND';
+    return 'SEA';
+  })();
   var _viaBtn = function(val,ico,lbl,color){
     var on = viaActual===val;
     return '<button data-via="'+val+'" type="button" class="_fix_via_btn" style="flex:1;padding:9px 4px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;border:1.5px solid '+(on?color:'var(--border)')+';background:'+(on?color+'26':'var(--s2)')+';color:'+(on?color:'var(--muted)')+'">'+ico+' '+lbl+'</button>';
@@ -13398,6 +13442,10 @@ function _corregirRubroUI(idx){
     +'<button id="_fix_rubro_ok" style="flex:2;background:linear-gradient(135deg,rgba(99,179,237,.25),rgba(99,179,237,.12));border:1.5px solid rgba(99,179,237,.5);color:#63b3ed;border-radius:10px;padding:10px;font-size:12px;font-weight:800;cursor:pointer">🏷️ Recalcular y Guardar</button>'
     +'</div></div>';
   document.body.appendChild(ov);
+  if(typeof _makeSearchableSelect==='function'){
+    _makeSearchableSelect('_fix_origen_pais');
+    _makeSearchableSelect('_fix_origen_ciudad');
+  }
 
   // Tabs
   var tabG = ov.querySelector('#_fix_tab_gastos'), tabM = ov.querySelector('#_fix_tab_merc');
@@ -13786,98 +13834,43 @@ window._rescatar = _rescatarEmbarqueCloud;
 //    ahí se sube. Así ningún dispositivo puede borrar el trabajo de
 //    otro por una simple carrera de guardados.
 // ══════════════════════════════════════════════════════════════
+// ── FIX CRÍTICO #2 (ago-2026, egress): esta función YA NO descarga el
+//    maestro completo, lo fusiona en memoria y lo vuelve a subir entero
+//    (ese patrón "descargar 112 → fusionar → subir 112" era la causa
+//    principal de los 119 MB/día de egress). Ahora, usando la función
+//    RPC upsert_embarque_master (creada en Supabase, ver auditoría
+//    ago-2026), empuja SOLO los embarques cuyo `ts` cambió desde la
+//    última sincronización — uno por uno, cada uno chiquito — y el
+//    servidor actualiza ese único elemento dentro del arreglo JSON del
+//    maestro sin que el cliente tenga que bajar ni reenviar los demás.
+//    _lastSyncedTs guarda en memoria qué ts de cada embarque ya se
+//    confirmó en la nube, así que llamar esta función varias veces
+//    seguidas (como hacían varios sitios del código) ya no cuesta nada
+//    extra: si nada cambió, no se envía nada. ──
+window._lastSyncedTs = window._lastSyncedTs || {};
 async function _syncTendToCloud(){
   if(!_sb) { _marcarSyncPendiente(); return; }
   try {
-    // 1. Traer el maestro actual de la nube (puede tener embarques
-    //    de otro dispositivo que este todavía no tiene en memoria).
-    let cloudTend = [];
-    let cloudDeleted = [];
-    try{
-      const {data: cur} = await _sb.from('simulador_sesiones')
-        .select('datos').eq('nombre', _TEND_MASTER_KEY).maybeSingle();
-      if(cur && cur.datos){
-        const p = JSON.parse(cur.datos);
-        cloudTend    = Array.isArray(p.tendData) ? p.tendData : [];
-        cloudDeleted = Array.isArray(p.deleted)  ? p.deleted  : [];
+    const cambios = (tendData||[]).filter(function(d){
+      if(!d || !d.nro) return false;
+      const key = String(d.nro).trim().toUpperCase();
+      return (window._lastSyncedTs[key]||0) !== (d.ts||0);
+    });
+    let huboError = false;
+    for(const d of cambios){
+      const key = String(d.nro).trim().toUpperCase();
+      const _r = await _sb.rpc('upsert_embarque_master', { p_nro: d.nro, p_registro: d });
+      if(_r && _r.error){
+        console.error('RPC upsert_embarque_master error:', d.nro, _r.error);
+        huboError = true;
+        continue;
       }
-    }catch(e){ /* si falla la lectura, se sigue con cloudTend=[] y se fusiona igual */ }
-
-    // ── FIX CRÍTICO #2 (jul-2026): un embarque que se eliminó y luego se
-    //    volvió a procesar quedaba bloqueado PARA SIEMPRE. La versión
-    //    anterior unía ciegamente la lista negra local con la de la nube,
-    //    así que aunque el procesar quitara el N° de la lista negra local,
-    //    esta función lo volvía a agregar desde la copia (desactualizada)
-    //    que aún estaba en la nube — el embarque nunca podía "resucitar".
-    //    Ahora: si el N° está VIVO ahora mismo en tendData (el usuario lo
-    //    acaba de procesar/reprocesar), NUNCA se re-agrega a la lista
-    //    negra, y su tombstone se borra también en la nube. ──
-    const nrosVivosLocal = new Set();
-    (tendData||[]).forEach(d=>{ if(d && d.nro) nrosVivosLocal.add(String(d.nro).trim().toUpperCase()); });
-
-    // 2. Lista negra unificada: local ∪ nube (por si otro dispositivo
-    //    eliminó algo que este todavía no sabe) — salvo lo que este
-    //    dispositivo tiene vivo en tendData ahora mismo.
-    const deletedSet = new Set(Array.from(window._deletedEmbarques||[]).map(String));
-    cloudDeleted.forEach(k => { if(!nrosVivosLocal.has(String(k).trim().toUpperCase())) deletedSet.add(String(k)); });
-    window._deletedEmbarques = deletedSet;
-
-    // 3. Fusionar por N° de embarque — gana el registro con ts más
-    //    reciente; nunca se pierde un embarque que este dispositivo
-    //    no tenía porque lo procesó otro usuario.
-    const merged = new Map();
-    const keyOf = d => d.nro ? String(d.nro).trim().toUpperCase() : ('_ts_'+(d.ts||Math.random()));
-    cloudTend.forEach(d=>{
-      if(!d) return;
-      if(deletedSet.has(String(d.nro||'')) || deletedSet.has(String(d.ts||''))) return; // respeta eliminados
-      merged.set(keyOf(d), d);
-    });
-    (tendData||[]).forEach(d=>{
-      if(!d) return;
-      // tendData local es la fuente viva de este dispositivo — nunca se
-      // filtra aquí por deletedSet: si está en memoria es porque el
-      // usuario lo quiere activo (recién procesado/reprocesado).
-      const k = keyOf(d);
-      const existing = merged.get(k);
-      if(!existing || (d.ts||0) >= (existing.ts||0)) merged.set(k, d); // local reciente gana
-    });
-    const mergedArr = Array.from(merged.values());
-
-    const payload = {
-      nombre: _TEND_MASTER_KEY,
-      datos: JSON.stringify({
-        tendData:   mergedArr,
-        deleted:    Array.from(deletedSet),  // lista negra permanente
-        updated_at: new Date().toISOString()
-      }),
-      updated_at: new Date().toISOString()
-    };
-    const _r = await _sb.from('simulador_sesiones').upsert(payload, { onConflict: 'nombre' });
-    if(_r && _r.error){
-      console.error('Cloud sync error:', _r.error);
-      if(typeof _showToast==='function') _showToast('⚠️ No se pudo sincronizar con la nube: '+(_r.error.message||'error desconocido'),'red',6000);
-      _marcarSyncPendiente();
-      throw _r.error;
+      window._lastSyncedTs[key] = d.ts || Date.now();
     }
-    // ── FIX CRÍTICO #3 (jul-2026): antes, si el largo de la fusión no
-    //    coincidía, se reemplazaba TODO el arreglo tendData por uno nuevo
-    //    (mergedArr), con objetos NUEVOS traídos de la nube. Si en ese
-    //    momento el usuario tenía abierto "Corregir Embarque" editando un
-    //    objeto `d` que ya no estaba en el arreglo reemplazado, sus cambios
-    //    quedaban aplicados a un objeto huérfano — y saveTendData() subía
-    //    la nube el arreglo NUEVO, sin esos cambios. Por eso a veces
-    //    "no se guardaba" o había que corregir el mismo embarque varias
-    //    veces (cada intento tenía otra chance de no toparse con el race).
-    //    Ahora NUNCA se reemplaza el arreglo ni los objetos existentes —
-    //    solo se AGREGAN los que de verdad falten (de otro dispositivo/
-    //    usuario), preservando cada referencia en memoria intacta. ──
-    const localKeys = new Set((tendData||[]).map(keyOf));
-    const faltantes = mergedArr.filter(d => !localKeys.has(keyOf(d)));
-    if(faltantes.length){
-      tendData = (tendData||[]).concat(faltantes);
-      window.tendData = tendData;
-      try { localStorage.setItem('_tendData_v2', JSON.stringify(tendData)); } catch(e){}
-      if(typeof renderTend==='function') renderTend();
+    if(huboError){
+      if(typeof _showToast==='function') _showToast('⚠️ Algunos embarques no se pudieron sincronizar con la nube','red',6000);
+      _marcarSyncPendiente();
+      return;
     }
     _limpiarSyncPendiente();
   } catch(e){
@@ -14131,64 +14124,18 @@ async function _pullTendFromCloud(){
       } catch(e){ cloudTend = []; }
     }
 
-    // 2. SIEMPRE revisar sesiones individuales — pueden tener embarques más nuevos
-    //    que el maestro aún no tiene (ej: guardados antes de esta lógica, o
-    //    guardados mientras el maestro fallaba por conexión)
-    const { data: sessions, error: sessErr } = await _sb
-      .from('simulador_sesiones')
-      .select('nombre, datos, updated_at')
-      .neq('nombre', _TEND_MASTER_KEY)
-      .order('updated_at', { ascending: true });
-
+    // ── FIX CRÍTICO #3 (ago-2026, egress): antes, esta función SIEMPRE
+    //    traía TODAS las filas de simulador_sesiones que no fueran el
+    //    maestro (las 112+ sesiones individuales, más backups y
+    //    plantillas) — cada vez que se abría la app. Eso era la mayor
+    //    fuente de egress de la aplicación. Ya no hace falta: desde
+    //    ago-2026 cada embarque se sincroniza contra el maestro en el
+    //    momento (vía _syncTendToCloud → RPC), así que el maestro ya
+    //    está al día y basta con leerlo a él. La sesión individual de
+    //    cada embarque (con el detalle completo: campos, invLines) se
+    //    sigue guardando igual, pero solo se lee bajo demanda cuando el
+    //    usuario abre ESE embarque puntual — nunca las 112 juntas. ──
     let sesionesNuevas = 0;
-    if(!sessErr && sessions && sessions.length){
-      sessions.forEach(row => {
-        try {
-          const d = JSON.parse(row.datos || '{}');
-          // Una sesión individual puede traer su propio tendData (snapshot del momento)
-          // o un registro único del embarque
-          const registros = d.tendData && d.tendData.length ? d.tendData : [];
-          // También intentar reconstruir desde los campos del snap
-          if(d.snap || d.nro){
-            // ── Fecha de negocio real: SOLO d.snap?.fecha (si el snap la trae) o
-            //    d.fecha si de verdad es una fecha simple (YYYY-MM-DD), nunca un
-            //    timestamp completo con hora — eso es metadata de autoguardado,
-            //    no la fecha que el usuario eligió al procesar. Mejor dejarla
-            //    vacía (se puede corregir manualmente) que rellenarla mal. ──
-            var _fechaCruda = d.snap?.fecha || d.fecha || '';
-            var _fechaNegocio = (typeof _fechaCruda === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(_fechaCruda)) ? _fechaCruda : '';
-            const recSnap = {
-              nro: d.nro || '',
-              desc: d.desc || '',
-              fecha: _fechaNegocio,
-              ahorro: d.snap?.ahorroNeto || 0,
-              cif: d.snap?.cif || 0,
-              esc: d.snap?.esc || (d.compar==='cifexp'?'CIF Express':'Sababa'),
-              ts: d.snap?.ts || new Date(row.updated_at||Date.now()).getTime(),
-              snap: d.snap || null,
-              invLines: d.invLines || [],
-              status: 'completo',
-              // ── Marca de baja prioridad: esta reconstrucción viene de la sesión
-              //    "cruda" de autoguardado, no del maestro. Nunca puede desplazar
-              //    a un registro ya procesado — solo se usa si el embarque no
-              //    existe de ninguna otra forma. ──
-              _fromSessionFallback: true
-            };
-            registros.push(recSnap);
-          }
-          registros.forEach(rec => {
-            if(!rec.nro && !rec.ts) return; // registro inválido
-            const existe = cloudTend.find(c =>
-              (c.nro && rec.nro && c.nro.trim().toUpperCase() === rec.nro.trim().toUpperCase()) ||
-              (c.ts && rec.ts && c.ts === rec.ts)
-            );
-            // No resucitar registros que el usuario eliminó explícitamente
-            const isDeleted = deletedSet.has(String(rec.nro||'')) || deletedSet.has(String(rec.ts||''));
-            if(!existe && !isDeleted){ cloudTend.push(rec); sesionesNuevas++; }
-          });
-        } catch(e){}
-      });
-    }
 
     if(!cloudTend.length) return false;
 
@@ -14256,12 +14203,32 @@ async function _pullTendFromCloud(){
     tendData = cloudTend;
     window.tendData = tendData; // mantener sincronizada la referencia global tras el pull
 
+    // ── Marcar como "ya sincronizado" todo lo que vino directo del maestro
+    //    (no lo que es localOnly, eso sí necesita subirse) — así
+    //    _syncTendToCloud() no reenvía por RPC algo que la nube ya tiene. ──
+    window._lastSyncedTs = window._lastSyncedTs || {};
+    const localOnlyKeys = new Set(localOnly.map(d => d.nro ? String(d.nro).trim().toUpperCase() : ''));
+    cloudTend.forEach(rec => {
+      if(!rec || !rec.nro) return;
+      const key = String(rec.nro).trim().toUpperCase();
+      if(!localOnlyKeys.has(key)) window._lastSyncedTs[key] = rec.ts || 0;
+    });
+
     // 4. Correcciones y migraciones en memoria
+    // ── Como _syncTendToCloud() ahora solo sube lo que cambió de `ts`
+    //    (ya no resube todo siempre), si una corrección automática
+    //    modifica un registro sin tocar su `ts`, ese arreglo quedaría
+    //    solo en memoria y nunca llegaría a la nube. Por eso comparamos
+    //    antes/después y le damos `ts` nuevo a lo que sí cambió. ──
+    const _antesCorr = new Map(tendData.map(d => [d, JSON.stringify(d)]));
     _corregirEmbarque('22035', 'Sababa');
     tendData.forEach(d => { if(!d._gastosMigrados) _migrarGastosDesdeSnap(d); });
     tendData.forEach(d => { _corregirItbmsCifExpress(d); });
     tendData.forEach(d => { _corregirLandedUnico(d); });
     tendData.forEach(d => { _corregirItbmsHomolSababa(d); });
+    tendData.forEach(d => {
+      if(_antesCorr.has(d) && _antesCorr.get(d) !== JSON.stringify(d)) d.ts = Date.now();
+    });
     // ── Corrección ahorro Sababa con flete (embarques no FOB/EXT) ──
     // _corregirAhorroNegativoSababa removida — causaba sobreescritura incorrecta
 
@@ -15542,8 +15509,23 @@ async function procesarEmbarque(){
     piezas:     invLines.reduce((s,l)=>s+(l.piezas||0),0) || window._totalPiezas || 0,
     bultos:     invLines.reduce((s,l)=>s+(l.bultos||0),0),
     equipos:    parseInt(document.getElementById('s1_equipos')?.value)||1,
-    tipoEquipo: document.getElementById('s1_equipo')?.value||'',
-    viaTransporte: document.getElementById('s1_via_transporte')?.value||'SEA',
+    // FIX (jul-2026): 's1_equipo' y 's1_via_transporte' NO EXISTEN en el
+    // formulario de Información del Embarque — el campo real es 's1_tipo_emb'
+    // (Contenedor directo / Consolidado Marítimo / Consolidado Terrestre /
+    // Carga suelta / Camión / Furgón / Avión). Por eso viaTransporte SIEMPRE
+    // se guardaba como 'SEA' (Marítimo), sin importar que el embarque fuera
+    // Zona Libre por camión — de ahí que Corregir Embarque mostrara
+    // "Marítimo" en embarques locales que nunca zarparon ni llegaron a puerto.
+    tipoEquipo: document.getElementById('s1_tipo_emb')?.value || '',
+    viaTransporte: (function(){
+      var te = document.getElementById('s1_tipo_emb')?.value || '';
+      if(te === 'Avión') return 'AIR';
+      if(te === 'Camión' || te === 'Furgón' || te === 'Consolidado Terrestre') return 'LAND';
+      // Zona Libre es despacho local desde Colón — nunca marítimo/aéreo salvo
+      // que el propio Tipo de Embarque diga explícitamente "Avión" (arriba).
+      if((typeof tipo !== 'undefined' ? tipo : '') === 'ZL') return 'LAND';
+      return 'SEA';
+    })(),
     // ── Contenedores múltiples ──
     contenedores: window._contenedores && window._contenedores.length >= 1
       ? JSON.parse(JSON.stringify(window._contenedores))
@@ -15601,6 +15583,9 @@ async function procesarEmbarque(){
   // ── Foto inicial de Costo Inventario para detectar futuras diferencias ──
   if(typeof _setHistBaseline==='function') _setHistBaseline(snap);
   saveTendData();
+  // Procesar un embarque SÍ debe quedar en la nube de inmediato — no esperar
+  // el agrupamiento de 6s que usa saveTendData() para ediciones incidentales.
+  if(typeof _flushSaveTendData==='function') _flushSaveTendData();
   renderTend();
   renderTopProvs();
   updateCmpNroList();
@@ -16600,6 +16585,12 @@ function deleteTend(idx){
         _sb.from('simulador_sesiones').delete().eq('nombre', _nroDel).then(function(_r){
           if(_r && _r.error){ console.error('Error borrando sesión individual '+_nroDel+':', _r.error); _encolarBorradoPendiente(_nroDel); }
         }).catch(function(){ _encolarBorradoPendiente(_nroDel); });
+        // ── También quitarlo del maestro — vía RPC, sin descargar/resubir
+        //    el arreglo completo (ver auditoría ago-2026). ──
+        _sb.rpc('delete_embarque_master', { p_nro: _nroDel }).then(function(_r2){
+          if(_r2 && _r2.error) console.error('Error quitando '+_nroDel+' del maestro:', _r2.error);
+        }).catch(function(){});
+        delete window._lastSyncedTs?.[_nroDel.toUpperCase()];
       } else {
         // Sin conexión a Supabase en este momento — encolar para reintentar
         // apenas se restablezca (ver _asegurarReintentoSync).
@@ -20323,7 +20314,10 @@ function _kpiMostrarInventario(card){
         +'<div style="font-size:10px;color:var(--muted);margin-bottom:8px;line-height:1.5">🎯 <strong style="color:var(--text)">Redondeo Global</strong> — recorre TODOS los embarques (mercancía, homologado, gastos, ITBMS, landed) y limpia cualquier arrastre de decimales ocultos, dejando cada monto en exactamente 2 decimales. Es el mismo efecto que editar embarque por embarque a mano, en una sola pasada.</div>'
         +'<button id="_ajInv_global_btn" style="width:100%;background:linear-gradient(135deg,rgba(88,166,255,.18),rgba(88,166,255,.08));border:1.5px solid rgba(88,166,255,.45);color:var(--blue-l);border-radius:10px;padding:10px;font-size:12px;font-weight:800;cursor:pointer">🎯 Redondear TODOS los embarques a 2 decimales</button>'
 
-        +'<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;margin:16px 0 6px">📜 Historial de Ajustes Manuales</div>'
+        +'<div style="display:flex;align-items:center;justify-content:space-between;margin:16px 0 6px">'
+          +'<span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase">📜 Historial de Ajustes Manuales</span>'
+          +'<button id="_ajInv_hist_clear" type="button" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:3px 8px;font-size:10px;cursor:pointer">🗑️ Limpiar</button>'
+        +'</div>'
         +'<div id="_ajInv_hist" style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:8px"></div>'
 
       +'</div>'
@@ -20346,6 +20340,8 @@ function _kpiMostrarInventario(card){
 
   pop.querySelector('#_ajInv_btn').onclick=function(){ _aplicarAjusteInventarioManual(pop); };
   pop.querySelector('#_ajInv_global_btn').onclick=function(){ _redondeoGlobalTendData(pop); };
+  var _histClearBtn = pop.querySelector('#_ajInv_hist_clear');
+  if(_histClearBtn) _histClearBtn.onclick=function(){ _limpiarHistorialAjustesInventario(pop); };
 
   _renderHistorialAjustesInventario(pop);
 }
@@ -20391,7 +20387,27 @@ function _distribuirAjusteEnLineas(lines, delta){
   return true;
 }
 
-// ── Aplica el ajuste manual seleccionado en el modal de Costo Inventario ──
+// ── Limpia por completo el historial de Ajustes Manuales de Costo Inventario
+//    (log + los deltas invisibles _ajusteRedondeoInv guardados en cada
+//    embarque). Pensado para arrancar de cero cuando el historial trae
+//    entradas de pruebas/antiguas que el usuario nunca aplicó a propósito. ──
+function _limpiarHistorialAjustesInventario(pop){
+  if(!confirm('🗑️ Esto borra TODO el historial de Ajustes Manuales y revierte cualquier ajuste invisible de centavos ya aplicado en los embarques.\n\n¿Continuar?')) return;
+  window._ajustesInventarioLog = [];
+  _guardarAjustesInventario();
+  (window.tendData||[]).forEach(function(d){
+    if(d._ajusteRedondeoInv){
+      delete d._ajusteRedondeoInv;
+      if(typeof _setHistBaseline==='function') _setHistBaseline(d, true);
+    }
+  });
+  if(typeof saveTendData==='function') saveTendData();
+  if(typeof renderTend==='function') renderTend();
+  if(pop) _renderHistorialAjustesInventario(pop);
+  _showToast&&_showToast('✅ Historial de ajustes manuales limpiado','green',3000);
+}
+
+
 // ── Redondeo global a 2 decimales (jul-2026) ──────────────────────────
 //  Ian venía teniendo que abrir "Corregir Embarque" uno por uno y re-teclear
 //  el Valor Homologado para forzar que el campo dejara de arrastrar
