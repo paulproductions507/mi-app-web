@@ -17022,7 +17022,15 @@ function renderTend(_scopeEl){
   const groups={};
   const sorted=[...filteredData].sort((a,b)=>a.fecha.localeCompare(b.fecha));
   sorted.forEach(d=>{
-    const dt=new Date(d.fecha);
+    // ── FIX CRÍTICO (ago-2026): `new Date('2026-08-01')` interpreta esa
+    //    cadena como medianoche UTC. En Panamá (UTC-5) eso equivale a
+    //    2026-07-31 19:00 hora local, así que dt.getMonth() devolvía
+    //    JULIO en vez de AGOSTO — el embarque quedaba agrupado en el mes
+    //    equivocado aunque `fecha` estuviera guardada correctamente. Se
+    //    arma la fecha a partir de sus partes (año/mes/día) como fecha
+    //    LOCAL, sin pasar por conversión de zona horaria. ──
+    const _fp = (d.fecha||'').split('-');
+    const dt = (_fp.length===3) ? new Date(+_fp[0], +_fp[1]-1, +_fp[2]) : new Date(d.fecha);
     let key;
     if(tendPeriod==='dia'){
       key=d.fecha; // full date as key
