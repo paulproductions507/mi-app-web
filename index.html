@@ -20284,7 +20284,7 @@ function _kpiMostrarInventario(card){
       +'</div>'
       +'<div id="_ajInvBody" style="display:none;background:var(--bg);padding:14px">'
 
-        +'<div style="font-size:10px;color:var(--muted);margin-bottom:12px;line-height:1.5">Modo selectivo: elige el embarque, la línea a corregir (Costo Mercancía · Costo No Mercancía · ITBMS) y el monto — máximo <strong style="color:var(--orange-l)">±$0.05</strong>. El ajuste se diluye entre las facturas de esa línea dentro del embarque elegido, para revertir el desfase de centavos sin alterar el resultado real.</div>'
+        +'<div style="font-size:10px;color:var(--muted);margin-bottom:12px;line-height:1.5">Modo selectivo: elige el embarque, la línea a corregir (Costo Mercancía · Costo No Mercancía · ITBMS) y el monto — máximo <strong style="color:var(--orange-l)">±$0.05</strong>. El ajuste se guarda como un <strong style="color:var(--orange-l)">centavo fantasma</strong> invisible del embarque: se suma solo al total agregado (Costo Inventario) para cuadrar con el sistema empresarial — <strong>ninguna factura individual cambia de monto</strong>.</div>'
 
         +'<div style="margin-bottom:10px">'
           +'<label style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:4px">Embarque</label>'
@@ -20319,6 +20319,10 @@ function _kpiMostrarInventario(card){
 
         +'<button id="_ajInv_btn" style="width:100%;background:linear-gradient(135deg,rgba(240,136,62,.2),rgba(240,136,62,.1));border:1.5px solid rgba(240,136,62,.5);color:var(--orange-l);border-radius:10px;padding:10px;font-size:12px;font-weight:800;cursor:pointer">✅ Aplicar Ajuste</button>'
 
+        +'<div style="border-top:1px dashed var(--border);margin:16px 0 12px"></div>'
+        +'<div style="font-size:10px;color:var(--muted);margin-bottom:8px;line-height:1.5">🎯 <strong style="color:var(--text)">Redondeo Global</strong> — recorre TODOS los embarques (mercancía, homologado, gastos, ITBMS, landed) y limpia cualquier arrastre de decimales ocultos, dejando cada monto en exactamente 2 decimales. Es el mismo efecto que editar embarque por embarque a mano, en una sola pasada.</div>'
+        +'<button id="_ajInv_global_btn" style="width:100%;background:linear-gradient(135deg,rgba(88,166,255,.18),rgba(88,166,255,.08));border:1.5px solid rgba(88,166,255,.45);color:var(--blue-l);border-radius:10px;padding:10px;font-size:12px;font-weight:800;cursor:pointer">🎯 Redondear TODOS los embarques a 2 decimales</button>'
+
         +'<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;margin:16px 0 6px">📜 Historial de Ajustes Manuales</div>'
         +'<div id="_ajInv_hist" style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:8px"></div>'
 
@@ -20341,6 +20345,7 @@ function _kpiMostrarInventario(card){
   };
 
   pop.querySelector('#_ajInv_btn').onclick=function(){ _aplicarAjusteInventarioManual(pop); };
+  pop.querySelector('#_ajInv_global_btn').onclick=function(){ _redondeoGlobalTendData(pop); };
 
   _renderHistorialAjustesInventario(pop);
 }
@@ -20387,6 +20392,71 @@ function _distribuirAjusteEnLineas(lines, delta){
 }
 
 // ── Aplica el ajuste manual seleccionado en el modal de Costo Inventario ──
+// ── Redondeo global a 2 decimales (jul-2026) ──────────────────────────
+//  Ian venía teniendo que abrir "Corregir Embarque" uno por uno y re-teclear
+//  el Valor Homologado para forzar que el campo dejara de arrastrar
+//  decimales invisibles (ej. 1417.567 en vez de 1418.00), causando
+//  descuadres de 2-4 centavos contra el sistema empresarial. Esta función
+//  hace lo mismo en una sola pasada sobre TODOS los embarques: recorre cada
+//  registro (snap.invLines, sc1/sc2/sc3, y los campos financieros del
+//  propio embarque) y redondea cada número a exactamente 2 decimales.
+//  Como redondear un entero a 2 decimales no lo altera, es seguro barrer
+//  el objeto completo — solo cambian los valores que sí traían arrastre.
+//  Se excluyen las llaves que contienen "tasa" (tipo de cambio) para no
+//  perder precisión ahí donde sí hacen falta más de 2 decimales.
+function _deepRoundMoney(obj, depth){
+  if(obj===null || obj===undefined || typeof obj!=='object') return 0;
+  depth = depth||0;
+  if(depth>8) return 0; // corta por si hay referencias circulares
+  var changed = 0;
+  Object.keys(obj).forEach(function(k){
+    if(/tasa/i.test(k)) return; // no tocar tipos de cambio
+    var val = obj[k];
+    if(typeof val === 'number' && isFinite(val)){
+      var r = Math.round(val*100)/100;
+      if(r !== val){ obj[k] = r; changed++; }
+    } else if(val && typeof val === 'object'){
+      changed += _deepRoundMoney(val, depth+1);
+    }
+  });
+  return changed;
+}
+
+function _redondeoGlobalTendData(pop){
+  var all = (window.tendData||[]);
+  if(!all.length){ _showToast&&_showToast('⚠️ No hay embarques cargados','orange',2500); return; }
+  if(!confirm('🎯 Redondear TODOS los embarques ('+all.length+') a 2 decimales.\n\nSe limpiará cualquier arrastre de decimales ocultos en mercancía, homologado, gastos, ITBMS y landed — sin cambiar el resultado real, solo la precisión guardada.\n\n¿Continuar?')) return;
+
+  var totalCambios = 0, embAfectados = 0;
+  all.forEach(function(d){
+    var c = 0;
+    c += _deepRoundMoney(d.snap);
+    c += _deepRoundMoney(d.invLines);
+    // Campos financieros sueltos que a veces viven directo en el registro
+    ['cif','ahorro','landed','landed1','landedG','itbms','mercHomol'].forEach(function(k){
+      if(typeof d[k]==='number'){
+        var r = Math.round(d[k]*100)/100;
+        if(r!==d[k]){ d[k]=r; c++; }
+      }
+    });
+    if(c>0){
+      totalCambios += c; embAfectados++;
+      if(typeof _setHistBaseline==='function') _setHistBaseline(d, true);
+    }
+  });
+
+  if(typeof saveTendData==='function') saveTendData();
+  if(typeof renderTend==='function') renderTend();
+
+  if(pop && pop.remove){
+    pop.remove();
+    _kpiMostrarInventario();
+    var _newPop = document.getElementById('_invDetallePop');
+    if(_newPop){ var _hdr=_newPop.querySelector('#_ajInvHdr'); if(_hdr) _hdr.click(); }
+  }
+  _showToast&&_showToast('✅ Redondeo global aplicado: '+totalCambios+' valor(es) corregido(s) en '+embAfectados+' embarque(s)','green',5000);
+}
+
 function _aplicarAjusteInventarioManual(pop){
   var nro = (pop.querySelector('#_ajInv_nro').value||'').trim();
   var linea = pop.querySelector('#_ajInv_linea').value;
@@ -20405,22 +20475,13 @@ function _aplicarAjusteInventarioManual(pop){
   if(!confirm('¿Aplicar ajuste de '+(monto>=0?'+':'')+'$'+monto.toFixed(2)+' en '+_lineaLbl[linea]+' del embarque '+nro+'?\n\nSe diluirá entre las facturas de esa línea dentro del embarque.')) return;
 
   found.forEach(function(d){
-    if(!d.snap) d.snap={};
-    if(!d.snap.invLines) d.snap.invLines = d.invLines || [];
-    var allLines = d.snap.invLines;
-    var matching = allLines.filter(function(l){
-      var t = l.tipoFac||'mercancia';
-      if(linea==='mercancia') return t==='mercancia';
-      if(linea==='itbms') return t==='itbms';
-      return t!=='mercancia' && t!=='itbms' && t!=='seguro'; // nomerc
-    });
-    if(matching.length){
-      _distribuirAjusteEnLineas(matching, monto);
-    } else {
-      // No hay facturas de esa línea todavía — se registra como línea nueva de ajuste.
-      var tipoFacNew = linea==='mercancia'?'mercancia':linea==='itbms'?'itbms':'otros';
-      allLines.push({tipoFac:tipoFacNew, deptCat:'AJUSTE', prov:'AJUSTE MANUAL', costo:monto, oc:'ajuste-decimales', _desc:'Ajuste manual de centavos'+(nota?' — '+nota:'')});
-    }
+    // FIX (jul-2026): el ajuste ya NO se diluye entre las facturas reales del
+    // embarque (eso hacía que el monto de una factura fiscal dejara de coincidir
+    // con lo que llegó del proveedor). Ahora se guarda como un delta invisible
+    // en el propio registro del embarque — solo afecta el total agregado que
+    // ve _calcCostoInventario, ninguna factura individual cambia de valor.
+    if(!d._ajusteRedondeoInv) d._ajusteRedondeoInv = {mercancia:0, nomerc:0, itbms:0};
+    d._ajusteRedondeoInv[linea] = Math.round(((d._ajusteRedondeoInv[linea]||0)+monto)*100)/100;
     // El ajuste es intencional — actualizar el baseline para que no aparezca
     // como una "Diferencia" ⚠ sin explicar en el historial de embarques.
     if(typeof _setHistBaseline==='function') _setHistBaseline(d, true);
@@ -21239,17 +21300,25 @@ function _calcCostoInventario(d){
   var mercHomol=isLocal?(sc3.mercHomol||0):0;
   var mercInv=isLocal&&mercHomol>0?mercHomol:mercOrig;
 
+  // ── Ajuste manual de redondeo (jul-2026) — ver herramienta 🔧 "Ajuste en Costo de
+  //    Inventario". Se guarda APARTE de invLines, para que nunca modifique el monto
+  //    visible de ninguna factura individual; solo se suma aquí, al total agregado
+  //    del embarque, de forma invisible ("centavo fantasma"). ──
+  var _ajR = d._ajusteRedondeoInv || {};
+  var _ajMerc = _ajR.mercancia || 0, _ajNM = _ajR.nomerc || 0, _ajItbms = _ajR.itbms || 0;
+
   // ── Usar invLines reales (cuadran con el empresarial al centavo) ──
   if(allLines.length>0){
     // ITBMS separado para mostrar en desglose — NO duplicar en costoNM
     var itbmsReal=allLines.filter(function(l){return l.tipoFac==='itbms';})
-      .reduce(function(a,l){return a+(l.costo||0);},0);
+      .reduce(function(a,l){return a+(l.costo||0);},0) + _ajItbms;
     // costoNM = todo lo que NO es mercancía NI ITBMS NI seguro (el seguro es solo para
     // cálculo de arancel DAI, no es un gasto real en el inventario)
     var gastoReal=allLines.reduce(function(a,l){
       var t=l.tipoFac||'mercancia';
       return (t==='mercancia'||t==='itbms'||t==='seguro') ? a : a+(l.costo||0);
-    },0);
+    },0) + _ajNM;
+    mercInv = mercInv + _ajMerc;
     var costoInvReal=mercInv+gastoReal+itbmsReal;
     // Para Sababa no-Local (liquidación ZL): sc3 puede tener el noMerc si sc1 está vacío
     if(gastoReal===0 && isSab && !isLocal && (sc3.noMerc||0)>0){
@@ -25891,13 +25960,15 @@ function _toggleContenedorField(val){
 //    terrestre (Camión/Furgón/Consolidado Terrestre) → Fecha de Despacho,
 //    porque el pedido ya se registra por factura en Proveedores. ──
 function _toggleFechasEmbarque(){
-  var tipoEmbEl = document.getElementById('s1_tipo_emb');
-  var val = tipoEmbEl ? tipoEmbEl.value : '';
-  var esTerrestre = val === 'Furgón' || val === 'Camión' || val === 'Consolidado Terrestre';
   var esZL = (typeof tipo !== 'undefined' ? tipo : '') === 'ZL';
   var rowEtd = document.getElementById('blk_etd_eta_row');
   var rowDespacho = document.getElementById('blk_despacho_row');
-  var mostrarDespacho = esZL && esTerrestre;
+  // FIX (jul-2026): Zona Libre nunca tiene "zarpe" ni "puerto" — es despacho
+  // local desde Colón sin importar el tipo de embarque (Carga suelta, Camión,
+  // etc.). Antes solo cambiaba si además era transporte terrestre, dejando
+  // ETD/ETA visibles por error en ZL con Carga suelta u otros tipos.
+  // Coincide con el mismo criterio que ya usa 🏷️ Corregir Embarque.
+  var mostrarDespacho = esZL;
   if(rowEtd) rowEtd.style.display = mostrarDespacho ? 'none' : '';
   if(rowDespacho) rowDespacho.style.display = mostrarDespacho ? '' : 'none';
 }
@@ -29990,7 +30061,11 @@ function _motoresMapeado(rows) {
     setField('s2_dif_cif', dif);
     setField('s2_dif_fob', dif);
     var s2Pago = document.getElementById('s2_pago');
-    if (s2Pago) { s2Pago.value = (totalMerc + fleteVal).toFixed(2); s2Pago.dataset.autoSet = 'true'; }
+    // FIX (jul-2026): "Total Pago" en Sababa debe reflejar el CIF/mercancía menos el
+    // Traspaso (el traspaso no forma parte de lo realmente pagado a Sababa) — antes
+    // se mostraba totalMerc+fleteVal sin restar totalTrasp, aunque baseParaDif (arriba)
+    // sí lo hacía. Ese desfase visual llevaba a diferencias y comisión mal calculadas.
+    if (s2Pago) { s2Pago.value = Math.max(0, (totalMerc - totalTrasp) + fleteVal).toFixed(2); s2Pago.dataset.autoSet = 'true'; }
   }
 
   // ── 5. Forzar sab2Tipo ──
@@ -31326,6 +31401,31 @@ body:not(.sidebar-pinned) #app-wrapper {
   padding-right: 12px !important;
 }
 
+/* 1b/2b. Modo Costeo — anula el Layout Controller de arriba: sin sidebar,
+   sin margen reservado, ancho real de pantalla completa (mismo peso de
+   especificidad que las reglas de arriba, pero declaradas después ⇒ ganan). */
+body.costeo-mode #app-wrapper {
+  margin-left: 0 !important;
+  width: 100% !important;
+}
+body.costeo-mode #tab-sim > div,
+body.costeo-mode #tab-sim .page,
+body.costeo-mode #tab-cifexp > div,
+body.costeo-mode #tab-cifexp .page,
+body.costeo-mode #tab-sababa > div,
+body.costeo-mode #tab-sababa .page,
+body.costeo-mode #tab-facturas > div,
+body.costeo-mode #tab-facturas .page {
+  max-width: 100% !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  padding-left: 16px !important;
+  padding-right: 16px !important;
+}
+@media(min-width:1000px){
+  body.costeo-mode #tab-sim .page,body.costeo-mode #tab-cifexp .page,body.costeo-mode #tab-sababa .page,body.costeo-mode #tab-facturas .page{padding-left:32px !important;padding-right:32px !important;}
+}
+
 /* 3. MODAL DRAWER — centrado, todas las otras pestañas */
 
 /* ── Botón guardar factura — micro-animación ── */
@@ -31785,6 +31885,89 @@ body:not(.sidebar-pinned) #app-wrapper {
 
 })();
 
+// ── Combobox con búsqueda al escribir (jul-2026) ──────────────────────
+//  Envuelve un <select> nativo con un <input> de texto filtrable, sin
+//  romper NADA del código existente que lee/escribe .value en ese select
+//  (incluye _selSetOrCustom, _actualizarCiudades, etc.) — se engancha el
+//  setter nativo de .value para mantener el texto visible sincronizado
+//  automáticamente, sin tener que tocar cada lugar que asigna el valor.
+function _makeSearchableSelect(selectId){
+  var sel = document.getElementById(selectId);
+  if(!sel || sel._searchWrapped) return;
+  sel._searchWrapped = true;
+
+  var wrap = document.createElement('div');
+  wrap.style.cssText = 'position:relative;width:100%';
+  sel.parentNode.insertBefore(wrap, sel);
+  wrap.appendChild(sel);
+  sel.style.display = 'none';
+
+  var inp = document.createElement('input');
+  inp.type = 'text';
+  inp.autocomplete = 'off';
+  inp.placeholder = 'Escribe para buscar…';
+  inp.style.cssText = 'width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px';
+  wrap.appendChild(inp);
+
+  var list = document.createElement('div');
+  list.style.cssText = 'position:absolute;top:100%;left:0;right:0;z-index:200;background:var(--s1);border:1px solid var(--border);border-radius:8px;max-height:220px;overflow-y:auto;display:none;box-shadow:0 8px 24px rgba(0,0,0,.35);margin-top:2px';
+  wrap.appendChild(list);
+
+  function norm(s){ return (s||'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase(); }
+
+  function syncDisplay(){
+    var opt = sel.options[sel.selectedIndex];
+    inp.value = (opt && opt.value) ? opt.textContent : '';
+  }
+
+  function renderList(filter){
+    var f = norm(filter);
+    var opts = Array.prototype.slice.call(sel.options).filter(function(o){ return o.value !== ''; });
+    var matches = f ? opts.filter(function(o){ return norm(o.textContent).indexOf(f) > -1; }) : opts;
+    if(!matches.length){
+      list.innerHTML = '<div style="padding:8px 10px;font-size:12px;color:var(--muted)">Sin resultados — usa "Otro (escribir)…"</div>';
+      list.style.display = 'block';
+      return;
+    }
+    list.innerHTML = matches.map(function(o){
+      return '<div class="_ss_opt" data-val="'+o.value.replace(/"/g,'&quot;')+'" style="padding:8px 10px;font-size:12px;color:var(--text);cursor:pointer">'+o.textContent+'</div>';
+    }).join('');
+    list.style.display = 'block';
+    Array.prototype.forEach.call(list.querySelectorAll('._ss_opt'), function(row){
+      row.onmousedown = function(e){
+        e.preventDefault();
+        sel.value = row.getAttribute('data-val');
+        sel.dispatchEvent(new Event('change', {bubbles:true}));
+        syncDisplay();
+        list.style.display = 'none';
+      };
+    });
+  }
+
+  inp.addEventListener('focus', function(){ renderList(''); });
+  inp.addEventListener('input', function(){ renderList(inp.value); });
+  inp.addEventListener('blur', function(){ setTimeout(function(){ list.style.display='none'; syncDisplay(); }, 150); });
+
+  // Enganchar el setter nativo de .value para que el input visible se
+  // mantenga sincronizado sin importar quién cambie sel.value.
+  var nativeDesc = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
+  if(nativeDesc && nativeDesc.set){
+    Object.defineProperty(sel, 'value', {
+      get: function(){ return nativeDesc.get.call(sel); },
+      set: function(v){ nativeDesc.set.call(sel, v); syncDisplay(); },
+      configurable: true
+    });
+  }
+
+  syncDisplay();
+}
+
+function _initCombosBuscables(){
+  ['s1_pais_emb','s1_ciudad_emb','s1_tipo_emb'].forEach(function(id){
+    if(typeof _makeSearchableSelect==='function') _makeSearchableSelect(id);
+  });
+}
+
 function _abrirModalEmbarque(){
   var ov = document.getElementById('_modal_emb_overlay');
   if(!ov) return;
@@ -31814,6 +31997,8 @@ function _abrirModalEmbarque(){
     if(typeof termino === 'undefined' || !termino) { try{ termino='CIF'; }catch(e){} }
   }
   _actualizarResumenEmbarque();
+  _initCombosBuscables();
+  if(typeof _toggleFechasEmbarque==='function') _toggleFechasEmbarque();
 }
 
 function _cerrarModalEmbarque(){
