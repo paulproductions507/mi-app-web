@@ -12951,6 +12951,18 @@ window._hfToggleMes2 = function(hd, ev){
 // dispositivo. Para corregir: eliminar de Supabase y reprocesar.
 // ══════════════════════════════════════════════════════════════
 const _TEND_MASTER_KEY  = '_TEND_MASTER';
+// ── FIX (ago-2026): `new Date().toISOString().slice(0,10)` da la fecha
+//    en UTC, no en hora de Panamá (UTC-5). Cerca de la medianoche esto
+//    puede adelantar o atrasar un día el valor por defecto que aparece
+//    en "Fecha del Embarque" y modales similares. Esta función arma la
+//    fecha con los componentes LOCALES del navegador (año/mes/día tal
+//    como los ve el usuario en su reloj), sin pasar por conversión de
+//    zona horaria. Úsala para cualquier default de fecha de negocio;
+//    no hace falta para nombres de archivo exportados (esos no importan). ──
+function _hoyLocalISO(){
+  var d = new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
 const _DELETED_LIST_KEY = '_TEND_DELETED'; // NROs/TS eliminados — lista negra permanente
 
 // Lista de embarques eliminados (en memoria, se sincroniza con nube)
@@ -14022,8 +14034,15 @@ async function _descargarBackupManual(){
 async function _abrirBackupsSemanales(){
   if(!_sb){ initSupabase(); await new Promise(r=>setTimeout(r,400)); }
   if(!_sb){ _showToast('⚠️ Sin conexión a la nube','red',3000); return; }
+  // ── FIX (ago-2026, egress): antes esta lista pedía `datos` (el
+  //    historial completo, ~112 embarques) de los 8 backups SOLO para
+  //    mostrar la fecha y el conteo — eso eran 8 copias completas del
+  //    historial descargadas cada vez que se abría este panel. Ahora
+  //    solo se piden nombre y fecha; el contenido completo de un backup
+  //    puntual se baja recién cuando el usuario decide Restaurar o
+  //    Descargar ESE backup específico. ──
   const { data: rows, error } = await _sb.from('simulador_sesiones')
-    .select('nombre, datos, updated_at')
+    .select('nombre, updated_at')
     .like('nombre', '_BACKUP_%')
     .order('updated_at', { ascending: false });
   if(error){ _showToast('⚠️ Error al cargar backups: '+error.message,'red',4000); return; }
@@ -14038,8 +14057,7 @@ async function _abrirBackupsSemanales(){
     +'<div style="font-size:11px;color:var(--muted);margin-bottom:14px">Restaura tu historial completo de embarques a como estaba al momento del backup. Se conservan las últimas 8 semanas.</div>'
     +'<div id="_backupsList">'
     + rows.map(function(r,i){
-        let info='';
-        try{ const p=JSON.parse(r.datos); info=(p.count||0)+' embarques · '+(p.backup_date||r.updated_at).slice(0,16).replace('T',' '); }catch(e){ info=r.updated_at.slice(0,16).replace('T',' '); }
+        const info=r.updated_at.slice(0,16).replace('T',' ');
         const semana=r.nombre.replace('_BACKUP_','');
         return '<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;background:var(--bg)">'
           +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;color:var(--text)">Semana '+semana+'</div><div style="font-size:11px;color:var(--muted)">'+info+'</div></div>'
@@ -14050,14 +14068,23 @@ async function _abrirBackupsSemanales(){
     +'</div></div>';
   modal.onclick = () => modal.remove();
   document.body.appendChild(modal);
-  window._backupsListaCache = rows;
+  window._backupsListaCache = rows; // solo nombre/updated_at — el contenido se pide bajo demanda
+}
+
+// Trae el contenido COMPLETO de un solo backup, bajo demanda (solo cuando
+// el usuario va a restaurarlo o descargarlo) — nunca los 8 de una vez.
+async function _fetchBackupCompleto(nombre){
+  const { data, error } = await _sb.from('simulador_sesiones')
+    .select('datos').eq('nombre', nombre).maybeSingle();
+  if(error || !data) throw error || new Error('Backup no encontrado');
+  return JSON.parse(data.datos);
 }
 
 // Descarga como archivo .json un backup semanal específico de la lista cacheada
-function _descargarBackupSemanalIdx(idx){
+async function _descargarBackupSemanalIdx(idx){
   const rows = window._backupsListaCache;
   if(!rows || !rows[idx]) return;
-  let parsed; try{ parsed = JSON.parse(rows[idx].datos); }catch(e){ _showToast('⚠️ Backup corrupto','red',3000); return; }
+  let parsed; try{ parsed = await _fetchBackupCompleto(rows[idx].nombre); }catch(e){ _showToast('⚠️ Backup corrupto o no encontrado','red',3000); return; }
   const semana = rows[idx].nombre.replace('_BACKUP_','');
   const blob = new Blob([JSON.stringify(parsed,null,2)], {type:'application/json'});
   const url = URL.createObjectURL(blob);
@@ -14075,7 +14102,7 @@ async function _restaurarBackupSemanal(idx){
   const rows = window._backupsListaCache;
   if(!rows || !rows[idx]) return;
   let parsed;
-  try{ parsed = JSON.parse(rows[idx].datos); }catch(e){ _showToast('⚠️ Backup corrupto','red',3000); return; }
+  try{ parsed = await _fetchBackupCompleto(rows[idx].nombre); }catch(e){ _showToast('⚠️ Backup corrupto o no encontrado','red',3000); return; }
   if(!parsed.tendData || !Array.isArray(parsed.tendData)){ _showToast('⚠️ Backup sin datos válidos','red',3000); return; }
   const semana = rows[idx].nombre.replace('_BACKUP_','');
   if(!confirm('¿Restaurar el backup de la semana '+semana+' ('+parsed.tendData.length+' embarques)?\n\nEsto reemplazará tu historial actual de embarques ('+(tendData?tendData.length:0)+' embarques) con la versión del backup, tanto local como en la nube.')) return;
@@ -14092,8 +14119,17 @@ async function _restaurarBackupSemanal(idx){
   _showToast('♻️ Historial restaurado desde backup de la semana '+semana+' ('+tendData.length+' embarques)','green',5000);
 }
 
-async function _pullTendFromCloud(){
+window._lastPullAt = window._lastPullAt || 0;
+async function _pullTendFromCloud(force){
   if(!_sb) return false;
+  // ── FIX (ago-2026, egress): antes, cada vez que se entraba a la pestaña
+  //    "Tendencias" (o se abría la app, o varios otros flujos) se volvía a
+  //    descargar el maestro COMPLETO — aunque ya se hubiera descargado hace
+  //    unos segundos. Eso es lectura repetida del mismo dato, que sí cuenta
+  //    como egress. Ahora, salvo que se pida explícitamente con force=true
+  //    (por ejemplo el botón manual "☁️ Sincronizar Nube"), si ya se hizo
+  //    un pull hace menos de 5 minutos simplemente no se repite. ──
+  if(!force && (Date.now() - window._lastPullAt) < 5*60*1000) return false;
   try {
     // 1. Leer el registro maestro
     const { data: masterData, error: masterErr } = await _sb
@@ -14241,6 +14277,7 @@ async function _pullTendFromCloud(){
       _syncTendToCloud();
     }
 
+    window._lastPullAt = Date.now();
     return true;
   } catch(e){ console.warn('Cloud pull error:', e.message); return false; }
 }
@@ -14254,7 +14291,7 @@ async function _syncManualTend(btn){
     if(btn){ btn.disabled=false; btn.textContent='☁️ Sincronizar Nube'; }
     return;
   }
-  await _pullTendFromCloud();
+  await _pullTendFromCloud(true);
   // Aplicar fix de tipo de importación para embarques históricos mal guardados
   if(typeof _fixImportacionTipo === 'function') _fixImportacionTipo();
   renderTend();
@@ -15004,7 +15041,7 @@ function autoFillTend(){
   if(mainDesc&&mainDesc.value) descEl.value=mainDesc.value;
   if(window._lastAhorroNeto) ahorroEl.value=window._lastAhorroNeto.toFixed(2);
   if(window._lastCIF) cifEl.value=window._lastCIF.toFixed(2);
-  fechaEl.value=new Date().toISOString().slice(0,10);
+  fechaEl.value=_hoyLocalISO();
 }
 // ══════════════════════════════════════════════════════════════════
 // Asignación de Facturas por Equipo/Contenedor
@@ -15436,7 +15473,7 @@ async function procesarEmbarque(){
   if(typeof _autoFillGastosProveedores === 'function') _autoFillGastosProveedores();
 
   // ── Modal de fecha (reemplaza prompt() que Chrome puede bloquear) ──
-  let fecha = new Date().toISOString().slice(0,10);
+  let fecha = _hoyLocalISO();
   fecha = await new Promise(function(resolve){
     const ov = document.createElement('div');
     ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:999999;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px)';
@@ -15444,7 +15481,7 @@ async function procesarEmbarque(){
       '<div style="background:var(--s1);border:1px solid var(--border);border-radius:16px;padding:24px;max-width:340px;width:100%;box-shadow:0 24px 64px rgba(0,0,0,.5)">'
       +'<div style="font-size:15px;font-weight:800;color:var(--text);margin-bottom:6px">📅 Fecha del Embarque</div>'
       +'<div style="font-size:11px;color:var(--muted);margin-bottom:14px">Puedes cambiarla para registrar embarques históricos.</div>'
-      +_fechaSelectsHTML('_proc_fecha', new Date().toISOString().slice(0,10))
+      +_fechaSelectsHTML('_proc_fecha', _hoyLocalISO())
       +'<div id="_proc_fecha_err" style="display:none;color:var(--red-l);font-size:10px;margin-top:8px">⚠️ Selecciona día, mes y año válidos.</div>'
       +'<div style="display:flex;gap:10px;margin-top:16px">'
       +'<button id="_proc_fecha_cancel" style="flex:1;background:none;border:1px solid var(--border);color:var(--muted);border-radius:10px;padding:10px;font-size:12px;font-weight:600;cursor:pointer">← Cancelar</button>'
@@ -16555,7 +16592,7 @@ function registrarAhorro(){
   const desc=document.getElementById('tend_desc').value||'Embarque';
   const ahorro=parseFloat(document.getElementById('tend_ahorro').value)||0;
   const cif=parseFloat(document.getElementById('tend_cif').value)||0;
-  const fecha=document.getElementById('tend_fecha').value||new Date().toISOString().slice(0,10);
+  const fecha=document.getElementById('tend_fecha').value||_hoyLocalISO();
   const esc=document.getElementById('tend_esc')?.value||'CIF Express';
   if(!ahorro){ alert('Ingresa el monto de ahorro.'); return; }
   tendData.push({nro,desc,ahorro,cif,fecha,esc,ts:Date.now()});
@@ -26361,7 +26398,7 @@ function _unicoSincronizarDesdeFormulario(){
   _setU('unico_tipo_emb', _get('s1_tipo_emb'));
   // Fecha
   const fecEl = document.getElementById('unico_fecha');
-  const fecMain = _get('s1_fecha_llegada') || new Date().toISOString().slice(0,10);
+  const fecMain = _get('s1_fecha_llegada') || _hoyLocalISO();
   if(fecEl) fecEl.value = fecMain;
   calcUnico();
   _showToast('✅ Datos importados del formulario principal','green',2000);
@@ -26371,7 +26408,7 @@ function calcUnicoFull(){
   const corredor = document.getElementById('unico_corredor')?.value || 'cifexp';
   const nro      = document.getElementById('unico_nro')?.value || '';
   const desc     = document.getElementById('unico_desc')?.value || '';
-  const fecha    = document.getElementById('unico_fecha')?.value || new Date().toISOString().slice(0,10);
+  const fecha    = document.getElementById('unico_fecha')?.value || _hoyLocalISO();
   const pais     = document.getElementById('unico_pais')?.value || '';
   const ciudad   = document.getElementById('unico_ciudad')?.value || '';
   const tipoEmb  = document.getElementById('unico_tipo_emb')?.value || '';
@@ -26527,7 +26564,7 @@ async function procesarUnico(){
   //    fecha de HOY sin avisar ni preguntar — por eso embarques
   //    procesados en otro mes terminaban agrupados en "Julio". Ahora
   //    se pregunta siempre, igual que en el flujo principal. ──
-  let fechaUnico = document.getElementById('unico_fecha')?.value || new Date().toISOString().slice(0,10);
+  let fechaUnico = document.getElementById('unico_fecha')?.value || _hoyLocalISO();
   fechaUnico = await new Promise(function(resolve){
     const ov = document.createElement('div');
     ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:999999;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px)';
@@ -26591,7 +26628,7 @@ async function procesarUnico(){
   const snap = {
     nro: nro||'SIN-NRO-'+Date.now(),
     desc: ud.desc||'Embarque Único',
-    fecha: ud.fecha || new Date().toISOString().slice(0,10),
+    fecha: ud.fecha || _hoyLocalISO(),
     ahorro: 0,
     cif: ud.cif,
     esc: 'Único — '+ud.corName.replace(/[⚡🤝✏️]/g,'').trim(),
@@ -30501,7 +30538,7 @@ window.onload=function(){
   renderTend();
   renderTopProvs();
   const tf=document.getElementById('tend_fecha');
-  if(tf) tf.value=new Date().toISOString().slice(0,10);
+  if(tf) tf.value=_hoyLocalISO();
   window.sc_comisionEditada = false;
   const symbols=['%','×','÷','+','$','=','∑','→','CIF','FOB','AR','7%','MV','$','≈','#1','#2','#3','Σ','Δ'];
   const colors=['#3fb950','#58a6ff','#f08632','#ffffff','#3fb950','#a0a0a0'];
@@ -30532,7 +30569,7 @@ window.onload=function(){
   updateSab2View(); initFormScroll();
   // Init Único tab date
   const unicoFecha=document.getElementById('unico_fecha');
-  if(unicoFecha&&!unicoFecha.value) unicoFecha.value=new Date().toISOString().slice(0,10);
+  if(unicoFecha&&!unicoFecha.value) unicoFecha.value=_hoyLocalISO();
   calcUnico();
 
   // ── Activar botón "Aplicar" cuando cambia cualquier campo ──
