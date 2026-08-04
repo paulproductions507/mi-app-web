@@ -12989,6 +12989,28 @@ window._hfToggleMes2 = function(hd, ev){
 // dispositivo. Para corregir: eliminar de Supabase y reprocesar.
 // ══════════════════════════════════════════════════════════════
 const _TEND_MASTER_KEY  = '_TEND_MASTER';
+// ── FIX CRÍTICO (ago-2026): la lista negra de eliminados (_deletedEmbarques)
+//    vivía embebida dentro del JSON gigante de _TEND_MASTER, pero el sync
+//    rápido por RPC (_syncTendToCloud → upsert_embarque_master) SOLO
+//    actualiza el registro individual de cada embarque — NUNCA toca ni
+//    resube el campo 'deleted' del maestro. Resultado: cuando un embarque
+//    se borraba y se volvía a procesar con el mismo N°, el dispositivo que
+//    lo reprocesó lo quitaba de SU lista negra en memoria, pero la nube se
+//    quedaba diciendo "eliminado" para siempre — así el registro llegara
+//    perfecto al maestro (confirmado: sí llega), cualquier OTRO dispositivo
+//    lo seguía filtrando al hacer pull. Ahora la lista negra vive en su
+//    propio registro chiquito e independiente, que SÍ se resube cada vez
+//    que cambia (borrar o reprocesar) — sin tocar el documento grande.
+const _DELETED_LIST_KEY = '_DELETED_LIST';
+async function _pushDeletedListToCloud(){
+  if(!window._sb) return;
+  try{
+    await window._sb.from('simulador_sesiones').upsert(
+      { nombre:_DELETED_LIST_KEY, datos: JSON.stringify({ deleted: Array.from(window._deletedEmbarques||[]) }), updated_at:new Date().toISOString() },
+      { onConflict:'nombre' }
+    );
+  }catch(e){ console.warn('No se pudo subir _DELETED_LIST:', e); }
+}
 // ── FIX (ago-2026): `new Date().toISOString().slice(0,10)` da la fecha
 //    en UTC, no en hora de Panamá (UTC-5). Cerca de la medianoche esto
 //    puede adelantar o atrasar un día el valor por defecto que aparece
@@ -13001,7 +13023,6 @@ function _hoyLocalISO(){
   var d = new Date();
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 }
-const _DELETED_LIST_KEY = '_TEND_DELETED'; // NROs/TS eliminados — lista negra permanente
 
 // Lista de embarques eliminados (en memoria, se sincroniza con nube)
 if(!window._deletedEmbarques) window._deletedEmbarques = new Set();
@@ -14460,14 +14481,28 @@ async function _pullTendFromCloud(force){
       try {
         const parsed = JSON.parse(masterData.datos||'{}');
         cloudTend = Array.isArray(parsed.tendData) ? parsed.tendData : [];
-        // Restaurar la lista negra guardada en el maestro — salvo lo que
-        // este dispositivo tiene vivo en tendData ahora mismo.
-        if(Array.isArray(parsed.deleted)){
-          parsed.deleted.forEach(k => { if(!nrosVivosLocal.has(String(k).trim().toUpperCase())) deletedSet.add(String(k)); });
-        }
-        window._deletedEmbarques = deletedSet;
       } catch(e){ cloudTend = []; }
     }
+
+    // ── FIX CRÍTICO (ago-2026): la lista negra YA NO se lee del campo
+    //    'deleted' embebido en el maestro — ese campo queda congelado para
+    //    siempre porque el sync rápido por RPC nunca lo actualiza (ver
+    //    _pushDeletedListToCloud arriba). Ahora se lee de su propio
+    //    registro chiquito e independiente, que sí se mantiene al día. ──
+    try {
+      const { data: delData } = await _sb
+        .from('simulador_sesiones')
+        .select('datos')
+        .eq('nombre', _DELETED_LIST_KEY)
+        .maybeSingle();
+      if(delData){
+        const parsedDel = JSON.parse(delData.datos||'{}');
+        if(Array.isArray(parsedDel.deleted)){
+          parsedDel.deleted.forEach(k => { if(!nrosVivosLocal.has(String(k).trim().toUpperCase())) deletedSet.add(String(k)); });
+        }
+      }
+    } catch(e){ /* si falla, seguimos solo con la lista negra local */ }
+    window._deletedEmbarques = deletedSet;
 
     // ── FIX CRÍTICO #3 (ago-2026, egress): antes, esta función SIEMPRE
     //    traía TODAS las filas de simulador_sesiones que no fueran el
@@ -15908,8 +15943,14 @@ async function procesarEmbarque(){
   // Sin esto, el embarque reprocesado tras un borrado desaparece al sincronizar con la nube.
   if(nro){
     if(!window._deletedEmbarques) window._deletedEmbarques = new Set();
+    const _tenia = window._deletedEmbarques.has(String(nro)) || (snap.ts && window._deletedEmbarques.has(String(snap.ts)));
     window._deletedEmbarques.delete(String(nro));
     if(snap.ts) window._deletedEmbarques.delete(String(snap.ts));
+    // FIX (ago-2026): esta limpieza solo vivía en memoria local — nunca se
+    // resubía a la nube, así que el embarque reprocesado quedaba invisible
+    // en cualquier otro dispositivo aunque el registro llegara bien al
+    // maestro. Ver definición de _pushDeletedListToCloud() más arriba.
+    if(_tenia) _pushDeletedListToCloud().catch(function(){});
   }
 
   // Si es actualización de un pendiente, reemplazar en lugar de agregar
@@ -16286,8 +16327,10 @@ function reabrirEmbarquePendiente(idx){
 
   // Limpiar lista negra para que al reprocesar no sea filtrado por la nube
   if(!window._deletedEmbarques) window._deletedEmbarques = new Set();
+  const _yaEstabaBorrado = (d.nro && window._deletedEmbarques.has(String(d.nro))) || (d.ts && window._deletedEmbarques.has(String(d.ts)));
   if(d.nro) window._deletedEmbarques.delete(String(d.nro));
   if(d.ts)  window._deletedEmbarques.delete(String(d.ts));
+  if(_yaEstabaBorrado && typeof _pushDeletedListToCloud==='function') _pushDeletedListToCloud().catch(function(){});
 
   // Marcar como reabierto en tendData para que procesarEmbarque lo reemplace directamente
   d.status = 'reabierto';
@@ -16386,6 +16429,16 @@ function reabrirEmbarquePendiente(idx){
   _set('s1_acarreo', (s.sc1&&s.sc1.acarreo) || s.acarreo || '');
   _set('s1_dmce',    (s.sc1&&s.sc1.dmce)    || s.dmce    || '');
   _set('s1_agente',  (s.sc1&&s.sc1.agente)  || s.agente  || '');
+  // FIX (ago-2026): Traspaso y Diferencia Sababa NUNCA se restauraban al
+  // reabrir. _clearFormSilent() los vacía a '' a propósito (líneas ~16479)
+  // y reabrir nunca los volvía a llenar — aunque el traspaso SÍ estaba
+  // capturado en el snap (s.trasp) y la diferencia en s.sc3.difPago. Por
+  // eso "Total Pago Realizado" quedaba = CIF puro sin descontar nada,
+  // arrastrando mal Comisión y Master Value en cualquier embarque con
+  // traspaso o diferencia de factura.
+  _set('s1_traspaso', s.trasp || '');
+  _set('s2_dif_cif',  (s.sc3 && s.sc3.difPago) || '');
+  if(typeof syncTraspasoSC3==='function') syncTraspasoSC3();
 
   // ── 6. Tasas / porcentajes ──
   if(s.arPct  !== undefined) _set('s1_ar',    ((s.arPct ||0)*100).toFixed(2));
@@ -16988,6 +17041,7 @@ function deleteTend(idx){
     if(!window._deletedEmbarques) window._deletedEmbarques = new Set();
     if(d.nro) window._deletedEmbarques.add(String(d.nro));
     if(d.ts)  window._deletedEmbarques.add(String(d.ts));
+    _pushDeletedListToCloud().catch(function(){});
     // ── Borrar también la sesión individual en Supabase (simulador_sesiones) ──
     // Sin esto, el registro queda "huérfano" en la nube con datos viejos y puede
     // resurgir en una sincronización posterior.
