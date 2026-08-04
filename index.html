@@ -13168,6 +13168,26 @@ var _syncChain = Promise.resolve();
 var _saveDebounceTimer = null;
 var _SAVE_DEBOUNCE_MS = 6000; // agrupa ediciones seguidas en una sola subida a la nube
 
+// ── FIX (ago-2026): guardarSesionNube() (botón manual "☁️ Guardar Nube") y
+//    _guardarYRecargar() (al pulsar "Procesar Embarque") pueden escribir la
+//    MISMA sesión (simulador_sesiones, misma nombre=nro) casi al mismo
+//    tiempo si el usuario pulsa "Guardar Nube" justo antes de procesar.
+//    Antes, cada una llamaba a autoGuardarSupabase() de forma independiente
+//    — dos peticiones de red en vuelo a la vez, sin orden garantizado. Si la
+//    petición del guardado manual (con el formulario aún incompleto) tardaba
+//    más en responder que la del procesamiento (con el formulario completo),
+//    la incompleta llegaba después y quedaba como versión final en la nube
+//    — perdiendo origen/país/tipo aunque el embarque sí se procesó bien.
+//    Ahora TODO guardado de sesión pasa por esta cola: se ejecutan uno
+//    detrás del otro, en el mismo orden en que el usuario los disparó, sin
+//    depender de cuál responda primero por la red. ──
+var _sesionSaveChain = Promise.resolve();
+function _guardarSesionEnCola(nombre){
+  var p = _sesionSaveChain.then(function(){ return autoGuardarSupabase(nombre); });
+  _sesionSaveChain = p.catch(function(){}); // no rompas la cola si una falla
+  return p; // el llamador sigue viendo el error real si falla
+}
+
 function saveTendData(){
   // localStorage — siempre, inmediato, sin depender de Supabase
   try { localStorage.setItem('_tendData_v2', JSON.stringify(tendData||[])); } catch(e){}
@@ -15987,6 +16007,31 @@ async function procesarEmbarque(){
   });
 }
 
+// FIX (ago-2026): clic manual en "Nuevo Ingreso" ya no recarga a ciegas —
+// si el guardado a la nube todavía está en vuelo, espera a que termine
+// (o al tope de seguridad) para no abortar la petición de red.
+function _procNuevoIngresoClick(){
+  var btn = document.getElementById('_procNuevoBtn');
+  var numEl = document.getElementById('_procCountdownNum');
+  function doReload(){
+    if(window._procCountdownTimer) clearInterval(window._procCountdownTimer);
+    var ov = document.getElementById('_procOverlay');
+    if(ov) ov.remove();
+    window.location.reload();
+  }
+  if(window._procSaveSettled || !window._sb){ doReload(); return; }
+  if(btn) btn.disabled = true;
+  if(numEl) numEl.textContent = '…';
+  var _tries = 0;
+  var _waiter = setInterval(function(){
+    _tries++;
+    if(window._procSaveSettled || _tries >= 20){
+      clearInterval(_waiter);
+      doReload();
+    }
+  }, 1000);
+}
+
 function _showProcessingOverlay(nro, desc, cif, ahorro, landedVal, factorVal, onDone){
   const fmt=n=>'$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
   const old=document.getElementById('_procOverlay'); if(old) old.remove();
@@ -16074,29 +16119,64 @@ function _showProcessingOverlay(nro, desc, cif, ahorro, landedVal, factorVal, on
       +'</div>'
       +'<div style="display:flex;gap:10px">'
       +'<button id="_procCancelBtn" onclick="document.getElementById(\'_procOverlay\').remove();if(window._procCountdownTimer)clearInterval(window._procCountdownTimer);" style="flex:1;background:none;border:1px solid var(--border);color:var(--muted);border-radius:11px;padding:10px;font-size:12px;font-weight:600;cursor:pointer">✕ Cerrar</button>'
-      +'<button id="_procNuevoBtn" onclick="document.getElementById(\'_procOverlay\').remove();window.location.reload()" style="flex:2;background:linear-gradient(135deg,rgba(63,185,80,.25),rgba(46,160,67,.15));border:1.5px solid rgba(63,185,80,.55);color:var(--green-l);border-radius:11px;padding:10px;font-size:12px;font-weight:800;cursor:pointer">↺ Nuevo Ingreso (<span id="_procCountdownNum">5</span>)</button>'
+      +'<button id="_procNuevoBtn" onclick="_procNuevoIngresoClick()" style="flex:2;background:linear-gradient(135deg,rgba(63,185,80,.25),rgba(46,160,67,.15));border:1.5px solid rgba(63,185,80,.55);color:var(--green-l);border-radius:11px;padding:10px;font-size:12px;font-weight:800;cursor:pointer">↺ Nuevo Ingreso (<span id="_procCountdownNum">5</span>)</button>'
       +'</div></div>';
 
     document.body.appendChild(div);
 
-    // ── Countdown de 5 segundos: reinicia automático a Gestión Integral salvo cancelación ──
+    // ── FIX CRÍTICO (ago-2026): el countdown de 5s recargaba la página
+    //    (window.location.reload()) SIN IMPORTAR si el guardado a Supabase
+    //    ya había terminado. autoGuardarSupabase() son 2+ viajes de red
+    //    seguidos (upsert de la sesión individual + upsert_embarque_master);
+    //    si la red iba lenta y tardaba más de 5s, el reload ABORTABA esa
+    //    petición a mitad de camino — el embarque procesado se quedaba
+    //    SOLO en localStorage, sin que nada avisara del problema. Ahora el
+    //    reload espera a que el guardado realmente termine (éxito o fallo
+    //    encolado para reintento), con un tope de seguridad de 20s por si
+    //    algo se cuelga por completo.
+    window._procSaveSettled = false;
+    var _cdMaxExtra = 20; // segundos tope de espera adicional si la red va lenta
+
     var _cd = 5;
     var numEl = document.getElementById('_procCountdownNum');
+    var btnNuevo = document.getElementById('_procNuevoBtn');
     window._procCountdownTimer = setInterval(function(){
       _cd--;
-      if(numEl) numEl.textContent = _cd;
-      if(_cd <= 0){
+      if(_cd > 0){
+        if(numEl) numEl.textContent = _cd;
+        return;
+      }
+      // Llegó a 0 — ¿ya terminó el guardado a la nube?
+      if(window._procSaveSettled || !window._sb){
         clearInterval(window._procCountdownTimer);
         var ov = document.getElementById('_procOverlay');
         if(ov) ov.remove();
+        window.location.reload();
+        return;
+      }
+      // Todavía guardando — no recargar aún, esperar (con tope de seguridad)
+      if(numEl) numEl.textContent = '…';
+      if(btnNuevo) btnNuevo.title = 'Terminando de guardar en la nube…';
+      _cdMaxExtra--;
+      if(_cdMaxExtra <= 0){
+        // Tope de seguridad: recargar de todos modos — el guardado quedó
+        // encolado para reintento automático si no alcanzó a terminar.
+        clearInterval(window._procCountdownTimer);
+        var ov2 = document.getElementById('_procOverlay');
+        if(ov2) ov2.remove();
         window.location.reload();
       }
     }, 1000);
 
     // ── Disparar el guardado en la nube automáticamente al mostrar el overlay ──
     if(typeof window._procOverlayDone === 'function'){
-      window._procOverlayDone();
+      var _saveP = window._procOverlayDone();
       window._procOverlayDone = null;
+      Promise.resolve(_saveP).catch(function(){}).then(function(){
+        window._procSaveSettled = true;
+      });
+    } else {
+      window._procSaveSettled = true;
     }
   }, 600);
 }
@@ -26962,7 +27042,7 @@ async function procesarUnico(){
   // Save directo a nube — await garantiza escritura
   if(!_sb){ initSupabase(); await new Promise(r=>setTimeout(r,600)); }
   try{ await _syncTendToCloud(); }catch(e){ console.warn('syncTend:',e); }
-  try{ await autoGuardarSupabase(nro || ('UNICO-'+Date.now())); }catch(e){ console.error('autoGuardarSupabase (unico):',e); }
+  try{ await _guardarSesionEnCola(nro || ('UNICO-'+Date.now())); }catch(e){ console.error('autoGuardarSupabase (unico):',e); }
 
   // ── FIX (jul-2026): el registro automático de uso de plantillas solo
   //    existía en el flujo principal (Calcular Costo) — el flujo de
@@ -27651,7 +27731,7 @@ async function guardarSesionNube(){
   if(!_sb){ initSupabase(); await new Promise(r=>setTimeout(r,400)); }
   if(!_sb){ if(typeof _showToast==='function') _showToast('⚠️ Sin conexión a la nube — verifica tu internet','red',5000); return; }
   try{
-    await autoGuardarSupabase(nombre);
+    await _guardarSesionEnCola(nombre);
     if(typeof _showToast==='function') _showToast('☁️ Guardado en la nube: '+nombre,'green',3000);
   }catch(e){
     // autoGuardarSupabase ya muestra el toast rojo con el detalle del error
@@ -27860,7 +27940,7 @@ async function _guardarYRecargar(nombre){
   if(typeof _plntConsumirSesion==='function') _plntConsumirSesion(nombre);
 
   try {
-    if(window._sb) await autoGuardarSupabase(nombre);
+    if(window._sb) await _guardarSesionEnCola(nombre);
     // Update spinner to success
     spin.innerHTML = `
       <div style="width:56px;height:56px;background:rgba(63,185,80,.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:30px">✅</div>
@@ -27868,10 +27948,20 @@ async function _guardarYRecargar(nombre){
       <div style="color:rgba(255,255,255,.5);font-size:11px">${window._sb ? 'Sincronizado con la nube' : 'Guardado localmente'}</div>
     `;
   } catch(e) {
+    // FIX (ago-2026): antes este catch mostraba "Guardado localmente" y ahí
+    // se quedaba — sin llamar a _marcarSyncPendiente(), el embarque NUNCA
+    // entraba a la cola de reintento automático (_asegurarReintentoSync).
+    // Resultado: un fallo de red momentáneo durante "Procesar embarque"
+    // dejaba el embarque atrapado en localStorage para siempre, sin que la
+    // app lo supiera ni lo reintentara, y sin que el usuario se enterara
+    // (el aviso desaparecía solo en 1.2s). Ahora si falla: se encola para
+    // reintento automático y el aviso queda visible más tiempo.
+    console.error('autoGuardarSupabase falló en _guardarYRecargar:', e);
+    if(typeof _marcarSyncPendiente==='function') _marcarSyncPendiente();
     spin.innerHTML = `
-      <div style="font-size:30px">💾</div>
-      <div style="color:#3fb950;font-size:13px;font-weight:600">Guardado localmente</div>
-      <div style="color:rgba(255,255,255,.5);font-size:11px">Sin nube — los datos están en tu dispositivo</div>
+      <div style="font-size:30px">⚠️</div>
+      <div style="color:#f0883e;font-size:13px;font-weight:700">Guardado local — pendiente de nube</div>
+      <div style="color:rgba(255,255,255,.6);font-size:11px;max-width:260px;text-align:center">No se pudo subir a Supabase ahora. Quedó en cola y la app lo reintentará sola.</div>
     `;
   }
   // Quitar spinner sin recargar — la app ya tiene el estado correcto en memoria
@@ -27880,8 +27970,14 @@ async function _guardarYRecargar(nombre){
     // Actualizar UI
     if(typeof renderTend==='function') renderTend();
     if(typeof renderTopProvs==='function') renderTopProvs();
-    if(typeof _showToast==='function') _showToast('✅ Embarque guardado correctamente','green',3000);
-  }, 1200);
+    if(typeof _showToast==='function'){
+      if(window._syncPendiente){
+        _showToast('⚠️ Embarque guardado local — reintentando subida a la nube automáticamente','orange',5000);
+      } else {
+        _showToast('✅ Embarque guardado correctamente','green',3000);
+      }
+    }
+  }, window._syncPendiente ? 3200 : 1200);
 }
 
 
