@@ -876,6 +876,16 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
   flex-shrink:0; width:100%; box-sizing:border-box;
   padding:22px 22px 16px; border-bottom:1px solid var(--zborder);
 }
+/* FIX (ago-2026, visual): antes el contenido del header (título, tarjetas
+   KPI, tira de meses, resumen) se estiraba a lo ancho de TODO el monitor
+   porque .zlh-header-full no tenía max-width — en una pantalla ancha el
+   grid de KPIs (auto-fit, 1fr) repartía el sobrante entre pocas tarjetas y
+   quedaban gigantes y muy separadas ("alargado"). Ahora el contenido vive
+   en una columna centrada de ancho fijo (misma referencia --content-max
+   que ya usan las demás vistas de la app), y el fondo oscuro sigue
+   corriendo a lo ancho completo por fuera, así que no se nota costura. */
+.zlh-header-full > *{ max-width:900px; margin-left:auto; margin-right:auto; }
+.zlh-header-full .splash-kpi-strip{ overflow-x:visible; }
 .zlh-shell{display:flex; width:100%; flex:1; min-height:0; overflow:hidden;}
 
 /* -- sidebar rail: lista vertical con ícono + nombre SIEMPRE visibles
@@ -1627,6 +1637,9 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
     </button>
     <button onclick="_abrirBackupsSemanales()" style="background:none;border:none;color:var(--muted);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 8px;border-radius:8px;transition:background .15s" onmouseenter="this.style.background='rgba(255,255,255,.06)'" onmouseleave="this.style.background='none'" title="Backups Semanales">
       <span style="font-size:16px">🗄️</span><span style="font-size:9px;color:var(--muted2)">Backups</span>
+    </button>
+    <button onclick="_abrirReconciliacionCI()" style="background:none;border:none;color:var(--muted);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 8px;border-radius:8px;transition:background .15s" onmouseenter="this.style.background='rgba(255,255,255,.06)'" onmouseleave="this.style.background='none'" title="Reconciliar Costo Inventario vs. ERP">
+      <span style="font-size:16px">🧮</span><span style="font-size:9px;color:var(--muted2)">Reconciliar</span>
     </button>
     <button onclick="_descargarBackupManual()" style="background:none;border:none;color:var(--muted);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 8px;border-radius:8px;transition:background .15s" onmouseenter="this.style.background='rgba(255,255,255,.06)'" onmouseleave="this.style.background='none'" title="Descargar Backup Manual">
       <span style="font-size:16px">⬇️🗄️</span><span style="font-size:9px;color:var(--muted2)">Backup</span>
@@ -3878,7 +3891,7 @@ function _fmtDayDate(d){
 }
 
 // ── helpers ──
-function _plnF(n){ n=parseFloat(n)||0; if(window._plnFOBFull) return '$'+n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); return n>=1e6?'$'+(n/1e6).toFixed(1)+'M':n>=1000?'$'+(n/1000).toFixed(1)+'k':'$'+n.toFixed(0); }
+function _plnF(n){ n=parseFloat(n)||0; if(window._plnFOBFull) return '$'+n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); return n>=1e6?'$'+(n/1e6).toFixed(1)+'MM':n>=1000?'$'+(n/1000).toFixed(1)+'k':'$'+n.toFixed(0); }
 function _plnSetEmpalet(val){
   var inp=document.getElementById('_pln_empalet');
   if(inp) inp.value=val?'1':'0';
@@ -11654,13 +11667,29 @@ function handleFile(event){
 window._pcCache = {}; // { prov_nombre: {pais, ciudad} }
 window._pcSelected = null;
 
-async function _pcCargarCache(){
+async function _pcCargarCache(force){
   // 1) Base: lo que ya está guardado localmente (nunca se debe perder).
   var local = {};
   try {
     var raw = localStorage.getItem('_pcCache');
     if(raw) local = JSON.parse(raw) || {};
   } catch(e){ local = {}; }
+
+  // ── FIX (ago-2026, egress): antes esta función bajaba la tabla completa
+  //    prov_config de Supabase CADA VEZ que se entraba a Tendencias, se
+  //    abría Configuración, o se abría la tarjeta de origen de proveedores
+  //    — aunque no hubiera pasado ni un minuto desde la última vez. Los
+  //    países/ciudades de proveedores casi nunca cambian, así que basta con
+  //    refrescar una vez cada 24h (persistido en localStorage, sobrevive
+  //    recargas de página) salvo que se pida explícitamente con force=true
+  //    (por ejemplo tras guardar/eliminar un origen). Mientras tanto se usa
+  //    directamente la caché local ya cargada. ──
+  window._pcCache = local;
+  var _pcLastPull = 0;
+  try { _pcLastPull = parseInt(localStorage.getItem('_pcCacheTs')||'0', 10) || 0; } catch(e){}
+  if(!force && (Date.now() - _pcLastPull) < 24*60*60*1000){
+    return;
+  }
 
   // 2) Traer de Supabase y FUSIONAR (la nube complementa/actualiza, pero las
   // entradas que solo existen localmente NUNCA se borran por esto).
@@ -11675,6 +11704,7 @@ async function _pcCargarCache(){
       }
     }
   } catch(e){ console.warn('prov_config Supabase error', e); }
+  if(cloudOk){ try{ localStorage.setItem('_pcCacheTs', String(Date.now())); }catch(e){} }
 
   var merged = Object.assign({}, local, cloud);
   window._pcCache = merged;
@@ -14119,7 +14149,258 @@ async function _restaurarBackupSemanal(idx){
   _showToast('♻️ Historial restaurado desde backup de la semana '+semana+' ('+tendData.length+' embarques)','green',5000);
 }
 
-window._lastPullAt = window._lastPullAt || 0;
+// ══════════════════════════════════════════════════════════════════
+// 🧮 RECONCILIACIÓN DE COSTO INVENTARIO vs. ERP (ago-2026)
+// Etapa 1 (mensual): compara, mes por mes, el Costo Inventario que
+// calcula el sistema contra el que reporta el ERP empresarial (Compras
+// Manager) — el usuario lo llena a mano después de cada cierre.
+// Etapa 2 (por embarque): dentro de un mes con diferencia, compara
+// embarque por embarque para encontrar cuál es el que no cuadra.
+// Ambas etapas son 100% manuales — el usuario decide cuándo consultar,
+// nunca se ejecutan solas ni generan notificaciones. ──
+window._RECON_MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+window._reconState = { anio: new Date().getFullYear(), stage: 'mensual', mesActivo: null, erpMensual: {}, erpEmbarques: {} };
+
+// Suma, con los datos YA guardados en tendData, el Costo Inventario real
+// del sistema para cada uno de los 12 meses de un año — usa `fecha`
+// como string (slice) para no toparse con el mismo bug de zona horaria
+// que ya corregimos en el agrupador de Tendencias.
+function _reconCalcMensualSistema(anio){
+  const totales = new Array(12).fill(0);
+  (window.tendData||[]).forEach(d=>{
+    if(!d || !d.fecha) return;
+    const y = d.fecha.slice(0,4), m = parseInt(d.fecha.slice(5,7),10);
+    if(y !== String(anio) || !m || m<1 || m>12) return;
+    totales[m-1] += (_calcCostoInventario(d).costoInv || 0);
+  });
+  return totales;
+}
+
+// Lista de embarques de un mes/año con su Costo Inventario del sistema —
+// para la Etapa 2.
+function _reconListaEmbarquesMes(anio, mes){
+  const mm = String(mes).padStart(2,'0');
+  return (window.tendData||[])
+    .filter(d=> d && d.fecha && d.fecha.slice(0,4)===String(anio) && d.fecha.slice(5,7)===mm)
+    .map(d=> ({ nro:d.nro||'', desc:d.desc||'', fecha:d.fecha||'', sistema:_calcCostoInventario(d).costoInv||0 }))
+    .sort((a,b)=> a.fecha.localeCompare(b.fecha));
+}
+
+async function _reconCargarErpMensual(anio){
+  // Local primero (siempre disponible al instante), luego la nube si hay.
+  try{
+    const local = localStorage.getItem('_reconCI_'+anio);
+    if(local) window._reconState.erpMensual[anio] = JSON.parse(local);
+  }catch(e){}
+  if(_sb){
+    try{
+      const { data } = await _sb.from('simulador_sesiones').select('datos').eq('nombre','_RECON_CI_'+anio).maybeSingle();
+      if(data && data.datos){
+        const p = JSON.parse(data.datos);
+        if(p && p.meses){ window._reconState.erpMensual[anio] = p.meses; localStorage.setItem('_reconCI_'+anio, JSON.stringify(p.meses)); }
+      }
+    }catch(e){}
+  }
+  if(!window._reconState.erpMensual[anio]) window._reconState.erpMensual[anio] = {};
+}
+
+async function _reconGuardarErpMensual(anio){
+  const meses = window._reconState.erpMensual[anio] || {};
+  localStorage.setItem('_reconCI_'+anio, JSON.stringify(meses));
+  if(_sb){
+    try{
+      await _sb.from('simulador_sesiones').upsert({
+        nombre: '_RECON_CI_'+anio,
+        datos: JSON.stringify({ anio, meses, updated_at: new Date().toISOString() }),
+        updated_at: new Date().toISOString()
+      }, { onConflict:'nombre' });
+    }catch(e){ console.warn('Error guardando plantilla ERP:', e); }
+  }
+  _showToast('💾 Plantilla de '+anio+' guardada','green',2500);
+}
+
+async function _abrirReconciliacionCI(){
+  await _reconCargarErpMensual(window._reconState.anio);
+  window._reconState.stage = 'mensual';
+  const old = document.getElementById('_reconModal'); if(old) old.remove();
+  const modal = document.createElement('div');
+  modal.id = '_reconModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px';
+  modal.innerHTML = '<div id="_reconBody" style="background:var(--s1);border:1px solid var(--border);border-radius:14px;padding:20px;max-width:620px;width:100%;max-height:85vh;overflow-y:auto" onclick="event.stopPropagation()"></div>';
+  modal.onclick = () => modal.remove();
+  document.body.appendChild(modal);
+  _reconRenderMensual();
+}
+
+function _reconFmt(v){ return '$'+(v||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+
+function _reconRenderMensual(){
+  window._reconState.stage='mensual';
+  const anio = window._reconState.anio;
+  const sistema = _reconCalcMensualSistema(anio);
+  const erp = window._reconState.erpMensual[anio] || {};
+  const body = document.getElementById('_reconBody');
+  if(!body) return;
+  const anios = [anio-1, anio, anio+1, anio+2].filter((v,i,a)=>a.indexOf(v)===i);
+  let filas = '';
+  for(let i=0;i<12;i++){
+    const mes = i+1;
+    const sisVal = sistema[i]||0;
+    const erpVal = parseFloat(erp[mes])||0;
+    const diff = erpVal>0 ? (sisVal - erpVal) : null;
+    const diffColor = diff===null ? 'var(--muted)' : (Math.abs(diff)<0.01 ? 'var(--green-l)' : 'var(--red-l)');
+    const diffTxt = diff===null ? '—' : (diff>=0?'+':'')+_reconFmt(diff);
+    filas += '<div style="display:grid;grid-template-columns:80px 1fr 1fr 1fr auto;gap:6px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">'
+      +'<div style="font-size:11px;color:var(--text);font-weight:600">'+_RECON_MESES[i].slice(0,3)+'</div>'
+      +'<div style="font-size:11px;color:var(--muted)">'+_reconFmt(sisVal)+'</div>'
+      +'<input type="number" step="0.01" value="'+(erp[mes]!=null?erp[mes]:'')+'" placeholder="ERP..." oninput="window._reconState.erpMensual['+anio+']=window._reconState.erpMensual['+anio+']||{};window._reconState.erpMensual['+anio+']['+mes+']=this.value;" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;padding:4px 6px">'
+      +'<div style="font-size:11px;font-weight:700;color:'+diffColor+'">'+diffTxt+'</div>'
+      +'<button onclick="_reconRenderEmbarques('+mes+')" title="Ver embarques de este mes" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:3px 7px;font-size:11px;cursor:pointer">🔍</button>'
+      +'</div>';
+  }
+  body.innerHTML =
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><div style="font-size:14px;font-weight:700;color:var(--text)">🧮 Reconciliación de Costo Inventario</div><button onclick="document.getElementById(\'_reconModal\').remove()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer">×</button></div>'
+    +'<div style="font-size:11px;color:var(--muted);margin-bottom:12px">Compara, mes por mes, lo que calcula el sistema contra lo que reporta tu ERP. Llena la columna ERP a mano, o sube la plantilla ya llena.</div>'
+    +'<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">'
+    +'<label style="font-size:11px;color:var(--muted)">Año:</label>'
+    +'<select onchange="window._reconState.anio=parseInt(this.value);_reconCargarErpMensual(window._reconState.anio).then(_reconRenderMensual)" style="background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 8px;font-size:12px">'
+    + anios.map(a=>'<option value="'+a+'"'+(a===anio?' selected':'')+'>'+a+'</option>').join('')
+    +'</select>'
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:80px 1fr 1fr 1fr auto;gap:6px;font-size:10px;color:var(--muted2);font-weight:700;padding-bottom:6px;border-bottom:2px solid var(--border)">'
+    +'<div>MES</div><div>SISTEMA</div><div>ERP</div><div>DIF.</div><div></div></div>'
+    + filas
+    +'<div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">'
+    +'<button onclick="_reconGuardarErpMensual(window._reconState.anio)" style="flex:1;min-width:100px;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:8px;padding:9px;font-size:12px;font-weight:600;cursor:pointer">💾 Guardar</button>'
+    +'<button onclick="_reconDescargarExcelMensual()" style="flex:1;min-width:100px;background:rgba(210,153,34,.12);border:1px solid rgba(210,153,34,.3);color:var(--orange-l);border-radius:8px;padding:9px;font-size:12px;font-weight:600;cursor:pointer">⬇️ Descargar</button>'
+    +'<button onclick="document.getElementById(\'_reconFileMensual\').click()" style="flex:1;min-width:100px;background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:8px;padding:9px;font-size:12px;font-weight:600;cursor:pointer">⬆️ Subir</button>'
+    +'</div>'
+    +'<input type="file" id="_reconFileMensual" accept=".xlsx" style="display:none" onchange="_reconSubirExcelMensual(this)">';
+}
+
+function _reconDescargarExcelMensual(){
+  if(typeof XLSX==='undefined'){ _showToast('Cargando librería Excel… reintenta.','orange',3000); return; }
+  const anio = window._reconState.anio;
+  const sistema = _reconCalcMensualSistema(anio);
+  const erp = window._reconState.erpMensual[anio] || {};
+  const rows = [['Mes','Costo Inventario Sistema','Costo Inventario ERP','Diferencia']];
+  for(let i=0;i<12;i++){
+    const mes=i+1; const sisVal=sistema[i]||0; const erpVal=parseFloat(erp[mes])||'';
+    rows.push([_RECON_MESES[i], Math.round(sisVal*100)/100, erpVal, erpVal? Math.round((sisVal-erpVal)*100)/100 : '']);
+  }
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=[{wch:12},{wch:22},{wch:22},{wch:16}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Costo Inventario '+anio);
+  XLSX.writeFile(wb, 'reconciliacion_costo_inventario_'+anio+'.xlsx');
+}
+
+function _reconSubirExcelMensual(input){
+  const file = input.files && input.files[0]; if(!file) return;
+  if(typeof XLSX==='undefined'){ _showToast('Cargando librería Excel… reintenta.','orange',3000); return; }
+  const reader = new FileReader();
+  reader.onload = e=>{
+    try{
+      const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const raw = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+      const anio = window._reconState.anio;
+      window._reconState.erpMensual[anio] = window._reconState.erpMensual[anio] || {};
+      raw.slice(1).forEach(r=>{
+        const nombreMes = String(r[0]||'').trim();
+        const idx = _RECON_MESES.findIndex(m=>m.toLowerCase()===nombreMes.toLowerCase());
+        const erpVal = parseFloat(r[2]);
+        if(idx>=0 && !isNaN(erpVal)) window._reconState.erpMensual[anio][idx+1] = erpVal;
+      });
+      _reconRenderMensual();
+      _showToast('✅ Plantilla cargada — revisa y dale Guardar','green',3000);
+    }catch(err){ _showToast('⚠️ No se pudo leer el Excel: '+err.message,'red',4000); }
+  };
+  reader.readAsArrayBuffer(file);
+  input.value = '';
+}
+
+function _reconRenderEmbarques(mes){
+  window._reconState.stage='embarques';
+  window._reconState.mesActivo = mes;
+  const anio = window._reconState.anio;
+  const lista = _reconListaEmbarquesMes(anio, mes);
+  const erpMap = window._reconState.erpEmbarques[anio+'-'+mes] || {};
+  const body = document.getElementById('_reconBody');
+  if(!body) return;
+  let filas = '';
+  lista.forEach(e=>{
+    const erpVal = parseFloat(erpMap[e.nro]);
+    const diff = !isNaN(erpVal) ? (e.sistema - erpVal) : null;
+    const diffColor = diff===null ? 'var(--muted)' : (Math.abs(diff)<0.01 ? 'var(--green-l)' : 'var(--red-l)');
+    const diffTxt = diff===null ? '—' : (diff>=0?'+':'')+_reconFmt(diff);
+    filas += '<div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid var(--border)">'
+      +'<div style="flex:1;min-width:0"><div style="font-size:11px;font-weight:700;color:var(--text)">'+e.nro+'</div><div style="font-size:10px;color:var(--muted)">'+(e.desc||'').slice(0,28)+'</div></div>'
+      +'<div style="font-size:11px;color:var(--muted);width:90px;text-align:right">'+_reconFmt(e.sistema)+'</div>'
+      +'<div style="font-size:11px;font-weight:700;color:'+diffColor+';width:90px;text-align:right">'+diffTxt+'</div>'
+      +'<button onclick="_reconIrACorregir(\''+e.nro+'\')" title="Ir a corregir este embarque" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:3px 7px;font-size:11px;cursor:pointer">✏️</button>'
+      +'</div>';
+  });
+  body.innerHTML =
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><div style="font-size:14px;font-weight:700;color:var(--text)">🔍 '+_RECON_MESES[mes-1]+' '+anio+' — por embarque</div><button onclick="document.getElementById(\'_reconModal\').remove()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer">×</button></div>'
+    +'<div style="font-size:11px;color:var(--muted);margin-bottom:12px">Descarga la plantilla, llénala con el Costo Inventario que te da el ERP por embarque, y súbela para ver cuál no cuadra.</div>'
+    +'<button onclick="_reconRenderMensual()" style="background:none;border:none;color:var(--blue-l);font-size:11px;cursor:pointer;margin-bottom:10px;padding:0">← Volver a la vista mensual</button>'
+    +(lista.length ? filas : '<div style="font-size:12px;color:var(--muted);padding:12px 0">No hay embarques procesados en este mes.</div>')
+    +'<div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">'
+    +'<button onclick="_reconDescargarExcelEmbarques()" style="flex:1;min-width:100px;background:rgba(210,153,34,.12);border:1px solid rgba(210,153,34,.3);color:var(--orange-l);border-radius:8px;padding:9px;font-size:12px;font-weight:600;cursor:pointer">⬇️ Descargar plantilla</button>'
+    +'<button onclick="document.getElementById(\'_reconFileEmbarques\').click()" style="flex:1;min-width:100px;background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:8px;padding:9px;font-size:12px;font-weight:600;cursor:pointer">⬆️ Subir plantilla llena</button>'
+    +'</div>'
+    +'<input type="file" id="_reconFileEmbarques" accept=".xlsx" style="display:none" onchange="_reconSubirExcelEmbarques(this)">';
+}
+
+function _reconDescargarExcelEmbarques(){
+  if(typeof XLSX==='undefined'){ _showToast('Cargando librería Excel… reintenta.','orange',3000); return; }
+  const anio = window._reconState.anio, mes = window._reconState.mesActivo;
+  const lista = _reconListaEmbarquesMes(anio, mes);
+  const rows = [['Nro. Embarque','Descripción','Fecha','Costo Inventario Sistema','Costo Inventario ERP']];
+  lista.forEach(e=> rows.push([e.nro, e.desc, e.fecha, Math.round(e.sistema*100)/100, '']));
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=[{wch:14},{wch:26},{wch:12},{wch:22},{wch:22}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Embarques '+_RECON_MESES[mes-1]);
+  XLSX.writeFile(wb, 'reconciliacion_embarques_'+_RECON_MESES[mes-1]+'_'+anio+'.xlsx');
+}
+
+function _reconSubirExcelEmbarques(input){
+  const file = input.files && input.files[0]; if(!file) return;
+  if(typeof XLSX==='undefined'){ _showToast('Cargando librería Excel… reintenta.','orange',3000); return; }
+  const reader = new FileReader();
+  reader.onload = e=>{
+    try{
+      const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const raw = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+      const anio = window._reconState.anio, mes = window._reconState.mesActivo;
+      const key = anio+'-'+mes;
+      window._reconState.erpEmbarques[key] = window._reconState.erpEmbarques[key] || {};
+      raw.slice(1).forEach(r=>{
+        const nro = String(r[0]||'').trim();
+        const erpVal = parseFloat(r[4]);
+        if(nro && !isNaN(erpVal)) window._reconState.erpEmbarques[key][nro] = erpVal;
+      });
+      _reconRenderEmbarques(mes);
+      _showToast('✅ Plantilla cargada','green',3000);
+    }catch(err){ _showToast('⚠️ No se pudo leer el Excel: '+err.message,'red',4000); }
+  };
+  reader.readAsArrayBuffer(file);
+  input.value = '';
+}
+
+// Cierra el modal y salta directo al embarque dentro del Historial de
+// Embarques Procesados, usando el mismo buscador que ya existe ahí.
+function _reconIrACorregir(nro){
+  document.getElementById('_reconModal')?.remove();
+  const el = document.getElementById('tf_buscar');
+  if(el){ el.value = nro; if(typeof _applyTendFilters==='function') _applyTendFilters(); el.scrollIntoView({behavior:'smooth', block:'center'}); }
+  _showToast('🔍 Mostrando embarque '+nro,'blue',2500);
+}
+
+
 async function _pullTendFromCloud(force){
   if(!_sb) return false;
   // ── FIX (ago-2026, egress): antes, cada vez que se entraba a la pestaña
@@ -19750,7 +20031,7 @@ function _tendFmt(n){
     return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
   }
   if(!n||n===0) return '—';
-  if(n>=1000000) return '$'+(n/1000000).toFixed(2)+'M';
+  if(n>=1000000) return '$'+(n/1000000).toFixed(2)+'MM';
   if(n>=1000) return '$'+(n/1000).toFixed(1)+'k';
   return '$'+Number(n||0).toFixed(2);
 }
@@ -20502,6 +20783,13 @@ function _redondeoGlobalTendData(pop){
     });
     if(c>0){
       totalCambios += c; embAfectados++;
+      // FIX (ago-2026): _syncTendToCloud() decide qué subir comparando d.ts
+      // contra _lastSyncedTs[nro]. _setHistBaseline() NO toca d.ts (solo
+      // actualiza _histBase con su propio timestamp interno), así que sin
+      // esta línea el redondeo se quedaba solo en memoria/localStorage y
+      // nunca llegaba a Supabase — pérdida silenciosa de datos, no solo
+      // ineficiencia de egress.
+      d.ts = Date.now();
       if(typeof _setHistBaseline==='function') _setHistBaseline(d, true);
     }
   });
@@ -20543,6 +20831,10 @@ function _aplicarAjusteInventarioManual(pop){
     // ve _calcCostoInventario, ninguna factura individual cambia de valor.
     if(!d._ajusteRedondeoInv) d._ajusteRedondeoInv = {mercancia:0, nomerc:0, itbms:0};
     d._ajusteRedondeoInv[linea] = Math.round(((d._ajusteRedondeoInv[linea]||0)+monto)*100)/100;
+    // FIX (ago-2026): mismo bug que en el redondeo global — sin tocar d.ts
+    // este ajuste nunca se detecta como "cambiado" en _syncTendToCloud() y
+    // se queda solo en este dispositivo.
+    d.ts = Date.now();
     // El ajuste es intencional — actualizar el baseline para que no aparezca
     // como una "Diferencia" ⚠ sin explicar en el historial de embarques.
     if(typeof _setHistBaseline==='function') _setHistBaseline(d, true);
@@ -25021,7 +25313,7 @@ function renderResumenRapido(){
   if(!el) return;
 
   const all = _getFilteredTendData();
-  const fmtM = n => { const v=Math.abs(n||0); if(v>=1e6) return '$'+(n/1e6).toFixed(2)+'M'; if(v>=1e3) return '$'+(n/1e3).toFixed(1)+'k'; return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0}); };
+  const fmtM = n => { const v=Math.abs(n||0); if(v>=1e6) return '$'+(n/1e6).toFixed(2)+'MM'; if(v>=1e3) return '$'+(n/1e3).toFixed(1)+'k'; return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0}); };
   const fmtD = n => '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
   const fmtA = n => window._tendFmtFull ? fmtD(n) : fmtM(n);
   const pct  = (n,d) => d>0 ? (n/d*100).toFixed(1)+'%' : '0.0%';
@@ -25634,7 +25926,7 @@ function renderTopProvs(mode, deptFilter){
 
   const all = _getFilteredTendData();
   const f=n=>'$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-  const fK=n=>window._tendFmtFull ? f(n) : (n>=1e6?'$'+(n/1e6).toFixed(2)+'M':n>=1000?'$'+(n/1000).toFixed(1)+'k':f(n));
+  const fK=n=>window._tendFmtFull ? f(n) : (n>=1e6?'$'+(n/1e6).toFixed(2)+'MM':n>=1000?'$'+(n/1000).toFixed(1)+'k':f(n));
 
   // ── Build provider data with ZL/IMP classification ──
   const provData = {}; // { prov: { total, zl, imp, dept:{} } }
@@ -27014,7 +27306,7 @@ window._fmtMoney = function(n){
   if(!n && n!==0) return '—';
   var v = Number(n||0);
   if(v===0) return '$0';
-  if(Math.abs(v)>=1000000) return '$'+(v/1000000).toFixed(2)+'M';
+  if(Math.abs(v)>=1000000) return '$'+(v/1000000).toFixed(2)+'MM';
   if(Math.abs(v)>=1000) return '$'+(v/1000).toFixed(1)+'k';
   return '$'+v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
 };
