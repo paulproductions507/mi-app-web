@@ -7919,7 +7919,15 @@ function switchTab(id,el){
   }
   if(id==='tendencias'){
     setTimeout(async ()=>{
-      if(_sb) await _pullTendFromCloud();
+      // FIX (ago-2026): antes esta llamada NO forzaba el pull, así que el
+      // límite de 5 min entre pulls (agregado para ahorrar egress) podía
+      // dejar la pestaña Tendencias mostrando datos viejos justo cuando el
+      // usuario entra a comprobar un embarque procesado hace poco en otro
+      // dispositivo — pareciendo que el embarque "no llegó a la nube" cuando
+      // en realidad sí llegó, solo que esta pestaña no volvió a preguntar.
+      // Tendencias es exactamente el lugar donde el dato fresco importa más,
+      // así que aquí SIEMPRE se fuerza.
+      if(_sb) await _pullTendFromCloud(true);
       if(_sb && typeof _autoBackupSemanal==='function') _autoBackupSemanal();
       // Cargar Origen de Proveedores — necesario para que la búsqueda por
       // país/ciudad funcione aunque el usuario nunca haya abierto Configuración.
@@ -16308,25 +16316,31 @@ function reabrirEmbarquePendiente(idx){
   _set('s1_nro_emb',    d.nro   || '');
   _set('s1_desc_emb',   d.desc  || '');
   _set('s1_id_fiscal',  d.idFiscal || '');
-  _set('s1_origen_emb', s.origen|| '');
-  _set('s1_destino',    s.destino|| '');
+  // FIX (ago-2026): estos campos NUNCA vivieron en d.snap (=window._lastSnap,
+  // que solo guarda termino/tipo/equipo/valores de escenarios) — vivían en el
+  // registro raíz 'd' (ver construcción del registro, líneas ~15841-15897).
+  // Reabrir los buscaba en 's.X' (d.snap.X) y siempre venía undefined, dejando
+  // el formulario en blanco aunque el dato SÍ estaba guardado en d.X.
+  _set('s1_origen_emb', d.origen|| '');
+  _set('s1_destino',    d.destino|| '');
   // Restaurar lugar de recepción
-  if(s.lugarRecep !== undefined){ const lr=document.getElementById('s1_lugar_recep'); if(lr) lr.value=s.lugarRecep||''; }
-  { const etdEl=document.getElementById('s1_etd'); if(etdEl) etdEl.value=s.etd||''; }
-  { const etaPEl=document.getElementById('s1_eta_puerto'); if(etaPEl) etaPEl.value=s.etaPuerto||''; }
-  { const fdEl=document.getElementById('s1_fecha_despacho'); if(fdEl) fdEl.value=s.fechaDespacho||''; }
+  if(d.lugarRecep !== undefined){ const lr=document.getElementById('s1_lugar_recep'); if(lr) lr.value=d.lugarRecep||''; }
+  { const etdEl=document.getElementById('s1_etd'); if(etdEl) etdEl.value=d.etd||''; }
+  { const etaPEl=document.getElementById('s1_eta_puerto'); if(etaPEl) etaPEl.value=d.etaPuerto||''; }
+  { const fdEl=document.getElementById('s1_fecha_despacho'); if(fdEl) fdEl.value=d.fechaDespacho||''; }
   if(typeof _toggleFechasEmbarque==='function') _toggleFechasEmbarque();
-  if(s.gastoComp){ const gc=document.getElementById('s1_gasto_comp'); if(gc) gc.value=s.gastoComp||''; }
-  if(s.usoSistema){ const us=document.getElementById('s1_uso_sistema'); if(us) us.value=s.usoSistema||''; }
+  if(d.gastoComp){ const gc=document.getElementById('s1_gasto_comp'); if(gc) gc.value=d.gastoComp||''; }
+  if(d.usoSistema){ const us=document.getElementById('s1_uso_sistema'); if(us) us.value=d.usoSistema||''; }
   // Restaurar selectores de origen país/ciudad
-  if(typeof _restaurarOrigenEmb==='function') _restaurarOrigenEmb(s.origen||d.origen||'');
+  if(typeof _restaurarOrigenEmb==='function') _restaurarOrigenEmb(d.origen||'');
 
   // ── 4. Equipo / contenedor ──
   if(s.equipo){
     const eqEl = document.getElementById('s1_equipo');
     if(eqEl){ eqEl.value = s.equipo; if(typeof setEquipo==='function') setEquipo(s.equipo); }
     // Also restore tipo_emb for contenedor field visibility
-    if(s.tipoEquipo){ const te=document.getElementById('s1_tipo_emb'); if(te){te.value=s.tipoEquipo;if(typeof _toggleContenedorField==='function')_toggleContenedorField(s.tipoEquipo);} }
+    // FIX (ago-2026): tipoEquipo vive en d.tipoEquipo (registro raíz), no en d.snap.tipoEquipo
+    if(d.tipoEquipo){ const te=document.getElementById('s1_tipo_emb'); if(te){te.value=d.tipoEquipo;if(typeof _toggleContenedorField==='function')_toggleContenedorField(d.tipoEquipo);} }
   }
   if(s.equipos !== undefined) _set('s1_equipos', s.equipos);
   // Restaurar vía de transporte
