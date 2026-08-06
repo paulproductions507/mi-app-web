@@ -1446,11 +1446,11 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
     }
   }
 </script>
+<script>
   // Tap-to-toggle para el sidebar de inicio (además de :hover en escritorio)
   // (El viejo _zlhToggle/hover-flyout del riel ya no aplica: ahora cada
   //  módulo es un botón de navegación directa, siempre visible con su
   //  nombre — no hay submenús que abrir/cerrar.)
-
 </script>
 
 <!-- SIDEBAR OVERLAY -->
@@ -1743,7 +1743,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
       <div style="display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border)">
         <span style="font-size:16px">📋</span>
         <span style="font-size:14px;font-weight:800;color:var(--text);flex:1">Información del Embarque</span>
-        <button onclick="_imprimirInfoEmbarque()" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;margin-right:6px">🖨️ Imprimir / PDF</button>
+        <button onclick="_imprimirInfoEmbarque()" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;margin-right:6px">🖨️ Imprimir</button>
         <button onclick="_cerrarModalEmbarque()" style="background:rgba(218,54,51,.1);border:1px solid rgba(218,54,51,.25);color:var(--red-l);border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer">✕ Cerrar</button>
       </div>
       <!-- Body -->
@@ -2097,6 +2097,27 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
         <button onclick="_cerrarModalEquipo()" style="background:rgba(218,54,51,.1);border:1px solid rgba(218,54,51,.25);color:var(--red-l);border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer">✕ Cerrar</button>
       </div>
       <div style="padding:16px 18px">
+        <!-- Costo Inventario Sistema / Diferencia -->
+        <div id="_eq_costoinv_wrap" style="margin-bottom:10px;background:rgba(88,166,255,.04);border:1px solid rgba(88,166,255,.15);border-radius:8px;padding:8px 10px">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:4px">
+            <span style="font-size:10px;font-weight:700;color:var(--blue-l)">📘 Costo Inventario (Sistema)</span>
+            <span style="font-size:9px;color:var(--muted);font-weight:400">Manual — se compara vs. Costo Landed Global</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div>
+              <label style="font-size:9px;color:var(--blue-l);font-weight:600;display:block;margin-bottom:3px">Costo Inventario Sistema (USD)</label>
+              <input type="number" id="s1_costo_inv_sistema" value="" placeholder="0.00" step="0.01" oninput="_calcDiferenciaInventario();calc();_actualizarSummaryEquipo()" style="width:100%;background:var(--bg);border:1px solid rgba(88,166,255,.35);border-radius:6px;padding:6px 8px;color:var(--blue-l);font-size:12px;font-weight:700;font-family:'IBM Plex Mono',monospace">
+            </div>
+            <div>
+              <label style="font-size:9px;color:var(--orange-l);font-weight:600;display:block;margin-bottom:3px">Diferencia (USD)</label>
+              <input type="number" id="_eq_diferencia_vis" readonly style="width:100%;background:var(--bg);border:1px solid rgba(240,136,62,.25);border-radius:6px;padding:6px 8px;color:var(--orange-l);font-size:12px;font-weight:700;font-family:'IBM Plex Mono',monospace">
+            </div>
+          </div>
+          <div style="margin-top:5px;font-size:9px;color:var(--muted);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span>Costo Landed Global actual: <strong id="_eq_landed_ref" style="color:var(--muted)">—</strong></span>
+            <button type="button" onclick="_aplicarGastosComplementarios()" style="background:rgba(240,136,62,.12);border:1px solid rgba(240,136,62,.3);color:var(--orange-l);border-radius:5px;padding:2px 8px;font-size:9px;font-weight:700;cursor:pointer">⬇️ Aplicar a Gastos Complementarios</button>
+          </div>
+        </div>
         <div class="r2" style="margin-bottom:10px">
           <div class="field" style="margin-bottom:0"><label style="font-size:10px">Tipo de Equipo</label>
             <select id="s1_equipo" onchange="setEquipo(this.value);_renderContenedores();_actualizarSummaryEquipo()" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px">
@@ -2272,6 +2293,35 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
         </div>
       </div>
 
+    </div>
+  </div>
+
+  <!-- VISTA PREVIA COMPARATIVA — Escenario Regular vs. Escenario elegido en "Comparar contra" -->
+  <div class="card" style="margin-bottom:12px" id="blk-vista-previa-card">
+    <div class="card-hd" style="cursor:pointer;user-select:none" onclick="_toggleSection('vista-previa-body','vista-previa-chev',this)">
+      <div class="dot b"></div><h3>Vista Previa — Comparativo</h3>
+      <span id="vista-previa-chev" style="margin-left:auto;font-size:12px;color:var(--muted)">▼</span>
+    </div>
+    <div id="vista-previa-body" class="card-bd">
+      <div style="display:flex;align-items:center;justify-content:flex-end;margin-bottom:8px">
+        <button onclick="_imprimirVistaPreviaComparativo()" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer">🖨️ Imprimir</button>
+      </div>
+      <div id="vista-previa-wrap" style="display:flex;align-items:stretch;gap:0;flex-wrap:wrap">
+        <!-- Tarjeta izquierda: Escenario Regular -->
+        <div style="flex:1;min-width:220px;background:var(--s2);border:1px solid var(--border);border-radius:10px 0 0 10px;padding:14px">
+          <div style="font-size:11px;font-weight:800;color:var(--green-l);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;text-align:left">🟢 Escenario Regular</div>
+          <div id="vp-reg-rows" style="display:flex;flex-direction:column;gap:9px;text-align:left"></div>
+        </div>
+        <!-- Divisor VS -->
+        <div style="display:flex;align-items:center;justify-content:center;padding:0 10px;flex:0 0 auto">
+          <div style="width:34px;height:34px;border-radius:50%;background:var(--s1);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:var(--muted)">VS</div>
+        </div>
+        <!-- Tarjeta derecha: Escenario comparativo (CIF Express / Sababa) -->
+        <div style="flex:1;min-width:220px;background:var(--s2);border:1px solid var(--border);border-radius:0 10px 10px 0;padding:14px">
+          <div id="vp-cmp-title" style="font-size:11px;font-weight:800;color:var(--blue-l);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;text-align:left">🔵 Escenario Cif Express</div>
+          <div id="vp-cmp-rows" style="display:flex;flex-direction:column;gap:9px;text-align:left"></div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -8132,6 +8182,7 @@ function setCompar(val,el){
     return;
   }
   calc();
+  if(typeof _actualizarVistaPreviaComparativo==='function') _actualizarVistaPreviaComparativo();
   // Si cambiamos a CIF Express, actualizar displays del desglose honorarios
   if(val==='cifexp') setTimeout(updateCifExpDisplays, 20);
 }
@@ -9483,6 +9534,8 @@ function calc(){
     sdF('disp_itbms_total',  sc1_itbms + itbmsTasaFinal);
     sdF('disp_costo_original', sc1_landed1);       // Costeable = Merc + No Merc (sin ITBMS)
     sdF('disp_costo_landed_global', sc1_landedG);  // Global = Costeable + ITBMS
+    if(typeof _calcDiferenciaInventario==='function') _calcDiferenciaInventario();
+    if(typeof _actualizarVistaPreviaComparativo==='function') _actualizarVistaPreviaComparativo();
     const _facEl=document.getElementById('disp_factor_importacion');
     if(_facEl) _facEl.value=sc1_base>0?(((sc1_noMerc/sc1_base)*100).toFixed(2)+'%'):'—';
     // Costo Inventario = Valor Merc + Arancel + Honorarios (sin ITBMS, sin DMCE, sin acarreo)
@@ -10741,6 +10794,13 @@ function syncDifPagoSC3(){
 }
 function mirrorAgente(val){
   const n = parseFloat(val)||0;
+  // Mantener sincronizados los dos campos "Gastos Origen y Destino" (Equipo y FOB)
+  // para que el mapeo a "Gasto Origen Destino (mapeado)" nunca muestre $0 por
+  // haberse llenado el otro campo en vez de este.
+  ['s1_agente','s1_agente_fob'].forEach(function(id){
+    const el=document.getElementById(id);
+    if(el && el.value !== val) el.value = val;
+  });
   // Always mirror agente to SC3 standalone (unless user explicitly changed it)
   const el2 = document.getElementById('s2_agente');
   if(el2 && el2.dataset.autoSet !== 'false') {
@@ -26512,6 +26572,14 @@ function _imprimirInfoEmbarque(){
   } else {
     filas.push(['ETD (Zarpe)', v('s1_etd')]);
     filas.push(['ETA (Puerto)', v('s1_eta_puerto')]);
+    (function(){
+      var etd=v('s1_etd'), etaP=v('s1_eta_puerto');
+      if(etd && etaP){
+        var dEtd=new Date(etd+'T00:00:00'), dEta=new Date(etaP+'T00:00:00');
+        var dias=Math.round((dEta-dEtd)/86400000);
+        if(!isNaN(dias)) filas.push(['🚢 Tiempo en Tránsito', dias+' día'+(dias===1?'':'s')]);
+      }
+    })();
   }
   filas.push(['Lugar de Recepción', selTxt('s1_lugar_recep')]);
   filas.push(['Notas', v('s1_notas')]);
@@ -32601,6 +32669,121 @@ function _aplicarDaiAjustado(){
   _actualizarSummaryImpuestos();
   if(typeof _showToast==='function') _showToast('✅ Arancel DAI actualizado al '+window._lastDaiPctAjustado.toFixed(4)+'%','green',2500);
 }
+// ── Vista Previa Comparativa: Escenario Regular vs. Escenario elegido (CIF Express / Sababa) ──
+function _vpRow(icon,lbl,val,color){
+  return '<div><div style="font-size:9px;color:var(--muted);font-weight:600;margin-bottom:2px">'+icon+' '+lbl+'</div><div style="font-size:13px;font-weight:800;color:'+color+';font-family:\'IBM Plex Mono\',monospace">'+val+'</div></div>';
+}
+function _actualizarVistaPreviaComparativo(){
+  var fmt2=function(v){return '$'+(v||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});};
+  function gv(id){var el=document.getElementById(id); return el?el.value:'';}
+  var regHtml='';
+  regHtml+=_vpRow('💼','Valor Mercancía', gv('disp_valor_merc')||'—','var(--blue-l)');
+  regHtml+=_vpRow('📦','Costo No Mercancía', gv('disp_costo_no_merc')||'—','var(--orange-l)');
+  regHtml+=_vpRow('🧾','ITBMS', gv('disp_itbms_total')||'—','var(--muted)');
+  regHtml+=_vpRow('📘','Costo Inventario', gv('disp_costo_inventario')||'—','var(--blue-l)');
+  regHtml+=_vpRow('🏁','Costo Grande Global', gv('disp_costo_landed_global')||'—','var(--muted)');
+  regHtml+=_vpRow('📊','Factor Importación', gv('disp_factor_importacion')||'—','var(--orange-l)');
+  var regEl=document.getElementById('vp-reg-rows'); if(regEl) regEl.innerHTML=regHtml;
+
+  var snap=window._lastSnap||{};
+  var sc1=snap.sc1||{}, sc2=snap.sc2||{}, sc3=snap.sc3||{};
+  var itbPct=snap.itbPct||0.07;
+  var titleEl=document.getElementById('vp-cmp-title');
+  var cmpHtml='';
+  if(typeof compar!=='undefined' && compar==='sababa'){
+    if(titleEl) titleEl.innerHTML='🟠 Escenario Sababa';
+    var merc3 = sc3.mercHomol>0?sc3.mercHomol:(sc1.base||0);
+    var baseAj = sc3.baseAjustada>0?sc3.baseAjustada:(merc3*(1+itbPct));
+    var com3 = sc3.comision>0?sc3.comision:(baseAj*(snap.sc3ComPct||0.10));
+    var fl3 = sc3.flete||snap.flete||0;
+    var ag3 = sc3.gastos||sc1.agente||0;
+    var noMerc3 = com3+fl3+ag3;
+    var landed3 = merc3+noMerc3;
+    var factor3 = merc3>0?((noMerc3/merc3)*100).toFixed(2)+'%':'—';
+    cmpHtml+=_vpRow('💼','Valor Mercancía (Homologado)', fmt2(merc3),'var(--blue-l)');
+    cmpHtml+=_vpRow('📦','Costo No Mercancía', fmt2(noMerc3),'var(--orange-l)');
+    cmpHtml+=_vpRow('🧾','ITBMS', '—','var(--muted)');
+    cmpHtml+=_vpRow('📘','Costo Inventario (Homologado)', fmt2(merc3+com3),'var(--blue-l)');
+    cmpHtml+=_vpRow('🏁','Costo Grande Global', fmt2(landed3),'var(--muted)');
+    cmpHtml+=_vpRow('📊','Factor Importación', factor3,'var(--orange-l)');
+  } else {
+    if(titleEl) titleEl.innerHTML='🔵 Escenario Cif Express';
+    var cif2 = sc2.base||sc1.base||0;
+    var isExon = sc2.exon!==false;
+    var ar2 = isExon?0:(sc1.arancel||0);
+    var itbms2 = sc2.itbms || ((cif2+ar2)*itbPct);
+    var tasa2 = sc2.tasa!==undefined?sc2.tasa:(sc1.tasa||0);
+    var itbTasa2 = sc1.itbmsTasaFinal!==undefined ? sc1.itbmsTasaFinal : (tasa2*itbPct);
+    var uso2=(sc2.form2!==undefined&&sc2.form2!==null&&sc2.form2!=='')?parseFloat(sc2.form2):3;
+    var hon2=sc2.hon||(cif2*0.03);
+    var ag2=sc2.agente||sc1.agente||0;
+    var noMerc2=ar2+tasa2+itbTasa2+uso2+hon2+ag2;
+    var landed2=cif2+noMerc2+itbms2;
+    var costoInv2=cif2+ar2+hon2;
+    var factor2=cif2>0?((noMerc2/cif2)*100).toFixed(2)+'%':'—';
+    cmpHtml+=_vpRow('💼','Valor Mercancía', fmt2(cif2),'var(--blue-l)');
+    cmpHtml+=_vpRow('📦','Costo No Mercancía', fmt2(noMerc2),'var(--orange-l)');
+    cmpHtml+=_vpRow('🧾','ITBMS', fmt2(itbms2),'var(--muted)');
+    cmpHtml+=_vpRow('📘','Costo Inventario', fmt2(costoInv2),'var(--blue-l)');
+    cmpHtml+=_vpRow('🏁','Costo Grande Global', fmt2(landed2),'var(--muted)');
+    cmpHtml+=_vpRow('📊','Factor Importación', factor2,'var(--orange-l)');
+  }
+  var cmpEl=document.getElementById('vp-cmp-rows'); if(cmpEl) cmpEl.innerHTML=cmpHtml;
+}
+function _imprimirVistaPreviaComparativo(){
+  var reg=document.getElementById('vp-reg-rows'); var cmp=document.getElementById('vp-cmp-rows');
+  var cmpTitle=document.getElementById('vp-cmp-title');
+  if(!reg||!cmp) return;
+  var win=window.open('','_blank','width=800,height=900');
+  if(!win){ alert('El navegador bloqueó la ventana de impresión. Habilita ventanas emergentes e intenta de nuevo.'); return; }
+  win.document.write(
+    '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Vista Previa Comparativa</title>'
+    +'<style>body{font-family:Arial,Helvetica,sans-serif;padding:24px;color:#111}h1{font-size:18px;margin-bottom:2px}'
+    +'.sub{color:#666;font-size:12px;margin-bottom:18px}.cols{display:flex;gap:24px}.col{flex:1;border:1px solid #ccc;border-radius:8px;padding:16px}'
+    +'.hd{font-weight:800;font-size:13px;margin-bottom:12px}'
+    +'@media print{button{display:none}}</style></head><body>'
+    +'<h1>📋 Vista Previa Comparativa</h1>'
+    +'<div class="sub">Generado '+new Date().toLocaleString('es-PA')+' — Gestión Integral de Compras y Costeo, ZLC Panamá</div>'
+    +'<div class="cols">'
+    +'<div class="col"><div class="hd">🟢 Escenario Regular</div>'+reg.innerHTML+'</div>'
+    +'<div class="col"><div class="hd">'+(cmpTitle?cmpTitle.textContent:'Comparativo')+'</div>'+cmp.innerHTML+'</div>'
+    +'</div>'
+    +'<button onclick="window.print()" style="margin-top:20px;padding:10px 18px;font-size:13px;cursor:pointer">🖨️ Imprimir / Guardar como PDF</button>'
+    +'</body></html>'
+  );
+  win.document.close(); win.focus();
+  setTimeout(function(){ win.print(); }, 300);
+}
+
+// ── Costo Inventario Sistema (manual) vs. Costo Landed Global → Diferencia ──
+function _calcDiferenciaInventario(){
+  var invEl=document.getElementById('s1_costo_inv_sistema');
+  var difEl=document.getElementById('_eq_diferencia_vis');
+  var refEl=document.getElementById('_eq_landed_ref');
+  var landedEl=document.getElementById('disp_costo_landed_global');
+  var landedRaw=landedEl?(landedEl.value||''):'';
+  var landed=parseFloat(landedRaw.toString().replace(/[^0-9.\-]/g,''))||0;
+  var tieneInv = invEl && invEl.value !== '';
+  var inv=parseFloat(invEl?.value||0)||0;
+  var dif=inv-landed;
+  window._lastDifInventario = tieneInv ? dif : null;
+  if(refEl) refEl.textContent='$'+landed.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  if(difEl) difEl.value = tieneInv ? dif.toFixed(2) : '';
+}
+function _aplicarGastosComplementarios(){
+  if(window._lastDifInventario===null || window._lastDifInventario===undefined){
+    if(typeof _showToast==='function') _showToast('⚠️ Ingresa primero el Costo Inventario Sistema para calcular la Diferencia','orange',3000);
+    return;
+  }
+  var gcEl=document.getElementById('s1_gasto_comp');
+  var actual=parseFloat(gcEl?.value||0)||0;
+  var nuevo=actual+window._lastDifInventario;
+  if(gcEl) gcEl.value=nuevo.toFixed(2);
+  calc();
+  if(typeof _actualizarSummaryEquipo==='function') _actualizarSummaryEquipo();
+  _calcDiferenciaInventario();
+  if(typeof _showToast==='function') _showToast('✅ Gasto Complementario actualizado — Costo Landed Global igualado al Costo Inventario Sistema','green',3000);
+}
 function _actualizarSummaryImpuestos(){
   var ar=parseFloat(document.getElementById('s1_ar')?.value||10);
   var itbms=parseFloat(document.getElementById('s1_itbms')?.value||7);
@@ -32663,7 +32846,23 @@ function _cerrarModalHonorarios(){
   ov.style.display='none'; document.body.style.overflow='';
 }
 function _guardarModalHonorarios(){
-  calc(); _actualizarSummaryHonorarios(); _cerrarModalHonorarios();
+  calc(); _actualizarSummaryHonorarios();
+  // Mapear "Formularios" (Honorarios de Corredor) → "Uso del Sistema" (Impuestos y Tasas).
+  // Sigue siendo editable: el usuario puede sobrescribir el valor manualmente después.
+  (function(){
+    var noHon=window._noHonorarios===true;
+    if(noHon) return;
+    var honManualVal=(typeof window._honManual==='number'&&window._honManual>0)?window._honManual:null;
+    if(honManualVal!==null) return; // con honorario manual no hay desglose de Formularios que mapear
+    var reng=Math.max(1,parseInt(document.getElementById('s1_reng')?.value||1));
+    var formShts=(reng<=5?1:1+Math.ceil((reng-5)/10));
+    var form1=formShts*3;
+    var usoEl=document.getElementById('s1_uso_sistema');
+    if(usoEl){ usoEl.value=form1; }
+    if(typeof calc==='function') calc();
+    if(typeof _actualizarSummaryImpuestos==='function') _actualizarSummaryImpuestos();
+  })();
+  _cerrarModalHonorarios();
   if(typeof _showToast==='function') _showToast('✅ Honorarios guardados','green',2000);
 }
 function _actualizarSummaryHonorarios(){
@@ -32711,6 +32910,7 @@ function _abrirModalEquipo(){
   ov.style.display='block'; document.body.style.overflow='hidden';
   if(typeof _renderContenedores==='function') _renderContenedores();
   _actualizarSummaryEquipo();
+  if(typeof _calcDiferenciaInventario==='function') _calcDiferenciaInventario();
 }
 function _cerrarModalEquipo(){
   var ov=document.getElementById('_modal_equipo_overlay'); if(!ov) return;
