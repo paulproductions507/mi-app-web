@@ -8053,13 +8053,15 @@ function updateCifExpDisplays(){
   sd('sc2_hon_display', sc2_hon);
 
   // ── Monto Exento: auto-sugerir 72% si el usuario no lo ha editado manualmente ──
+  // (mismo criterio que en calc(): recalcular siempre con el CIF vigente, no solo
+  // cuando el campo está en $0 — ver nota en calc() sobre el bug de Importación)
   document.querySelectorAll('[id="sc2_hon_ng"]').forEach(function(honNgEl){
     var hasUserValue = window._sc2_hon_ng_userEdited && (parseFloat(honNgEl.value)||0) > 0;
     var hasSnapValue = !hasUserValue && sc2.honNg > 0;
     if(hasSnapValue){
       honNgEl.value = sc2.honNg.toFixed(2);
     } else if(!hasUserValue && sc2_hon > 0){
-      // Sugerir 72% del total
+      // Sugerir 72% del total, recalculado siempre con el CIF actual
       honNgEl.value = (sc2_hon * 0.72).toFixed(2);
     }
   });
@@ -9447,8 +9449,14 @@ function calc(){
   const _allHonNg = document.querySelectorAll('[id="sc2_hon_ng"]');
   const _honNgEl  = _allHonNg.length > 1 ? _allHonNg[_allHonNg.length-1] : _allHonNg[0];
   let sc2_hon_ng_raw = _honNgEl ? (parseFloat(_honNgEl.value)||0) : 0;
-  // Si el usuario no ha editado manualmente y el campo está vacío, sugerir 72% automáticamente
-  if(!window._sc2_hon_ng_userEdited && sc2_hon_ng_raw === 0 && sc2_hon > 0){
+  // Si el usuario no ha editado manualmente, mantener siempre el 72% actualizado con el
+  // CIF real — antes solo se sugería la primera vez que el campo estaba en $0, así que
+  // en Importación (donde el CIF/FOB se escribe dígito por dígito o llega tarde por
+  // factura) el 72% se calculaba una sola vez sobre un CIF mínimo/parcial y se quedaba
+  // "pegado" ahí hasta guardar. En Zona Libre el campo CIF ya llegaba con su valor final
+  // de una vez, por eso no se notaba. Con esto, mientras no sea manual, siempre se
+  // recalcula sobre el CIF vigente.
+  if(!window._sc2_hon_ng_userEdited && sc2_hon > 0){
     sc2_hon_ng_raw = Math.round(sc2_hon * 0.72 * 100) / 100;
     // Escribir el valor sugerido en el campo para que sea visible
     document.querySelectorAll('[id="sc2_hon_ng"]').forEach(el => { el.value = sc2_hon_ng_raw.toFixed(2); });
