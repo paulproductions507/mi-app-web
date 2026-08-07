@@ -1703,7 +1703,7 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
         </button>
 
         <!-- BOTÓN EQUIPO -->
-        <button onclick="_abrirModalEquipo()" style="background:rgba(88,166,255,.08);border:1px solid rgba(88,166,255,.28);border-radius:10px;padding:9px 8px;text-align:left;cursor:pointer;transition:background .15s" onmouseenter="this.style.background='rgba(88,166,255,.15)'" onmouseleave="this.style.background='rgba(88,166,255,.08)'">
+        <button id="btn-equipo-quick" onclick="_abrirModalEquipo()" style="background:rgba(88,166,255,.08);border:1px solid rgba(88,166,255,.28);border-radius:10px;padding:9px 8px;text-align:left;cursor:pointer;transition:background .15s" onmouseenter="this.style.background='rgba(88,166,255,.15)'" onmouseleave="this.style.background='rgba(88,166,255,.08)'">
           <div style="font-size:16px;margin-bottom:3px">🚛</div>
           <div style="font-size:11px;font-weight:700;color:var(--blue-l)">Equipo</div>
           <div id="_equipo_summary_lbl" style="font-size:10px;color:var(--muted);margin-top:2px;font-family:'IBM Plex Mono',monospace">—</div>
@@ -32869,7 +32869,36 @@ function _aplicarDifMV930(){
   if(typeof calcSab2==='function') calcSab2();
   if(typeof _actualizarSummaryEquipo==='function') _actualizarSummaryEquipo();
   if(typeof _calcDiferenciaInventario==='function') _calcDiferenciaInventario();
-  if(typeof _showToast==='function') _showToast('✅ Master Value ajustado al 9.30% — diferencia aplicada a Gastos Complementarios','green',3000);
+
+  // ── Feedback visual de confirmación — mismo criterio que al guardar una factura ──
+  // Parpadeo verde en el bloque de la regla y en el botón rápido de Equipo (ahí vive
+  // el Gasto Complementario que se acaba de actualizar). Si el modal de Equipo está
+  // abierto en ese momento, se cierra y se re-abre al instante para reflejar el
+  // Gasto Complementario ya actualizado — igual que Proveedores al guardar factura.
+  _flashOk('blk-mv930');
+  _flashOk('btn-equipo-quick');
+  var eqOverlay = document.getElementById('_modal_equipo_overlay');
+  if(eqOverlay && eqOverlay.style.display==='block'){
+    if(typeof _cerrarModalEquipo==='function') _cerrarModalEquipo();
+    setTimeout(function(){ if(typeof _abrirModalEquipo==='function') _abrirModalEquipo(); }, 60);
+  }
+
+  if(typeof _showToast==='function') _showToast('✅ Master Value ajustado al 9.30% — diferencia aplicada a Gastos Complementarios (Equipo)','green',3000);
+}
+// Parpadeo verde breve de confirmación sobre cualquier elemento por id (mismo lenguaje
+// visual que el botón ✓ de Guardar Factura en Proveedores, aplicado de forma genérica).
+function _flashOk(id){
+  var el=document.getElementById(id);
+  if(!el) return;
+  var prevTransition=el.style.transition, prevShadow=el.style.boxShadow, prevBorder=el.style.borderColor;
+  el.style.transition='box-shadow .18s ease, border-color .18s ease';
+  el.style.boxShadow='0 0 0 3px rgba(63,185,80,.55)';
+  el.style.borderColor='rgba(63,185,80,.8)';
+  setTimeout(function(){
+    el.style.boxShadow=prevShadow||'';
+    el.style.borderColor=prevBorder||'';
+    setTimeout(function(){ el.style.transition=prevTransition||''; }, 200);
+  }, 450);
 }
 function _actualizarSummaryImpuestos(){
   var ar=parseFloat(document.getElementById('s1_ar')?.value||10);
