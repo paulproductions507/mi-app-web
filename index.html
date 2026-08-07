@@ -32718,13 +32718,39 @@ function _vpRow(icon,lbl,val,color){
 function _actualizarVistaPreviaComparativo(){
   var fmt2=function(v){return '$'+(v||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});};
   function gv(id){var el=document.getElementById(id); return el?el.value:'';}
+  function pf(id){var el=document.getElementById(id); var raw=el?(el.value||''):''; return parseFloat(raw.toString().replace(/[^0-9.\-]/g,''))||0;}
   var regHtml='';
   regHtml+=_vpRow('💼','Valor Mercancía', gv('disp_valor_merc')||'—','var(--blue-l)');
   regHtml+=_vpRow('📦','Costo No Mercancía', gv('disp_costo_no_merc')||'—','var(--orange-l)');
   regHtml+=_vpRow('🧾','ITBMS', gv('disp_itbms_total')||'—','var(--muted)');
-  regHtml+=_vpRow('📘','Costo Inventario', gv('disp_costo_inventario')||'—','var(--blue-l)');
+
+  // FIX: "Costo Inventario" no restaba el Gasto Complementario (Equipo) — por eso
+  // no calzaba 1:1 contra el Costo Inventario (Homologado) de Sababa. Se reemplaza
+  // por el desglose real: Costo Landed Costeable = Valor Merc. + No Merc., y si hay
+  // Gasto Complementario se muestra aparte y se resta para el valor final ajustado.
+  var vMerc1     = pf('disp_valor_merc');
+  var noMerc1    = pf('disp_costo_no_merc');
+  var gastoComp1 = pf('s1_gasto_comp');
+  var landedCosteable1    = vMerc1 + noMerc1;
+  var landedCosteableAdj1 = landedCosteable1 + gastoComp1;
+  var factorOrig1 = vMerc1>0 ? (noMerc1/vMerc1*100) : 0;
+  var factorAdj1  = vMerc1>0 ? (((landedCosteableAdj1-vMerc1)/vMerc1)*100) : 0;
+  var hayGastoComp1 = Math.abs(gastoComp1)>0.004;
+
+  regHtml+=_vpRow('🧮','Costo Landed (Costeable)', fmt2(landedCosteable1),'var(--blue-l)');
+  if(hayGastoComp1){
+    regHtml+=_vpRow('📎','Gasto Complementario', (gastoComp1>=0?'+':'-')+'$'+Math.abs(gastoComp1).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}),'var(--orange-l)');
+    regHtml+=_vpRow('✅','Costo Landed Costeable (ajustado)', fmt2(landedCosteableAdj1),'var(--green-l)');
+  }
   regHtml+=_vpRow('🏁','Costo Grande Global', gv('disp_costo_landed_global')||'—','var(--muted)');
-  regHtml+=_vpRow('📊','Factor Importación', gv('disp_factor_importacion')||'—','var(--orange-l)');
+  if(hayGastoComp1){
+    regHtml+='<div style="display:flex;gap:10px;align-items:flex-start">'
+      +'<div style="flex:1">'+_vpRow('📊','Factor Importación (inicial)', factorOrig1.toFixed(2)+'%','var(--muted)')+'</div>'
+      +'<div style="flex:1;border-left:1px solid var(--border);padding-left:10px">'+_vpRow('📊','Factor Importación (ajustado)', factorAdj1.toFixed(2)+'%','var(--orange-l)')+'</div>'
+      +'</div>';
+  } else {
+    regHtml+=_vpRow('📊','Factor Importación', gv('disp_factor_importacion')||'—','var(--orange-l)');
+  }
   var regEl=document.getElementById('vp-reg-rows'); if(regEl) regEl.innerHTML=regHtml;
 
   var snap=window._lastSnap||{};
@@ -32872,15 +32898,20 @@ function _aplicarDifMV930(){
 
   // ── Feedback visual de confirmación — mismo criterio que al guardar una factura ──
   // Parpadeo verde en el bloque de la regla y en el botón rápido de Equipo (ahí vive
-  // el Gasto Complementario que se acaba de actualizar). Si el modal de Equipo está
-  // abierto en ese momento, se cierra y se re-abre al instante para reflejar el
-  // Gasto Complementario ya actualizado — igual que Proveedores al guardar factura.
+  // el Gasto Complementario que se acaba de actualizar). FIX: antes solo se
+  // cerraba/reabría el modal de Equipo si YA estaba abierto — como normalmente se
+  // aplica esto desde la pestaña Sababa (con Equipo cerrado), nunca se disparaba.
+  // Ahora siempre se abre (o se refresca si ya estaba abierto) para mostrar el
+  // Gasto Complementario actualizado — igual que Proveedores al guardar factura.
   _flashOk('blk-mv930');
   _flashOk('btn-equipo-quick');
   var eqOverlay = document.getElementById('_modal_equipo_overlay');
-  if(eqOverlay && eqOverlay.style.display==='block'){
+  var eqYaAbierto = eqOverlay && eqOverlay.style.display==='block';
+  if(eqYaAbierto){
     if(typeof _cerrarModalEquipo==='function') _cerrarModalEquipo();
     setTimeout(function(){ if(typeof _abrirModalEquipo==='function') _abrirModalEquipo(); }, 60);
+  } else {
+    setTimeout(function(){ if(typeof _abrirModalEquipo==='function') _abrirModalEquipo(); }, 150);
   }
 
   if(typeof _showToast==='function') _showToast('✅ Master Value ajustado al 9.30% — diferencia aplicada a Gastos Complementarios (Equipo)','green',3000);
