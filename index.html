@@ -14117,6 +14117,10 @@ async function _syncTendToCloud(){
         continue;
       }
       window._lastSyncedTs[key] = d.ts || Date.now();
+      // Realtime (ago-2026): avisar a los demás dispositivos que ESTE
+      // embarque cambió, para que hagan un pull dirigido en vez de esperar
+      // hasta 5 min. Solo viaja el número y el ts — nunca el registro.
+      if(typeof _avisarEmbarqueActualizado==='function') _avisarEmbarqueActualizado(d.nro, d.ts);
     }
     if(huboError){
       if(typeof _showToast==='function') _showToast('⚠️ Algunos embarques no se pudieron sincronizar con la nube','red',6000);
@@ -18775,16 +18779,45 @@ async function _plntConsumirSesion(nroEmbarque){
   }catch(e){ console.warn('plantilla auto-consumo:', e.message); }
 }
 
-async function _plntLoad(){
+var _plntLastPullAt = 0;
+var _plntCacheMem = null;
+var _plntRealtimeChannel = null;
+function _plntInitRealtime(){
+  if(!_sb || _plntRealtimeChannel) return;
+  try{
+    _plntRealtimeChannel = _sb.channel('plnt_updates')
+      .on('broadcast', {event:'PLANTILLA_UPDATED'}, function(){
+        console.log('📡 Señal recibida: plantillas actualizadas');
+        _plntCacheMem = null; // fuerza a releer en el próximo _plntLoad
+      })
+      .subscribe();
+  }catch(e){ console.warn('No se pudo iniciar canal Realtime de plantillas:', e); }
+}
+function _plntAvisarActualizado(){
+  try{ if(_plntRealtimeChannel) _plntRealtimeChannel.send({type:'broadcast', event:'PLANTILLA_UPDATED', payload:{}}); }catch(e){}
+}
+
+// FIX (ago-2026, auditoría de tráfico): mismo patrón que Tendencias y
+// Facturas Disponibles — memoria > localStorage > nube. Solo va a la nube
+// si pasaron 5 min desde el último pull, si se pide force=true, o si llegó
+// una señal Realtime (que vacía _plntCacheMem). Las plantillas SIGUEN
+// viviendo en Supabase (multi-dispositivo intacto) — esto solo evita
+// repreguntar a la nube en cada apertura del módulo sin necesidad.
+async function _plntLoad(force){
+  if(_plntCacheMem && !force && (Date.now()-_plntLastPullAt) < 5*60*1000) return _plntCacheMem;
   var local=[];
   try{ local=JSON.parse(localStorage.getItem(_PLANT_KEY)||'[]'); }catch(e){}
+  _plntCacheMem = local;
   if(!_sb) return local;
+  if(!force && (Date.now()-_plntLastPullAt) < 5*60*1000) return local;
   try{
     var res=await _sb.from('simulador_sesiones').select('datos').eq('nombre',_PLANT_KEY).maybeSingle();
+    _plntLastPullAt = Date.now();
     if(res.data&&res.data.datos){
       var cloud=JSON.parse(res.data.datos||'[]');
       if(Array.isArray(cloud)&&cloud.length>=local.length){
         localStorage.setItem(_PLANT_KEY,JSON.stringify(cloud));
+        _plntCacheMem = cloud;
         return cloud;
       }
     }
@@ -18794,6 +18827,8 @@ async function _plntLoad(){
 
 async function _plntSave(arr){
   try{ localStorage.setItem(_PLANT_KEY,JSON.stringify(arr)); }catch(e){}
+  _plntCacheMem = arr;
+  _plntLastPullAt = Date.now();
   if(!_sb){ _showToast('⚠️ Sin conexión — guardado solo local','orange',2500); return; }
   try{
     await _sb.from('simulador_sesiones').upsert({
@@ -18801,6 +18836,10 @@ async function _plntSave(arr){
       datos:JSON.stringify(arr),
       updated_at:new Date().toISOString()
     },{onConflict:'nombre'});
+    // Igual que en facturas: esto sigue subiendo el arreglo completo de
+    // plantillas (falta el RPC granular). El aviso Realtime al menos evita
+    // que los demás dispositivos pregunten a ciegas cada 5 min.
+    if(typeof _plntAvisarActualizado==='function') _plntAvisarActualizado();
   }catch(e){ console.warn('plantillas save:',e.message); }
 }
 
@@ -19178,20 +19217,49 @@ async function _plntAplicar(id, ovEl, btnEl){
 function esc2(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 var _FDKEY = '_FACTDISP_MASTER';
+var _fdLastPullAt = 0;
+var _fdCacheMem = null;
+var _fdRealtimeChannel = null;
+function _fdInitRealtime(){
+  if(!_sb || _fdRealtimeChannel) return;
+  try{
+    _fdRealtimeChannel = _sb.channel('fd_updates')
+      .on('broadcast', {event:'FACTURAS_UPDATED'}, function(){
+        console.log('📡 Señal recibida: facturas disponibles actualizadas');
+        _fdCacheMem = null; // fuerza a releer en el próximo _fdLoad
+      })
+      .subscribe();
+  }catch(e){ console.warn('No se pudo iniciar canal Realtime de facturas:', e); }
+}
+function _fdAvisarActualizado(){
+  try{ if(_fdRealtimeChannel) _fdRealtimeChannel.send({type:'broadcast', event:'FACTURAS_UPDATED', payload:{}}); }catch(e){}
+}
 
 // ── Supabase load: pull facturas from cloud, fallback to localStorage ──
-async function _fdLoad(){
+// FIX (ago-2026, auditoría de tráfico): antes esta función consultaba
+// Supabase SIEMPRE que se abría la pestaña de Facturas, aunque nada hubiera
+// cambiado. Ahora: memoria > localStorage > nube, y solo va a la nube si
+// pasaron 5 min desde el último pull O si llegó una señal Realtime
+// (_fdCacheMem se pone en null desde _fdInitRealtime cuando eso pasa), o si
+// se pide explícitamente con force=true (ej. tras guardar en este mismo
+// dispositivo).
+async function _fdLoad(force){
+  if(_fdCacheMem && !force && (Date.now()-_fdLastPullAt) < 5*60*1000) return _fdCacheMem;
   // Try localStorage first for instant render
   var local = [];
   try{ local = JSON.parse(localStorage.getItem(_FDKEY)||'[]'); }catch(e){}
+  _fdCacheMem = local;
   if(!_sb) return local;
+  if(!force && (Date.now()-_fdLastPullAt) < 5*60*1000) return local;
   try{
     var res = await _sb.from('simulador_sesiones')
       .select('datos').eq('nombre', _FDKEY).maybeSingle();
+    _fdLastPullAt = Date.now();
     if(res.data && res.data.datos){
       var cloud = JSON.parse(res.data.datos||'[]');
       if(Array.isArray(cloud) && cloud.length >= local.length){
         localStorage.setItem(_FDKEY, JSON.stringify(cloud));
+        _fdCacheMem = cloud;
         return cloud;
       }
     }
@@ -19200,19 +19268,40 @@ async function _fdLoad(){
 }
 
 // ── Supabase save: write to cloud + localStorage ──
+// FIX (ago-2026): ahora que existen los RPC upsert_factura_disponible /
+// delete_factura_disponible en Supabase, _fdSave() deja de resubir el
+// arreglo completo — solo actualiza localStorage/memoria (el "espejo"
+// local). El envío real a la nube ocurre en _fdSaveOne()/_fdDeleteOneCloud(),
+// que mandan UNA sola factura por operación, igual que
+// upsert_embarque_master lo hace para embarques.
 async function _fdSave(d){
-  // Always write localStorage immediately
   try{ localStorage.setItem(_FDKEY, JSON.stringify(d)); }catch(e){}
+  _fdCacheMem = d;
+  _fdLastPullAt = Date.now();
+}
+
+// Sube/actualiza UNA sola factura vía RPC (sin tocar las demás).
+async function _fdSaveOne(f){
   if(!_sb){ _showToast('⚠️ Sin conexión a nube — guardado solo local','orange',2500); return; }
   try{
-    await _sb.from('simulador_sesiones').upsert({
-      nombre: _FDKEY,
-      datos: JSON.stringify(d),
-      updated_at: new Date().toISOString()
-    }, { onConflict: 'nombre' });
+    const _r = await _sb.rpc('upsert_factura_disponible', { p_id: f.id, p_factura: f });
+    if(_r && _r.error) throw _r.error;
+    if(typeof _fdAvisarActualizado==='function') _fdAvisarActualizado();
   }catch(e){
-    console.warn('factDisp save error:', e.message);
-    _showToast('⚠️ Error guardando en nube','orange',2000);
+    console.warn('upsert_factura_disponible error:', e.message||e);
+    _showToast('⚠️ Error guardando la factura en la nube','orange',2500);
+  }
+}
+// Elimina UNA sola factura vía RPC (sin tocar las demás).
+async function _fdDeleteOneCloud(id){
+  if(!_sb) return;
+  try{
+    const _r = await _sb.rpc('delete_factura_disponible', { p_id: id });
+    if(_r && _r.error) throw _r.error;
+    if(typeof _fdAvisarActualizado==='function') _fdAvisarActualizado();
+  }catch(e){
+    console.warn('delete_factura_disponible error:', e.message||e);
+    _showToast('⚠️ Error eliminando la factura en la nube','orange',2500);
   }
 }
 function _fdUsadas(){
@@ -19461,6 +19550,7 @@ async function _fdMarcarConsumida(fid){
   f.saldo = 0;
 
   await _fdSave(data);
+  await _fdSaveOne(f);
   _fdInvalidateCache();
   _showToast('✅ Factura '+f.num+' marcada como consumida — Embarque: '+nro, 'green', 3000);
   renderFactDisp();
@@ -19519,6 +19609,7 @@ async function _fdAsociarRetroactivo(fid){
     f.saldo = Math.max(0, saldoPrev - monto);
 
     await _fdSave(data);
+    await _fdSaveOne(f);
     _fdInvalidateCache();
     ov.remove();
     _showToast('✅ '+fmt(monto)+' de factura '+f.num+' asociados al embarque '+nro, 'green', 4000);
@@ -19566,6 +19657,7 @@ async function _fdEditarRubro(fid){
     var nuevo = document.getElementById('_fdEdRubro_sel').value;
     f.tipo = nuevo;
     await _fdSave(data);
+    await _fdSaveOne(f);
     _fdInvalidateCache();
     ov.remove();
     _showToast('✅ Rubro actualizado a "'+etiquetas[nuevo]+'"', 'green', 3000);
@@ -19578,6 +19670,7 @@ async function _fdConsumirParcial(numFact, montoUsado){
   if(!numFact || !montoUsado) return;
   var data = await _fdLoad();
   var changed = false;
+  var cambiadas = [];
   data.forEach(function(f){
     if((f.num||'').toUpperCase() === numFact.toUpperCase()){
       var saldoActual = (f.saldo != null ? f.saldo : f.monto) || 0;
@@ -19591,10 +19684,12 @@ async function _fdConsumirParcial(numFact, montoUsado){
         fecha:    new Date().toISOString().slice(0,10)
       });
       changed = true;
+      cambiadas.push(f);
     }
   });
   if(changed){
     await _fdSave(data);
+    for(const f of cambiadas) await _fdSaveOne(f);
     _fdInvalidateCache();
   }
 }
@@ -19666,7 +19761,7 @@ async function _fdAgregar(){
     _showToast('⚠️ Ya existe una factura con ese número','orange',3000); return;
   }
 
-  data.push({
+  var nueva = {
     id:   Date.now().toString(36)+Math.random().toString(36).slice(2,5),
     num:  num,
     fecha:fecha||new Date().toISOString().slice(0,10),
@@ -19676,8 +19771,10 @@ async function _fdAgregar(){
     rubros:rubros,
     notas:notas,
     creadoEn:new Date().toISOString()
-  });
+  };
+  data.push(nueva);
   await _fdSave(data);
+  await _fdSaveOne(nueva);
   _fdInvalidateCache();
   _showToast('✅ Factura '+num+' guardada ☁️ · $'+monto.toLocaleString('en-US',{minimumFractionDigits:2}),'green',2500);
   renderFactDisp();
@@ -19688,6 +19785,7 @@ async function _fdEliminar(id){
   var data=(await _fdLoad()).filter(function(f){ return f.id!==id; });
   _fdInvalidateCache();
   await _fdSave(data);
+  await _fdDeleteOneCloud(id);
   _showToast('🗑️ Factura eliminada','orange',2000);
   renderFactDisp();
 }
@@ -27645,9 +27743,51 @@ function initSupabase(){
       badge.style.borderColor = 'rgba(63,185,80,.3)';
       badge.style.color = 'var(--green-l)';
     }
+    // ── Realtime (ago-2026, auditoría de tráfico): en vez de que cada
+    //    dispositivo pregunte "¿hay algo nuevo?" cada 5 min, este dispositivo
+    //    se suscribe a un canal Broadcast. Cuando OTRO dispositivo termina de
+    //    sincronizar un embarque, avisa por este canal con solo el número y
+    //    el timestamp (nunca el maestro completo) — y este dispositivo hace
+    //    un pull dirigido en el momento, no cada 5 min a ciegas.
+    //    El pull de 5 min NO se elimina — queda como red de seguridad para
+    //    cuando el dispositivo estuvo desconectado y no pudo recibir la señal.
+    if(typeof _initTendRealtime==='function') _initTendRealtime();
+    if(typeof _fdInitRealtime==='function') _fdInitRealtime();
+    if(typeof _plntInitRealtime==='function') _plntInitRealtime();
   }catch(e){
     console.warn('Supabase no disponible:', e.message);
   }
+}
+
+var _tendRealtimeChannel = null;
+function _initTendRealtime(){
+  if(!_sb || _tendRealtimeChannel) return;
+  try{
+    _tendRealtimeChannel = _sb.channel('tend_updates')
+      .on('broadcast', {event:'EMBARQUE_UPDATED'}, function(msg){
+        var nro = msg && msg.payload && msg.payload.nro;
+        console.log('📡 Señal recibida: embarque actualizado', nro);
+        // Pull dirigido, ignorando el límite de 5 min porque esto SÍ es un
+        // cambio real (no una consulta a ciegas). El propio _pullTendFromCloud
+        // ya trae solo el maestro (liviano) + la lista negra, nunca las
+        // sesiones individuales completas.
+        if(typeof _pullTendFromCloud==='function'){
+          _pullTendFromCloud(true).then(function(changed){
+            if(changed && typeof renderTend==='function' && document.getElementById('tendencias')) renderTend();
+          }).catch(function(){});
+        }
+      })
+      .subscribe();
+  }catch(e){ console.warn('No se pudo iniciar canal Realtime:', e); }
+}
+// Avisa a los demás dispositivos que un embarque cambió — sin mandar datos,
+// solo el número y el timestamp. Se llama al final de _syncTendToCloud().
+function _avisarEmbarqueActualizado(nro, ts){
+  try{
+    if(_tendRealtimeChannel){
+      _tendRealtimeChannel.send({ type:'broadcast', event:'EMBARQUE_UPDATED', payload:{ nro:nro, ts:ts } });
+    }
+  }catch(e){ /* si falla el aviso, la red de seguridad de 5 min lo cubre igual */ }
 }
 
 
