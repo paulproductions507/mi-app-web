@@ -1205,24 +1205,21 @@ async function _pushToCloud(data){
     }
   }catch(e){}
 
-  // 2. Push directly to Supabase regardless
+  // 2. Sincronización individual vía RPC — mismo mecanismo que index.html
+  //    (auditoría egress ago-2026, Prioridad 1 "Escenario Único").
+  //    YA NO descarga "_TEND_MASTER" completo, lo fusiona en memoria ni lo
+  //    vuelve a subir entero: ese patrón "bajar todos → modificar 1 → subir
+  //    todos" era el foco crítico señalado en la auditoría porque unico.html
+  //    procesa liquidaciones con desembolsos reales una por una. El RPC
+  //    upsert_embarque_master (mismo que usa index.html) actualiza en el
+  //    servidor SOLO el elemento data.nro dentro del arreglo del maestro —
+  //    no se toca lógica de negocio ni cálculos de liquidación, solo la
+  //    forma en que este cambio se persiste en Supabase.
   if(!_sb){ initSB(); }
   if(_sb){
     try{
-      // Pull current master first
-      var existing=[];
-      var res=await _sb.from('simulador_sesiones').select('datos').eq('nombre',_SB_MASTER).maybeSingle();
-      if(res.data){ try{ var p=JSON.parse(res.data.datos); existing=p.tendData||[]; }catch(e){} }
-      // Merge
-      var idx2=existing.findIndex(function(t){return t.nro&&t.nro.trim().toUpperCase()===data.nro.toUpperCase();});
-      if(idx2!==-1) existing[idx2]=data; else existing.push(data);
-      // Save
-      var payload={
-        nombre:_SB_MASTER,
-        datos:JSON.stringify({tendData:existing,updated_at:new Date().toISOString()}),
-        updated_at:new Date().toISOString()
-      };
-      var r=await _sb.from('simulador_sesiones').upsert(payload,{onConflict:'nombre'});
+      if(!data.ts) data.ts = Date.now();
+      var r=await _sb.rpc('upsert_embarque_master', { p_nro: data.nro, p_registro: data });
       if(!r.error){
         // También guardar fila individual del embarque (nombre=nro) — para que
         // Planeación de Carga lo detecte igual que los embarques normales.
@@ -1243,7 +1240,7 @@ async function _pushToCloud(data){
         document.getElementById('cloud-badge').style.color='var(--green)';
         return true;
       } else {
-        console.warn('SB upsert error:',r.error);
+        console.warn('RPC upsert_embarque_master error:',r.error);
         document.getElementById('cloud-badge').textContent='⚠️ Error nube';
         document.getElementById('cloud-badge').style.color='var(--red,#f85149)';
       }
