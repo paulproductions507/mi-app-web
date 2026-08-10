@@ -15647,8 +15647,12 @@ function _asignConfirmar(){
   // Update snap in tendData
   var idx = tendData.findIndex(function(d){ return d.nro === snap.nro; });
   if(idx >= 0) tendData[idx] = snap;
-  saveTendData();
-  if(typeof _syncTendToCloud==='function') _syncTendToCloud();
+  // FIX (ago-2026, auditoría de tráfico, prioridad 5): antes se llamaba
+  // saveTendData() (que YA programa su propia sincronización) Y ADEMÁS
+  // _syncTendToCloud() de inmediato por separado — dos caminos para lo
+  // mismo. Ahora un solo camino: _flushSaveTendData() guarda local al
+  // instante y fuerza la sincronización ya, sin duplicar el disparo.
+  if(typeof _flushSaveTendData==='function') _flushSaveTendData(); else saveTendData();
   _showToast('✅ Facturas asignadas a equipos', 'green', 2000);
   
   var overlay = document.getElementById('_asign_overlay');
@@ -16149,6 +16153,7 @@ async function procesarEmbarque(){
       try{
         var arrP = await _plntLoad();
         var cambiado = false;
+        var cambiadasP = [];
         _plntPend.forEach(function(pid){
           var p = arrP.find(function(x){ return x.id===pid; });
           if(!p) return;
@@ -16158,9 +16163,10 @@ async function procesarEmbarque(){
           if(!yaRegistrado){
             p.usos.push({embarque:nro, fecha:new Date().toISOString()});
             cambiado = true;
+            cambiadasP.push(p);
           }
         });
-        if(cambiado) await _plntSave(arrP);
+        if(cambiado){ await _plntSave(arrP); for(const p of cambiadasP) await _plntSaveOne(p); }
       }catch(e){ console.warn('Error registrando uso de plantilla:', e); }
     })();
   }
@@ -17345,8 +17351,7 @@ function _correrProcesoProveedores(){
   });
 
   if(fixed > 0){
-    saveTendData();
-    if(typeof _syncTendToCloud==='function') _syncTendToCloud();
+    if(typeof _flushSaveTendData==='function') _flushSaveTendData(); else saveTendData();
     _showToast('✅ Proceso completado — '+fixed+' proveedor'+(fixed!==1?'es':'')+ ' corregido'+(fixed!==1?'s':''), 'green', 3500);
     if(typeof renderTend==='function') renderTend();
   } else {
@@ -17402,8 +17407,7 @@ function _fixImportacionTipo(){
   });
 
   if(fixed > 0){
-    saveTendData();
-    if(typeof _syncTendToCloud === 'function') _syncTendToCloud();
+    if(typeof _flushSaveTendData==='function') _flushSaveTendData(); else saveTendData();
     console.log('[fixImportacionTipo] Corregidos '+fixed+' embarques de importación (ZL→IMP)');
   } else {
     // Debug: listar nros disponibles en tendData para diagnóstico
@@ -18764,6 +18768,7 @@ async function _plntConsumirSesion(nroEmbarque){
     if(!ids || !ids.length || !nroEmbarque) return;
     var arr = await _plntLoad();
     var cambiado = false;
+    var cambiadas = [];
     ids.forEach(function(id){
       var p = arr.find(function(x){ return x.id===id; });
       if(!p) return;
@@ -18772,9 +18777,10 @@ async function _plntConsumirSesion(nroEmbarque){
       if(!yaRegistrado){
         p.usos.push({embarque:String(nroEmbarque).trim(), fecha:new Date().toISOString(), manual:false, auto:true});
         cambiado = true;
+        cambiadas.push(p);
       }
     });
-    if(cambiado) await _plntSave(arr);
+    if(cambiado){ await _plntSave(arr); for(const p of cambiadas) await _plntSaveOne(p); }
     _plntSesionSet([]); // limpiar — ya quedaron vinculadas a este embarque
   }catch(e){ console.warn('plantilla auto-consumo:', e.message); }
 }
@@ -18825,22 +18831,30 @@ async function _plntLoad(force){
   return local;
 }
 
+// FIX (ago-2026): igual que en Facturas — con los RPC upsert_plantilla /
+// delete_plantilla, _plntSave() deja de resubir el arreglo completo. Solo
+// actualiza el espejo local; el envío real a la nube va por
+// _plntSaveOne()/_plntDeleteOneCloud(), UNA plantilla por operación.
 async function _plntSave(arr){
   try{ localStorage.setItem(_PLANT_KEY,JSON.stringify(arr)); }catch(e){}
   _plntCacheMem = arr;
   _plntLastPullAt = Date.now();
+}
+async function _plntSaveOne(p){
   if(!_sb){ _showToast('⚠️ Sin conexión — guardado solo local','orange',2500); return; }
   try{
-    await _sb.from('simulador_sesiones').upsert({
-      nombre:_PLANT_KEY,
-      datos:JSON.stringify(arr),
-      updated_at:new Date().toISOString()
-    },{onConflict:'nombre'});
-    // Igual que en facturas: esto sigue subiendo el arreglo completo de
-    // plantillas (falta el RPC granular). El aviso Realtime al menos evita
-    // que los demás dispositivos pregunten a ciegas cada 5 min.
+    const _r = await _sb.rpc('upsert_plantilla', { p_id: p.id, p_plantilla: p });
+    if(_r && _r.error) throw _r.error;
     if(typeof _plntAvisarActualizado==='function') _plntAvisarActualizado();
-  }catch(e){ console.warn('plantillas save:',e.message); }
+  }catch(e){ console.warn('upsert_plantilla error:', e.message||e); _showToast('⚠️ Error guardando la plantilla en la nube','orange',2500); }
+}
+async function _plntDeleteOneCloud(id){
+  if(!_sb) return;
+  try{
+    const _r = await _sb.rpc('delete_plantilla', { p_id: id });
+    if(_r && _r.error) throw _r.error;
+    if(typeof _plntAvisarActualizado==='function') _plntAvisarActualizado();
+  }catch(e){ console.warn('delete_plantilla error:', e.message||e); }
 }
 
 // ── Módulo principal de Plantillas (pantalla completa) ──
@@ -18990,7 +19004,7 @@ function _plntSubirNueva(){
       var b64=e.target.result.split(',')[1];
       var mimeType=file.type||'application/octet-stream';
       var arr=await _plntLoad();
-      arr.push({
+      var nuevaP = {
         id:'plnt_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
         nombre:nombre,
         usuario:usuario,
@@ -18999,8 +19013,10 @@ function _plntSubirNueva(){
         fecha:new Date().toISOString(),
         datos:b64,
         usos:[]
-      });
+      };
+      arr.push(nuevaP);
       await _plntSave(arr);
+      await _plntSaveOne(nuevaP);
       try{ localStorage.setItem('_plnt_ultimo_usuario',usuario); }catch(e){}
       ov.remove();
       _showToast('✅ Plantilla "'+nombre+'" guardada','green',3000);
@@ -19035,6 +19051,7 @@ async function _plntEliminar(id){
   var p=arr.find(function(x){return x.id===id;});
   arr=arr.filter(function(x){return x.id!==id;});
   await _plntSave(arr);
+  await _plntDeleteOneCloud(id);
   _showToast('🗑️ Plantilla eliminada','orange',2500);
   var m=document.getElementById('_plnt_modal');
   if(m) _plntRender(m);
@@ -19059,6 +19076,7 @@ async function _plntMarcarUsada(id){
   if(!yaRegistrado){
     p.usos.push({embarque:nro, fecha:new Date().toISOString(), manual:true});
     await _plntSave(arr);
+    await _plntSaveOne(p);
     _showToast('✅ Plantilla vinculada al embarque '+nro,'green',3000);
   } else {
     _showToast('ℹ️ Ya estaba vinculada a ese embarque','orange',2500);
@@ -20046,8 +20064,7 @@ function _editarPiezasHistProv(embarqueIdx, provName, numFact, oc, piezasActuale
       return;
     }
     encontradas.forEach(function(l){ l.piezas = nuevo; });
-    if(typeof saveTendData==='function') saveTendData();
-    if(typeof _syncTendToCloud==='function') _syncTendToCloud();
+    if(typeof _flushSaveTendData==='function') _flushSaveTendData(); else if(typeof saveTendData==='function') saveTendData();
     if(typeof _showToast==='function') _showToast('✅ Piezas actualizadas a '+nuevo.toLocaleString(),'green',3000);
     if(typeof _renderHistProvList==='function') _renderHistProvList();
   };
@@ -20110,8 +20127,7 @@ function _editarProveedorHistProv(embarqueIdx, provName, numFact, oc, provActual
       return;
     }
     encontradas.forEach(function(l){ l.prov = nuevo; });
-    if(typeof saveTendData==='function') saveTendData();
-    if(typeof _syncTendToCloud==='function') _syncTendToCloud();
+    if(typeof _flushSaveTendData==='function') _flushSaveTendData(); else if(typeof saveTendData==='function') saveTendData();
     if(typeof _showToast==='function') _showToast('✅ Proveedor actualizado a "'+nuevo+'"','green',3000);
     if(typeof _renderHistProvList==='function') _renderHistProvList();
   };
@@ -20163,8 +20179,7 @@ function _editarDeptoHistProv(embarqueIdx, provName, numFact, oc, deptoActual){
       return;
     }
     encontradas.forEach(function(l){ l.deptCat = nuevo; l.dept = nuevo; });
-    if(typeof saveTendData==='function') saveTendData();
-    if(typeof _syncTendToCloud==='function') _syncTendToCloud();
+    if(typeof _flushSaveTendData==='function') _flushSaveTendData(); else if(typeof saveTendData==='function') saveTendData();
     if(typeof _showToast==='function') _showToast('✅ Reclasificado a "'+nuevo+'"','green',3000);
     if(typeof _renderHistProvList==='function') _renderHistProvList();
   };
@@ -20529,8 +20544,7 @@ function _plnConfirmarFacturasGlobal(embarqueIdx, tipo){
         });
       }
     });
-    if(typeof saveTendData==='function') saveTendData();
-    if(typeof _syncTendToCloud==='function') _syncTendToCloud();
+    if(typeof _flushSaveTendData==='function') _flushSaveTendData(); else if(typeof saveTendData==='function') saveTendData();
     if(typeof _showToast==='function') _showToast('🔒 '+locked+' factura'+(locked!==1?'s':'')+' confirmadas y bloqueadas','green',3500);
     if(typeof abrirFacturasEmbarque==='function') abrirFacturasEmbarque(embarqueIdx);
   };
@@ -20611,8 +20625,7 @@ function _editarNumFactHistorial(embarqueIdx, lineKey, currentNfac){
     });
 
     if(updated){
-      if(typeof saveTendData==='function') saveTendData();
-      if(typeof _syncTendToCloud==='function') _syncTendToCloud();
+      if(typeof _flushSaveTendData==='function') _flushSaveTendData(); else if(typeof saveTendData==='function') saveTendData();
       if(typeof _showToast==='function') _showToast('✅ Factura actualizada: ' + newNfac + ' — bloqueada para futuras ediciones', 'green', 4000);
       if(window._lastFacturaIdx === embarqueIdx && typeof abrirFacturasEmbarque === 'function'){
         abrirFacturasEmbarque(embarqueIdx);
@@ -27388,6 +27401,7 @@ async function procesarUnico(){
     try{
       var arrP = await _plntLoad();
       var cambiado = false;
+      var cambiadasU = [];
       _plntPendU.forEach(function(pid){
         var p = arrP.find(function(x){ return x.id===pid; });
         if(!p) return;
@@ -27396,9 +27410,10 @@ async function procesarUnico(){
         if(!yaRegistrado){
           p.usos.push({embarque:nro, fecha:new Date().toISOString()});
           cambiado = true;
+          cambiadasU.push(p);
         }
       });
-      if(cambiado) await _plntSave(arrP);
+      if(cambiado){ await _plntSave(arrP); for(const p of cambiadasU) await _plntSaveOne(p); }
     }catch(e){ console.warn('Error registrando uso de plantilla (único):', e); }
   }
   _plntSesionSet([]);
