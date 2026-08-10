@@ -932,15 +932,24 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
 .zlh-title{font-size:clamp(21px,4vw,28px); font-weight:800; color:var(--ztext); margin:0 0 7px; letter-spacing:-.01em; line-height:1.2; font-family:'Inter',sans-serif;}
 .zlh-sub{color:var(--zmuted); font-size:13px; max-width:560px; margin-bottom:20px; font-family:'Inter',sans-serif;}
 
-.zlh-kpi-strip{display:grid !important; grid-template-columns:repeat(auto-fit,minmax(118px,1fr)); gap:9px; margin-bottom:22px;}
+/* FIX (ago-2026): antes era grid auto-fit con 1fr, así que con pocas tarjetas
+   (6-7) en un contenedor ancho el sobrante se repartía entre ellas y quedaban
+   gigantes/aplanadas ("alargadas"). Ahora es flex-wrap con un ancho de tarjeta
+   fijo (no crecen más allá de --kpi-w), así que se ven parejas sin importar
+   cuántas haya ni cuán ancho sea el monitor. */
+.zlh-kpi-strip{display:flex !important; flex-wrap:wrap; gap:12px; margin-bottom:22px;}
 .zlh-kpi-strip .splash-kpi-chip{
+  --kpi-w:168px;
   background:var(--zsurf) !important; border:1px solid var(--zborder) !important; border-radius:13px !important;
-  padding:12px 12px 10px !important; text-align:left !important; min-width:0 !important;
+  padding:16px 16px 14px !important; text-align:left !important; min-width:0 !important;
+  flex:1 1 var(--kpi-w); max-width:var(--kpi-w); min-height:78px;
+  display:flex !important; flex-direction:column; justify-content:center;
   position:relative; overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,.2), 0 8px 24px -8px rgba(0,0,0,.35);
 }
 .zlh-kpi-strip .splash-kpi-chip::before{content:''; position:absolute; top:0; left:0; right:0; height:3px; background:linear-gradient(90deg,var(--zt),var(--zg));}
-.zlh-kpi-strip .splash-kpi-chip-val{font-family:var(--zmono) !important; font-size:18px !important; color:var(--ztext) !important;}
-.zlh-kpi-strip .splash-kpi-chip-lbl{font-family:var(--zmono) !important; font-size:9px !important; letter-spacing:.06em; text-transform:uppercase; color:var(--zdim) !important; margin-top:5px !important;}
+.zlh-kpi-strip .splash-kpi-chip-val{font-family:var(--zmono) !important; font-size:22px !important; color:var(--ztext) !important;}
+.zlh-kpi-strip .splash-kpi-chip-lbl{font-family:var(--zmono) !important; font-size:9.5px !important; letter-spacing:.06em; text-transform:uppercase; color:var(--zdim) !important; margin-top:6px !important;}
+@media(max-width:480px){ .zlh-kpi-strip .splash-kpi-chip{ --kpi-w:calc(50% - 6px); } }
 
 .zlh-section-lbl{font-family:var(--zmono); font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--zdim); margin:4px 0 10px;}
 .zlh-month-strip{display:flex; gap:6px; overflow-x:auto; scrollbar-width:none; padding-bottom:2px; margin-bottom:22px;}
@@ -1179,12 +1188,12 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
     <rect width="400" height="380" fill="rgba(2,8,20,.15)"/>
   </svg></div>
 
-  <div id="splash-hero" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;width:100%;position:absolute;transition:opacity .4s,transform .4s;">
+  <div id="splash-hero" style="display:flex;flex-direction:column;align-items:flex-start;justify-content:center;height:100%;width:100%;position:absolute;transition:opacity .4s,transform .4s;padding-left:clamp(24px,9vw,110px);box-sizing:border-box;">
     <div class="splash-icon">🛃</div>
-    <div class="splash-title">Gestión Integral de<br>Compras y Costeo</div>
+    <div class="splash-title" style="text-align:left;">Gestión Integral de<br>Compras y Costeo</div>
 
-    <button class="splash-btn" onclick="showSplashNav()">▶ &nbsp; Ingresar al Sistema</button>
-    <div class="splash-ver">Simulación · Ahorro · Desembolso · Análisis · ZLC Panamá</div>
+    <button class="splash-btn" onclick="showSplashNav()" style="margin-left:0;">▶ &nbsp; Ingresar al Sistema</button>
+    <div class="splash-ver" style="text-align:left;">Grupo Primavera Holding · Departamento de Tráfico · ZLC Panamá</div>
   </div>
 
   <!-- PANTALLA INTERMEDIA: imagen de marca al ingresar (Compras & Costeo) -->
