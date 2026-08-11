@@ -652,8 +652,14 @@ body[style*="color-scheme: light"] .prov-name { color: #111827 !important; font-
 body.costeo-mode #sidebar,
 body.costeo-mode #sidebar-overlay{display:none!important;}
 body.costeo-mode .btn-inicio{display:inline-flex!important;}
-/* Ancho completo real — ya no hay sidebar ni columna angosta */
-body.costeo-mode .page{max-width:100%!important;padding-left:14px;padding-right:14px;}
+/* FIX (ago-2026, visual): antes .page se estiraba a max-width:100% en modo
+   Costeo (ya no hay sidebar angosto que lo justifique) — en un monitor
+   ancho eso separaba demasiado los bloques internos (Costo Original/
+   Homologado, Vista Previa Comparativo, etc.), dejando algunos como
+   "flotando" sueltos con huecos enormes. Ahora usa el mismo tope
+   --content-max que el resto de la app (900-1360px según ancho de
+   pantalla), centrado, igual que se hizo antes en el panel de inicio. */
+body.costeo-mode .page{padding-left:14px;padding-right:14px;}
 @media(min-width:1000px){body.costeo-mode .page{padding-left:28px;padding-right:28px;}}
 @media(min-width:1500px){body.costeo-mode .page{padding-left:48px;padding-right:48px;}}
 /* Fila de íconos de categoría — scroll horizontal con botones de esquina */
@@ -913,30 +919,45 @@ body.theme-light #_provTooltip{background:#fff;border-color:#d8e6df;box-shadow:0
    corriendo a lo ancho completo por fuera, así que no se nota costura. */
 .zlh-header-full > *{ max-width:900px; margin-left:auto; margin-right:auto; }
 .zlh-header-full .splash-kpi-strip{ overflow-x:visible; }
-.zlh-shell{display:flex; width:100%; align-items:flex-start;}
+.zlh-shell{width:100%;}
 
-/* -- sidebar rail: lista vertical con ícono + nombre SIEMPRE visibles
-      (antes dependía de :hover/tap para mostrar el nombre en un flyout,
-      y en pantallas táctiles eso no queda claro — ahora cada fila ya
-      dice qué es, sin necesidad de tocarla primero). -- */
-.zlh-rail{
-  flex-shrink:0; width:250px; background:var(--zsurf);
-  border-right:1px solid var(--zborder); display:flex; flex-direction:column;
-  align-items:stretch; padding:16px 10px; gap:2px;
-  /* sticky en vez de su propio scroll: ahora el rail viaja pegado arriba
-     dentro del único scroll de la página, en lugar de ser una columna
-     con altura de 100% y scrollbar propia */
-  position:sticky; top:0; max-height:100vh; overflow-y:auto; overflow-x:hidden;
-  -webkit-overflow-scrolling:touch;
+/* ================= Barra de navegación superior (ago-2026) =================
+   Vive arriba, pegada (sticky) mientras se hace scroll. Un solo botón
+   "Módulos" que al pasar el cursor (o tocarlo en celular) abre el menú
+   GRANDE de siempre (ícono + nombre + descripción, agrupado por sección) —
+   pero ahora como un cajón (flyout) que se desliza desde la izquierda
+   HACIA LA DERECHA, no un menú que cae hacia abajo. Con el panel abierto,
+   el resto del fondo se ve esmerilado (blur), no tapado de golpe. */
+.zlh-topnav{
+  position:sticky; top:0; z-index:20; width:100%; box-sizing:border-box;
+  display:flex; align-items:center; gap:3px;
+  background:var(--zsurf); border:1px solid var(--zborder); border-radius:14px;
+  padding:7px; margin-bottom:18px;
+  box-shadow:0 1px 2px rgba(0,0,0,.2), 0 8px 24px -10px rgba(0,0,0,.4);
 }
-.zlh-rail-brand{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--zt),var(--zt2));display:flex;align-items:center;justify-content:center;font-size:18px;margin:0 0 14px 6px;flex-shrink:0;}
-/* Antes había un espaciador enorme (clamp 160-300px) para alinear los íconos
-   con la tarjeta de "Resumen" cuando el sidebar corría a lo largo de TODO el
-   contenido (título+KPIs incluidos). Ahora el título/KPIs/resumen viven en su
-   propio header de ancho completo arriba, así que el sidebar ya arranca a la
-   altura correcta y no necesita empujar sus íconos hacia abajo. */
-.zlh-rail-spacer{display:none;}
+.zlh-topnav-trigger-btn{
+  display:flex; align-items:center; gap:9px; background:none; border:none;
+  color:var(--ztext); font-family:'Inter',sans-serif; font-size:13px; font-weight:700;
+  padding:8px 12px 8px 8px; border-radius:10px; cursor:pointer;
+}
+.zlh-topnav-trigger-btn:hover, .zlh-topnav-trigger-btn.open{background:rgba(31,143,127,.16); color:var(--zt);}
+.zlh-topnav-brand{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,var(--zt),var(--zt2));display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;}
+.zlh-topnav-trigger-btn .car{font-size:10px;color:var(--zdim);}
 
+/* -- El cajón grande: se desliza desde la izquierda hacia la derecha -- */
+.zlh-flyout{
+  position:fixed; left:0; top:0; bottom:0; width:310px; max-width:86vw;
+  background:var(--zsurf); border-right:1px solid var(--zborder);
+  z-index:25; transform:translateX(-100%);
+  transition:transform .3s cubic-bezier(.25,.46,.45,.94);
+  display:flex; flex-direction:column; padding:16px 10px; gap:2px;
+  overflow-y:auto; -webkit-overflow-scrolling:touch;
+}
+.zlh-flyout.open{transform:translateX(0);}
+.zlh-flyout-hdr{display:flex;align-items:center;justify-content:space-between;padding:2px 6px 14px;flex-shrink:0;}
+.zlh-flyout-brand{font-size:15px;font-weight:800;color:var(--ztext);display:flex;align-items:center;gap:8px;}
+.zlh-flyout-close{background:none;border:none;color:var(--zdim);font-size:20px;cursor:pointer;line-height:1;padding:4px;}
+.zlh-flyout-close:hover{color:var(--ztext);}
 .zlh-nav-section{margin-top:16px;}
 .zlh-nav-section:first-of-type{margin-top:0;}
 .zlh-nav-section-lbl{font-family:var(--zmono); font-size:9.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--zdim); padding:0 8px 6px;}
@@ -950,15 +971,33 @@ body.theme-light #_provTooltip{background:#fff;border-color:#d8e6df;box-shadow:0
 .zlh-nav-item b{display:block; font-size:12.5px; font-weight:700;}
 .zlh-nav-item small{display:block; font-size:10px; color:var(--zdim); font-weight:500; margin-top:1px; line-height:1.3;}
 
+/* Fondo esmerilado (efecto "vidrio de baño") detrás del contenido mientras
+   el cajón está abierto — así el resto del panel (KPIs, mapa) no se ve
+   tapado de golpe, sólo desenfocado. */
+.zlh-topnav-backdrop{
+  position:fixed; inset:0; z-index:22; backdrop-filter:blur(7px) saturate(1.05);
+  -webkit-backdrop-filter:blur(7px) saturate(1.05); background:rgba(10,21,19,.25);
+  opacity:0; pointer-events:none; transition:opacity .18s ease;
+}
+.zlh-topnav-backdrop.show{opacity:1; pointer-events:auto;}
+
 /* -- main content -- */
-.zlh-main{flex:1; min-width:0; padding:22px; display:flex; align-items:flex-start; justify-content:center;}
+.zlh-main{width:100%; min-width:0; padding:0 22px 22px; box-sizing:border-box;}
 /* ── Tarjeta "Orígenes Recibidos" (ago-2026) — versión básica, mapa tipo
+
    tracking pendiente evolucionar con ETA/tránsito más adelante. Reusa la
    paleta zt/zg del propio panel ZLH; nada nuevo que aprender visualmente. */
-.zlh-origins-card{width:100%;max-width:920px;background:var(--zsurf);border:1px solid var(--zborder);border-radius:16px;padding:20px 22px 22px;box-shadow:0 1px 3px rgba(0,0,0,.2);}
+/* FIX (ago-2026, alineación): max-width igualado a 900px (el mismo tope
+   que usan título/KPIs/meses/resumen arriba) y centrado con margin:auto
+   en vez de flex en el padre — así el borde izquierdo de esta tarjeta cae
+   exactamente en la misma columna que todo lo de arriba, sin quedar "un
+   poco antes" por una diferencia de 20px entre 900 y 920. */
+.zlh-origins-card{width:100%;max-width:900px;margin:0 auto;background:var(--zsurf);border:1px solid var(--zborder);border-radius:16px;padding:20px 22px 22px;box-shadow:0 1px 3px rgba(0,0,0,.2);}
 .zlh-origins-hd{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:4px;flex-wrap:wrap;}
 .zlh-origins-hd h3{font-size:14.5px;font-weight:800;color:var(--ztext);font-family:'Inter',sans-serif;display:flex;align-items:center;gap:7px;}
 .zlh-origins-hd small{font-size:10.5px;color:var(--zdim);font-family:var(--zmono);}
+.zlh-origins-ver-btn{background:none;border:1px solid var(--zborder);color:var(--zmuted);font-size:10px;font-weight:600;padding:4px 9px;border-radius:20px;cursor:pointer;font-family:'Inter',sans-serif;}
+.zlh-origins-ver-btn:hover{color:var(--zt);border-color:var(--zt);}
 .zlh-origins-sub{font-size:11.5px;color:var(--zmuted);margin-bottom:16px;font-family:'Inter',sans-serif;}
 .zlh-map-wrap{position:relative;width:100%;aspect-ratio:2/1;border-radius:12px;overflow:hidden;background:
     radial-gradient(circle at 20% 30%,rgba(31,143,127,.10),transparent 45%),
@@ -1048,27 +1087,7 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
 @media(max-width:680px){
   .zlh-header-full{padding:18px 14px 14px;}
   .zlh-main{padding:18px 14px 34px;}
-  /* FIX (ago-2026, visual): en celular, .zlh-shell ponía el riel de 210px
-     y el contenido principal LADO A LADO — en una pantalla de ~375px de
-     ancho eso deja el mapa/contenido apretado en una franja angosta.
-     Ahora el riel pasa a ser una barra horizontal compacta (solo ícono +
-     nombre corto, sin descripción) ARRIBA del contenido, para que el mapa
-     y las tarjetas usen todo el ancho disponible. */
-  .zlh-shell{flex-direction:column;}
-  .zlh-rail{
-    width:100%; height:auto; max-height:none; flex-direction:row; flex-wrap:nowrap;
-    overflow-x:auto; overflow-y:hidden; padding:10px 10px; gap:8px;
-    border-right:none; border-bottom:1px solid var(--zborder); -webkit-overflow-scrolling:touch;
-  }
-  .zlh-rail-brand{display:none;}
-  .zlh-nav-section{margin-top:0; display:flex; flex-direction:row; gap:8px; flex-shrink:0;}
-  .zlh-nav-section:first-of-type{margin-top:0;}
-  .zlh-nav-section-lbl{display:none;}
-  .zlh-nav-item{flex-direction:column; align-items:center; gap:3px; width:64px; flex-shrink:0; padding:7px 4px; border-radius:10px; text-align:center;}
-  .zlh-nav-item .zlh-nav-ico{width:auto; margin-top:0; font-size:19px;}
-  .zlh-nav-item b{font-size:9.5px; font-weight:700; line-height:1.15;}
-  .zlh-nav-item small{display:none;}
-  .zlh-main{flex:1; min-height:0;}
+  .zlh-flyout{width:270px;}
   /* Igual que antes: KPIs/meses/resumen más compactos para bajar menos */
   .zlh-kpi-strip .splash-kpi-chip{padding:10px 11px 9px !important; min-height:0;}
   .zlh-kpi-strip .splash-kpi-chip-val{font-size:17px !important;}
@@ -1371,45 +1390,28 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
 
       <div style="position:relative;overflow:hidden;">
         <canvas id="nav-trend-canvas" style="position:absolute;top:0;left:0;width:100%;height:80px;opacity:.10;pointer-events:none"></canvas>
-        <div class="zlh-eyebrow">Grupo Primavera Holding · Automatizado</div>
+        <h1 class="zlh-title">Gestión Integral de<br>Compras y Costeo</h1>
       </div>
-      <h1 class="zlh-title">Gestión Integral de<br>Compras y Costeo</h1>
+      <div class="zlh-eyebrow">Grupo Primavera Holding · Automatizado</div>
       <div class="zlh-sub">Simulación, ahorro y desembolso de importaciones y compras Zona Libre de Colón, con KPIs y tendencias en tiempo real.</div>
 
-      <div class="splash-kpi-strip zlh-kpi-strip" id="splash-kpi-strip">
-        <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-embarques">—</div><div class="splash-kpi-chip-lbl">Emb. Mes</div></div>
-        <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-ahorro">—</div><div class="splash-kpi-chip-lbl">Ahorro Total</div></div>
-        <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-cif">—</div><div class="splash-kpi-chip-lbl">Compras Mes</div></div>
-        <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-landed">—</div><div class="splash-kpi-chip-lbl">Landed Mes</div></div>
-        <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-fac-merc">—</div><div class="splash-kpi-chip-lbl">Fact. Merc.</div></div>
-        <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-fac-serv">—</div><div class="splash-kpi-chip-lbl">Fact. Serv.</div></div>
-        <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-piezas">—</div><div class="splash-kpi-chip-lbl">Piezas</div></div>
-        <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-costo-inv" style="color:var(--zg)">—</div><div class="splash-kpi-chip-lbl">Costo Inventario</div></div>
-      </div>
+      <!-- BARRA DE NAVEGACIÓN — un solo botón "Módulos" arriba. Al pasar el
+           cursor (o tocarlo en celular) abre el cajón grande de siempre,
+           con ícono + nombre + descripción, deslizándose hacia la derecha. -->
+      <nav class="zlh-topnav" id="zlhTopNav">
+        <button class="zlh-topnav-trigger-btn" id="zlhFlyoutTrigger" onmouseenter="_zlhFlyoutOpen()" onclick="_zlhFlyoutToggle()">
+          <span class="zlh-topnav-brand">🛃</span>
+          Módulos
+          <span class="car">▸</span>
+        </button>
+      </nav>
+      <div class="zlh-topnav-backdrop" id="zlhTopNavBackdrop" onclick="_zlhFlyoutClose()"></div>
 
-      <div class="zlh-section-lbl">Embarques por Mes — <span id="zlh-month-year"></span></div>
-      <div class="zlh-month-strip" id="zlh-month-strip"></div>
-
-      <div class="zlh-section-lbl">Resumen</div>
-      <div class="zlh-reminder-row">
-        <div class="zlh-reminder-card" id="zlhLastShip">
-          <div class="zlh-reminder-eyebrow">Último embarque trabajado</div>
-          <div class="zlh-reminder-empty">Sin actividad reciente todavía.</div>
+      <aside class="zlh-flyout" id="zlhFlyout" onmouseleave="_zlhFlyoutClose()">
+        <div class="zlh-flyout-hdr">
+          <div class="zlh-flyout-brand">🛃 Módulos</div>
+          <button class="zlh-flyout-close" onclick="_zlhFlyoutClose()" aria-label="Cerrar">×</button>
         </div>
-        <div class="zlh-reminder-card zlh-trend-card">
-          <div class="zlh-reminder-eyebrow">Ahorro · últimos meses</div>
-          <div id="home-trend-delta" class="zlh-trend-delta">—</div>
-          <canvas id="home-trend-canvas" height="64"></canvas>
-        </div>
-      </div>
-    </div>
-
-    <div class="zlh-shell">
-
-      <!-- SIDEBAR — lista completa, ícono + nombre siempre visibles (nada
-           escondido detrás de un hover/tap), todos los módulos dentro. -->
-      <aside class="zlh-rail" id="zlhRail">
-        <div class="zlh-rail-brand">🛃</div>
 
         <div class="zlh-nav-section">
           <div class="zlh-nav-section-lbl">Calcular Costo</div>
@@ -1448,6 +1450,36 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
         </div>
       </aside>
 
+      <div class="splash-kpi-strip zlh-kpi-strip" id="splash-kpi-strip">
+        <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-embarques">—</div><div class="splash-kpi-chip-lbl">Emb. Mes</div></div>
+        <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-ahorro">—</div><div class="splash-kpi-chip-lbl">Ahorro Total</div></div>
+        <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-cif">—</div><div class="splash-kpi-chip-lbl">Compras Mes</div></div>
+        <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-landed">—</div><div class="splash-kpi-chip-lbl">Landed Mes</div></div>
+        <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-fac-merc">—</div><div class="splash-kpi-chip-lbl">Fact. Merc.</div></div>
+        <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-fac-serv">—</div><div class="splash-kpi-chip-lbl">Fact. Serv.</div></div>
+        <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-piezas">—</div><div class="splash-kpi-chip-lbl">Piezas</div></div>
+        <div class="splash-kpi-chip"><div class="splash-kpi-chip-val" id="sk-costo-inv" style="color:var(--zg)">—</div><div class="splash-kpi-chip-lbl">Costo Inventario</div></div>
+      </div>
+
+      <div class="zlh-section-lbl">Embarques por Mes — <span id="zlh-month-year"></span></div>
+      <div class="zlh-month-strip" id="zlh-month-strip"></div>
+
+      <div class="zlh-section-lbl">Resumen</div>
+      <div class="zlh-reminder-row">
+        <div class="zlh-reminder-card" id="zlhLastShip">
+          <div class="zlh-reminder-eyebrow">Último embarque trabajado</div>
+          <div class="zlh-reminder-empty">Sin actividad reciente todavía.</div>
+        </div>
+        <div class="zlh-reminder-card zlh-trend-card">
+          <div class="zlh-reminder-eyebrow">Ahorro · últimos meses</div>
+          <div id="home-trend-delta" class="zlh-trend-delta">—</div>
+          <canvas id="home-trend-canvas" height="64"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="zlh-shell">
+
       <!-- MAIN — tarjeta de Orígenes Recibidos (mapa tipo tracking, versión
            básica). El resto de la información en vivo (KPIs, embarques por
            mes, resumen) ya vive arriba, a lo ancho. -->
@@ -1455,7 +1487,10 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
         <div class="zlh-origins-card">
           <div class="zlh-origins-hd">
             <h3>🌍 Orígenes de Mercancía Recibida</h3>
-            <small id="zlhOrigTotal">—</small>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <small id="zlhOrigTotal">—</small>
+              <button type="button" class="zlh-origins-ver-btn" onclick="_zlhAbrirOrigenesModal()">Ver orígenes ▸</button>
+            </div>
           </div>
           <div class="zlh-origins-sub">Pasa el cursor sobre un punto para ver el detalle.</div>
           <div class="zlh-map-wrap" id="zlhOrigMap">
@@ -1463,9 +1498,6 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
                  src="https://cdn.jsdelivr.net/gh/flekschas/simple-world-map@master/world-map.svg"
                  onerror="this.style.display='none'">
             <div id="zlhOrigDots" style="position:absolute;inset:0;"></div>
-          </div>
-          <div style="margin-top:16px;text-align:center;">
-            <button type="button" class="zlh-reminder-btn" onclick="_zlhAbrirOrigenesModal()">Ver orígenes ▸</button>
           </div>
           <!-- FIX (ago-2026): la lista completa de países ya no se carga a
                la vista principal (se veía desordenada / poco elegante).
@@ -1502,8 +1534,13 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
     'Malasia':[76,52],'Tailandia':[75,45],'Pakistan':[64,38],'Bangladesh':[70,40],
     'Turkey':[57,33],'Alemania':[50,25],'Italia':[51,30],'Espana':[47,30],
     'Portugal':[45,30],'USA':[20,30],'Canada':[20,20],'Mexico':[17,40],
-    'Panamá':[22,50],'Costa Rica':[20,48],'Guatemala':[18,45],'Honduras':[19,46],
-    'Nicaragua':[19,48],'El Salvador':[18,47],'Colombia':[23,55],'Brasil':[30,62],
+    /* FIX (ago-2026): cadena centroamericana reordenada para que caiga en
+       la franja angosta del istmo, en línea recta y progresiva entre
+       México (17,40) y Colombia (23,55) — antes Panamá quedaba mezclada
+       con Costa Rica/México en vez de justo antes de Colombia. */
+    'Guatemala':[18,43],'Honduras':[19,44.5],'El Salvador':[18.5,44],
+    'Nicaragua':[20,46.5],'Costa Rica':[21.5,48.5],'Panamá':[23,50.5],
+    'Colombia':[23,55],'Brasil':[30,62],
     'Puerto Rico':[26,43]
   };
   var _ZLH_FLAGS = {
@@ -1599,7 +1636,6 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
     var ov = document.getElementById('zlhOrigModalOverlay');
     if(ov) ov.style.display = 'none';
   }
-</script>
   // ---------- Widget de inicio: recordatorio ligero (sin recargar el tráfico) ----------
   function _zlhPopulateReminder(){
     var box = document.getElementById('zlhLastShip');
@@ -1700,10 +1736,36 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
   }
 </script>
 <script>
-  // Tap-to-toggle para el sidebar de inicio (además de :hover en escritorio)
-  // (El viejo _zlhToggle/hover-flyout del riel ya no aplica: ahora cada
-  //  módulo es un botón de navegación directa, siempre visible con su
-  //  nombre — no hay submenús que abrir/cerrar.)
+  // Cajón de módulos (.zlh-flyout): se desliza desde la izquierda hacia la
+  // derecha al pasar el cursor sobre "Módulos" (o al tocarlo en celular),
+  // con un fondo esmerilado detrás. Un solo punto de apertura/cierre para
+  // que el botón, el cajón y el fondo esmerilado queden siempre en sync.
+  function _zlhFlyoutOpen(){
+    var fly = document.getElementById('zlhFlyout');
+    var bg = document.getElementById('zlhTopNavBackdrop');
+    var trg = document.getElementById('zlhFlyoutTrigger');
+    if(fly) fly.classList.add('open');
+    if(bg) bg.classList.add('show');
+    if(trg) trg.classList.add('open');
+  }
+  function _zlhFlyoutClose(){
+    var fly = document.getElementById('zlhFlyout');
+    var bg = document.getElementById('zlhTopNavBackdrop');
+    var trg = document.getElementById('zlhFlyoutTrigger');
+    if(fly) fly.classList.remove('open');
+    if(bg) bg.classList.remove('show');
+    if(trg) trg.classList.remove('open');
+  }
+  function _zlhFlyoutToggle(){
+    var fly = document.getElementById('zlhFlyout');
+    if(fly && fly.classList.contains('open')) _zlhFlyoutClose();
+    else _zlhFlyoutOpen();
+  }
+  document.addEventListener('click', function(e){
+    if(!e.target.closest('.zlh-flyout') && !e.target.closest('#zlhFlyoutTrigger')){
+      _zlhFlyoutClose();
+    }
+  });
 </script>
 
 <!-- SIDEBAR OVERLAY -->
