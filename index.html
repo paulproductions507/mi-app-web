@@ -133,6 +133,14 @@ body{font-family:'Inter','IBM Plex Sans',system-ui,-apple-system,sans-serif;back
 
 /* LAYOUT — ancho unificado en toda la app */
 :root { --content-max: 900px; }
+/* FIX (ago-2026, visual): antes --content-max quedaba fijo en 900px sin
+   importar qué tan ancho fuera el monitor, así que en pantallas de
+   escritorio grandes todo el contenido de trabajo (formularios, tablas,
+   tarjetas) se veía apretado en una columna angosta con espacio muerto
+   enorme a los lados. Ahora crece en dos escalones para monitores anchos —
+   celular y tablet no cambian en nada, siguen usando los 900px de base. */
+@media(min-width:1400px){ :root{ --content-max: 1180px; } }
+@media(min-width:1800px){ :root{ --content-max: 1360px; } }
 .page{max-width:var(--content-max) !important;margin-left:auto !important;margin-right:auto !important;padding:16px 12px;width:100%;}
 @media(min-width:600px){.page{padding:16px 20px;}}
 @media(min-width:1200px){.page{padding:20px 24px;}}
@@ -760,6 +768,18 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
 .kpi-card.b::before{background:linear-gradient(90deg,#1f6feb,#58a6ff);}
 .kpi-card.o::before{background:linear-gradient(90deg,#d29922,#f08632);}
 .kpi-card.p::before{background:linear-gradient(90deg,#da3633,#ff6a5f);}
+/* Tarjeta "próximamente" — mismo cascarón kpi-card, pero con borde punteado y
+   sin barra de color superior, para que se note claramente que ese espacio
+   está reservado y aún no tiene datos reales. */
+.kpi-card.soon{border:1.5px dashed rgba(63,185,80,.45);background:var(--s1);}
+.kpi-card.soon::before{display:none;}
+.kpi-card.soon .kpi-soon-badge{position:absolute;top:10px;right:12px;font-size:8px;font-weight:800;letter-spacing:.06em;color:#3fb950;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);border-radius:20px;padding:2px 8px;text-transform:uppercase;}
+body.theme-light .kpi-card.soon{background:#f3f9f6;border-color:rgba(46,160,67,.4);}
+/* Tooltip flotante para filas de Top Proveedores (y similares) — imita el
+   recuadro que aparece al pasar el cursor sobre las gráficas. */
+#_provTooltip{position:fixed;z-index:99999;background:var(--s1);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:11px;color:var(--text);box-shadow:0 4px 16px rgba(0,0,0,.25);pointer-events:none;display:none;min-width:150px;line-height:1.5;}
+#_provTooltip b{color:var(--green-l);}
+body.theme-light #_provTooltip{background:#fff;border-color:#d8e6df;box-shadow:0 4px 16px rgba(0,0,0,.12);}
 .kpi-icon{font-size:22px;margin-bottom:8px;display:block;}
 .kpi-lbl{font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;}
 .kpi-val{font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:800;line-height:1;color:var(--text);}
@@ -920,7 +940,45 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
 .zlh-nav-item small{display:block; font-size:10px; color:var(--zdim); font-weight:500; margin-top:1px; line-height:1.3;}
 
 /* -- main content -- */
-.zlh-main{flex:1; min-width:0; height:100%; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:22px; display:flex; align-items:center; justify-content:center;}
+.zlh-main{flex:1; min-width:0; height:100%; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:22px; display:flex; align-items:flex-start; justify-content:center;}
+/* ── Tarjeta "Orígenes Recibidos" (ago-2026) — versión básica, mapa tipo
+   tracking pendiente evolucionar con ETA/tránsito más adelante. Reusa la
+   paleta zt/zg del propio panel ZLH; nada nuevo que aprender visualmente. */
+.zlh-origins-card{width:100%;max-width:920px;background:var(--zsurf);border:1px solid var(--zborder);border-radius:16px;padding:20px 22px 22px;box-shadow:0 1px 3px rgba(0,0,0,.2);}
+.zlh-origins-hd{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:4px;flex-wrap:wrap;}
+.zlh-origins-hd h3{font-size:14.5px;font-weight:800;color:var(--ztext);font-family:'Inter',sans-serif;display:flex;align-items:center;gap:7px;}
+.zlh-origins-hd small{font-size:10.5px;color:var(--zdim);font-family:var(--zmono);}
+.zlh-origins-sub{font-size:11.5px;color:var(--zmuted);margin-bottom:16px;font-family:'Inter',sans-serif;}
+.zlh-map-wrap{position:relative;width:100%;aspect-ratio:2/1;border-radius:12px;overflow:hidden;background:
+    radial-gradient(circle at 20% 30%,rgba(31,143,127,.10),transparent 45%),
+    radial-gradient(circle at 78% 38%,rgba(212,162,76,.08),transparent 42%),
+    var(--zbg);
+  border:1px solid var(--zborder);}
+/* Mapa mundial real (SVG libre, CC-BY-SA — flekschas/simple-world-map,
+   basado en Al MacDonald / Wikimedia Commons) de fondo, recoloreado para
+   que combine con la paleta del panel en ambos temas. */
+.zlh-map-img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;opacity:.9;}
+body:not(.theme-light) .zlh-map-img{filter:brightness(0) saturate(100%) invert(19%) sepia(24%) saturate(1200%) hue-rotate(122deg) brightness(85%) contrast(88%); opacity:.55;}
+body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) sepia(9%) saturate(700%) hue-rotate(122deg) brightness(92%) contrast(85%); opacity:.35;}
+.zlh-map-label{position:absolute;left:50%;top:0;transform:translate(-50%,calc(-100% - 12px));display:flex;flex-direction:column;align-items:center;pointer-events:none;}
+.zlh-map-label .chip{background:var(--zsurf2);border:1px solid var(--zborder);border-radius:7px;padding:3px 7px;font-family:'Inter',sans-serif;font-size:9.5px;font-weight:700;color:var(--ztext);white-space:nowrap;box-shadow:0 3px 10px rgba(0,0,0,.25);}
+.zlh-map-label .chip .n{color:var(--zg);font-weight:800;}
+.zlh-map-label .stem{width:1px;height:10px;background:var(--zborder);}
+.zlh-map-dot{position:absolute;transform:translate(-50%,-50%);cursor:pointer;}
+.zlh-map-dot .pulse{position:absolute;inset:0;border-radius:50%;background:var(--zt);opacity:.35;animation:zlhPulse 2.2s ease-out infinite;}
+.zlh-map-dot .core{position:relative;border-radius:50%;background:linear-gradient(135deg,var(--zt),var(--zg));box-shadow:0 0 0 3px rgba(31,143,127,.18);}
+@keyframes zlhPulse{0%{transform:scale(.6);opacity:.5;}100%{transform:scale(2.6);opacity:0;}}
+.zlh-map-tip{position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:var(--zsurf2);border:1px solid var(--zborder);border-radius:9px;padding:7px 10px;font-family:'Inter',sans-serif;font-size:11px;color:var(--ztext);white-space:nowrap;box-shadow:0 6px 20px rgba(0,0,0,.35);opacity:0;pointer-events:none;transition:opacity .12s;z-index:5;}
+.zlh-map-dot:hover .zlh-map-tip{opacity:1;}
+.zlh-map-tip b{color:var(--zg);}
+.zlh-map-tip .tipsub{color:var(--zdim);font-size:9.5px;margin-top:2px;font-family:var(--zmono);}
+.zlh-origins-list{margin-top:16px;display:flex;flex-direction:column;gap:0;border-top:1px solid var(--zborder);}
+.zlh-origins-row{display:flex;align-items:center;gap:10px;padding:9px 2px;border-bottom:1px solid var(--zborder);font-family:'Inter',sans-serif;}
+.zlh-origins-row .flag{font-size:15px;width:22px;text-align:center;flex-shrink:0;}
+.zlh-origins-row .nm{flex:1;min-width:0;font-size:12px;font-weight:600;color:var(--ztext);}
+.zlh-origins-row .cnt{font-size:11px;color:var(--zdim);font-family:var(--zmono);flex-shrink:0;}
+.zlh-origins-row .val{font-size:12px;font-weight:700;color:var(--zg);font-family:var(--zmono);flex-shrink:0;min-width:78px;text-align:right;}
+.zlh-origins-empty{padding:30px 10px;text-align:center;color:var(--zmuted);font-size:12px;font-family:'Inter',sans-serif;}
 .zlh-main-empty{text-align:center; max-width:340px;}
 .zlh-main-empty .ico{font-size:38px; margin-bottom:10px;}
 .zlh-main-empty h2{font-size:17px; font-weight:800; color:var(--ztext); margin:0 0 6px; font-family:'Inter',sans-serif;}
@@ -974,7 +1032,39 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
 @media(max-width:680px){
   .zlh-header-full{padding:18px 14px 14px;}
   .zlh-main{padding:18px 14px 34px;}
-  .zlh-rail{width:210px;}
+  /* FIX (ago-2026, visual): en celular, .zlh-shell ponía el riel de 210px
+     y el contenido principal LADO A LADO — en una pantalla de ~375px de
+     ancho eso deja el mapa/contenido apretado en una franja angosta.
+     Ahora el riel pasa a ser una barra horizontal compacta (solo ícono +
+     nombre corto, sin descripción) ARRIBA del contenido, para que el mapa
+     y las tarjetas usen todo el ancho disponible. */
+  .zlh-shell{flex-direction:column;}
+  .zlh-rail{
+    width:100%; height:auto; max-height:none; flex-direction:row; flex-wrap:nowrap;
+    overflow-x:auto; overflow-y:hidden; padding:10px 10px; gap:8px;
+    border-right:none; border-bottom:1px solid var(--zborder); -webkit-overflow-scrolling:touch;
+  }
+  .zlh-rail-brand{display:none;}
+  .zlh-nav-section{margin-top:0; display:flex; flex-direction:row; gap:8px; flex-shrink:0;}
+  .zlh-nav-section:first-of-type{margin-top:0;}
+  .zlh-nav-section-lbl{display:none;}
+  .zlh-nav-item{flex-direction:column; align-items:center; gap:3px; width:64px; flex-shrink:0; padding:7px 4px; border-radius:10px; text-align:center;}
+  .zlh-nav-item .zlh-nav-ico{width:auto; margin-top:0; font-size:19px;}
+  .zlh-nav-item b{font-size:9.5px; font-weight:700; line-height:1.15;}
+  .zlh-nav-item small{display:none;}
+  .zlh-main{flex:1; min-height:0;}
+  /* Igual que antes: KPIs/meses/resumen más compactos para bajar menos */
+  .zlh-kpi-strip .splash-kpi-chip{padding:10px 11px 9px !important; min-height:0;}
+  .zlh-kpi-strip .splash-kpi-chip-val{font-size:17px !important;}
+  .zlh-kpi-strip .splash-kpi-chip-lbl{font-size:8.5px !important; margin-top:3px !important;}
+  .splash-kpi-strip.zlh-kpi-strip{gap:7px !important; margin-bottom:14px !important;}
+  .zlh-section-lbl{margin:0 0 6px;}
+  .zlh-month-strip{margin-bottom:14px;}
+  .zlh-month-chip{min-width:40px; padding:6px 4px;}
+  .zlh-month-chip-val{font-size:12.5px;}
+  .zlh-reminder-card{padding:11px;}
+  .zlh-origins-card{padding:14px 14px 16px;}
+}
 }
 </style>
 <!-- OVERRIDE FINAL — max-width forzado en todo -->
@@ -1342,13 +1432,23 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
         </div>
       </aside>
 
-      <!-- MAIN — placeholder de bienvenida; toda la información en vivo
-           (KPIs, embarques por mes, resumen) ya vive arriba, a lo ancho. -->
+      <!-- MAIN — tarjeta de Orígenes Recibidos (mapa tipo tracking, versión
+           básica). El resto de la información en vivo (KPIs, embarques por
+           mes, resumen) ya vive arriba, a lo ancho. -->
       <main class="zlh-main">
-        <div class="zlh-main-empty">
-          <div class="ico">📦🚚</div>
-          <h2>Gestión Integral de Compras y Costeo</h2>
-          <p>Selecciona un módulo en el menú lateral para comenzar.</p>
+        <div class="zlh-origins-card">
+          <div class="zlh-origins-hd">
+            <h3>🌍 Orígenes de Mercancía Recibida</h3>
+            <small id="zlhOrigTotal">—</small>
+          </div>
+          <div class="zlh-origins-sub">Pasa el cursor sobre un punto para ver el detalle. Próximamente: tránsito en vivo y ETA estimado por origen.</div>
+          <div class="zlh-map-wrap" id="zlhOrigMap">
+            <img class="zlh-map-img" alt="" aria-hidden="true"
+                 src="https://cdn.jsdelivr.net/gh/flekschas/simple-world-map@master/world-map.svg"
+                 onerror="this.style.display='none'">
+            <div id="zlhOrigDots" style="position:absolute;inset:0;"></div>
+          </div>
+          <div class="zlh-origins-list" id="zlhOrigList"></div>
         </div>
       </main>
 
@@ -1356,6 +1456,102 @@ body.sidebar-pinned .hdr, body.sidebar-pinned header.hdr{margin-left:0;}
   </div>
 </div>
 <script>
+  // ---------- Tarjeta "Orígenes Recibidos" (ago-2026) ----------
+  // Coordenadas aproximadas (% izquierda/arriba) sobre una proyección
+  // equirectangular simple — suficiente para ubicar el origen a simple
+  // vista, no es un mapa cartográfico exacto. Cubre los países que ya
+  // existen como opciones en el formulario de embarque.
+  var _ZLH_GEO = {
+    'China':[78,35],'Hong Kong':[79,42],'Taiwan':[82,40],'Vietnam':[76,45],
+    'Korea':[83,32],'Japan':[87,32],'India':[68,42],'Indonesia':[79,55],
+    'Malasia':[76,52],'Tailandia':[75,45],'Pakistan':[64,38],'Bangladesh':[70,40],
+    'Turkey':[57,33],'Alemania':[50,25],'Italia':[51,30],'Espana':[47,30],
+    'Portugal':[45,30],'USA':[20,30],'Canada':[20,20],'Mexico':[17,40],
+    'Panamá':[22,50],'Costa Rica':[20,48],'Guatemala':[18,45],'Honduras':[19,46],
+    'Nicaragua':[19,48],'El Salvador':[18,47],'Colombia':[23,55],'Brasil':[30,62],
+    'Puerto Rico':[26,43]
+  };
+  var _ZLH_FLAGS = {
+    'China':'🇨🇳','Hong Kong':'🇭🇰','Taiwan':'🇹🇼','Vietnam':'🇻🇳','Korea':'🇰🇷','Japan':'🇯🇵',
+    'India':'🇮🇳','Indonesia':'🇮🇩','Malasia':'🇲🇾','Tailandia':'🇹🇭','Pakistan':'🇵🇰',
+    'Bangladesh':'🇧🇩','Turkey':'🇹🇷','Alemania':'🇩🇪','Italia':'🇮🇹','Espana':'🇪🇸',
+    'Portugal':'🇵🇹','USA':'🇺🇸','Canada':'🇨🇦','Mexico':'🇲🇽','Panamá':'🇵🇦',
+    'Costa Rica':'🇨🇷','Guatemala':'🇬🇹','Honduras':'🇭🇳','Nicaragua':'🇳🇮',
+    'El Salvador':'🇸🇻','Colombia':'🇨🇴','Brasil':'🇧🇷','Puerto Rico':'🇵🇷'
+  };
+  var _ZLH_NOMBRES = {
+    'Espana':'España','USA':'Estados Unidos','Japan':'Japón','Korea':'Corea del Sur','Turkey':'Turquía'
+  };
+  function _zlhOrigenPais(d){
+    // El país puede venir directo en d.pais, o embebido en d.origen ("Ciudad, País")
+    if(d.pais) return d.pais;
+    if(d.origen){
+      var partes = String(d.origen).split(',');
+      return partes[partes.length-1].trim();
+    }
+    return '';
+  }
+  function _zlhPopulateOrigenes(){
+    var mapEl = document.getElementById('zlhOrigDots');
+    var listEl = document.getElementById('zlhOrigList');
+    var totEl = document.getElementById('zlhOrigTotal');
+    if(!mapEl || !listEl) return;
+    var data = window.tendData || [];
+    var porPais = {};
+    data.forEach(function(d){
+      // FIX (ago-2026): _isUnicoD no existe como función global — solo vivía
+      // como variable local dentro de otras funciones. Referenciarla aquí
+      // tiraba un ReferenceError que congelaba toda la app en la pantalla
+      // de carga ("Preparando tu panel..."). Ahora el chequeo va inline,
+      // igual al patrón que ya usa el resto del archivo.
+      var _esUnicoOrig = !!(d.modoUnico || d.tipoEsc==='unico' || (d.esc||'').toLowerCase().includes('único') || (d.esc||'').toLowerCase().includes('unico'));
+      if(_esUnicoOrig) return; // no mezclar registros de escenario único
+      var pais = _zlhOrigenPais(d);
+      if(!pais) return;
+      if(!porPais[pais]) porPais[pais] = {count:0, valor:0};
+      porPais[pais].count++;
+      porPais[pais].valor += (d.cif || d.sc3_mercHomol || 0);
+    });
+    var paises = Object.keys(porPais);
+    if(totEl) totEl.textContent = paises.length ? (paises.length+' origen'+(paises.length!==1?'es':'')+' · '+data.length+' embarques') : '';
+    if(!paises.length){
+      mapEl.innerHTML = '';
+      listEl.innerHTML = '<div class="zlh-origins-empty">Todavía no hay embarques recibidos para mostrar en el mapa.</div>';
+      return;
+    }
+    var maxCount = Math.max.apply(null, paises.map(function(p){ return porPais[p].count; }));
+    var fmt = function(n){ return '$'+Math.round(n).toLocaleString('en-US'); };
+    // -- puntos en el mapa, con etiqueta SIEMPRE visible (como el ejemplo de
+    //    referencia: bandera + país + conteo, unida al punto con una línea).
+    //    Solo se muestra el detalle de valor total al pasar el cursor, para
+    //    no saturar el mapa de texto. Se ordena por volumen para que, si dos
+    //    quedan cerca, la más grande se dibuje primero (debajo). --
+    var mapHtml = '';
+    paises.slice().sort(function(a,b){ return porPais[b].count - porPais[a].count; }).forEach(function(pais){
+      var geo = _ZLH_GEO[pais];
+      if(!geo) return; // país sin coordenada conocida — se queda solo en la lista de abajo
+      var info = porPais[pais];
+      var size = 9 + Math.round((info.count/maxCount)*15); // 9–24px según volumen
+      var nombre = _ZLH_NOMBRES[pais] || pais;
+      var flag = _ZLH_FLAGS[pais] || '📍';
+      mapHtml += '<div class="zlh-map-dot" style="left:'+geo[0]+'%;top:'+geo[1]+'%;">'+
+        '<div class="pulse" style="width:'+size+'px;height:'+size+'px;"></div>'+
+        '<div class="core" style="width:'+size+'px;height:'+size+'px;"></div>'+
+        '<div class="zlh-map-label"><div class="chip">'+flag+' <span class="n">'+info.count+'</span></div><div class="stem"></div></div>'+
+        '<div class="zlh-map-tip">'+flag+' <b>'+nombre+'</b><div class="tipsub">'+info.count+' embarque'+(info.count!==1?'s':'')+' · '+fmt(info.valor)+' recibidos</div></div>'+
+        '</div>';
+    });
+    mapEl.innerHTML = mapHtml;
+    // -- lista ordenada por volumen (respaldo accesible + cifras exactas) --
+    var ordenados = paises.slice().sort(function(a,b){ return porPais[b].count - porPais[a].count; });
+    listEl.innerHTML = ordenados.map(function(pais){
+      var info = porPais[pais];
+      var nombre = _ZLH_NOMBRES[pais] || pais;
+      var flag = _ZLH_FLAGS[pais] || '📍';
+      return '<div class="zlh-origins-row"><span class="flag">'+flag+'</span><span class="nm">'+nombre+'</span><span class="cnt">'+info.count+' emb.</span><span class="val">'+fmt(info.valor)+'</span></div>';
+    }).join('');
+  }
+</script>
   // ---------- Widget de inicio: recordatorio ligero (sin recargar el tráfico) ----------
   function _zlhPopulateReminder(){
     var box = document.getElementById('zlhLastShip');
@@ -9105,6 +9301,7 @@ function showSplashNav(){
   // Populate KPI chips + monthly breakdown from tendData (fuente única, respeta toggle $k/$Completo)
   _zlhPopulateKPIs();
   _zlhPopulateMonthly();
+  if(typeof _zlhPopulateOrigenes==='function'){ try{ _zlhPopulateOrigenes(); }catch(e){ console.warn('Orígenes:',e); } }
   setTimeout(()=>{
     if(nav){ nav.classList.add('nav-visible'); nav.style.transform='translateY(0)'; }
     requestAnimationFrame(()=>{ if(typeof _zlhAlignRailIcons==='function') _zlhAlignRailIcons(); });
@@ -22121,6 +22318,110 @@ function _calcCostoInventario(d){
 }
 
 
+// ── Comparativo de Contenedores — copia (duplicada, decisión ago-2026) del
+//    array CONTAINERS de "Cuadro de Importación Estadístico 2025", reducida
+//    solo a mes/año/valorFobTotal (lo único que necesita esta gráfica). Si el
+//    archivo fuente se actualiza con nuevos contenedores, este bloque debe
+//    volver a regenerarse/copiarse igual para mantenerlo al día.
+var _CONT_DATA = [{"mes":1,"anio":2025,"fob":40698.0},{"mes":1,"anio":2025,"fob":103851.8},{"mes":1,"anio":2025,"fob":10950.53},{"mes":1,"anio":2025,"fob":86018.4},{"mes":1,"anio":2025,"fob":110462.5},{"mes":1,"anio":2025,"fob":112783.8},{"mes":1,"anio":2025,"fob":53687.16},{"mes":null,"anio":null,"fob":17605.84},{"mes":null,"anio":null,"fob":25940.84},{"mes":1,"anio":2025,"fob":21883.2},{"mes":1,"anio":2025,"fob":56672.25},{"mes":2,"anio":2025,"fob":54210.0},{"mes":2,"anio":2025,"fob":120222.5},{"mes":2,"anio":2025,"fob":103060.8},{"mes":2,"anio":2025,"fob":30845.06},{"mes":2,"anio":2025,"fob":12393.0},{"mes":3,"anio":2025,"fob":65482.65},{"mes":3,"anio":2025,"fob":29979.6},{"mes":3,"anio":2025,"fob":78980.8},{"mes":3,"anio":2025,"fob":47467.6},{"mes":3,"anio":2025,"fob":61238.9},{"mes":3,"anio":2025,"fob":29873.34},{"mes":3,"anio":2025,"fob":105044.25},{"mes":3,"anio":2025,"fob":61877.54},{"mes":3,"anio":2025,"fob":53741.5},{"mes":3,"anio":2025,"fob":10446.55},{"mes":3,"anio":2025,"fob":47032.17},{"mes":3,"anio":2025,"fob":122474.0},{"mes":3,"anio":2025,"fob":8938.89},{"mes":3,"anio":2025,"fob":9831.33},{"mes":3,"anio":2025,"fob":13123.05},{"mes":3,"anio":2025,"fob":227449.2},{"mes":3,"anio":2025,"fob":9300.8},{"mes":3,"anio":2025,"fob":8868.85},{"mes":3,"anio":2025,"fob":168575.45},{"mes":null,"anio":null,"fob":12393.0},{"mes":4,"anio":2025,"fob":7469.0},{"mes":4,"anio":2025,"fob":133278.75},{"mes":4,"anio":2025,"fob":59658.0},{"mes":4,"anio":2025,"fob":57987.5},{"mes":4,"anio":2025,"fob":29852.26},{"mes":4,"anio":2025,"fob":83202.0},{"mes":4,"anio":2025,"fob":46554.14},{"mes":4,"anio":2025,"fob":190120.65},{"mes":4,"anio":2025,"fob":96943.2},{"mes":4,"anio":2025,"fob":51161.2},{"mes":4,"anio":2025,"fob":142371.25},{"mes":4,"anio":2025,"fob":94823.25},{"mes":4,"anio":2025,"fob":55345.48},{"mes":4,"anio":2025,"fob":93511.31},{"mes":4,"anio":2025,"fob":143513.2},{"mes":4,"anio":2025,"fob":102400.5},{"mes":4,"anio":2025,"fob":32290.4},{"mes":4,"anio":2025,"fob":57666.8},{"mes":4,"anio":2025,"fob":131978.0},{"mes":4,"anio":2025,"fob":53341.2},{"mes":4,"anio":2025,"fob":25635.8},{"mes":4,"anio":2025,"fob":52606.5},{"mes":4,"anio":2025,"fob":16528.0},{"mes":4,"anio":2025,"fob":18831.0},{"mes":5,"anio":2025,"fob":117167.27},{"mes":5,"anio":2025,"fob":84342.0},{"mes":5,"anio":2025,"fob":50097.7},{"mes":5,"anio":2025,"fob":40657.7},{"mes":5,"anio":2025,"fob":53856.8},{"mes":5,"anio":2025,"fob":144249.75},{"mes":5,"anio":2025,"fob":51583.75},{"mes":5,"anio":2025,"fob":90988.1},{"mes":5,"anio":2025,"fob":112594.45},{"mes":5,"anio":2025,"fob":24824.12},{"mes":5,"anio":2025,"fob":59463.04},{"mes":5,"anio":2025,"fob":107897.9},{"mes":5,"anio":2025,"fob":69598.2},{"mes":5,"anio":2025,"fob":70260.1},{"mes":5,"anio":2025,"fob":86446.4},{"mes":5,"anio":2025,"fob":36641.1},{"mes":6,"anio":2025,"fob":20272.14},{"mes":5,"anio":2025,"fob":30046.18},{"mes":6,"anio":2025,"fob":46077.6},{"mes":5,"anio":2025,"fob":84472.21},{"mes":5,"anio":2025,"fob":13599.0},{"mes":5,"anio":2025,"fob":69885.43},{"mes":6,"anio":2025,"fob":29188.5},{"mes":6,"anio":2025,"fob":109170.0},{"mes":6,"anio":2025,"fob":49500.0},{"mes":6,"anio":2025,"fob":23426.0},{"mes":6,"anio":2025,"fob":31152.3},{"mes":6,"anio":2025,"fob":251178.0},{"mes":6,"anio":2025,"fob":98426.0},{"mes":6,"anio":2025,"fob":46901.2},{"mes":6,"anio":2025,"fob":150009.19},{"mes":6,"anio":2025,"fob":126573.41},{"mes":6,"anio":2025,"fob":61815.26},{"mes":6,"anio":2025,"fob":159519.1},{"mes":6,"anio":2025,"fob":85163.42},{"mes":6,"anio":2025,"fob":19283.4},{"mes":6,"anio":2025,"fob":26748.41},{"mes":6,"anio":2025,"fob":17002.67},{"mes":6,"anio":2025,"fob":15661.6},{"mes":6,"anio":2025,"fob":31948.36},{"mes":6,"anio":2025,"fob":19958.4},{"mes":6,"anio":2025,"fob":32464.2},{"mes":6,"anio":2025,"fob":16651.66},{"mes":6,"anio":2025,"fob":28912.93},{"mes":6,"anio":2025,"fob":102017.5},{"mes":7,"anio":2025,"fob":21891.44},{"mes":7,"anio":2025,"fob":45336.0},{"mes":7,"anio":2025,"fob":81173.95},{"mes":7,"anio":2025,"fob":19459.5},{"mes":7,"anio":2025,"fob":137103.7},{"mes":7,"anio":2025,"fob":78819.45},{"mes":7,"anio":2025,"fob":18704.2},{"mes":null,"anio":null,"fob":139718.15},{"mes":7,"anio":2025,"fob":29898.59},{"mes":7,"anio":2025,"fob":22927.08},{"mes":7,"anio":2025,"fob":110797.8},{"mes":7,"anio":2025,"fob":40744.8},{"mes":7,"anio":2025,"fob":39927.0},{"mes":7,"anio":2025,"fob":123110.02},{"mes":7,"anio":2025,"fob":37510.35},{"mes":7,"anio":2025,"fob":39228.11},{"mes":7,"anio":2025,"fob":22800.0},{"mes":7,"anio":2025,"fob":70822.35},{"mes":7,"anio":2025,"fob":182524.45},{"mes":7,"anio":2025,"fob":49500.0},{"mes":7,"anio":2025,"fob":15750.0},{"mes":7,"anio":2025,"fob":42170.4},{"mes":8,"anio":2025,"fob":42621.65},{"mes":null,"anio":null,"fob":43241.02},{"mes":null,"anio":null,"fob":33386.03},{"mes":8,"anio":2025,"fob":26783.05},{"mes":7,"anio":2025,"fob":42622.0},{"mes":7,"anio":2025,"fob":61405.2},{"mes":7,"anio":2025,"fob":48259.68},{"mes":8,"anio":2025,"fob":152157.0},{"mes":8,"anio":2025,"fob":31397.4},{"mes":null,"anio":null,"fob":11465.1},{"mes":8,"anio":2025,"fob":21940.0},{"mes":null,"anio":null,"fob":61459.19},{"mes":8,"anio":2025,"fob":38923.89},{"mes":8,"anio":2025,"fob":91258.64},{"mes":8,"anio":2025,"fob":16756.3},{"mes":8,"anio":2025,"fob":15712.62},{"mes":9,"anio":2025,"fob":23409.0},{"mes":8,"anio":2025,"fob":30811.96},{"mes":9,"anio":2025,"fob":22960.14},{"mes":9,"anio":2025,"fob":37439.79},{"mes":9,"anio":2025,"fob":57672.71},{"mes":9,"anio":2025,"fob":54656.4},{"mes":9,"anio":2025,"fob":20979.0},{"mes":9,"anio":2025,"fob":35684.0},{"mes":9,"anio":2025,"fob":0},{"mes":9,"anio":2025,"fob":33829.43},{"mes":9,"anio":2025,"fob":16270.9},{"mes":9,"anio":2025,"fob":13599.9},{"mes":9,"anio":2025,"fob":84769.3},{"mes":9,"anio":2025,"fob":54926.87},{"mes":null,"anio":null,"fob":50613.93},{"mes":null,"anio":null,"fob":103298.08},{"mes":9,"anio":2025,"fob":27549.06},{"mes":9,"anio":2025,"fob":31109.34},{"mes":9,"anio":2025,"fob":37890.86},{"mes":9,"anio":2025,"fob":13607.06},{"mes":9,"anio":2025,"fob":112545.75},{"mes":9,"anio":2025,"fob":14680.8},{"mes":9,"anio":2025,"fob":32145.82},{"mes":9,"anio":2025,"fob":34560.1},{"mes":9,"anio":2025,"fob":56038.32},{"mes":9,"anio":2025,"fob":33406.3},{"mes":9,"anio":2025,"fob":18744.89},{"mes":9,"anio":2025,"fob":53103.12},{"mes":9,"anio":2025,"fob":75909.6},{"mes":10,"anio":2025,"fob":15655.25},{"mes":9,"anio":2025,"fob":54775.2},{"mes":9,"anio":2025,"fob":20860.2},{"mes":10,"anio":2025,"fob":22675.47},{"mes":null,"anio":null,"fob":12540.57},{"mes":10,"anio":2025,"fob":8686.0},{"mes":10,"anio":2025,"fob":121011.5},{"mes":null,"anio":null,"fob":35166.54},{"mes":10,"anio":2025,"fob":23643.15},{"mes":10,"anio":2025,"fob":24583.5},{"mes":10,"anio":2025,"fob":19417.23},{"mes":10,"anio":2025,"fob":20795.76},{"mes":10,"anio":2025,"fob":35160.44},{"mes":10,"anio":2025,"fob":101560.5},{"mes":10,"anio":2025,"fob":91519.65},{"mes":null,"anio":null,"fob":75908.75},{"mes":10,"anio":2025,"fob":173967.81},{"mes":10,"anio":2025,"fob":87856.94},{"mes":10,"anio":2025,"fob":110753.5},{"mes":10,"anio":2025,"fob":156287.15},{"mes":10,"anio":2025,"fob":178504.0},{"mes":10,"anio":2025,"fob":10856.19},{"mes":null,"anio":null,"fob":31064.21},{"mes":10,"anio":2025,"fob":13442.24},{"mes":10,"anio":2025,"fob":8686.0},{"mes":10,"anio":2025,"fob":21732.0},{"mes":10,"anio":2025,"fob":7920.0},{"mes":10,"anio":2025,"fob":15960.0},{"mes":10,"anio":2025,"fob":13599.9},{"mes":10,"anio":2025,"fob":94806.25},{"mes":10,"anio":2025,"fob":49500.0},{"mes":null,"anio":null,"fob":41202.6},{"mes":null,"anio":null,"fob":28674.4},{"mes":10,"anio":2025,"fob":125127.55},{"mes":10,"anio":2025,"fob":24843.0},{"mes":10,"anio":2025,"fob":121509.5},{"mes":11,"anio":2025,"fob":13771.15},{"mes":11,"anio":2025,"fob":25873.9},{"mes":11,"anio":2025,"fob":215391.6},{"mes":10,"anio":2025,"fob":27880.97},{"mes":11,"anio":2025,"fob":160309.3},{"mes":10,"anio":2025,"fob":12495.0},{"mes":11,"anio":2025,"fob":181710.55},{"mes":11,"anio":2025,"fob":181710.55},{"mes":11,"anio":2025,"fob":3000.0},{"mes":11,"anio":2025,"fob":95619.5},{"mes":11,"anio":2025,"fob":21457.8},{"mes":11,"anio":2025,"fob":15236.28},{"mes":11,"anio":2025,"fob":175800.66},{"mes":11,"anio":2025,"fob":106777.0},{"mes":null,"anio":null,"fob":56895.34},{"mes":11,"anio":2025,"fob":113151.0},{"mes":11,"anio":2025,"fob":61714.85},{"mes":11,"anio":2025,"fob":135937.0},{"mes":11,"anio":2025,"fob":17354.64},{"mes":11,"anio":2025,"fob":120502.55},{"mes":12,"anio":2025,"fob":27873.12},{"mes":12,"anio":2025,"fob":18711.0},{"mes":null,"anio":null,"fob":34216.88},{"mes":12,"anio":2025,"fob":54275.5},{"mes":12,"anio":2025,"fob":58098.12},{"mes":12,"anio":2025,"fob":28682.64},{"mes":12,"anio":2025,"fob":35085.2},{"mes":12,"anio":2025,"fob":97142.69},{"mes":12,"anio":2025,"fob":77810.0},{"mes":12,"anio":2025,"fob":184963.26},{"mes":12,"anio":2025,"fob":70095.4},{"mes":12,"anio":2025,"fob":28615.35},{"mes":12,"anio":2025,"fob":22800.0},{"mes":1,"anio":2025,"fob":36400.72},{"mes":12,"anio":2025,"fob":37176.32},{"mes":2,"anio":2025,"fob":28509.4},{"mes":3,"anio":2025,"fob":20064.0},{"mes":4,"anio":2025,"fob":25877.79},{"mes":4,"anio":2025,"fob":30744.72},{"mes":5,"anio":2025,"fob":18755.0},{"mes":5,"anio":2025,"fob":25182.09},{"mes":6,"anio":2025,"fob":18935.74},{"mes":8,"anio":2025,"fob":17778.6},{"mes":null,"anio":null,"fob":12850.0},{"mes":null,"anio":null,"fob":12850.0},{"mes":11,"anio":2025,"fob":11474.38},{"mes":12,"anio":2025,"fob":0},{"mes":2,"anio":2025,"fob":6481.25},{"mes":3,"anio":2025,"fob":3108},{"mes":4,"anio":2025,"fob":6930.47},{"mes":7,"anio":2025,"fob":21885},{"mes":8,"anio":2025,"fob":7364},{"mes":null,"anio":null,"fob":9717.36},{"mes":9,"anio":2025,"fob":3772},{"mes":9,"anio":2025,"fob":3000},{"mes":9,"anio":2025,"fob":7447.8},{"mes":10,"anio":2025,"fob":24405.75},{"mes":11,"anio":2025,"fob":9919.28},{"mes":12,"anio":2025,"fob":3230},{"mes":11,"anio":2025,"fob":175289.4},{"mes":10,"anio":2025,"fob":49500},{"mes":12,"anio":2025,"fob":43195.3},{"mes":null,"anio":null,"fob":14400},{"mes":1,"anio":2026,"fob":67990.25},{"mes":1,"anio":2026,"fob":89238.61},{"mes":null,"anio":2026,"fob":20970.5},{"mes":1,"anio":2026,"fob":18974.8},{"mes":1,"anio":2026,"fob":89536.15},{"mes":1,"anio":2026,"fob":34890.54},{"mes":1,"anio":2026,"fob":32763.03},{"mes":2,"anio":2026,"fob":29801.36},{"mes":1,"anio":2026,"fob":191355.95},{"mes":2,"anio":2026,"fob":52494.0},{"mes":2,"anio":2026,"fob":57987.48},{"mes":2,"anio":2026,"fob":218940.46},{"mes":2,"anio":2026,"fob":39679.25},{"mes":2,"anio":2026,"fob":22895.25},{"mes":2,"anio":2026,"fob":162585.65},{"mes":2,"anio":2026,"fob":108541.5},{"mes":3,"anio":2026,"fob":118010.5},{"mes":3,"anio":2026,"fob":81812.0},{"mes":3,"anio":2026,"fob":134047.5},{"mes":3,"anio":2026,"fob":98193.13},{"mes":3,"anio":2026,"fob":19519.37},{"mes":3,"anio":2026,"fob":10187.1},{"mes":3,"anio":2026,"fob":28975.0},{"mes":3,"anio":2026,"fob":28975.0},{"mes":3,"anio":2026,"fob":84500.0},{"mes":3,"anio":2026,"fob":102843.0},{"mes":3,"anio":2026,"fob":107741.9},{"mes":3,"anio":2026,"fob":80000.0},{"mes":3,"anio":2026,"fob":59111.0},{"mes":3,"anio":2026,"fob":70830.75},{"mes":3,"anio":2026,"fob":64475.0},{"mes":4,"anio":2026,"fob":67303.7},{"mes":4,"anio":2026,"fob":10187.1},{"mes":4,"anio":2026,"fob":45736.0},{"mes":4,"anio":2026,"fob":43422.0},{"mes":null,"anio":2026,"fob":29523.0},{"mes":null,"anio":2026,"fob":93235.75},{"mes":null,"anio":2026,"fob":64793.9},{"mes":4,"anio":2026,"fob":32581.9},{"mes":null,"anio":2026,"fob":53743.0},{"mes":null,"anio":2026,"fob":17728.4},{"mes":null,"anio":2026,"fob":104547.14},{"mes":null,"anio":2026,"fob":25012.8},{"mes":4,"anio":2026,"fob":124744.5},{"mes":4,"anio":2026,"fob":34045.4},{"mes":4,"anio":2026,"fob":170762.1},{"mes":null,"anio":2026,"fob":58589.25},{"mes":null,"anio":2026,"fob":29916.95},{"mes":null,"anio":2026,"fob":22800.0},{"mes":4,"anio":2026,"fob":33017.56},{"mes":4,"anio":2026,"fob":29312.45},{"mes":null,"anio":2026,"fob":51118.0},{"mes":4,"anio":2026,"fob":144466.5},{"mes":4,"anio":2026,"fob":33357.98},{"mes":4,"anio":2026,"fob":123800.85},{"mes":4,"anio":2026,"fob":44460.0},{"mes":5,"anio":2026,"fob":28371.12},{"mes":5,"anio":2026,"fob":35219.1},{"mes":5,"anio":2026,"fob":20906.09},{"mes":5,"anio":2026,"fob":23516.6},{"mes":5,"anio":2026,"fob":37952.0},{"mes":5,"anio":2026,"fob":78407.0},{"mes":5,"anio":2026,"fob":21668.5},{"mes":null,"anio":2026,"fob":135661.0},{"mes":5,"anio":2026,"fob":195347.4},{"mes":5,"anio":2026,"fob":114064.32},{"mes":5,"anio":2026,"fob":82893.25},{"mes":5,"anio":2026,"fob":24361.05},{"mes":5,"anio":2026,"fob":28052.0},{"mes":5,"anio":2026,"fob":57450.25},{"mes":5,"anio":2026,"fob":77977.6},{"mes":5,"anio":2026,"fob":124835.25},{"mes":5,"anio":2026,"fob":25104.03},{"mes":5,"anio":2026,"fob":9285.0},{"mes":5,"anio":2026,"fob":246769.13},{"mes":5,"anio":2026,"fob":25416.3},{"mes":5,"anio":2026,"fob":27174.4},{"mes":5,"anio":2026,"fob":14500.0},{"mes":5,"anio":2026,"fob":111445.75},{"mes":6,"anio":2026,"fob":82040.4},{"mes":6,"anio":2026,"fob":103562.0},{"mes":6,"anio":2026,"fob":6437.5},{"mes":6,"anio":2026,"fob":23961.76},{"mes":6,"anio":2026,"fob":49896.96},{"mes":6,"anio":2026,"fob":268000.0},{"mes":6,"anio":2026,"fob":105467.25},{"mes":6,"anio":2026,"fob":15138.0},{"mes":6,"anio":2026,"fob":30837.0},{"mes":null,"anio":2026,"fob":26740.85},{"mes":6,"anio":2026,"fob":55296.94},{"mes":6,"anio":2026,"fob":14720.0},{"mes":6,"anio":2026,"fob":22157.39},{"mes":6,"anio":2026,"fob":94492.63},{"mes":6,"anio":2026,"fob":32226.03},{"mes":6,"anio":2026,"fob":99851.15},{"mes":6,"anio":2026,"fob":31882.88},{"mes":6,"anio":2026,"fob":25302.55},{"mes":6,"anio":2026,"fob":53452.22},{"mes":6,"anio":2026,"fob":45056.64},{"mes":6,"anio":2026,"fob":16884.0},{"mes":7,"anio":2026,"fob":50200.95},{"mes":7,"anio":2026,"fob":9600.0},{"mes":7,"anio":2026,"fob":10481.0},{"mes":null,"anio":2026,"fob":10026.0},{"mes":7,"anio":2026,"fob":52652.8},{"mes":7,"anio":2026,"fob":20467.95},{"mes":7,"anio":2026,"fob":169446.96},{"mes":6,"anio":2026,"fob":42974.17},{"mes":null,"anio":2026,"fob":88676.65},{"mes":null,"anio":2026,"fob":88147.85},{"mes":null,"anio":2026,"fob":43658.04},{"mes":null,"anio":2026,"fob":55869.75},{"mes":null,"anio":2026,"fob":44397.04},{"mes":null,"anio":2026,"fob":61052.7},{"mes":null,"anio":2026,"fob":58379.07},{"mes":null,"anio":2026,"fob":672.0},{"mes":null,"anio":2026,"fob":381201.4},{"mes":null,"anio":2026,"fob":0},{"mes":null,"anio":2026,"fob":39777.0},{"mes":null,"anio":2026,"fob":113886.48},{"mes":null,"anio":2026,"fob":117006.0},{"mes":null,"anio":2026,"fob":0},{"mes":null,"anio":2026,"fob":44301.0},{"mes":null,"anio":2026,"fob":67301.28},{"mes":null,"anio":2026,"fob":25680.0},{"mes":null,"anio":2026,"fob":51543.88},{"mes":null,"anio":2026,"fob":36621.5},{"mes":null,"anio":2026,"fob":66830.8},{"mes":null,"anio":2026,"fob":8802.8},{"mes":null,"anio":2026,"fob":615.88},{"mes":null,"anio":2026,"fob":195303.0},{"mes":null,"anio":2026,"fob":61621.2},{"mes":null,"anio":2026,"fob":6558.0},{"mes":null,"anio":2026,"fob":5824.2},{"mes":null,"anio":2026,"fob":16126.0},{"mes":null,"anio":2026,"fob":0},{"mes":null,"anio":2026,"fob":0},{"mes":null,"anio":2026,"fob":0},{"mes":null,"anio":2026,"fob":0},{"mes":null,"anio":2026,"fob":0},{"mes":null,"anio":2026,"fob":0},{"mes":null,"anio":2026,"fob":0},{"mes":null,"anio":2026,"fob":104102.5},{"mes":null,"anio":2026,"fob":0},{"mes":null,"anio":2026,"fob":99961.95},{"mes":null,"anio":2026,"fob":4609.8}];
+
+function _renderContainerComparativo(){
+  var canvas = document.getElementById('cont-cmp-canvas');
+  if(!canvas) return;
+  var years = [...new Set(_CONT_DATA.map(function(d){return d.anio;}).filter(Boolean))].sort();
+  if(!years.length) return;
+  var yA = years[years.length-2] !== undefined ? years[years.length-2] : years[0];
+  var yB = years[years.length-1];
+  function monthly(y){
+    var counts=new Array(12).fill(0), fob=new Array(12).fill(0);
+    _CONT_DATA.forEach(function(d){
+      if(d.anio===y && d.mes){ counts[d.mes-1]++; fob[d.mes-1]+=d.fob||0; }
+    });
+    return {counts:counts, fob:fob};
+  }
+  var mA = monthly(yA), mB = monthly(yB);
+  var dpr = window.devicePixelRatio||1;
+  var W = canvas.getBoundingClientRect().width || canvas.offsetWidth;
+  if(!W || W<10){
+    var _r=(canvas._retries||0)+1; canvas._retries=_r;
+    if(_r<=5){ requestAnimationFrame(function(){ setTimeout(_renderContainerComparativo,80); }); }
+    return;
+  }
+  canvas._retries=0;
+  W = Math.max(W,280);
+  var H=200;
+  canvas.width=W*dpr; canvas.height=H*dpr;
+  canvas.style.height=H+'px'; canvas.style.width='100%';
+  var ctx=canvas.getContext('2d');
+  ctx.scale(dpr,dpr);
+  ctx.clearRect(0,0,W,H);
+  var MESES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  var pad={l:28,r:8,t:16,b:22};
+  var cw=W-pad.l-pad.r, ch=H-pad.t-pad.b;
+  var maxV=Math.max.apply(null, mA.counts.concat(mB.counts).concat([1]));
+  var groupW = cw/12;
+  var barW = Math.max(6, Math.min(14, groupW/2 - 3));
+  for(var i=0;i<=4;i++){
+    var gy=pad.t+ch*(1-i/4);
+    ctx.strokeStyle='rgba(48,54,61,.4)'; ctx.lineWidth=1; ctx.setLineDash([4,4]);
+    ctx.beginPath(); ctx.moveTo(pad.l,gy); ctx.lineTo(pad.l+cw,gy); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle='rgba(139,148,158,.7)'; ctx.font='9px Inter'; ctx.textAlign='right';
+    ctx.fillText(Math.round(maxV*i/4), pad.l-5, gy+3);
+  }
+  var bars=[];
+  for(var m=0;m<12;m++){
+    var gx = pad.l + groupW*m;
+    var xA = gx + groupW/2 - barW - 2;
+    var xB = gx + groupW/2 + 2;
+    var hA = ch*(mA.counts[m]/maxV);
+    var hB = ch*(mB.counts[m]/maxV);
+    ctx.fillStyle = 'rgba(31,111,235,.75)';
+    ctx.fillRect(xA, pad.t+ch-hA, barW, hA);
+    ctx.fillStyle = 'rgba(63,185,80,.85)';
+    ctx.fillRect(xB, pad.t+ch-hB, barW, hB);
+    ctx.fillStyle='rgba(139,148,158,.8)'; ctx.font='9px Inter'; ctx.textAlign='center';
+    ctx.fillText(MESES[m], gx+groupW/2, pad.t+ch+14);
+    bars.push({x:xA,y:pad.t+ch-hA,w:barW,h:Math.max(hA,2),year:yA,month:m,count:mA.counts[m],fob:mA.fob[m]});
+    bars.push({x:xB,y:pad.t+ch-hB,w:barW,h:Math.max(hB,2),year:yB,month:m,count:mB.counts[m],fob:mB.fob[m]});
+  }
+  canvas._bars = bars;
+  canvas._meses = MESES;
+  if(!canvas._hoverBound){
+    canvas._hoverBound = true;
+    canvas.addEventListener('mousemove', _contCmpHover);
+    canvas.addEventListener('mouseleave', function(){ if(typeof _provTipHide==='function') _provTipHide(); });
+    canvas.addEventListener('touchstart', function(e){
+      _contCmpHover(e.touches[0], canvas);
+      clearTimeout(window._provTipT);
+      window._provTipT=setTimeout(function(){ if(typeof _provTipHide==='function') _provTipHide(); },3000);
+    });
+  }
+  var legendEl = document.getElementById('cont-cmp-legend');
+  if(legendEl){
+    legendEl.innerHTML =
+      '<span style="display:inline-flex;align-items:center;gap:4px;margin-right:12px"><span style="width:9px;height:9px;border-radius:2px;background:rgba(31,111,235,.85);display:inline-block"></span>'+yA+'</span>'+
+      '<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:2px;background:rgba(63,185,80,.9);display:inline-block"></span>'+yB+'</span>';
+  }
+}
+// Hit-test de barras del comparativo de contenedores + tooltip flotante
+// (reutiliza el mismo _provTipShow/_provTipHide de Top 10 Proveedores).
+function _contCmpHover(ev, canvasArg){
+  var canvas = canvasArg || (ev.currentTarget || ev.target);
+  if(!canvas || !canvas._bars) return;
+  var rect = canvas.getBoundingClientRect();
+  var mx = ev.clientX - rect.left, my = ev.clientY - rect.top;
+  var hit = null;
+  canvas._bars.forEach(function(b){
+    if(mx>=b.x && mx<=b.x+b.w && my>=b.y-2 && my<=b.y+b.h) hit=b;
+  });
+  if(!hit){ if(typeof _provTipHide==='function') _provTipHide(); return; }
+  var html = '📦 <b>'+canvas._meses[hit.month]+' '+hit.year+'</b><br>'
+    + 'Contenedores: <b>'+hit.count+'</b><br>'
+    + 'Valor FOB: <b>$'+Number(hit.fob||0).toLocaleString('en-US',{maximumFractionDigits:0})+'</b>';
+  if(typeof _provTipShow==='function') _provTipShow(ev, html);
+}
+
 function renderDashboardKPIs(data){
   const els=Array.from(document.querySelectorAll('[id="dash-kpi-block"]'));
   const el=els.length ? els[els.length-1] : null;
@@ -22268,6 +22569,17 @@ function renderDashboardKPIs(data){
         <div class="kpi-lbl">Facturas Procesadas</div>
         <div class="kpi-val">${totalFact}</div>
         <div class="kpi-sub">Líneas de factura totales</div>
+      </div>
+      <div class="kpi-card g" style="grid-column:1 / -1;display:block">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+          <span class="kpi-icon" style="margin-bottom:0">📦</span>
+          <div class="kpi-lbl" style="margin-bottom:0">Comparativo de Contenedores — Cuadro de Importación</div>
+          <span id="cont-cmp-legend" style="margin-left:auto;font-size:10px;color:var(--muted)"></span>
+        </div>
+        <div style="position:relative">
+          <canvas id="cont-cmp-canvas" style="width:100%;display:block"></canvas>
+        </div>
+        <div style="font-size:9px;color:var(--muted);margin-top:4px">Datos copiados de "Cuadro de Importación Estadístico" — pasa el cursor sobre una barra para ver el detalle.</div>
       </div>
     </div>
 
@@ -22433,6 +22745,8 @@ function renderDashboardKPIs(data){
       });
     });
   }, 1200);
+  // ── Comparativo de Contenedores (dato duplicado de Cuadro de Importación) ──
+  setTimeout(function(){ if(typeof _renderContainerComparativo==='function') _renderContainerComparativo(); }, 60);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -26333,6 +26647,36 @@ function _toggleMontoExacto(el, val){
   el.dataset.mostrandoExacto = mostrandoExacto ? '0' : '1';
 }
 
+// ── Tooltip flotante para Top 10 Proveedores: al pasar el cursor sobre un
+//    proveedor se muestra un recuadro con el desglose (ZL/IMP, % del total y
+//    N° de embarques asociados), igual al efecto hover de las gráficas de
+//    Cuadro de Importación. Un solo div reutilizado, posicionado junto al
+//    cursor. ──
+function _provTipShow(ev, html){
+  var tip = document.getElementById('_provTooltip');
+  if(!tip){
+    tip = document.createElement('div');
+    tip.id = '_provTooltip';
+    document.body.appendChild(tip);
+  }
+  tip.innerHTML = html;
+  tip.style.display = 'block';
+  _provTipMove(ev);
+}
+function _provTipMove(ev){
+  var tip = document.getElementById('_provTooltip');
+  if(!tip || tip.style.display==='none') return;
+  var x = ev.clientX + 14, y = ev.clientY + 14;
+  var maxX = window.innerWidth - tip.offsetWidth - 10;
+  var maxY = window.innerHeight - tip.offsetHeight - 10;
+  tip.style.left = Math.min(x, maxX) + 'px';
+  tip.style.top  = Math.min(y, maxY) + 'px';
+}
+function _provTipHide(){
+  var tip = document.getElementById('_provTooltip');
+  if(tip) tip.style.display = 'none';
+}
+
 function renderTopProvs(mode, deptFilter){
   mode = mode || window._top10Mode || 'global';
   window._top10Mode = mode;
@@ -26382,10 +26726,11 @@ function renderTopProvs(mode, deptFilter){
       }
       const dept = (l.dept||l.deptCat||'Sin Depto').trim();
       // Acumular — isZL se determina por embarque, no por proveedor global
-      if(!provData[prov]) provData[prov]={total:0,zl:0,imp:0,dept:{},isZL:embIsZL};
+      if(!provData[prov]) provData[prov]={total:0,zl:0,imp:0,dept:{},isZL:embIsZL,nros:new Set()};
       provData[prov].total += l.costo;
       if(embIsZL) provData[prov].zl += l.costo; else provData[prov].imp += l.costo;
       provData[prov].dept[dept] = (provData[prov].dept[dept]||0) + l.costo;
+      if(nroStr) provData[prov].nros.add(nroStr);
     });
   });
 
@@ -26504,7 +26849,14 @@ function renderTopProvs(mode, deptFilter){
       sorted.map(([prov,p],i)=>{
         const pctTotal = totalAll>0?((p.total/totalAll)*100).toFixed(1):'0.0';
         const tipo = p.isZL?'ZL':'IMP';
-        return '<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;border-bottom:1px solid rgba(48,54,61,.2)">'+
+        const nEmb = p.nros ? p.nros.size : 0;
+        const tipHtml = '📦 <b>'+esc2(prov)+'</b><br>'
+          +'Total facturado: <b>'+esc2(f(p.total))+'</b><br>'
+          +'Zona Libre: '+esc2(f(p.zl||0))+' &nbsp;·&nbsp; Importación: '+esc2(f(p.imp||0))+'<br>'
+          +'N° de embarques asociados: <b>'+nEmb+'</b><br>'
+          +'% del total Top 10: <b>'+pctTotal+'%</b>';
+        const tipAttr = tipHtml.replace(/'/g,"\\'");
+        return '<div onmousemove="_provTipMove(event)" onmouseenter="_provTipShow(event,\''+tipAttr+'\')" onmouseleave="_provTipHide()" ontouchstart="_provTipShow(event.touches[0],\''+tipAttr+'\');clearTimeout(window._provTipT);window._provTipT=setTimeout(_provTipHide,3000)" style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;border-bottom:1px solid rgba(48,54,61,.2);cursor:default">'+
           '<div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1">'+
           '<span style="font-size:10px;font-weight:700;color:var(--muted);min-width:22px;flex-shrink:0">#'+(i+1)+'</span>'+
           '<span style="font-size:10px;background:rgba(139,148,158,.12);border-radius:3px;padding:1px 6px;color:var(--muted);font-weight:600;flex-shrink:0">'+tipo+'</span>'+
@@ -27789,6 +28141,7 @@ function _initTendRealtime(){
         if(typeof _pullTendFromCloud==='function'){
           _pullTendFromCloud(true).then(function(changed){
             if(changed && typeof renderTend==='function' && document.getElementById('tendencias')) renderTend();
+            if(changed && typeof _zlhPopulateOrigenes==='function'){ try{ _zlhPopulateOrigenes(); }catch(e){ console.warn('Orígenes:',e); } }
           }).catch(function(){});
         }
       })
@@ -31232,6 +31585,7 @@ window.onload=function(){
     }
     // Refresh UI without navigating anywhere
     if(typeof renderTend==='function') renderTend();
+    if(typeof _zlhPopulateOrigenes==='function'){ try{ _zlhPopulateOrigenes(); }catch(e){ console.warn('Orígenes:',e); } }
     if(typeof renderTopProvs==='function') renderTopProvs();
     if(typeof renderDashboardKPIs==='function') renderDashboardKPIs();
     if(typeof _populateProveedorFilter==='function') _populateProveedorFilter();
