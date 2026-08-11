@@ -928,11 +928,16 @@ body.theme-light #_provTooltip{background:#fff;border-color:#d8e6df;box-shadow:0
    pero ahora como un cajón (flyout) que se desliza desde la izquierda
    HACIA LA DERECHA, no un menú que cae hacia abajo. Con el panel abierto,
    el resto del fondo se ve esmerilado (blur), no tapado de golpe. */
+/* FIX (ago-2026): el botón que abre el menú de módulos ya no vive como
+   una barra a lo ancho dentro de la columna centrada de contenido (ahí no
+   hacía nada, sólo ocupaba espacio). Ahora es un botón flotante, fijo
+   en el borde izquierdo real de la pantalla — fuera de la columna
+   centrada — igual que un disparador de sidebar convencional. */
 .zlh-topnav{
-  position:sticky; top:0; z-index:20; width:100%; box-sizing:border-box;
+  position:fixed; left:16px; top:16px; z-index:20; width:auto; box-sizing:border-box;
   display:flex; align-items:center; gap:3px;
   background:var(--zsurf); border:1px solid var(--zborder); border-radius:14px;
-  padding:7px; margin-bottom:18px;
+  padding:7px; margin-bottom:0;
   box-shadow:0 1px 2px rgba(0,0,0,.2), 0 8px 24px -10px rgba(0,0,0,.4);
 }
 .zlh-topnav-trigger-btn{
@@ -944,9 +949,13 @@ body.theme-light #_provTooltip{background:#fff;border-color:#d8e6df;box-shadow:0
 .zlh-topnav-brand{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,var(--zt),var(--zt2));display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;}
 .zlh-topnav-trigger-btn .car{font-size:10px;color:var(--zdim);}
 
-/* -- El cajón grande: se desliza desde la izquierda hacia la derecha -- */
+/* -- El cajón grande: se desliza desde la izquierda hacia la derecha --
+   FIX (ago-2026): más ancho — debe llegar casi hasta el borde donde
+   arranca la columna centrada de contenido (900px), no quedarse corto
+   a media pantalla. */
 .zlh-flyout{
-  position:fixed; left:0; top:0; bottom:0; width:310px; max-width:86vw;
+  position:fixed; left:0; top:0; bottom:0;
+  width:min(86vw, clamp(310px, calc((100vw - 900px)/2 + 30px), 520px));
   background:var(--zsurf); border-right:1px solid var(--zborder);
   z-index:25; transform:translateX(-100%);
   transition:transform .3s cubic-bezier(.25,.46,.45,.94);
@@ -1049,7 +1058,7 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
    con un ancho fijo por tarjeta (168px) que dejaba huecos irregulares según
    cuántas entraban por fila. Ahora las 8 tarjetas siempre arman una grilla
    perfecta 4x2, más grandes y con más aire, estilo panel ejecutivo. */
-.zlh-kpi-strip{display:grid !important; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:24px;}
+.zlh-kpi-strip{display:grid !important; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:24px; padding-left:0 !important; padding-right:0 !important;}
 .zlh-kpi-strip .splash-kpi-chip{
   background:var(--zsurf) !important; border:1px solid var(--zborder) !important; border-radius:14px !important;
   padding:20px 18px !important; text-align:left !important; min-width:0 !important;
@@ -1060,11 +1069,11 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
 }
 .zlh-kpi-strip .splash-kpi-chip:hover{transform:translateY(-2px); border-color:var(--zt) !important; box-shadow:0 6px 22px -8px rgba(0,0,0,.5);}
 .zlh-kpi-strip .splash-kpi-chip::before{content:''; position:absolute; top:0; left:0; right:0; height:3px; background:linear-gradient(90deg,var(--zt),var(--zg));}
-.zlh-kpi-strip .splash-kpi-chip-val{font-family:var(--zmono) !important; font-size:27px !important; color:var(--ztext) !important;}
+.zlh-kpi-strip .splash-kpi-chip-val{font-family:var(--zmono) !important; font-size:clamp(15px,1.75vw,22px) !important; color:var(--ztext) !important; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; line-height:1.15;}
 .zlh-kpi-strip .splash-kpi-chip-lbl{font-family:var(--zmono) !important; font-size:10px !important; letter-spacing:.06em; text-transform:uppercase; color:var(--zdim) !important; margin-top:8px !important;}
 @media(max-width:900px){ .zlh-kpi-strip{grid-template-columns:repeat(2,1fr);} }
 
-.zlh-section-lbl{font-family:var(--zmono); font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--zdim); margin:4px 0 10px;}
+.zlh-section-lbl{font-family:var(--zmono); font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--zdim); margin:4px auto 10px; max-width:900px; width:100%; box-sizing:border-box;}
 .zlh-month-strip{display:flex; gap:6px; overflow-x:auto; scrollbar-width:none; padding-bottom:2px; margin-bottom:22px;}
 .zlh-month-strip::-webkit-scrollbar{display:none;}
 .zlh-month-chip{flex-shrink:0; min-width:52px; background:var(--zsurf); border:1px solid var(--zborder); border-radius:10px; padding:8px 6px; text-align:center;}
@@ -1401,7 +1410,7 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
       <nav class="zlh-topnav" id="zlhTopNav">
         <button class="zlh-topnav-trigger-btn" id="zlhFlyoutTrigger" onmouseenter="_zlhFlyoutOpen()" onclick="_zlhFlyoutToggle()">
           <span class="zlh-topnav-brand">🛃</span>
-          Módulos
+          Menú
           <span class="car">▸</span>
         </button>
       </nav>
@@ -1486,7 +1495,10 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
       <main class="zlh-main">
         <div class="zlh-origins-card">
           <div class="zlh-origins-hd">
-            <h3>🌍 Orígenes de Mercancía Recibida</h3>
+            <h3 style="display:flex;flex-direction:column;gap:1px;font-weight:400;">
+              <span style="font-size:9px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--zdim);font-family:var(--zmono);">🌍 Origen</span>
+              <span style="font-size:12px;font-weight:700;color:var(--ztext);font-family:'Inter',sans-serif;">Mercancía Recibida</span>
+            </h3>
             <div style="display:flex;align-items:center;gap:10px;">
               <small id="zlhOrigTotal">—</small>
               <button type="button" class="zlh-origins-ver-btn" onclick="_zlhAbrirOrigenesModal()">Ver orígenes ▸</button>
@@ -1528,20 +1540,22 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
   // equirectangular simple — suficiente para ubicar el origen a simple
   // vista, no es un mapa cartográfico exacto. Cubre los países que ya
   // existen como opciones en el formulario de embarque.
+  /* FIX (ago-2026): coordenadas recalculadas con proyección equirectangular
+     real (x% = (lon+180)/360*100, y% = (90-lat)/180*100) tomando el centro
+     geográfico aproximado de cada país. Antes eran valores "a ojo" que
+     dejaban a Panamá flotando en pleno océano/Norteamérica en vez del
+     istmo centroamericano — con esta fórmula cada punto cae sobre su país
+     real en el mapa (mismo criterio para todos: EE.UU., China, etc.). */
   var _ZLH_GEO = {
-    'China':[78,35],'Hong Kong':[79,42],'Taiwan':[82,40],'Vietnam':[76,45],
-    'Korea':[83,32],'Japan':[87,32],'India':[68,42],'Indonesia':[79,55],
-    'Malasia':[76,52],'Tailandia':[75,45],'Pakistan':[64,38],'Bangladesh':[70,40],
-    'Turkey':[57,33],'Alemania':[50,25],'Italia':[51,30],'Espana':[47,30],
-    'Portugal':[45,30],'USA':[20,30],'Canada':[20,20],'Mexico':[17,40],
-    /* FIX (ago-2026): cadena centroamericana reordenada para que caiga en
-       la franja angosta del istmo, en línea recta y progresiva entre
-       México (17,40) y Colombia (23,55) — antes Panamá quedaba mezclada
-       con Costa Rica/México en vez de justo antes de Colombia. */
-    'Guatemala':[18,43],'Honduras':[19,44.5],'El Salvador':[18.5,44],
-    'Nicaragua':[20,46.5],'Costa Rica':[21.5,48.5],'Panamá':[23,50.5],
-    'Colombia':[23,55],'Brasil':[30,62],
-    'Puerto Rico':[26,43]
+    'China':[78.9,30.1],'Hong Kong':[81.7,37.6],'Taiwan':[83.6,36.8],'Vietnam':[80.1,42.2],
+    'Korea':[85.5,30],'Japan':[88.4,29.9],'India':[71.9,37.4],'Indonesia':[81.6,50.4],
+    'Malasia':[78.3,47.7],'Tailandia':[78,41.2],'Pakistan':[69.3,33.1],'Bangladesh':[75.1,36.8],
+    'Turkey':[59.8,28.4],'Alemania':[52.9,21.6],'Italia':[53.5,26.7],'Espana':[48.9,27.6],
+    'Portugal':[47.7,28.1],'USA':[22.6,27.9],'Canada':[20.5,18.8],'Mexico':[21.5,36.9],
+    'Guatemala':[25,41.2],'Honduras':[26.1,41.6],'El Salvador':[25.3,42.3],
+    'Nicaragua':[26.3,43.9],'Costa Rica':[26.6,44.6],'Panamá':[27.7,45.3],
+    'Colombia':[29.4,47.4],'Brasil':[35.6,57.9],
+    'Puerto Rico':[31.5,40.1]
   };
   var _ZLH_FLAGS = {
     'China':'🇨🇳','Hong Kong':'🇭🇰','Taiwan':'🇹🇼','Vietnam':'🇻🇳','Korea':'🇰🇷','Japan':'🇯🇵',
