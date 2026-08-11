@@ -889,7 +889,14 @@ body.theme-light #_provTooltip{background:#fff;border-color:#d8e6df;box-shadow:0
     radial-gradient(circle at 100% 10%, rgba(212,162,76,.08), transparent 38%),
     var(--zbg);
   border-top:none; border-radius:0; box-shadow:none; padding:0;
-  display:flex; flex-direction:column; overflow:hidden;
+  display:flex; flex-direction:column;
+  /* FIX (ago-2026): antes esto tenía overflow:hidden y el scroll vivía
+     partido entre .zlh-rail y .zlh-main por separado — el header (título,
+     KPIs, meses, resumen) quedaba fijo arriba tapando media pantalla y la
+     barra de scroll de la derecha solo movía el mapa. Ahora el panel
+     completo es el único contenedor con scroll: una sola página, un solo
+     scroll, de arriba a abajo. */
+  overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch;
 }
 /* -- full-width header banner (título + KPIs), arriba de todo -- */
 .zlh-header-full{
@@ -906,16 +913,20 @@ body.theme-light #_provTooltip{background:#fff;border-color:#d8e6df;box-shadow:0
    corriendo a lo ancho completo por fuera, así que no se nota costura. */
 .zlh-header-full > *{ max-width:900px; margin-left:auto; margin-right:auto; }
 .zlh-header-full .splash-kpi-strip{ overflow-x:visible; }
-.zlh-shell{display:flex; width:100%; flex:1; min-height:0; overflow:hidden;}
+.zlh-shell{display:flex; width:100%; align-items:flex-start;}
 
 /* -- sidebar rail: lista vertical con ícono + nombre SIEMPRE visibles
       (antes dependía de :hover/tap para mostrar el nombre en un flyout,
       y en pantallas táctiles eso no queda claro — ahora cada fila ya
       dice qué es, sin necesidad de tocarla primero). -- */
 .zlh-rail{
-  flex-shrink:0; width:250px; height:100%; background:var(--zsurf);
+  flex-shrink:0; width:250px; background:var(--zsurf);
   border-right:1px solid var(--zborder); display:flex; flex-direction:column;
-  align-items:stretch; padding:16px 10px; gap:2px; overflow-y:auto; overflow-x:hidden;
+  align-items:stretch; padding:16px 10px; gap:2px;
+  /* sticky en vez de su propio scroll: ahora el rail viaja pegado arriba
+     dentro del único scroll de la página, en lugar de ser una columna
+     con altura de 100% y scrollbar propia */
+  position:sticky; top:0; max-height:100vh; overflow-y:auto; overflow-x:hidden;
   -webkit-overflow-scrolling:touch;
 }
 .zlh-rail-brand{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--zt),var(--zt2));display:flex;align-items:center;justify-content:center;font-size:18px;margin:0 0 14px 6px;flex-shrink:0;}
@@ -940,7 +951,7 @@ body.theme-light #_provTooltip{background:#fff;border-color:#d8e6df;box-shadow:0
 .zlh-nav-item small{display:block; font-size:10px; color:var(--zdim); font-weight:500; margin-top:1px; line-height:1.3;}
 
 /* -- main content -- */
-.zlh-main{flex:1; min-width:0; height:100%; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:22px; display:flex; align-items:flex-start; justify-content:center;}
+.zlh-main{flex:1; min-width:0; padding:22px; display:flex; align-items:flex-start; justify-content:center;}
 /* ── Tarjeta "Orígenes Recibidos" (ago-2026) — versión básica, mapa tipo
    tracking pendiente evolucionar con ETA/tránsito más adelante. Reusa la
    paleta zt/zg del propio panel ZLH; nada nuevo que aprender visualmente. */
@@ -995,19 +1006,24 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
    gigantes/aplanadas ("alargadas"). Ahora es flex-wrap con un ancho de tarjeta
    fijo (no crecen más allá de --kpi-w), así que se ven parejas sin importar
    cuántas haya ni cuán ancho sea el monitor. */
-.zlh-kpi-strip{display:flex !important; flex-wrap:wrap; gap:12px; margin-bottom:22px;}
+/* FIX (ago-2026): grid parejo de 4 columnas x 2 filas — antes era flex-wrap
+   con un ancho fijo por tarjeta (168px) que dejaba huecos irregulares según
+   cuántas entraban por fila. Ahora las 8 tarjetas siempre arman una grilla
+   perfecta 4x2, más grandes y con más aire, estilo panel ejecutivo. */
+.zlh-kpi-strip{display:grid !important; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:24px;}
 .zlh-kpi-strip .splash-kpi-chip{
-  --kpi-w:168px;
-  background:var(--zsurf) !important; border:1px solid var(--zborder) !important; border-radius:13px !important;
-  padding:16px 16px 14px !important; text-align:left !important; min-width:0 !important;
-  flex:1 1 var(--kpi-w); max-width:var(--kpi-w); min-height:78px;
+  background:var(--zsurf) !important; border:1px solid var(--zborder) !important; border-radius:14px !important;
+  padding:20px 18px !important; text-align:left !important; min-width:0 !important;
+  min-height:106px;
   display:flex !important; flex-direction:column; justify-content:center;
   position:relative; overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,.2), 0 8px 24px -8px rgba(0,0,0,.35);
+  transition:transform .15s,box-shadow .15s,border-color .15s;
 }
+.zlh-kpi-strip .splash-kpi-chip:hover{transform:translateY(-2px); border-color:var(--zt) !important; box-shadow:0 6px 22px -8px rgba(0,0,0,.5);}
 .zlh-kpi-strip .splash-kpi-chip::before{content:''; position:absolute; top:0; left:0; right:0; height:3px; background:linear-gradient(90deg,var(--zt),var(--zg));}
-.zlh-kpi-strip .splash-kpi-chip-val{font-family:var(--zmono) !important; font-size:22px !important; color:var(--ztext) !important;}
-.zlh-kpi-strip .splash-kpi-chip-lbl{font-family:var(--zmono) !important; font-size:9.5px !important; letter-spacing:.06em; text-transform:uppercase; color:var(--zdim) !important; margin-top:6px !important;}
-@media(max-width:480px){ .zlh-kpi-strip .splash-kpi-chip{ --kpi-w:calc(50% - 6px); } }
+.zlh-kpi-strip .splash-kpi-chip-val{font-family:var(--zmono) !important; font-size:27px !important; color:var(--ztext) !important;}
+.zlh-kpi-strip .splash-kpi-chip-lbl{font-family:var(--zmono) !important; font-size:10px !important; letter-spacing:.06em; text-transform:uppercase; color:var(--zdim) !important; margin-top:8px !important;}
+@media(max-width:900px){ .zlh-kpi-strip{grid-template-columns:repeat(2,1fr);} }
 
 .zlh-section-lbl{font-family:var(--zmono); font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--zdim); margin:4px 0 10px;}
 .zlh-month-strip{display:flex; gap:6px; overflow-x:auto; scrollbar-width:none; padding-bottom:2px; margin-bottom:22px;}
@@ -1441,17 +1457,36 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
             <h3>🌍 Orígenes de Mercancía Recibida</h3>
             <small id="zlhOrigTotal">—</small>
           </div>
-          <div class="zlh-origins-sub">Pasa el cursor sobre un punto para ver el detalle. Próximamente: tránsito en vivo y ETA estimado por origen.</div>
+          <div class="zlh-origins-sub">Pasa el cursor sobre un punto para ver el detalle.</div>
           <div class="zlh-map-wrap" id="zlhOrigMap">
             <img class="zlh-map-img" alt="" aria-hidden="true"
                  src="https://cdn.jsdelivr.net/gh/flekschas/simple-world-map@master/world-map.svg"
                  onerror="this.style.display='none'">
             <div id="zlhOrigDots" style="position:absolute;inset:0;"></div>
           </div>
-          <div class="zlh-origins-list" id="zlhOrigList"></div>
+          <div style="margin-top:16px;text-align:center;">
+            <button type="button" class="zlh-reminder-btn" onclick="_zlhAbrirOrigenesModal()">Ver orígenes ▸</button>
+          </div>
+          <!-- FIX (ago-2026): la lista completa de países ya no se carga a
+               la vista principal (se veía desordenada / poco elegante).
+               Sigue existiendo oculta para que el JS siga llenándola con
+               los mismos datos; el botón de arriba abre un modal con este
+               mismo contenido, resumido y a demanda. -->
+          <div class="zlh-origins-list" id="zlhOrigList" style="display:none;"></div>
         </div>
       </main>
 
+    </div>
+  </div>
+
+  <!-- Modal resumido de orígenes — reemplaza la lista larga que vivía siempre visible -->
+  <div id="zlhOrigModalOverlay" style="display:none;position:fixed;inset:0;z-index:99997;background:rgba(0,0,0,.65);align-items:center;justify-content:center;padding:16px;" onclick="if(event.target===this)_zlhCerrarOrigenesModal()">
+    <div style="background:var(--zsurf,var(--s1));border:1px solid var(--zborder,var(--border));border-radius:14px;max-width:440px;width:100%;max-height:78vh;overflow-y:auto;padding:18px 20px 20px;box-shadow:0 20px 60px rgba(0,0,0,.5);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <h3 style="font-size:14px;font-weight:800;color:var(--ztext,var(--text));margin:0;font-family:'Inter',sans-serif;">🌍 Orígenes de Mercancía</h3>
+        <button type="button" onclick="_zlhCerrarOrigenesModal()" aria-label="Cerrar" style="background:none;border:none;color:var(--zmuted,var(--muted));font-size:22px;cursor:pointer;line-height:1;padding:2px 4px;">×</button>
+      </div>
+      <div id="zlhOrigModalList"></div>
     </div>
   </div>
 </div>
@@ -1550,6 +1585,19 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
       var flag = _ZLH_FLAGS[pais] || '📍';
       return '<div class="zlh-origins-row"><span class="flag">'+flag+'</span><span class="nm">'+nombre+'</span><span class="cnt">'+info.count+' emb.</span><span class="val">'+fmt(info.valor)+'</span></div>';
     }).join('');
+  }
+  // ---------- Modal "Ver orígenes" — muestra a demanda la lista completa
+  // que antes vivía siempre visible debajo del mapa ----------
+  function _zlhAbrirOrigenesModal(){
+    var src = document.getElementById('zlhOrigList');
+    var dst = document.getElementById('zlhOrigModalList');
+    if(dst) dst.innerHTML = (src && src.innerHTML) ? src.innerHTML : '<div class="zlh-origins-empty">Todavía no hay embarques recibidos para mostrar.</div>';
+    var ov = document.getElementById('zlhOrigModalOverlay');
+    if(ov) ov.style.display = 'flex';
+  }
+  function _zlhCerrarOrigenesModal(){
+    var ov = document.getElementById('zlhOrigModalOverlay');
+    if(ov) ov.style.display = 'none';
   }
 </script>
   // ---------- Widget de inicio: recordatorio ligero (sin recargar el tráfico) ----------
