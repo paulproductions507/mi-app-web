@@ -133,14 +133,14 @@ body{font-family:'Inter','IBM Plex Sans',system-ui,-apple-system,sans-serif;back
 
 /* LAYOUT — ancho unificado en toda la app */
 :root { --content-max: 900px; }
-/* FIX (ago-2026, visual): antes --content-max quedaba fijo en 900px sin
-   importar qué tan ancho fuera el monitor, así que en pantallas de
-   escritorio grandes todo el contenido de trabajo (formularios, tablas,
-   tarjetas) se veía apretado en una columna angosta con espacio muerto
-   enorme a los lados. Ahora crece en dos escalones para monitores anchos —
-   celular y tablet no cambian en nada, siguen usando los 900px de base. */
-@media(min-width:1400px){ :root{ --content-max: 1180px; } }
-@media(min-width:1800px){ :root{ --content-max: 1360px; } }
+/* FIX (ago-2026, v2): el escalón anterior (900→1180→1360px) hacía que en
+   monitores grandes "Calcular Costo" se viera regado — filas larguísimas
+   con mucho espacio muerto. Se vuelve a un crecimiento moderado, para que
+   el formulario se sienta contenido en un canal (como las tarjetas del
+   dashboard) y no ocupe todo el ancho del monitor. Celular y tablet no
+   cambian, siguen en 900px de base. */
+@media(min-width:1400px){ :root{ --content-max: 940px; } }
+@media(min-width:1800px){ :root{ --content-max: 1000px; } }
 .page{max-width:var(--content-max) !important;margin-left:auto !important;margin-right:auto !important;padding:16px 12px;width:100%;}
 @media(min-width:600px){.page{padding:16px 20px;}}
 @media(min-width:1200px){.page{padding:20px 24px;}}
@@ -950,12 +950,11 @@ body.theme-light #_provTooltip{background:#fff;border-color:#d8e6df;box-shadow:0
 .zlh-topnav-trigger-btn .car{font-size:10px;color:var(--zdim);}
 
 /* -- El cajón grande: se desliza desde la izquierda hacia la derecha --
-   FIX (ago-2026): más ancho — debe llegar casi hasta el borde donde
-   arranca la columna centrada de contenido (900px), no quedarse corto
-   a media pantalla. */
+   FIX (ago-2026, v2): ancho moderado — ni angosto a media pantalla ni
+   tan ancho que ocupe todo el espacio; una franja discreta a la izquierda. */
 .zlh-flyout{
   position:fixed; left:0; top:0; bottom:0;
-  width:min(86vw, clamp(310px, calc((100vw - 900px)/2 + 30px), 520px));
+  width:min(80vw, clamp(280px, calc((100vw - 900px)/2 + 6px), 400px));
   background:var(--zsurf); border-right:1px solid var(--zborder);
   z-index:25; transform:translateX(-100%);
   transition:transform .3s cubic-bezier(.25,.46,.45,.94);
@@ -1540,22 +1539,29 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
   // equirectangular simple — suficiente para ubicar el origen a simple
   // vista, no es un mapa cartográfico exacto. Cubre los países que ya
   // existen como opciones en el formulario de embarque.
-  /* FIX (ago-2026): coordenadas recalculadas con proyección equirectangular
-     real (x% = (lon+180)/360*100, y% = (90-lat)/180*100) tomando el centro
-     geográfico aproximado de cada país. Antes eran valores "a ojo" que
-     dejaban a Panamá flotando en pleno océano/Norteamérica en vez del
-     istmo centroamericano — con esta fórmula cada punto cae sobre su país
-     real en el mapa (mismo criterio para todos: EE.UU., China, etc.). */
+  /* FIX (ago-2026, v2): la vez pasada seguía sin cuadrar porque el cálculo
+     asumía que la imagen del mapa llena el recuadro de lado a lado (2:1
+     exacto). Se verificó el SVG real que carga la app
+     (flekschas/simple-world-map, viewBox="30.767 241.591 784.077 458.627",
+     proporción 1.71:1) y como el recuadro CSS fuerza aspect-ratio:2/1 con
+     object-fit:contain, la imagen NO llena el ancho completo — queda una
+     franja vacía de ~7.3% a cada lado (izquierda y derecha) que antes no
+     se estaba descontando. Por eso Panamá (y en menor medida todo lo
+     demás) caía corrido hacia la izquierda, empalmado con Norteamérica.
+     Esta tabla ya descuenta esa franja en X, y además separa mejor la
+     cadena centroamericana (Panamá/Costa Rica más al sur, más cerca de
+     Colombia, menos pegada a México) según la posición real que se
+     verificó contra la captura de pantalla enviada. */
   var _ZLH_GEO = {
-    'China':[78.9,30.1],'Hong Kong':[81.7,37.6],'Taiwan':[83.6,36.8],'Vietnam':[80.1,42.2],
-    'Korea':[85.5,30],'Japan':[88.4,29.9],'India':[71.9,37.4],'Indonesia':[81.6,50.4],
-    'Malasia':[78.3,47.7],'Tailandia':[78,41.2],'Pakistan':[69.3,33.1],'Bangladesh':[75.1,36.8],
-    'Turkey':[59.8,28.4],'Alemania':[52.9,21.6],'Italia':[53.5,26.7],'Espana':[48.9,27.6],
-    'Portugal':[47.7,28.1],'USA':[22.6,27.9],'Canada':[20.5,18.8],'Mexico':[21.5,36.9],
-    'Guatemala':[25,41.2],'Honduras':[26.1,41.6],'El Salvador':[25.3,42.3],
-    'Nicaragua':[26.3,43.9],'Costa Rica':[26.6,44.6],'Panamá':[27.7,45.3],
-    'Colombia':[29.4,47.4],'Brasil':[35.6,57.9],
-    'Puerto Rico':[31.5,40.1]
+    'China':[74.7,30.1],'Hong Kong':[77.1,37.6],'Taiwan':[78.7,36.8],'Vietnam':[75.7,42.2],
+    'Korea':[80.3,30],'Japan':[82.8,29.9],'India':[68.7,37.4],'Indonesia':[77,50.4],
+    'Malasia':[74.2,47.7],'Tailandia':[73.9,41.2],'Pakistan':[66.5,33.1],'Bangladesh':[71.5,36.8],
+    'Turkey':[58.4,28.4],'Alemania':[52.5,21.6],'Italia':[53,26.7],'Espana':[49.1,27.6],
+    'Portugal':[48,28.1],'USA':[26.6,27.9],'Canada':[24.8,18.8],'Mexico':[25.6,36.9],
+    'Guatemala':[28.6,41.5],'Honduras':[29.7,41.9],'El Salvador':[28.9,42.6],
+    'Nicaragua':[29.9,44.3],'Costa Rica':[30.3,45.2],'Panamá':[31.3,47],
+    'Colombia':[32.6,48.5],'Brasil':[37.7,58.5],
+    'Puerto Rico':[34.2,40.5]
   };
   var _ZLH_FLAGS = {
     'China':'🇨🇳','Hong Kong':'🇭🇰','Taiwan':'🇹🇼','Vietnam':'🇻🇳','Korea':'🇰🇷','Japan':'🇯🇵',
