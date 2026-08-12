@@ -41,7 +41,7 @@ if(!window._accNativeBound){
 // Verificación automática de versión — fuerza recarga si el servidor tiene versión nueva
 (function(){
   var VER_KEY = '_app_build_zlc';
-  var VER_BUILD = '20260616-FIX17';
+  var VER_BUILD = '20260812-FIX18';
   try {
     var saved = sessionStorage.getItem(VER_KEY);
     if(saved && saved !== VER_BUILD){
@@ -33480,16 +33480,18 @@ function _actualizarVistaPreviaComparativo(){
     var cif2 = sc2.base||sc1.base||0;
     var isExon = sc2.exon!==false;
     var ar2 = isExon?0:(sc1.arancel||0);
-    var itbms2 = sc2.itbms || ((cif2+ar2)*itbPct);
-    var tasa2 = sc2.tasa!==undefined?sc2.tasa:(sc1.tasa||0);
-    var itbTasa2 = sc1.itbmsTasaFinal!==undefined ? sc1.itbmsTasaFinal : (tasa2*itbPct);
-    var uso2=(sc2.form2!==undefined&&sc2.form2!==null&&sc2.form2!=='')?parseFloat(sc2.form2):3;
     var hon2=sc2.hon||(cif2*0.03);
-    var ag2=sc2.agente||sc1.agente||0;
-    var noMerc2=ar2+tasa2+itbTasa2+uso2+hon2+ag2;
-    var landed2=cif2+noMerc2+itbms2;
+    // FIX: el Costo No Mercancía y el Landed de CIF Express deben salir de los
+    // valores YA calculados por el motor (sc2.noMerc / sc2.landedG / sc2.factor),
+    // que sí incluyen Master Value (puente) y Flete — antes se recalculaba aquí
+    // con una fórmula incompleta (sin Master Value ni Flete) y no calzaba ni con
+    // el Dashboard del Escenario #2 ni con el sistema empresarial. Mismo arreglo
+    // que ya se aplicó para Sababa (sc3.mv) arriba en esta misma función.
+    var itbms2 = (sc2.itbms||0) + (sc2.itbmsTasaFinal!==undefined?sc2.itbmsTasaFinal:(sc1.itbmsTasaFinal||0)) + (sc2.itbmsHon||0);
+    var noMerc2 = sc2.noMerc||0;
+    var landed2 = sc2.landedG||(cif2+noMerc2+itbms2);
     var costoInv2=cif2+ar2+hon2;
-    var factor2=cif2>0?((noMerc2/cif2)*100).toFixed(2)+'%':'—';
+    var factor2=cif2>0?(((sc2.factor||1)-1)*100).toFixed(2)+'%':'—';
     cmpHtml+=_vpRow('💼','Valor Mercancía', fmt2(cif2),'var(--blue-l)');
     cmpHtml+=_vpRow('📦','Costo No Mercancía', fmt2(noMerc2),'var(--orange-l)');
     cmpHtml+=_vpRow('🧾','ITBMS', fmt2(itbms2),'var(--muted)');
