@@ -41,7 +41,7 @@ if(!window._accNativeBound){
 // Verificación automática de versión — fuerza recarga si el servidor tiene versión nueva
 (function(){
   var VER_KEY = '_app_build_zlc';
-  var VER_BUILD = '20260812-FIX19';
+  var VER_BUILD = '20260812-FIX20';
   try {
     var saved = sessionStorage.getItem(VER_KEY);
     if(saved && saved !== VER_BUILD){
@@ -23675,18 +23675,21 @@ function exportDashboardExcel(){
     };
     var _esMercancia=function(l){
       var tf=(l.tipoFac||'').toLowerCase();
-      if(!tf||tf==='mercancia') return true;
-      // Si tiene OC numérico → mercancía
-      if(l.oc && /^\d+/.test(String(l.oc).trim())) return true;
-      // Líneas auto-generadas por Sababa (_autoGasto) → siempre van a servicio, nunca omitir
+      // Líneas auto-generadas de gastos (Sababa) → siempre servicio, nunca mercancía
       if(l._autoGasto) return false;
-      // Tipos de gasto conocidos → servicio
+      // tipoFac explícito de gasto conocido → SIEMPRE servicio. Esto tiene prioridad
+      // sobre cualquier otra heurística (antes el chequeo de "OC numérico" iba primero
+      // y reclasificaba como mercancía gastos cuyo OC traía el N° de factura del
+      // proveedor empezando con dígito — de ahí la discrepancia "unos sí y otros no").
       var gastos=['flete','acarreo','honorarios','liquidacion','tasa','uso_sistema','formulario','dmce','itbms','nota_credito','gastos'];
       if(gastos.indexOf(tf)>=0) return false;
+      // Sin tipoFac, o explícitamente 'mercancia' → mercancía
+      if(!tf||tf==='mercancia') return true;
       // Conceptos calculados internos de embarques viejos → servicio (nunca omitir si tiene costo)
       var ocStr=(l.oc||'').toLowerCase();
       if(ocStr.indexOf('diferencia liq')>=0) return l.costo>0?false:null;
-      return true;
+      // Cualquier tipoFac desconocido y distinto de 'mercancia' → por seguridad, servicio/gasto
+      return false;
     };
 
     var dri=3;
@@ -23864,7 +23867,7 @@ function exportDashboardExcel(){
       if(alt) cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+C_ALT}};
     }
     var ws3=wb.addWorksheet('Por Departamento',{pageSetup:{paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1}});
-    ws3.mergeCells('A1:N1');
+    ws3.mergeCells('A1:T1');
     var t3=ws3.getCell('A1');
     t3.value='RESUMEN POR DEPARTAMENTO';
     t3.font={name:'Calibri',bold:true,size:13,color:{argb:'FF'+C_HDR_FG}};
@@ -23875,24 +23878,29 @@ function exportDashboardExcel(){
     // Fila 2: grupos ZONA LIBRE / IMPORTACIÓN
     ws3.mergeCells('A2:A3');
     hdrCell(ws3.getCell('A2'),'Departamento',C_HDR_BG,C_HDR_FG);
-    ws3.mergeCells('B2:G2');
+    ws3.mergeCells('B2:I2');
     hdrCell(ws3.getCell('B2'),'🟢 ZONA LIBRE',C_GREEN,C_HDR_FG);
-    ws3.mergeCells('H2:M2');
-    hdrCell(ws3.getCell('H2'),'🟠 IMPORTACIÓN',C_ORANGE,C_HDR_FG);
-    ws3.mergeCells('N2:N3');
-    hdrCell(ws3.getCell('N2'),'Total General\n(Costo Landed)',C_HDR_BG,C_HDR_FG);
+    ws3.mergeCells('J2:Q2');
+    hdrCell(ws3.getCell('J2'),'🟠 IMPORTACIÓN',C_ORANGE,C_HDR_FG);
+    ws3.mergeCells('R2:R3');
+    hdrCell(ws3.getCell('R2'),'Total General\n(Costo Inventario incl. ITBMS)',C_HDR_BG,C_HDR_FG);
+    ws3.mergeCells('S2:S3');
+    hdrCell(ws3.getCell('S2'),'Ahorro Total',C_HDR_BG,C_HDR_FG);
+    ws3.mergeCells('T2:T3');
+    hdrCell(ws3.getCell('T2'),'% Ahorro',C_HDR_BG,C_HDR_FG);
 
-    var subH3=['Valor Compra\n(Original)','Valor Mercancía\n(Inventario)','Costo No\nMercancía','Costo Landed\nTotal','% Import.\ns/Inventario','% Import.\ns/Compra'];
-    var cols3=[28, 16,17,16,17,12,12, 16,17,16,17,12,12, 17];
+    var subH3=['Valor Compra\n(Original)','Valor Mercancía\n(Inventario)','Costo No\nMercancía','Costo Landed\nTotal','ITBMS','% Import.\ns/Inventario','% Import.\ns/Compra','Ahorro'];
+    var cols3=[28, 16,17,16,17,14,12,12,14, 16,17,16,17,14,12,12,14, 18,14,11];
     subH3.forEach(function(h,i){ hdrCell(ws3.getCell(3,2+i),h,C_HDR_BG,C_HDR_FG); });
-    subH3.forEach(function(h,i){ hdrCell(ws3.getCell(3,8+i),h,C_HDR_BG,C_HDR_FG); });
+    subH3.forEach(function(h,i){ hdrCell(ws3.getCell(3,10+i),h,C_HDR_BG,C_HDR_FG); });
     cols3.forEach(function(w,i){ ws3.getColumn(i+1).width=w; });
     ws3.getRow(2).height=20;
     ws3.getRow(3).height=32;
 
     // Prorrateo por departamento: usa la misma lógica que la Hoja 1 (_calcCostoInventario)
-    // para que Valor Mercancía (Inventario) y Costo No Mercancía por depto sumen exacto
-    // el total real del embarque (homologado + gastos), no solo el valor "crudo" de la línea.
+    // para que Valor Mercancía (Inventario), Costo No Mercancía, ITBMS y Ahorro por depto
+    // sumen exacto el total real del embarque (homologado + gastos + ITBMS + ahorro),
+    // no solo el valor "crudo" de la línea.
     var deptMap={};
     tendFiltered.forEach(function(d){
       var invL=(d.snap&&d.snap.invLines)?d.snap.invLines:(d.invLines||[]);
@@ -23903,22 +23911,26 @@ function exportDashboardExcel(){
       var ci=typeof _calcCostoInventario==='function'?_calcCostoInventario(d):null;
       var valorMercInv=ci?(ci.mercInv||costoOrig):costoOrig;
       var noMercTotal=ci?(ci.costoNM||0):0;
+      var itbmsTotal=ci?(ci.itbms||0):0;
+      var ahorroTotal=d.ahorro||0;
       mercLines.forEach(function(l){
         var dept=l.deptCat||l.dept||'Sin Categoría';
-        if(!deptMap[dept]) deptMap[dept]={zlCompra:0,zlInv:0,zlNoMerc:0,zlN:0,impCompra:0,impInv:0,impNoMerc:0,impN:0};
+        if(!deptMap[dept]) deptMap[dept]={zlCompra:0,zlInv:0,zlNoMerc:0,zlItbms:0,zlAhorro:0,zlN:0,impCompra:0,impInv:0,impNoMerc:0,impItbms:0,impAhorro:0,impN:0};
         var share=(l.costo||0)/costoOrig;
         var lineCompra=l.costo||0;
         var lineInv=valorMercInv*share;
         var lineNoMerc=noMercTotal*share;
+        var lineItbms=itbmsTotal*share;
+        var lineAhorro=ahorroTotal*share;
         var b=deptMap[dept];
-        if(tipoMerc==='ext'){ b.impCompra+=lineCompra; b.impInv+=lineInv; b.impNoMerc+=lineNoMerc; b.impN++; }
-        else { b.zlCompra+=lineCompra; b.zlInv+=lineInv; b.zlNoMerc+=lineNoMerc; b.zlN++; }
+        if(tipoMerc==='ext'){ b.impCompra+=lineCompra; b.impInv+=lineInv; b.impNoMerc+=lineNoMerc; b.impItbms+=lineItbms; b.impAhorro+=lineAhorro; b.impN++; }
+        else { b.zlCompra+=lineCompra; b.zlInv+=lineInv; b.zlNoMerc+=lineNoMerc; b.zlItbms+=lineItbms; b.zlAhorro+=lineAhorro; b.zlN++; }
       });
     });
 
     var startRow3=4;
     var deptKeys=Object.keys(deptMap).sort();
-    var totals3={zlCompra:0,zlInv:0,zlNoMerc:0,impCompra:0,impInv:0,impNoMerc:0};
+    var totals3={zlCompra:0,zlInv:0,zlNoMerc:0,zlItbms:0,zlAhorro:0,impCompra:0,impInv:0,impNoMerc:0,impItbms:0,impAhorro:0};
     deptKeys.forEach(function(k,ri){
       var v=deptMap[k];
       var row=startRow3+ri; var alt=(ri%2===1);
@@ -23927,23 +23939,33 @@ function exportDashboardExcel(){
       var zlFactCompra=v.zlCompra>0?(v.zlNoMerc/v.zlCompra*100):0;
       var impFactInv=v.impInv>0?(v.impNoMerc/v.impInv*100):0;
       var impFactCompra=v.impCompra>0?(v.impNoMerc/v.impCompra*100):0;
+      var totalGeneral=(zlLanded+v.zlItbms)+(impLanded+v.impItbms);
+      var ahorroDept=v.zlAhorro+v.impAhorro;
+      var compraDept=v.zlCompra+v.impCompra;
+      var pctAhorroDept=compraDept>0?(ahorroDept/compraDept*100):0;
       txtCell(ws3.getCell(row,1),k,alt,true);
       moneyCell(ws3.getCell(row,2),v.zlCompra,alt);
       moneyCell(ws3.getCell(row,3),v.zlInv,alt);
       moneyCell(ws3.getCell(row,4),v.zlNoMerc,alt);
       moneyCell(ws3.getCell(row,5),zlLanded,alt);
-      pctCell(ws3.getCell(row,6),zlFactInv,alt);
-      pctCell(ws3.getCell(row,7),zlFactCompra,alt);
-      moneyCell(ws3.getCell(row,8),v.impCompra,alt);
-      moneyCell(ws3.getCell(row,9),v.impInv,alt);
-      moneyCell(ws3.getCell(row,10),v.impNoMerc,alt);
-      moneyCell(ws3.getCell(row,11),impLanded,alt);
-      pctCell(ws3.getCell(row,12),impFactInv,alt);
-      pctCell(ws3.getCell(row,13),impFactCompra,alt);
-      moneyCell(ws3.getCell(row,14),zlLanded+impLanded,alt);
+      moneyCell(ws3.getCell(row,6),v.zlItbms,alt);
+      pctCell(ws3.getCell(row,7),zlFactInv,alt);
+      pctCell(ws3.getCell(row,8),zlFactCompra,alt);
+      moneyCell(ws3.getCell(row,9),v.zlAhorro,alt);
+      moneyCell(ws3.getCell(row,10),v.impCompra,alt);
+      moneyCell(ws3.getCell(row,11),v.impInv,alt);
+      moneyCell(ws3.getCell(row,12),v.impNoMerc,alt);
+      moneyCell(ws3.getCell(row,13),impLanded,alt);
+      moneyCell(ws3.getCell(row,14),v.impItbms,alt);
+      pctCell(ws3.getCell(row,15),impFactInv,alt);
+      pctCell(ws3.getCell(row,16),impFactCompra,alt);
+      moneyCell(ws3.getCell(row,17),v.impAhorro,alt);
+      moneyCell(ws3.getCell(row,18),totalGeneral,alt);
+      moneyCell(ws3.getCell(row,19),ahorroDept,alt);
+      pctCell(ws3.getCell(row,20),pctAhorroDept,alt);
       ws3.getRow(row).height=18;
-      totals3.zlCompra+=v.zlCompra; totals3.zlInv+=v.zlInv; totals3.zlNoMerc+=v.zlNoMerc;
-      totals3.impCompra+=v.impCompra; totals3.impInv+=v.impInv; totals3.impNoMerc+=v.impNoMerc;
+      totals3.zlCompra+=v.zlCompra; totals3.zlInv+=v.zlInv; totals3.zlNoMerc+=v.zlNoMerc; totals3.zlItbms+=v.zlItbms; totals3.zlAhorro+=v.zlAhorro;
+      totals3.impCompra+=v.impCompra; totals3.impInv+=v.impInv; totals3.impNoMerc+=v.impNoMerc; totals3.impItbms+=v.impItbms; totals3.impAhorro+=v.impAhorro;
     });
 
     var totRow3=startRow3+deptKeys.length;
@@ -23954,19 +23976,26 @@ function exportDashboardExcel(){
     tl3.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF1B3A6B'}};
     tl3.alignment={horizontal:'center',vertical:'middle'};
     var zlLandedT=totals3.zlInv+totals3.zlNoMerc, impLandedT=totals3.impInv+totals3.impNoMerc;
+    var totalGeneralT=(zlLandedT+totals3.zlItbms)+(impLandedT+totals3.impItbms);
+    var ahorroTotalT=totals3.zlAhorro+totals3.impAhorro;
+    var compraTotalT=totals3.zlCompra+totals3.impCompra;
     var totVals3=[
-      totals3.zlCompra, totals3.zlInv, totals3.zlNoMerc, zlLandedT,
+      totals3.zlCompra, totals3.zlInv, totals3.zlNoMerc, zlLandedT, totals3.zlItbms,
       totals3.zlInv>0?(totals3.zlNoMerc/totals3.zlInv):0,
       totals3.zlCompra>0?(totals3.zlNoMerc/totals3.zlCompra):0,
-      totals3.impCompra, totals3.impInv, totals3.impNoMerc, impLandedT,
+      totals3.zlAhorro,
+      totals3.impCompra, totals3.impInv, totals3.impNoMerc, impLandedT, totals3.impItbms,
       totals3.impInv>0?(totals3.impNoMerc/totals3.impInv):0,
       totals3.impCompra>0?(totals3.impNoMerc/totals3.impCompra):0,
-      zlLandedT+impLandedT
+      totals3.impAhorro,
+      totalGeneralT, ahorroTotalT,
+      compraTotalT>0?(ahorroTotalT/compraTotalT):0
     ];
+    var _pctIdx3=[5,6,13,14,19];
     totVals3.forEach(function(v,i){
       var ci=2+i;
       var c=ws3.getCell(totRow3,ci);
-      if(i===4||i===5||i===10||i===11){ c.value=v; c.numFmt='0.00%'; }
+      if(_pctIdx3.indexOf(i)>=0){ c.value=v; c.numFmt='0.00%'; }
       else { c.value=v; c.numFmt='"$"#,##0.00'; }
       c.font={name:'Calibri',bold:true,size:10,color:{argb:'FFFFFFFF'}};
       c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF1B3A6B'}};
