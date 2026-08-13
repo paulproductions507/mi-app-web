@@ -41,7 +41,7 @@ if(!window._accNativeBound){
 // Verificación automática de versión — fuerza recarga si el servidor tiene versión nueva
 (function(){
   var VER_KEY = '_app_build_zlc';
-  var VER_BUILD = '20260812-FIX22';
+  var VER_BUILD = '20260812-FIX23';
   try {
     var saved = sessionStorage.getItem(VER_KEY);
     if(saved && saved !== VER_BUILD){
@@ -1571,14 +1571,29 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
      cadena centroamericana (Panamá/Costa Rica más al sur, más cerca de
      Colombia, menos pegada a México) según la posición real que se
      verificó contra la captura de pantalla enviada. */
+  /* FIX (ago-2026, v3): la v2 seguía mal — el cálculo por longitud/latitud
+     daba resultados parecidos a los ya (mal) puestos, así que el problema
+     no era la fórmula sino que la cadena centroamericana entera nunca se
+     había verificado contra el render real. Se midió en píxeles sobre la
+     captura de pantalla real que envió el usuario: se ubicó la línea
+     punteada de la frontera Panamá–Colombia que el propio mapa dibuja
+     (~28-33% x, ~53-58% y) y se confirmó que el punto de Panamá quedaba
+     claramente por ENCIMA de la franja de tierra del istmo, no sobre ella.
+     Se corrigió Panamá con esa medición directa, y se trasladó el resto de
+     la cadena centroamericana (Guatemala→Costa Rica) con el mismo
+     desplazamiento, para conservar su forma relativa (que no se había
+     reportado como incorrecta) pero aterrizada en la franja de tierra
+     correcta. Si algún país de esta cadena todavía se ve corrido, es el
+     único bloque de la tabla que sigue sin verificación 1:1 contra una
+     captura — avisar cuál para medirlo igual que Panamá. */
   var _ZLH_GEO = {
     'China':[74.7,30.1],'Hong Kong':[77.1,37.6],'Taiwan':[78.7,36.8],'Vietnam':[75.7,42.2],
     'Korea':[80.3,30],'Japan':[82.8,29.9],'India':[68.7,37.4],'Indonesia':[77,50.4],
     'Malasia':[74.2,47.7],'Tailandia':[73.9,41.2],'Pakistan':[66.5,33.1],'Bangladesh':[71.5,36.8],
     'Turkey':[58.4,28.4],'Alemania':[52.5,21.6],'Italia':[53,26.7],'Espana':[49.1,27.6],
     'Portugal':[48,28.1],'USA':[26.6,27.9],'Canada':[24.8,18.8],'Mexico':[25.6,36.9],
-    'Guatemala':[28.6,41.5],'Honduras':[29.7,41.9],'El Salvador':[28.9,42.6],
-    'Nicaragua':[29.9,44.3],'Costa Rica':[30.3,45.2],'Panamá':[31.8,45.5],
+    'Guatemala':[25.3,46.3],'Honduras':[26.4,46.7],'El Salvador':[25.6,47.4],
+    'Nicaragua':[26.6,49.1],'Costa Rica':[27.0,50.0],'Panamá':[29.0,50.0],
     'Colombia':[32.6,48.5],'Brasil':[37.7,58.5],
     'Puerto Rico':[34.2,40.5]
   };
