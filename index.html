@@ -23911,25 +23911,25 @@ function exportDashboardExcel(){
 
     // ══════════════════════════════════════
     // HOJA 2: Detalle Facturas — Mercancía y Servicio separados
-    // Columnas: N°Emb|Desc|Fecha|Trámite|Corredor|Tipo|Proveedor|Depto|OC|N°Factura|Val.Original|Val.Inventario|Gastos|Costo Landed|Notas
+    // Columnas: N°Emb|Desc|Fecha|Trámite|Corredor|Tipo|Tipo Proveedor|Proveedor|Depto|OC|N°Factura|Val.Original|Val.Inventario|Gastos|ITBMS|Costo Landed|Notas
     // ══════════════════════════════════════
     var ws2=wb.addWorksheet('Detalle Facturas');
-    var _ncols2=16;
-    ws2.mergeCells('A1:P1');
+    var _ncols2=17;
+    ws2.mergeCells('A1:Q1');
     var t2=ws2.getCell('A1');
     t2.value='DETALLE DE FACTURAS POR EMBARQUE';
     t2.font={name:'Calibri',bold:true,size:13,color:{argb:'FF'+C_HDR_FG}};
     t2.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+C_TITLE}};
     t2.alignment={horizontal:'center',vertical:'middle'};
     ws2.getRow(1).height=28;
-    var hdrs2=['N° Embarque','Descripción','Fecha','Tipo Trámite','Corredor','Tipo Factura','Proveedor','Departamento','Orden de Compra','N° Factura','Val. Original','Val. Inventario','Gastos','ITBMS','Costo Landed','Notas'];
-    var cols2=[13,28,12,14,20,18,26,22,18,18,16,16,16,14,17,32];
+    var hdrs2=['N° Embarque','Descripción','Fecha','Tipo Trámite','Corredor','Tipo Factura','Tipo Proveedor','Proveedor','Departamento','Orden de Compra','N° Factura','Val. Original','Val. Inventario','Gastos','ITBMS','Costo Landed','Notas'];
+    var cols2=[13,28,12,14,20,18,16,26,22,18,18,16,16,16,14,17,32];
     hdrs2.forEach(function(h,i){
       hdrCell(ws2.getCell(2,i+1),h,C_HDR_BG,C_HDR_FG);
       ws2.getColumn(i+1).width=cols2[i];
     });
     ws2.getRow(2).height=32;
-    ws2.autoFilter={from:{row:2,column:1},to:{row:2,column:16}};
+    ws2.autoFilter={from:{row:2,column:1},to:{row:2,column:17}};
 
     // Helpers tipo factura
     var _tipoFacLabel=function(tf,l){
@@ -23967,6 +23967,8 @@ function exportDashboardExcel(){
       var _costoOrigEmb=d.cif||d.fob||d.costoOrig||0;
       var fobHomolEmb=_ci?(_ci.mercInv||_costoOrigEmb):_costoOrigEmb;
       var _noMercEmb=_ci?(_ci.costoNM||0):0;
+      // Tipo Proveedor a nivel de embarque: Zona Libre vs Importación (misma lógica que Hoja 3)
+      var _tipoProvEmb=((d.snap&&d.snap.tipo)||d.tipo||'ZL')==='EXT'?'Importación':'Zona Libre';
 
       // Separar mercancía vs servicio, omitir conceptos internos calculados
       var mercLines=[]; var svcLines=[];
@@ -23997,25 +23999,30 @@ function exportDashboardExcel(){
         tcM.font={name:'Calibri',size:9,bold:true,color:{argb:'FF1E8449'}};
         tcM.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+(alt?'D5F5E3':'EAFAF1')}};
         tcM.alignment={horizontal:'center',vertical:'middle'};
-        txtCell(ws2.getCell(dri,7),l.prov||'—',alt);
-        txtCell(ws2.getCell(dri,8),l.deptCat||l.dept||'—',alt);
-        centerCell(ws2.getCell(dri,9),l.oc||'—',alt);          // OC
-        centerCell(ws2.getCell(dri,10),l.numFact||l.nfac||'—',alt); // N° Factura
-        moneyCell(ws2.getCell(dri,11),costoOrig,alt);           // Val. Original
-        moneyCell(ws2.getCell(dri,12),costoInv_merc,alt);       // Val. Inventario
+        // Tipo Proveedor: Zona Libre / Importación
+        var tpM=ws2.getCell(dri,7); tpM.value=_tipoProvEmb;
+        tpM.font={name:'Calibri',size:9,bold:true,color:{argb:'FF'+(_tipoProvEmb==='Zona Libre'?'1E8449':'B7770D')}};
+        tpM.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+(_tipoProvEmb==='Zona Libre'?(alt?'D5F5E3':'EAFAF1'):(alt?'FDEBD0':'FEF9EF'))}};
+        tpM.alignment={horizontal:'center',vertical:'middle'};
+        txtCell(ws2.getCell(dri,8),l.prov||'—',alt);
+        txtCell(ws2.getCell(dri,9),l.deptCat||l.dept||'—',alt);
+        centerCell(ws2.getCell(dri,10),l.oc||'—',alt);          // OC
+        centerCell(ws2.getCell(dri,11),l.numFact||l.nfac||'—',alt); // N° Factura
+        moneyCell(ws2.getCell(dri,12),costoOrig,alt);           // Val. Original
+        moneyCell(ws2.getCell(dri,13),costoInv_merc,alt);       // Val. Inventario
         // Gastos vacío en mercancía
-        var gcM=ws2.getCell(dri,13); gcM.value='';
+        var gcM=ws2.getCell(dri,14); gcM.value='';
         gcM.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+(alt?C_ALT:'FFFFFF')}};
-        // ITBMS vacío para mercancía (col 14)
-        var itM=ws2.getCell(dri,14); itM.value='';
+        // ITBMS vacío para mercancía (col 15)
+        var itM=ws2.getCell(dri,15); itM.value='';
         itM.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+(alt?C_ALT:'FFFFFF')}};
-        // Costo Landed = Val. Inventario (col 15) — gastos en filas de servicio
-        var ciM=ws2.getCell(dri,15); ciM.value=costoInv_merc; ciM.numFmt='"$"#,##0.00';
+        // Costo Landed = Val. Inventario (col 16) — gastos en filas de servicio
+        var ciM=ws2.getCell(dri,16); ciM.value=costoInv_merc; ciM.numFmt='"$"#,##0.00';
         ciM.font={name:'Calibri',bold:true,size:9};
         ciM.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+(alt?'D6EAF8':'EBF5FB')}};
         ciM.alignment={horizontal:'right',vertical:'middle'};
-        // Notas vacío para mercancía (col 16)
-        var nM=ws2.getCell(dri,16); nM.value='';
+        // Notas vacío para mercancía (col 17)
+        var nM=ws2.getCell(dri,17); nM.value='';
         nM.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+(alt?C_ALT:'FFFFFF')}};
         ws2.getRow(dri).height=17; dri++;
       });
@@ -24045,43 +24052,48 @@ function exportDashboardExcel(){
         tcS.font={name:'Calibri',size:9,bold:true,color:{argb:'FFB7770D'}};
         tcS.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+(alt?'FDEBD0':'FEF9EF')}};
         tcS.alignment={horizontal:'center',vertical:'middle'};
-        txtCell(ws2.getCell(dri,7),l.prov||'—',alt);
-        txtCell(ws2.getCell(dri,8),l.deptCat||l.dept||'Gastos',alt);
+        // Tipo Proveedor: las de servicio/gasto nunca quedan en blanco — "Gastos"
+        var tpS=ws2.getCell(dri,7); tpS.value='Gastos';
+        tpS.font={name:'Calibri',size:9,bold:true,color:{argb:'FF888888'}};
+        tpS.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+(alt?C_ALT:'FFFFFF')}};
+        tpS.alignment={horizontal:'center',vertical:'middle'};
+        txtCell(ws2.getCell(dri,8),l.prov||'—',alt);
+        txtCell(ws2.getCell(dri,9),l.deptCat||l.dept||'Gastos',alt);
         // Sin OC en servicio
-        var ocS=ws2.getCell(dri,9); ocS.value='—';
+        var ocS=ws2.getCell(dri,10); ocS.value='—';
         ocS.font={name:'Calibri',size:9,color:{argb:'FF888888'}}; ocS.alignment={horizontal:'center'};
         ocS.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+(alt?C_ALT:'FFFFFF')}};
-        centerCell(ws2.getCell(dri,10),l.numFact||l.nfac||'—',alt); // N° Factura
+        centerCell(ws2.getCell(dri,11),l.numFact||l.nfac||'—',alt); // N° Factura
         // Val.Original y Val.Inventario vacíos en servicio
-        var vO=ws2.getCell(dri,11); vO.value='';
+        var vO=ws2.getCell(dri,12); vO.value='';
         vO.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+(alt?C_ALT:'FFFFFF')}};
-        var vI=ws2.getCell(dri,12); vI.value='';
+        var vI=ws2.getCell(dri,13); vI.value='';
         vI.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+(alt?C_ALT:'FFFFFF')}};
         var _tfLow=(l.tipoFac||'').toLowerCase();
         // ITBMS de Sababa va en Gastos (es costeable), ITBMS de otros corredores va en col ITBMS separada
         var _esItbmsSeparado=(_tfLow==='itbms')&&!_isSabItbms;
-        // Col 13: Gastos — todo excepto ITBMS separado
+        // Col 14: Gastos — todo excepto ITBMS separado
         var _montoGasto=_esItbmsSeparado?0:costoGasto;
         var _montoItbms=_esItbmsSeparado?costoGasto:0;
-        if(_montoGasto>0) moneyCell(ws2.getCell(dri,13),_montoGasto,alt);
-        else{ var gV=ws2.getCell(dri,13); gV.value=''; gV.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+(alt?C_ALT:'FFFFFF')}}; }
-        // Col 14: ITBMS separado (azul claro)
+        if(_montoGasto>0) moneyCell(ws2.getCell(dri,14),_montoGasto,alt);
+        else{ var gV=ws2.getCell(dri,14); gV.value=''; gV.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+(alt?C_ALT:'FFFFFF')}}; }
+        // Col 15: ITBMS separado (azul claro)
         if(_montoItbms>0){
-          var itS=ws2.getCell(dri,14); itS.value=_montoItbms; itS.numFmt='"$"#,##0.00';
+          var itS=ws2.getCell(dri,15); itS.value=_montoItbms; itS.numFmt='"$"#,##0.00';
           itS.font={name:'Calibri',size:9,color:{argb:'FF1A5276'}};
           itS.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+(alt?'D6EAF8':'EBF5FB')}};
           itS.alignment={horizontal:'right',vertical:'middle'};
         } else {
-          var itS2=ws2.getCell(dri,14); itS2.value='';
+          var itS2=ws2.getCell(dri,15); itS2.value='';
           itS2.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+(alt?C_ALT:'FFFFFF')}};
         }
-        // Col 15: Costo Landed = Gastos (sin ITBMS separado)
+        // Col 16: Costo Landed = Gastos (sin ITBMS separado)
         var costoLanded=_montoGasto;
-        var ciS=ws2.getCell(dri,15); ciS.value=costoLanded>0?costoLanded:null; ciS.numFmt='"$"#,##0.00';
+        var ciS=ws2.getCell(dri,16); ciS.value=costoLanded>0?costoLanded:null; ciS.numFmt='"$"#,##0.00';
         ciS.font={name:'Calibri',bold:true,size:9};
         ciS.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+(alt?(_esItbmsSeparado?'F8F9FA':'D6EAF8'):(_esItbmsSeparado?'FFFFFF':'EBF5FB'))}};
         ciS.alignment={horizontal:'right',vertical:'middle'};
-        // Col 16: Notas — descriptor para Sababa
+        // Col 17: Notas — descriptor para Sababa
         var _notaVal='';
         var _ocLow=(l.oc||'').toLowerCase();
         if(_isSabItbms) {
@@ -24089,7 +24101,7 @@ function exportDashboardExcel(){
         } else if((l.prov||'').toUpperCase().indexOf('SABABA')>=0&&(_tfLow==='honorarios'||_ocLow.indexOf('comisi')>=0)) {
           _notaVal='Comisión Bruta s/Pago Fiscal';
         }
-        var nS=ws2.getCell(dri,16); nS.value=_notaVal;
+        var nS=ws2.getCell(dri,17); nS.value=_notaVal;
         nS.font={name:'Calibri',size:8,italic:true,color:{argb:'FF666666'}};
         nS.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+(alt?C_ALT:'FFFFFF')}};
         nS.alignment={horizontal:'left',vertical:'middle',indent:1};
@@ -24098,12 +24110,12 @@ function exportDashboardExcel(){
     });
     // ── Fila de totales Hoja 2 ──
     var totRow2=dri;
-    ws2.mergeCells(totRow2,1,totRow2,10);
+    ws2.mergeCells(totRow2,1,totRow2,11);
     var tcLbl=ws2.getCell(totRow2,1); tcLbl.value='TOTALES';
     tcLbl.font={name:'Calibri',bold:true,size:10,color:{argb:'FFFFFFFF'}};
     tcLbl.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF1B3A6B'}};
     tcLbl.alignment={horizontal:'center',vertical:'middle'};
-    [11,12,13,14,15].forEach(function(ci){
+    [12,13,14,15,16].forEach(function(ci){
       var sum=0;
       for(var r=3;r<totRow2;r++){
         var v=ws2.getCell(r,ci).value;
@@ -24115,8 +24127,8 @@ function exportDashboardExcel(){
       tc.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF1B3A6B'}};
       tc.alignment={horizontal:'right',vertical:'middle'};
     });
-    // Notas col 16 vacío en fila totales
-    var tcN16=ws2.getCell(totRow2,16); tcN16.value='';
+    // Notas col 17 vacío en fila totales
+    var tcN16=ws2.getCell(totRow2,17); tcN16.value='';
     tcN16.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF1B3A6B'}};
     ws2.getRow(totRow2).height=22;
     ws2.views=[{state:'frozen',ySplit:2}];
@@ -24267,6 +24279,132 @@ function exportDashboardExcel(){
     });
     ws3.getRow(totRow3).height=22;
     ws3.views=[{state:'frozen',ySplit:3}];
+
+    // ══════════════════════════════════════
+    // HOJA 4: Orígenes
+    // ══════════════════════════════════════
+    var ws4=wb.addWorksheet('Orígenes',{pageSetup:{paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1}});
+    ws4.mergeCells('A1:G1');
+    var t4=ws4.getCell('A1');
+    t4.value='DISTRIBUCIÓN POR PAÍS DE ORIGEN';
+    t4.font={name:'Calibri',bold:true,size:13,color:{argb:'FF'+C_HDR_FG}};
+    t4.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+C_TITLE}};
+    t4.alignment={horizontal:'center',vertical:'middle'};
+    ws4.getRow(1).height=28;
+
+    ws4.mergeCells('A2:G2');
+    var s4=ws4.getCell('A2');
+    s4.value='Generado: '+fecha+'   ·   ZLC Panamá — Saks';
+    s4.font={name:'Calibri',size:9,italic:true,color:{argb:'FF555555'}};
+    s4.alignment={horizontal:'center'};
+    ws4.getRow(2).height=16;
+
+    var hdrs4=['País / Origen','Departamento','Valor Mercancía\nOriginal','Valor Mercancía\n(Inventario)','Costo No\nMercancía','Costo Landed','% Participación'];
+    var cols4=[20,28,18,20,16,16,14];
+    hdrs4.forEach(function(h,i){ hdrCell(ws4.getCell(3,i+1),h,C_HDR_BG,C_HDR_FG); });
+    cols4.forEach(function(w,i){ ws4.getColumn(i+1).width=w; });
+    ws4.getRow(3).height=32;
+
+    // Agrupar: país -> departamento -> {orig, inv, noMerc, landed}
+    // Usa la misma lógica de prorrateo que la Hoja 3 (_calcCostoInventario)
+    // para que Costo Landed cuadre exacto con el resto del Excel.
+    var origMap={};
+    tendFiltered.forEach(function(d){
+      var invL=(d.snap&&d.snap.invLines)?d.snap.invLines:(d.invLines||[]);
+      var mercLines=invL.filter(function(l){return (l.tipoFac||'mercancia')==='mercancia';});
+      var costoOrig=mercLines.reduce(function(a,l){return a+(l.costo||0);},0);
+      if(costoOrig<=0||!mercLines.length) return;
+      var ci=typeof _calcCostoInventario==='function'?_calcCostoInventario(d):null;
+      var valorMercInv=ci?(ci.mercInv||costoOrig):costoOrig;
+      var noMercTotal=ci?(ci.costoNM||0):0;
+      var pais=_paisCiudadDe(d).pais||'Sin especificar';
+      if(!origMap[pais]) origMap[pais]={};
+      mercLines.forEach(function(l){
+        var dept=l.deptCat||l.dept||'Sin Categoría';
+        if(!origMap[pais][dept]) origMap[pais][dept]={orig:0,inv:0,noMerc:0};
+        var share=(l.costo||0)/costoOrig;
+        var b=origMap[pais][dept];
+        b.orig+=l.costo||0;
+        b.inv+=valorMercInv*share;
+        b.noMerc+=noMercTotal*share;
+      });
+    });
+
+    var origList=Object.keys(origMap).map(function(pais){
+      var tot={orig:0,inv:0,noMerc:0,landed:0};
+      Object.keys(origMap[pais]).forEach(function(dep){
+        var g=origMap[pais][dep];
+        var landed=g.inv+g.noMerc;
+        g.landed=landed;
+        tot.orig+=g.orig; tot.inv+=g.inv; tot.noMerc+=g.noMerc; tot.landed+=landed;
+      });
+      return {pais:pais, tot:tot};
+    }).sort(function(a,b){ return b.tot.landed-a.tot.landed; });
+
+    var tLndGlobal4=origList.reduce(function(s,o){return s+o.tot.landed;},0);
+    var row4=4;
+    var gOrig=0,gInv=0,gNoMerc=0,gLanded=0;
+    origList.forEach(function(ot){
+      var pais=ot.pais;
+      ws4.mergeCells(row4,1,row4,2);
+      var pc=ws4.getCell(row4,1);
+      pc.value=pais;
+      pc.font={name:'Calibri',bold:true,size:10,color:{argb:'FF'+C_HDR_FG}};
+      pc.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+C_HDR_BG}};
+      pc.alignment={horizontal:'left',vertical:'middle'};
+      var pctPais=tLndGlobal4>0?ot.tot.landed/tLndGlobal4:0;
+      [ot.tot.orig,ot.tot.inv,ot.tot.noMerc,ot.tot.landed].forEach(function(v,i){
+        var c=ws4.getCell(row4,3+i);
+        c.value=v; c.numFmt='"$"#,##0.00';
+        c.font={name:'Calibri',bold:true,size:10,color:{argb:'FF'+C_HDR_FG}};
+        c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+C_HDR_BG}};
+        c.alignment={horizontal:'right',vertical:'middle'};
+      });
+      var pcCell=ws4.getCell(row4,7);
+      pctCell(pcCell,pctPais*100,false);
+      pcCell.font={name:'Calibri',bold:true,size:10,color:{argb:'FF'+C_HDR_FG}};
+      pcCell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+C_HDR_BG}};
+      ws4.getRow(row4).height=18;
+      row4++;
+
+      var depts=Object.keys(origMap[pais]).sort(function(a,b){ return origMap[pais][b].landed-origMap[pais][a].landed; });
+      depts.forEach(function(dep,di){
+        var g=origMap[pais][dep];
+        var alt=(di%2===1);
+        txtCell(ws4.getCell(row4,1),'',alt);
+        txtCell(ws4.getCell(row4,2),dep,alt);
+        moneyCell(ws4.getCell(row4,3),g.orig,alt);
+        moneyCell(ws4.getCell(row4,4),g.inv,alt);
+        moneyCell(ws4.getCell(row4,5),g.noMerc,alt);
+        moneyCell(ws4.getCell(row4,6),g.landed,alt);
+        pctCell(ws4.getCell(row4,7),ot.tot.landed>0?(g.landed/ot.tot.landed*100):0,alt);
+        ws4.getRow(row4).height=16;
+        row4++;
+      });
+      gOrig+=ot.tot.orig; gInv+=ot.tot.inv; gNoMerc+=ot.tot.noMerc; gLanded+=ot.tot.landed;
+    });
+
+    // Fila total general — debe cuadrar con Hoja 3 (Total General Costo Landed sin ITBMS)
+    ws4.mergeCells(row4,1,row4,2);
+    var tg4=ws4.getCell(row4,1);
+    tg4.value='TOTAL GENERAL';
+    tg4.font={name:'Calibri',bold:true,size:10,color:{argb:'FFFFFFFF'}};
+    tg4.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF1B3A6B'}};
+    tg4.alignment={horizontal:'left',vertical:'middle'};
+    [gOrig,gInv,gNoMerc,gLanded].forEach(function(v,i){
+      var c=ws4.getCell(row4,3+i);
+      c.value=v; c.numFmt='"$"#,##0.00';
+      c.font={name:'Calibri',bold:true,size:10,color:{argb:'FFFFFFFF'}};
+      c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF1B3A6B'}};
+      c.alignment={horizontal:'right',vertical:'middle'};
+    });
+    var tot4pct=ws4.getCell(row4,7);
+    tot4pct.value=1; tot4pct.numFmt='0.00%';
+    tot4pct.font={name:'Calibri',bold:true,size:10,color:{argb:'FFFFFFFF'}};
+    tot4pct.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF1B3A6B'}};
+    tot4pct.alignment={horizontal:'right',vertical:'middle'};
+    ws4.getRow(row4).height=22;
+    ws4.views=[{state:'frozen',ySplit:3}];
 
     // Generar y descargar
     wb.xlsx.writeBuffer().then(function(buffer){
