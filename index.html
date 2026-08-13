@@ -41,7 +41,7 @@ if(!window._accNativeBound){
 // Verificación automática de versión — fuerza recarga si el servidor tiene versión nueva
 (function(){
   var VER_KEY = '_app_build_zlc';
-  var VER_BUILD = '20260812-FIX23';
+  var VER_BUILD = '20260812-FIX24';
   try {
     var saved = sessionStorage.getItem(VER_KEY);
     if(saved && saved !== VER_BUILD){
@@ -1593,7 +1593,7 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
     'Turkey':[58.4,28.4],'Alemania':[52.5,21.6],'Italia':[53,26.7],'Espana':[49.1,27.6],
     'Portugal':[48,28.1],'USA':[26.6,27.9],'Canada':[24.8,18.8],'Mexico':[25.6,36.9],
     'Guatemala':[25.3,46.3],'Honduras':[26.4,46.7],'El Salvador':[25.6,47.4],
-    'Nicaragua':[26.6,49.1],'Costa Rica':[27.0,50.0],'Panamá':[29.0,50.0],
+    'Nicaragua':[26.6,49.1],'Costa Rica':[27.0,50.0],'Panamá':[27.6,50.0],
     'Colombia':[32.6,48.5],'Brasil':[37.7,58.5],
     'Puerto Rico':[34.2,40.5]
   };
@@ -1850,7 +1850,11 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
     if(fly) fly.classList.add('open');
     // Con el panel fijado, no se muestra el esmerilado — el resto del
     // contenido (KPIs, gráficas) se ve nítido mientras el menú está abierto.
-    if(bg && !_zlhFlyoutPinned) bg.classList.add('show');
+    // FIX: antes solo se AGREGABA 'show' cuando no estaba fijado, pero nunca
+    // se QUITABA si ya estaba puesto de antes (ej. si abrías con el mouse y
+    // LUEGO fijabas) — por eso el esmerilado se quedaba pegado. Ahora se
+    // sincroniza en ambas direcciones.
+    if(bg) bg.classList.toggle('show', !_zlhFlyoutPinned);
     if(trg) trg.classList.add('open');
   }
   function _zlhFlyoutClose(){
@@ -21473,8 +21477,8 @@ function _kpiMostrarInventario(card){
         +'<button id="_ajInv_btn" style="width:100%;background:linear-gradient(135deg,rgba(240,136,62,.2),rgba(240,136,62,.1));border:1.5px solid rgba(240,136,62,.5);color:var(--orange-l);border-radius:10px;padding:10px;font-size:12px;font-weight:800;cursor:pointer">✅ Aplicar Ajuste</button>'
 
         +'<div style="border-top:1px dashed var(--border);margin:16px 0 12px"></div>'
-        +'<div style="font-size:10px;color:var(--muted);margin-bottom:8px;line-height:1.5">🎯 <strong style="color:var(--text)">Redondeo Global</strong> — recorre TODOS los embarques (mercancía, homologado, gastos, ITBMS, landed) y limpia cualquier arrastre de decimales ocultos, dejando cada monto en exactamente 2 decimales. Es el mismo efecto que editar embarque por embarque a mano, en una sola pasada.</div>'
-        +'<button id="_ajInv_global_btn" style="width:100%;background:linear-gradient(135deg,rgba(88,166,255,.18),rgba(88,166,255,.08));border:1.5px solid rgba(88,166,255,.45);color:var(--blue-l);border-radius:10px;padding:10px;font-size:12px;font-weight:800;cursor:pointer">🎯 Redondear TODOS los embarques a 2 decimales</button>'
+        +'<div style="font-size:10px;color:var(--muted);margin-bottom:8px;line-height:1.5">🎯 <strong style="color:var(--text)">Redondeo Global</strong> — recorre los embarques <strong style="color:var(--orange-l)">del filtro activo en Tendencias</strong> (mercancía, homologado, gastos, ITBMS, landed) y limpia cualquier arrastre de decimales ocultos, dejando cada monto en exactamente 2 decimales. Si no hay filtro de fecha puesto, aplica a todos. Es el mismo efecto que editar embarque por embarque a mano, en una sola pasada.</div>'
+        +'<button id="_ajInv_global_btn" style="width:100%;background:linear-gradient(135deg,rgba(88,166,255,.18),rgba(88,166,255,.08));border:1.5px solid rgba(88,166,255,.45);color:var(--blue-l);border-radius:10px;padding:10px;font-size:12px;font-weight:800;cursor:pointer">🎯 Redondear '+all.length+' embarque(s) del filtro activo</button>'
 
         +'<div style="display:flex;align-items:center;justify-content:space-between;margin:16px 0 6px">'
           +'<span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase">📜 Historial de Ajustes Manuales</span>'
@@ -21601,9 +21605,16 @@ function _deepRoundMoney(obj, depth){
 }
 
 function _redondeoGlobalTendData(pop){
-  var all = (window.tendData||[]);
-  if(!all.length){ _showToast&&_showToast('⚠️ No hay embarques cargados','orange',2500); return; }
-  if(!confirm('🎯 Redondear TODOS los embarques ('+all.length+') a 2 decimales.\n\nSe limpiará cualquier arrastre de decimales ocultos en mercancía, homologado, gastos, ITBMS y landed — sin cambiar el resultado real, solo la precisión guardada.\n\n¿Continuar?')) return;
+  // FIX: antes usaba window.tendData (TODOS los embarques cargados, sin
+  // importar el filtro de Tendencias). Ahora respeta el filtro activo —
+  // si hay un rango de fecha puesto (ej. agosto), solo redondea esos
+  // embarques; si no hay filtro de fecha, aplica a todos (mismo
+  // comportamiento de antes en ese caso).
+  var all = (typeof _getFilteredTendData==='function') ? _getFilteredTendData() : (window.tendData||[]);
+  if(!all.length){ _showToast&&_showToast('⚠️ No hay embarques en el filtro activo','orange',2500); return; }
+  var _desde=(typeof _tfVal==='function')?_tfVal('tf_desde'):'', _hasta=(typeof _tfVal==='function')?_tfVal('tf_hasta'):'';
+  var _alcance = (_desde||_hasta) ? ('del filtro activo ('+(_desde||'…')+' → '+(_hasta||'…')+')') : 'TODOS los embarques cargados (no hay filtro de fecha puesto)';
+  if(!confirm('🎯 Redondear '+all.length+' embarque(s) — '+_alcance+' — a 2 decimales.\n\nSe limpiará cualquier arrastre de decimales ocultos en mercancía, homologado, gastos, ITBMS y landed — sin cambiar el resultado real, solo la precisión guardada.\n\n¿Continuar?')) return;
 
   var totalCambios = 0, embAfectados = 0;
   all.forEach(function(d){
