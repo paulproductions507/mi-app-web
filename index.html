@@ -41,7 +41,7 @@ if(!window._accNativeBound){
 // Verificación automática de versión — fuerza recarga si el servidor tiene versión nueva
 (function(){
   var VER_KEY = '_app_build_zlc';
-  var VER_BUILD = '20260812-FIX20';
+  var VER_BUILD = '20260812-FIX22';
   try {
     var saved = sessionStorage.getItem(VER_KEY);
     if(saved && saved !== VER_BUILD){
@@ -966,6 +966,10 @@ body.theme-light #_provTooltip{background:#fff;border-color:#d8e6df;box-shadow:0
 .zlh-flyout-brand{font-size:15px;font-weight:800;color:var(--ztext);display:flex;align-items:center;gap:8px;}
 .zlh-flyout-close{background:none;border:none;color:var(--zdim);font-size:20px;cursor:pointer;line-height:1;padding:4px;}
 .zlh-flyout-close:hover{color:var(--ztext);}
+.zlh-flyout-pin{background:none;border:none;color:var(--zdim);font-size:14px;cursor:pointer;line-height:1;padding:5px 6px;border-radius:7px;}
+.zlh-flyout-pin:hover{color:var(--ztext);background:rgba(31,143,127,.14);}
+.zlh-flyout-pin.on{color:var(--zt);background:rgba(31,143,127,.22);}
+.zlh-flyout.pinned{box-shadow:2px 0 20px -6px rgba(0,0,0,.35);}
 .zlh-nav-section{margin-top:16px;}
 .zlh-nav-section:first-of-type{margin-top:0;}
 .zlh-nav-section-lbl{font-family:var(--zmono); font-size:9.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--zdim); padding:0 8px 6px;}
@@ -1019,6 +1023,16 @@ body.theme-light #_provTooltip{background:#fff;border-color:#d8e6df;box-shadow:0
 body:not(.theme-light) .zlh-map-img{filter:brightness(0) saturate(100%) invert(19%) sepia(24%) saturate(1200%) hue-rotate(122deg) brightness(85%) contrast(88%); opacity:.55;}
 body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) sepia(9%) saturate(700%) hue-rotate(122deg) brightness(92%) contrast(85%); opacity:.35;}
 .zlh-map-label{position:absolute;left:50%;top:0;transform:translate(-50%,calc(-100% - 12px));display:flex;flex-direction:column;align-items:center;pointer-events:none;}
+/* FIX (ago-2026): etiquetas cerca del borde del mapa (o dos países muy
+   pegados entre sí, ej. China/Hong Kong/Taiwan) se cortaban o se tapaban
+   porque siempre se centraban sobre el punto. Ahora, cuando el punto está
+   marcado como 'side-start' o 'side-end' (calculado en JS según su posición
+   real y sus vecinos), la etiqueta se ancla al punto y crece hacia un solo
+   lado, para que dos etiquetas cercanas se abran en direcciones opuestas. */
+.zlh-map-dot.side-start .zlh-map-label{left:0;transform:translate(0,calc(-100% - 12px));align-items:flex-start;}
+.zlh-map-dot.side-start .zlh-map-label .stem{align-self:flex-start;margin-left:2px;}
+.zlh-map-dot.side-end .zlh-map-label{left:auto;right:0;transform:translate(0,calc(-100% - 12px));align-items:flex-end;}
+.zlh-map-dot.side-end .zlh-map-label .stem{align-self:flex-end;margin-right:2px;}
 .zlh-map-label .chip{background:var(--zsurf2);border:1px solid var(--zborder);border-radius:7px;padding:3px 7px;font-family:'Inter',sans-serif;font-size:9.5px;font-weight:700;color:var(--ztext);white-space:nowrap;box-shadow:0 3px 10px rgba(0,0,0,.25);}
 .zlh-map-label .chip .n{color:var(--zg);font-weight:800;}
 .zlh-map-label .stem{width:1px;height:10px;background:var(--zborder);}
@@ -1027,6 +1041,8 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
 .zlh-map-dot .core{position:relative;border-radius:50%;background:linear-gradient(135deg,var(--zt),var(--zg));box-shadow:0 0 0 3px rgba(31,143,127,.18);}
 @keyframes zlhPulse{0%{transform:scale(.6);opacity:.5;}100%{transform:scale(2.6);opacity:0;}}
 .zlh-map-tip{position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:var(--zsurf2);border:1px solid var(--zborder);border-radius:9px;padding:7px 10px;font-family:'Inter',sans-serif;font-size:11px;color:var(--ztext);white-space:nowrap;box-shadow:0 6px 20px rgba(0,0,0,.35);opacity:0;pointer-events:none;transition:opacity .12s;z-index:5;}
+.zlh-map-dot.side-start .zlh-map-tip{left:0;transform:translateX(0);}
+.zlh-map-dot.side-end .zlh-map-tip{left:auto;right:0;transform:translateX(0);}
 .zlh-map-dot:hover .zlh-map-tip{opacity:1;}
 .zlh-map-tip b{color:var(--zg);}
 .zlh-map-tip .tipsub{color:var(--zdim);font-size:9.5px;margin-top:2px;font-family:var(--zmono);}
@@ -1418,7 +1434,10 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
       <aside class="zlh-flyout" id="zlhFlyout" onmouseleave="_zlhFlyoutClose()">
         <div class="zlh-flyout-hdr">
           <div class="zlh-flyout-brand">🛃 Módulos</div>
-          <button class="zlh-flyout-close" onclick="_zlhFlyoutClose()" aria-label="Cerrar">×</button>
+          <div style="display:flex;align-items:center;gap:2px;">
+            <button class="zlh-flyout-pin" id="zlhFlyoutPinBtn" onclick="_zlhFlyoutTogglePin()" title="Fijar panel">📌</button>
+            <button class="zlh-flyout-close" onclick="_zlhFlyoutClose()" aria-label="Cerrar">×</button>
+          </div>
         </div>
 
         <div class="zlh-nav-section">
@@ -1559,7 +1578,7 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
     'Turkey':[58.4,28.4],'Alemania':[52.5,21.6],'Italia':[53,26.7],'Espana':[49.1,27.6],
     'Portugal':[48,28.1],'USA':[26.6,27.9],'Canada':[24.8,18.8],'Mexico':[25.6,36.9],
     'Guatemala':[28.6,41.5],'Honduras':[29.7,41.9],'El Salvador':[28.9,42.6],
-    'Nicaragua':[29.9,44.3],'Costa Rica':[30.3,45.2],'Panamá':[31.3,47],
+    'Nicaragua':[29.9,44.3],'Costa Rica':[30.3,45.2],'Panamá':[31.8,45.5],
     'Colombia':[32.6,48.5],'Brasil':[37.7,58.5],
     'Puerto Rico':[34.2,40.5]
   };
@@ -1613,6 +1632,30 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
     }
     var maxCount = Math.max.apply(null, paises.map(function(p){ return porPais[p].count; }));
     var fmt = function(n){ return '$'+Math.round(n).toLocaleString('en-US'); };
+    // -- Lado (izquierda/derecha) de cada etiqueta: por defecto, los puntos
+    //    cerca del borde del mapa abren hacia adentro para no cortarse; y si
+    //    dos países quedan muy cerca uno del otro (posible choque visual,
+    //    como China/Hong Kong/Taiwan), se fuerza a que abran en direcciones
+    //    opuestas, alternando a medida que se recorren de izquierda a
+    //    derecha, para que nunca se tapen entre sí. --
+    var _paisesConGeo = paises.filter(function(p){ return !!_ZLH_GEO[p]; });
+    var _porX = _paisesConGeo.slice().sort(function(a,b){ return _ZLH_GEO[a][0]-_ZLH_GEO[b][0]; });
+    var _sideMap = {};
+    _porX.forEach(function(p){
+      var x = _ZLH_GEO[p][0];
+      if(x < 15) _sideMap[p] = 'start';
+      else if(x > 70) _sideMap[p] = 'end';
+      else _sideMap[p] = 'center';
+    });
+    for(var _si=0; _si<_porX.length-1; _si++){
+      var _pA=_porX[_si], _pB=_porX[_si+1];
+      var _gx = _ZLH_GEO[_pB][0]-_ZLH_GEO[_pA][0];
+      var _gy = Math.abs(_ZLH_GEO[_pB][1]-_ZLH_GEO[_pA][1]);
+      if(_gx < 6 && _gy < 12){
+        if(_sideMap[_pA]==='center') _sideMap[_pA]='start';
+        _sideMap[_pB] = (_sideMap[_pA]==='start') ? 'end' : 'start';
+      }
+    }
     // -- puntos en el mapa, con etiqueta SIEMPRE visible (como el ejemplo de
     //    referencia: bandera + país + conteo, unida al punto con una línea).
     //    Solo se muestra el detalle de valor total al pasar el cursor, para
@@ -1626,7 +1669,9 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
       var size = 9 + Math.round((info.count/maxCount)*15); // 9–24px según volumen
       var nombre = _ZLH_NOMBRES[pais] || pais;
       var flag = _ZLH_FLAGS[pais] || '📍';
-      mapHtml += '<div class="zlh-map-dot" style="left:'+geo[0]+'%;top:'+geo[1]+'%;">'+
+      var _side = _sideMap[pais]||'center';
+      var _sideCls = _side!=='center' ? (' side-'+_side) : '';
+      mapHtml += '<div class="zlh-map-dot'+_sideCls+'" style="left:'+geo[0]+'%;top:'+geo[1]+'%;">'+
         '<div class="pulse" style="width:'+size+'px;height:'+size+'px;"></div>'+
         '<div class="core" style="width:'+size+'px;height:'+size+'px;"></div>'+
         '<div class="zlh-map-label"><div class="chip">'+flag+' <span class="n">'+info.count+'</span></div><div class="stem"></div></div>'+
@@ -1760,15 +1805,41 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
   // derecha al pasar el cursor sobre "Módulos" (o al tocarlo en celular),
   // con un fondo esmerilado detrás. Un solo punto de apertura/cierre para
   // que el botón, el cajón y el fondo esmerilado queden siempre en sync.
+  // Fijar (pin): al activarlo, el cajón se queda abierto de forma permanente
+  // y el fondo esmerilado (blur) NO se muestra, para poder ver con nitidez
+  // los KPIs/gráficas de atrás. Sin fijar, todo se comporta como antes
+  // (hover para abrir, esmerilado detrás, se cierra al salir o hacer clic
+  // afuera). El estado se recuerda entre sesiones.
+  var _zlhFlyoutPinned = false;
+  try{ _zlhFlyoutPinned = localStorage.getItem('zlh_flyout_pinned')==='1'; }catch(e){}
+  function _zlhFlyoutApplyPinUI(){
+    var fly = document.getElementById('zlhFlyout');
+    var pinBtn = document.getElementById('zlhFlyoutPinBtn');
+    if(fly) fly.classList.toggle('pinned', _zlhFlyoutPinned);
+    if(pinBtn){
+      pinBtn.classList.toggle('on', _zlhFlyoutPinned);
+      pinBtn.title = _zlhFlyoutPinned ? 'Desfijar panel' : 'Fijar panel';
+    }
+  }
+  function _zlhFlyoutTogglePin(){
+    _zlhFlyoutPinned = !_zlhFlyoutPinned;
+    try{ localStorage.setItem('zlh_flyout_pinned', _zlhFlyoutPinned?'1':'0'); }catch(e){}
+    _zlhFlyoutApplyPinUI();
+    if(_zlhFlyoutPinned) _zlhFlyoutOpen();
+    else _zlhFlyoutClose();
+  }
   function _zlhFlyoutOpen(){
     var fly = document.getElementById('zlhFlyout');
     var bg = document.getElementById('zlhTopNavBackdrop');
     var trg = document.getElementById('zlhFlyoutTrigger');
     if(fly) fly.classList.add('open');
-    if(bg) bg.classList.add('show');
+    // Con el panel fijado, no se muestra el esmerilado — el resto del
+    // contenido (KPIs, gráficas) se ve nítido mientras el menú está abierto.
+    if(bg && !_zlhFlyoutPinned) bg.classList.add('show');
     if(trg) trg.classList.add('open');
   }
   function _zlhFlyoutClose(){
+    if(_zlhFlyoutPinned) return; // fijado: no se cierra al mover el mouse ni al hacer clic afuera
     var fly = document.getElementById('zlhFlyout');
     var bg = document.getElementById('zlhTopNavBackdrop');
     var trg = document.getElementById('zlhFlyoutTrigger');
@@ -1785,6 +1856,10 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
     if(!e.target.closest('.zlh-flyout') && !e.target.closest('#zlhFlyoutTrigger')){
       _zlhFlyoutClose();
     }
+  });
+  document.addEventListener('DOMContentLoaded', function(){
+    _zlhFlyoutApplyPinUI();
+    if(_zlhFlyoutPinned) _zlhFlyoutOpen();
   });
 </script>
 
