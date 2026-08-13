@@ -7768,6 +7768,7 @@ window._plnXLS = async function(){
       corr = _plnCorredorLabel(corr, corr);
       var tipoCarga = cub.tipoCarga||cub.via||'';
       var embStr = cub.nroEmb||'';
+      var origenCub = cub.origen||cub.lugarOrigen||'';
       rows.forEach(function(r){
         _AD.push({
           nroEmb: embStr,
@@ -7780,6 +7781,7 @@ window._plnXLS = async function(){
           prov: r.prov||'',
           tipo: r.tipo||'ZL',
           dept: r.dept||'',
+          origen: r.origen||origenCub||'',
           fob: parseFloat(r.fob)||0,
           homol: parseFloat(r.homol)||0,
           landed: parseFloat(r.landed)||0,
@@ -8086,6 +8088,155 @@ window._plnXLS = async function(){
 
   ws3.columns = [{width:30},{width:16},{width:16},{width:16},{width:14},{width:14},{width:10}];
   ws3.views = [{state:'frozen',xSplit:0,ySplit:2}];
+
+  // ═══════════════════════════════════════════════
+  // SHEET 4: Orígenes
+  // ═══════════════════════════════════════════════
+  var ws4 = wb.addWorksheet('Orígenes', {
+    pageSetup:{paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1}
+  });
+
+  ws4.mergeCells('A1:G1');
+  var o1 = ws4.getCell('A1');
+  o1.value = 'DISTRIBUCIÓN POR PAÍS DE ORIGEN — SEMANA '+_PLN_CUR;
+  o1.font = {name:'Calibri',size:13,bold:true,color:{argb:'FF'+C.white}};
+  o1.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF'+C.navy}};
+  o1.alignment = {horizontal:'center',vertical:'middle'};
+  ws4.getRow(1).height = 28;
+
+  ws4.mergeCells('A2:G2');
+  var o2 = ws4.getCell('A2');
+  o2.value = 'Generado: '+new Date().toLocaleDateString('es-PA')+'   ·   ZLC Panamá — Saks';
+  o2.font = {name:'Calibri', size:9, italic:true, color:{argb:'FF'+C.muted}};
+  o2.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF'+C.light}};
+  o2.alignment = {horizontal:'center', vertical:'middle'};
+  ws4.getRow(2).height = 16;
+
+  var hd4 = ['País / Origen','Departamento','Valor Mercancía Original','Valor Mercancía (Inventario)','Costo No Mercancía','Costo Landed','% Participación'];
+  var r4h = ws4.getRow(3);
+  r4h.height = 30;
+  hd4.forEach(function(h,i){
+    var c = r4h.getCell(i+1);
+    c.value = h;
+    c.font = {name:'Calibri',size:9,bold:true,color:{argb:'FF'+C.white}};
+    c.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF'+C.green}};
+    c.alignment = {horizontal:'center',vertical:'middle',wrapText:true};
+    var b = {style:'thin',color:{argb:'FF'+C.border}};
+    c.border = {top:b,left:b,bottom:{style:'medium',color:{argb:'FF'+C.white}},right:b};
+  });
+
+  // Función local para extraer país desde "Ciudad, País" o valor directo
+  function _origPais(s){
+    s = String(s||'').trim();
+    if(!s) return 'Sin Origen';
+    var partes = s.split(',');
+    return partes[partes.length-1].trim() || 'Sin Origen';
+  }
+
+  // Agrupar: país -> departamento -> {fob, hom, noMerc, landed}
+  var origMap = {};
+  var origOrder = [];
+  _AD.forEach(function(r){
+    var pais = _origPais(r.origen);
+    var dep = (r.dept||'SIN DEPTO').toUpperCase();
+    if(!origMap[pais]){ origMap[pais] = {}; origOrder.push(pais); }
+    if(!origMap[pais][dep]) origMap[pais][dep] = {fob:0, hom:0, noMerc:0, landed:0};
+    var g = origMap[pais][dep];
+    g.fob += r.fob;
+    g.hom += (r.homol>0 ? r.homol : r.fob);
+    g.noMerc += r.noMerc;
+    g.landed += r.landed;
+  });
+
+  // Ordenar países por Costo Landed total descendente
+  var origTotals = origOrder.map(function(pais){
+    var tot = {fob:0,hom:0,noMerc:0,landed:0};
+    Object.keys(origMap[pais]).forEach(function(dep){
+      var g = origMap[pais][dep];
+      tot.fob+=g.fob; tot.hom+=g.hom; tot.noMerc+=g.noMerc; tot.landed+=g.landed;
+    });
+    return {pais:pais, tot:tot};
+  }).sort(function(a,b){ return b.tot.landed - a.tot.landed; });
+
+  var tLndGlobal4 = origTotals.reduce(function(s,o){return s+o.tot.landed;},0);
+
+  var o4r = 4;
+  var oFobG=0, oHomG=0, oNMG=0, oLndG=0;
+  origTotals.forEach(function(ot, oi){
+    var pais = ot.pais;
+    var depts = Object.keys(origMap[pais]).sort(function(a,b){ return origMap[pais][b].landed - origMap[pais][a].landed; });
+
+    // Fila subtotal del país (fusionada, resaltada)
+    var pctPais = tLndGlobal4>0 ? ot.tot.landed/tLndGlobal4 : 0;
+    var pRow = ws4.getRow(o4r);
+    pRow.height = 18;
+    ws4.mergeCells('A'+o4r+':B'+o4r);
+    var pVals = [pais, '', ot.tot.fob, ot.tot.hom, ot.tot.noMerc, ot.tot.landed, pctPais];
+    pVals.forEach(function(v,i){
+      var c = pRow.getCell(i+1);
+      if(i===1) return; // fusionada con A
+      c.value = v;
+      if(i>=2 && i<=5) c.numFmt = moneyFmt();
+      if(i===6) c.numFmt = pctFmt();
+      c.font = {name:'Calibri',size:9,bold:true,color:{argb:'FF'+C.white}};
+      c.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF'+C.navy}};
+      c.alignment = {horizontal:i===0?'left':'center',vertical:'middle'};
+      var b = {style:'thin',color:{argb:'FF'+C.border}};
+      c.border = {top:b,left:b,bottom:b,right:b};
+    });
+    // Asegurar fill/borde también en celda B fusionada
+    var bCell = pRow.getCell(2);
+    bCell.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF'+C.navy}};
+    bCell.border = {top:{style:'thin',color:{argb:'FF'+C.border}},left:{style:'thin',color:{argb:'FF'+C.border}},bottom:{style:'thin',color:{argb:'FF'+C.border}},right:{style:'thin',color:{argb:'FF'+C.border}}};
+    o4r++;
+
+    // Filas de departamentos dentro del país
+    depts.forEach(function(dep, di){
+      var g = origMap[pais][dep];
+      var bg = di%2===0 ? C.row1 : C.row2;
+      var dRow = ws4.getRow(o4r);
+      dRow.height = 16;
+      var dVals = ['', dep, g.fob, g.hom, g.noMerc, g.landed, ot.tot.landed>0 ? g.landed/ot.tot.landed : 0];
+      dVals.forEach(function(v,i){
+        var c = dRow.getCell(i+1);
+        c.value = v;
+        if(i>=2 && i<=5) c.numFmt = moneyFmt();
+        if(i===6) c.numFmt = pctFmt();
+        c.font = {name:'Calibri',size:9,bold:false,color:{argb:'FF'+(i===5?C.orange:'1C2B4A')}};
+        c.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF'+bg}};
+        c.alignment = {horizontal:i===1?'left':'center',vertical:'middle'};
+        var b = {style:'thin',color:{argb:'FF'+C.border}};
+        c.border = {top:b,left:b,bottom:b,right:b};
+      });
+      o4r++;
+    });
+
+    oFobG+=ot.tot.fob; oHomG+=ot.tot.hom; oNMG+=ot.tot.noMerc; oLndG+=ot.tot.landed;
+  });
+
+  // Fila total general Sheet 4 — debe cuadrar con el total de Costo Landed de la Sheet 1
+  var totO = ws4.getRow(o4r);
+  totO.height = 20;
+  ws4.mergeCells('A'+o4r+':B'+o4r);
+  var totOVals = ['TOTAL GENERAL', '', oFobG, oHomG, oNMG, oLndG, 1];
+  totOVals.forEach(function(v,i){
+    if(i===1) return;
+    var c = totO.getCell(i+1);
+    c.value = v;
+    if(i>=2 && i<=5) c.numFmt = moneyFmt();
+    if(i===6) c.numFmt = pctFmt();
+    c.font = {name:'Calibri',size:10,bold:true,color:{argb:'FF'+C.white}};
+    c.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF'+C.navy}};
+    c.alignment = {horizontal:i===0?'left':'center',vertical:'middle'};
+    var b = {style:'medium',color:{argb:'FF'+C.green}};
+    c.border = {top:b,left:{style:'thin',color:{argb:'FF'+C.border}},bottom:b,right:{style:'thin',color:{argb:'FF'+C.border}}};
+  });
+  var totOB = totO.getCell(2);
+  totOB.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF'+C.navy}};
+  totOB.border = {top:{style:'medium',color:{argb:'FF'+C.green}},left:{style:'thin',color:{argb:'FF'+C.border}},bottom:{style:'medium',color:{argb:'FF'+C.green}},right:{style:'thin',color:{argb:'FF'+C.border}}};
+
+  ws4.columns = [{width:20},{width:28},{width:18},{width:20},{width:16},{width:16},{width:14}];
+  ws4.views = [{state:'frozen',xSplit:0,ySplit:3}];
 
   // ═══════════════════════════════════════════════
   // Generar y descargar
