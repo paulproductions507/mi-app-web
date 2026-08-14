@@ -3444,7 +3444,7 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
       <div class="field" style="margin-top:6px;padding:10px 12px;background:rgba(88,166,255,.06);border:1px solid rgba(88,166,255,.18);border-radius:8px">
         <label style="color:var(--blue-l);font-weight:600">🔵 Valor Exento Sababa (USD) <span style="font-size:9px;font-weight:400;color:var(--muted)">— reduce ITBMS, no afecta valor mercancía</span></label>
         <input type="number" id="s2_exento" value="" placeholder="0.00 (opcional)" step="0.01" oninput="window._sab2Exento=parseFloat(this.value)||0;calcSab2()" style="margin-top:4px;border-color:rgba(88,166,255,.3)">
-        <div style="font-size:10px;color:var(--muted);margin-top:4px">ITBMS = (Homologado − Exento) × 7%</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:4px">Gravado = (Base Ajustada − Exento) ÷ 1.07 · ITBMS = (Base Ajustada − Exento) − Gravado · Homologado = Gravado + Exento</div>
       </div>
 
       <div style="display:flex;gap:8px;margin-top:8px">
@@ -10257,10 +10257,13 @@ function calc(){
       const pagFinal   = pagado>0 ? pagado : montoBase;
       // SIEMPRE usar pagFinal como baseAjustada para que homologado sea exacto
       sc3_baseAjustada = pagFinal;
-      sc3_mercHomol    = sc3_baseAjustada / DIV;
-      const _sc3Exento  = window._sab2Exento || v('s2_exento') || 0;
-      const _sc3Gravado = Math.max(0, sc3_mercHomol - _sc3Exento);
-      sc3_itbmsHomol   = Math.round(_sc3Gravado * itbPct * 100) / 100;
+      // El Exento se resta ANTES de dividir ÷1.07 (mismo criterio que calcSab2()):
+      // esa porción no paga ITBMS y se vuelve a sumar completa al Homologado final.
+      const _sc3Exento    = window._sab2Exento || v('s2_exento') || 0;
+      const _sc3BaseGrav  = Math.max(0, sc3_baseAjustada - _sc3Exento);
+      const _sc3Gravado   = _sc3BaseGrav / DIV;
+      sc3_itbmsHomol   = Math.round((_sc3BaseGrav - _sc3Gravado) * 100) / 100;
+      sc3_mercHomol    = _sc3Gravado + _sc3Exento;
       // Criterio de base para la Comisión, elegido por el usuario en el formulario
       // Sababa: 'pago' = Total Pago real (incluye Diferencia) · 'mercancia' = Valor
       // Mercancía puro (montoBase, sin Diferencia). Mismo criterio que calcSab2().
@@ -11870,11 +11873,14 @@ function calcSab2(){
   const difAbs   = Math.abs(difPago);
   const tolerancia = Math.max(2, traspaso > 0 ? traspaso + 2 : 2);
 
-  // Homologación: base ajustada ÷ 1.07
-  const mercHomol    = baseAjust / DIV;
+  // Homologación: el Exento se resta de la Base Ajustada ANTES de dividir ÷1.07
+  // (esa porción no paga ITBMS y no debe "encogerse" por la homologación),
+  // y se vuelve a sumar completo al Valor Mercancía Homologado al final.
   const exentoSab    = window._sab2Exento || v('s2_exento') || 0;  // Reduce ITBMS, no el valor mercancía
-  const gravadoHomol = Math.max(0, mercHomol - exentoSab);
-  const itbmsHomol   = Math.round(gravadoHomol * itbPct * 100) / 100;
+  const baseGravada  = Math.max(0, baseAjust - exentoSab);
+  const gravadoHomol = baseGravada / DIV;
+  const itbmsHomol   = Math.round((baseGravada - gravadoHomol) * 100) / 100;
+  const mercHomol    = gravadoHomol + exentoSab;
 
   // Flete — solo aplica en FOB (en CIF ya está incluido en el valor)
   const fleteMain = isFOB ? v('s2_flete') : 0;
@@ -13357,8 +13363,8 @@ const d2_landed    = (sc2.base||sc1.base||0)+d2_noMercL;
 // ── SC3 SABABA ──
 // BASE = CIF - Traspaso + Diferencia_pago
 // comGlobal = BASE × 10%
-// mercHomol = BASE ÷ 1.07  (nuevo FOB → entra al inventario)
-// itbmsHomol = mercHomol × 7%
+// mercHomol = ((BASE − Exento) ÷ 1.07) + Exento  (nuevo FOB → entra al inventario)
+// itbmsHomol = (BASE − Exento) − ((BASE − Exento) ÷ 1.07)
 // comBruta = comGlobal - itbmsHomol
 // DESEMBOLSO = CIF_original + itbmsHomol + comBruta = CIF_orig + comGlobal
 const itbPctSnap   = s.itbPct||0.07;
