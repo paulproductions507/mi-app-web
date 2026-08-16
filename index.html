@@ -1423,7 +1423,7 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
            cursor (o tocarlo en celular) abre el cajón grande de siempre,
            con ícono + nombre + descripción, deslizándose hacia la derecha. -->
       <nav class="zlh-topnav" id="zlhTopNav">
-        <button class="zlh-topnav-trigger-btn" id="zlhFlyoutTrigger" onmouseenter="_zlhFlyoutOpen()" onclick="_zlhFlyoutToggle()">
+        <button class="zlh-topnav-trigger-btn" id="zlhFlyoutTrigger" onclick="_zlhFlyoutToggle()">
           <span class="zlh-topnav-brand">🛃</span>
           Menú
           <span class="car">▸</span>
@@ -1431,7 +1431,7 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
       </nav>
       <div class="zlh-topnav-backdrop" id="zlhTopNavBackdrop" onclick="_zlhFlyoutClose()"></div>
 
-      <aside class="zlh-flyout" id="zlhFlyout" onmouseleave="_zlhFlyoutClose()">
+      <aside class="zlh-flyout" id="zlhFlyout">
         <div class="zlh-flyout-hdr">
           <div class="zlh-flyout-brand">🛃 Módulos</div>
           <div style="display:flex;align-items:center;gap:2px;">
@@ -1833,6 +1833,24 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
   // afuera). El estado se recuerda entre sesiones.
   var _zlhFlyoutPinned = false;
   try{ _zlhFlyoutPinned = localStorage.getItem('zlh_flyout_pinned')==='1'; }catch(e){}
+
+  // ── Detección de dispositivo: ¿tiene mouse real (hover) o es solo táctil? ──
+  // Se usa una media query en vez de "sniffear" el user-agent, porque así
+  // funciona igual de bien en iPhone, Android, tablet o desktop, y hasta se
+  // re-evalúa si el dispositivo cambia (ej. se conecta un mouse a una tablet).
+  var _zlhHoverCapable = false;
+  function _zlhCheckHoverCapable(){
+    try{ _zlhHoverCapable = window.matchMedia('(hover: hover) and (pointer: fine)').matches; }
+    catch(e){ _zlhHoverCapable = false; }
+  }
+  _zlhCheckHoverCapable();
+  try{
+    var _zlhMq = window.matchMedia('(hover: hover) and (pointer: fine)');
+    var _zlhMqHandler = function(){ _zlhCheckHoverCapable(); };
+    if(_zlhMq.addEventListener) _zlhMq.addEventListener('change', _zlhMqHandler);
+    else if(_zlhMq.addListener) _zlhMq.addListener(_zlhMqHandler); // Safari viejo
+  }catch(e){}
+
   function _zlhFlyoutApplyPinUI(){
     var fly = document.getElementById('zlhFlyout');
     var pinBtn = document.getElementById('zlhFlyoutPinBtn');
@@ -1877,6 +1895,31 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
     if(fly && fly.classList.contains('open')) _zlhFlyoutClose();
     else _zlhFlyoutOpen();
   }
+
+  // ── Abrir al pasar el cursor: SOLO en dispositivos con mouse real ──
+  // Antes el botón tenía onmouseenter="_zlhFlyoutOpen()" fijo en el HTML.
+  // En iPhone (y algunos Android), al tocar un botón que tiene mouseenter Y
+  // click, Safari dispara ambos eventos en el mismo toque: primero el
+  // mouseenter (que ABRÍA el panel) y milisegundos después el click, que al
+  // ver el panel ya abierto lo volvía a CERRAR de inmediato — por eso en
+  // iPhone parecía que el menú "no abría nada". Enganchando el mouseenter
+  // solo por JS y solo cuando _zlhHoverCapable es true, el toque en
+  // touch-only devices depende 100% del click/tap, sin esa carrera.
+  document.addEventListener('DOMContentLoaded', function(){
+    var trg = document.getElementById('zlhFlyoutTrigger');
+    var fly = document.getElementById('zlhFlyout');
+    if(trg){
+      trg.addEventListener('mouseenter', function(){
+        if(_zlhHoverCapable) _zlhFlyoutOpen();
+      });
+    }
+    if(fly){
+      fly.addEventListener('mouseleave', function(){
+        if(_zlhHoverCapable) _zlhFlyoutClose();
+      });
+    }
+  });
+
   document.addEventListener('click', function(e){
     if(!e.target.closest('.zlh-flyout') && !e.target.closest('#zlhFlyoutTrigger')){
       _zlhFlyoutClose();
@@ -19381,7 +19424,7 @@ function _plntInitRealtime(){
         _plntCacheMem = null; // fuerza a releer en el próximo _plntLoad
       })
       .subscribe();
-  }catch(e){ console.warn('No se pudo iniciar canal Realtime de plantillas:', e); }
+  }catch(e){ /* Realtime opcional (mejora sobre HTTPS) — sin canal, sigue el respaldo por pull cada 5 min. Silencioso a propósito: no es un error para el usuario. */ }
 }
 function _plntAvisarActualizado(){
   try{ if(_plntRealtimeChannel) _plntRealtimeChannel.send({type:'broadcast', event:'PLANTILLA_UPDATED', payload:{}}); }catch(e){}
@@ -19831,7 +19874,7 @@ function _fdInitRealtime(){
         _fdCacheMem = null; // fuerza a releer en el próximo _fdLoad
       })
       .subscribe();
-  }catch(e){ console.warn('No se pudo iniciar canal Realtime de facturas:', e); }
+  }catch(e){ /* Realtime opcional (mejora sobre HTTPS) — sin canal, sigue el respaldo por pull cada 5 min. Silencioso a propósito: no es un error para el usuario. */ }
 }
 function _fdAvisarActualizado(){
   try{ if(_fdRealtimeChannel) _fdRealtimeChannel.send({type:'broadcast', event:'FACTURAS_UPDATED', payload:{}}); }catch(e){}
@@ -28793,7 +28836,7 @@ function _initTendRealtime(){
         }
       })
       .subscribe();
-  }catch(e){ console.warn('No se pudo iniciar canal Realtime:', e); }
+  }catch(e){ /* Realtime opcional (mejora sobre HTTPS) — sin canal, sigue el respaldo por pull cada 5 min. Silencioso a propósito: no es un error para el usuario. */ }
 }
 // Avisa a los demás dispositivos que un embarque cambió — sin mandar datos,
 // solo el número y el timestamp. Se llama al final de _syncTendToCloud().
@@ -33064,9 +33107,11 @@ let _sidebarPinned = false;
   var strip = document.createElement('div');
   strip.id = '_sidebar-hover-strip';
   strip.style.cssText = 'position:fixed;left:0;top:0;width:20px;height:100vh;z-index:298;';
-  // Only open on hover when sidebar is NOT pinned
+  // Only open on hover when sidebar is NOT pinned, y solo en dispositivos
+  // con mouse real — en iPhone/Android un toque cerca del borde izquierdo
+  // podía disparar este mouseenter sintético y abrir el panel sin querer.
   strip.addEventListener('mouseenter', function(){
-    if(!_sidebarPinned) openSidebar();
+    if(!_sidebarPinned && typeof _zlhHoverCapable!=='undefined' && _zlhHoverCapable) openSidebar();
   });
   document.body.appendChild(strip);
   // Close sidebar when mouse leaves both the sidebar and the strip
@@ -33075,6 +33120,7 @@ let _sidebarPinned = false;
     if(!sb) return;
     sb.addEventListener('mouseleave', function(e){
       if(_sidebarPinned) return;
+      if(typeof _zlhHoverCapable!=='undefined' && !_zlhHoverCapable) return;
       // Only close if not moving to strip
       var toEl = e.relatedTarget;
       if(toEl && (toEl.id==='_sidebar-hover-strip' || sb.contains(toEl))) return;
