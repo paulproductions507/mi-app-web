@@ -2361,7 +2361,7 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
         </div>
         <div id="blk-s1-traspaso" class="field" style="display:none">
           <label>Descuento / Traspaso ZL (USD)</label>
-          <input type="number" id="s1_traspaso" value="" placeholder="0.00" step="0.01" oninput="syncTraspasoSC3();calc()">
+          <input type="number" id="s1_traspaso" value="" placeholder="0.00" step="0.01" oninput="_normTraspaso(this);syncTraspasoSC3();calc()">
         </div>
         <div id="blk-s1-difpago" class="field" style="display:none">
           <label>Diferencia CIF <span style="font-size:9px;color:var(--blue-l);font-weight:400">✏️ editable · auto</span> (± USD) <span id="difpago-tipo-hint" style="font-size:10px;color:var(--blue-l)">← ajuste de centavos / redondeo</span></label>
@@ -2376,7 +2376,7 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
         </div>
         <div id="blk-s1-traspaso-fob" class="field" style="display:none">
           <label>Descuento / Traspaso ZL (USD)</label>
-          <input type="number" id="s1_traspaso_fob" value="" placeholder="0.00" step="0.01" oninput="calc()">
+          <input type="number" id="s1_traspaso_fob" value="" placeholder="0.00" step="0.01" oninput="_normTraspaso(this);calc()">
         </div>
         <div id="blk-s1-difpago-fob" class="field" style="display:none">
           <label>Diferencia Sababa (± USD)</label>
@@ -3334,7 +3334,7 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
         </div>
         <!-- Traspaso solo aplica en ZL CIF -->
         <div id="sab2-trasp-row" class="field"><label>Descuento Traspasos (USD)</label>
-          <input type="number" id="s2_trasp" value="" placeholder="0.00" step="0.01" oninput="calcSab2()">
+          <input type="number" id="s2_trasp" value="" placeholder="0.00" step="0.01" oninput="_normTraspaso(this);calcSab2()">
         </div>
         <!-- Diferencia: aplica en ZL y EXT CIF (viene automáticamente de PAGO_REALIZADO en plantilla) -->
         <div id="sab2-dif-cif-row" class="field" style="display:none"><label>Diferencia Sababa (± USD) <span class="info-btn" onclick="document.getElementById('dif-cif-info').classList.toggle('open')" style="font-style:normal">i</span></label>
@@ -3584,7 +3584,8 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
           <span id="inv-total-label" style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:700;color:var(--green-l)">$0.00</span>
         </div>
         <div style="font-size:10px;color:var(--muted2)" id="inv-apply-note"></div>
-        <div style="font-size:11px;color:var(--green-l);font-weight:600;margin-top:4px" id="inv-traspaso-label"></div>
+        <div style="font-size:11px;color:var(--orange-l);font-weight:600;margin-top:4px" id="inv-bultos-label"></div>
+        <div style="font-size:11px;color:var(--green-l);font-weight:600;margin-top:2px" id="inv-traspaso-label"></div>
         <div style="font-size:11px;color:var(--blue-l);font-weight:600;margin-top:2px" id="inv-piezas-label"></div>
       </div>
       <!-- Pie chart -->
@@ -11438,6 +11439,16 @@ function actualizarAhorro(){
 function syncSab2(){
   const sab2HasData = v('s2_costo_zl')>0 || v('s2_fob')>0;
   if(sab2HasData) calcSab2();
+}
+// Traspaso ZL siempre debe tratarse como positivo (es un descuento, no un cargo
+// negativo). Algunas plantillas lo traen en negativo por su propia lógica de signo
+// contable — esto normaliza cualquier entrada (manual o de plantilla) a valor
+// absoluto, antes de que el campo dispare el cálculo. Aplica igual en Sababa
+// Nuevo y Sababa Viejo, porque ambos leen de estos mismos campos.
+function _normTraspaso(el){
+  if(!el) return;
+  var n = parseFloat(el.value);
+  if(!isNaN(n) && n < 0){ el.value = Math.abs(n).toFixed(2); }
 }
 function syncTraspasoSC3(){
   const tr=v('s1_traspaso');
@@ -29014,7 +29025,7 @@ function renderInvLines(){
         +'<div style="flex:1"><div style="font-size:8px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.03em;margin-bottom:2px">Bultos</div><input type="number" value="'+(l.bultos||'')+'" placeholder="0" oninput="invLines['+i+'].bultos=parseInt(this.value)||0;_autoSumBultos()" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:5px;padding:5px 8px;color:var(--text);font-size:11px"></div>'
         +'<div style="flex:1"><div style="font-size:8px;color:var(--blue-l);font-weight:700;text-transform:uppercase;letter-spacing:.03em;margin-bottom:2px">Piezas</div><input type="number" value="'+(l.piezas||'')+'" placeholder="0" oninput="invLines['+i+'].piezas=parseInt(this.value)||0;_autoSumPiezas()" style="width:100%;background:var(--s2);border:1px solid rgba(88,166,255,.25);border-radius:5px;padding:5px 8px;color:var(--blue-l);font-size:11px;font-family:\'IBM Plex Mono\',monospace"></div>'
         +'<div style="flex:2"><div style="font-size:8px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.03em;margin-bottom:2px">N° Orden de Compra</div><input type="text" value="'+(l.oc||'')+'" placeholder="OC" oninput="invLines['+i+'].oc=this.value" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:5px;padding:5px 8px;color:var(--text);font-size:11px"></div>'
-        +'<div style="flex:1"><div style="font-size:8px;color:var(--green-l);font-weight:700;text-transform:uppercase;letter-spacing:.03em;margin-bottom:2px">Traspaso ($)</div><input type="number" value="'+(l.traspaso||'')+'" placeholder="0.00" oninput="invLines['+i+'].traspaso=parseFloat(this.value)||0;_autoSumTraspaso()" style="width:100%;background:var(--s2);border:1px solid rgba(63,185,80,.25);border-radius:5px;padding:5px 8px;color:var(--green-l);font-size:11px;font-family:\'IBM Plex Mono\',monospace"></div>'
+        +'<div style="flex:1"><div style="font-size:8px;color:var(--green-l);font-weight:700;text-transform:uppercase;letter-spacing:.03em;margin-bottom:2px">Traspaso ($)</div><input type="number" value="'+(l.traspaso||'')+'" placeholder="0.00" oninput="invLines['+i+'].traspaso=Math.abs(parseFloat(this.value)||0);_autoSumTraspaso()" style="width:100%;background:var(--s2);border:1px solid rgba(63,185,80,.25);border-radius:5px;padding:5px 8px;color:var(--green-l);font-size:11px;font-family:\'IBM Plex Mono\',monospace"></div>'
         +'</div>'
         +((typeof tipo!=='undefined' && tipo==='ZL')?(
           '<div style="display:flex;gap:6px;margin-bottom:6px;padding:5px 8px;background:rgba(240,136,62,.06);border-radius:6px;border:1px solid rgba(240,136,62,.2)">'
@@ -30457,6 +30468,7 @@ function calcInvTotals(){
   const f=n=>'$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
   const isFOB=termino==='FOB';
   const totalPiezas=mercLines.reduce((s,l)=>s+(l.piezas||0),0);
+  const totalBultos=mercLines.reduce((s,l)=>s+(l.bultos||0),0);
   window._totalPiezas=totalPiezas;
 
   // Actualizar TODOS los elementos con cada ID (cubre original + modal clone simultáneamente)
@@ -30467,6 +30479,7 @@ function calcInvTotals(){
   _setAll('inv-total-label', f(total));
   _setAll('inv-term-label',  isFOB ? 'FOB' : 'CIF');
   _setAll('inv-apply-note',  `Total se aplicará al campo "${isFOB?'Valor FOB':'Valor CIF'}".`);
+  _setAll('inv-bultos-label',   totalBultos>0 ? '📦 '+totalBultos.toLocaleString('en-US')+' bultos' : '');
   _setAll('inv-traspaso-label', trasTotal>0 ? '🔄 Traspaso total: '+f(trasTotal) : '');
   _setAll('inv-piezas-label',   totalPiezas>0 ? '🔢 '+totalPiezas.toLocaleString('en-US')+' piezas' : '');
 
@@ -30774,7 +30787,7 @@ function loadInvFile(input){
       const bultosRaw=String(r[bc]||'').replace(/[^0-9]/g,'');
       const bultos=bultosRaw?parseInt(bultosRaw)||0:0;
       const traspasoRaw=String(r[tc]||'').replace(/[^0-9.-]/g,'');
-      const traspaso=traspasoRaw?Math.round(parseFloat(traspasoRaw)*100)/100:0;
+      const traspaso=traspasoRaw?Math.abs(Math.round(parseFloat(traspasoRaw)*100)/100):0;
       const piezasRaw=String(r[pc]||'').replace(/[^0-9]/g,'');
       const piezas=piezasRaw?parseInt(piezasRaw)||0:0;
       const ocVal=String(r[oc2]||'').trim();
@@ -31752,7 +31765,7 @@ function _motoresMapeado(rows) {
     var monto = parseFloat(montoStr) || 0;
     var ocVal = cOC >= 0 ? String(r[cOC] || '').trim() : '';
     var bultos = cBultos >= 0 ? parseInt(String(r[cBultos]||'').replace(/[^0-9]/g,''))||0 : 0;
-    var trasp  = cTrasp >= 0 ? parseFloat(String(r[cTrasp]||'').replace(/[^0-9.-]/g,''))||0 : 0;
+    var trasp  = cTrasp >= 0 ? Math.abs(parseFloat(String(r[cTrasp]||'').replace(/[^0-9.-]/g,''))||0) : 0;
     var piezas = cPiezas >= 0 ? parseInt(String(r[cPiezas]||'').replace(/[^0-9]/g,''))||0 : 0;
     var ocH = cOCH >= 0 ? String(r[cOCH]||'').trim() : '';
     var mH  = cMH  >= 0 ? parseFloat(String(r[cMH]||'').replace(/[^0-9.-]/g,''))||0 : 0;
