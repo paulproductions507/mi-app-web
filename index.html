@@ -14292,6 +14292,7 @@ function _corregirRubroUI(idx){
     var tipoAct = l.tipoFac || 'mercancia';
     var selMerc = rubroOptsMerc.replace('value="'+tipoAct+'"','value="'+tipoAct+'" selected');
     var esRara = tipoAct !== 'mercancia';
+    var deptVal = (l.deptCat||l.dept||'').toString().replace(/"/g,'&quot;');
     return '<div style="background:var(--bg);border:1px solid '+(esRara?'rgba(248,81,73,.4)':'var(--border)')+';border-radius:10px;padding:10px 12px;margin-bottom:8px">'
       +(esRara?'<div style="font-size:9px;color:#f85149;font-weight:700;margin-bottom:6px">⚠️ Esta línea NO es mercancía — reclasifícala abajo</div>':'')
       +'<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:6px">'
@@ -14299,7 +14300,9 @@ function _corregirRubroUI(idx){
         +'<input type="number" step="0.01" data-monto-idx="'+realIdx+'" class="_fix_monto_merc" value="'+Number(l.costo||0).toFixed(2)+'" style="width:110px;text-align:right;background:var(--s2);border:1px solid rgba(88,166,255,.4);border-radius:6px;padding:5px 7px;color:var(--blue-l);font-family:monospace;font-size:12px;font-weight:800">'
       +'</div>'
       +'<div style="font-size:10px;color:var(--muted);margin-bottom:6px">Factura: '+(l.numFact||l.nfac||'—')+'</div>'
-      +'<select data-idx="'+realIdx+'" class="_fix_tipo_merc_sel" style="width:100%;background:var(--s2);border:1px solid '+(esRara?'rgba(248,81,73,.4)':'rgba(88,166,255,.3)')+';border-radius:7px;padding:7px 9px;color:var(--text);font-size:12px">'+selMerc+'</select>'
+      +'<select data-idx="'+realIdx+'" class="_fix_tipo_merc_sel" style="width:100%;background:var(--s2);border:1px solid '+(esRara?'rgba(248,81,73,.4)':'rgba(88,166,255,.3)')+';border-radius:7px;padding:7px 9px;color:var(--text);font-size:12px;margin-bottom:6px">'+selMerc+'</select>'
+      +'<div style="font-size:9px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px">Departamento (encabezado del embarque)</div>'
+      +'<input type="text" data-idx="'+realIdx+'" class="_fix_dept_merc" value="'+deptVal+'" placeholder="Ej: Hogar, Caballeros, Damas..." style="width:100%;background:var(--s2);border:1px solid rgba(63,185,80,.3);border-radius:7px;padding:7px 9px;color:var(--green-l);font-size:12px;font-weight:600">'
     +'</div>';
   }
 
@@ -14325,7 +14328,15 @@ function _corregirRubroUI(idx){
       +'<button id="_fix_tab_merc" type="button" style="flex:1;background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);font-size:12px;font-weight:700;padding:8px 4px;cursor:pointer">📦 Mercancía ('+lineasMerc.length+')</button>'
     +'</div>'
     +'<div id="_fix_panel_gastos">'+filasHtml+'</div>'
-    +'<div id="_fix_panel_merc" style="display:none">'+filasMercHtml+'</div>'
+    +'<div id="_fix_panel_merc" style="display:none">'
+      +'<div style="background:rgba(63,185,80,.06);border:1px solid rgba(63,185,80,.25);border-radius:10px;padding:10px 12px;margin-bottom:10px">'
+        +'<div style="font-size:11px;font-weight:700;color:var(--green-l);margin-bottom:4px">📥 Corregir Departamentos desde plantilla</div>'
+        +'<div style="font-size:10px;color:var(--muted);margin-bottom:8px">Sube el Excel con la columna Proveedor y Departamento — solo llena el campo Departamento de cada línea de abajo (por nombre de proveedor). No cambia montos ni factura.</div>'
+        +'<button type="button" id="_fix_dept_upload_btn" style="width:100%;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.35);color:var(--green-l);border-radius:7px;padding:8px;font-size:11px;font-weight:700;cursor:pointer">📄 Elegir Excel de Departamentos</button>'
+        +'<div id="_fix_dept_upload_status" style="font-size:10px;color:var(--muted);margin-top:6px"></div>'
+      +'</div>'
+      +filasMercHtml
+    +'</div>'
     +'<div style="display:flex;gap:10px;margin-top:8px">'
     +'<button id="_fix_rubro_cancel" style="flex:1;background:none;border:1px solid var(--border);color:var(--muted);border-radius:10px;padding:10px;font-size:12px;cursor:pointer">Cancelar</button>'
     +'<button id="_fix_rubro_ok" style="flex:2;background:linear-gradient(135deg,rgba(99,179,237,.25),rgba(99,179,237,.12));border:1.5px solid rgba(99,179,237,.5);color:#63b3ed;border-radius:10px;padding:10px;font-size:12px;font-weight:800;cursor:pointer">🏷️ Recalcular y Guardar</button>'
@@ -14335,6 +14346,81 @@ function _corregirRubroUI(idx){
     _makeSearchableSelect('_fix_origen_pais');
     _makeSearchableSelect('_fix_origen_ciudad');
   }
+
+  // ── Cargar plantilla de Departamentos (Excel) ──
+  // Solo llena el campo Departamento de cada línea de mercancía ya listada
+  // arriba, emparejando por nombre de proveedor. No toca montos ni rubros.
+  (function(){
+    var btnUp = ov.querySelector('#_fix_dept_upload_btn');
+    var stUp  = ov.querySelector('#_fix_dept_upload_status');
+    if(!btnUp) return;
+    btnUp.onclick = function(){
+      var inp = document.createElement('input');
+      inp.type = 'file';
+      inp.accept = '.xlsx,.xls,.csv';
+      inp.onchange = function(){
+        var file = inp.files && inp.files[0];
+        if(!file) return;
+        if(stUp) stUp.textContent = '⏳ Leyendo archivo...';
+        var reader = new FileReader();
+        reader.onload = function(e){
+          function _procesar(){
+            try{
+              var wb = XLSX.read(e.target.result, {type:'array'});
+              var ws = wb.Sheets[wb.SheetNames[0]];
+              var rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+              // Buscar fila de encabezados (columna Proveedor/Suplidor + Departamento/Depto)
+              var hdrIdx=-1, cProv=-1, cDept=-1;
+              for(var i=0;i<Math.min(rows.length,15);i++){
+                var hr=(rows[i]||[]).map(function(c){return String(c||'').toUpperCase().trim();});
+                var pIdx=hr.findIndex(function(h){return h.indexOf('PROVEEDOR')>=0||h.indexOf('SUPLIDOR')>=0;});
+                var dIdx=hr.findIndex(function(h){return h.indexOf('DEPARTAMENTO')>=0||h.indexOf('DEPTO')>=0||h.indexOf('DEPT')>=0;});
+                if(pIdx>=0 && dIdx>=0){ hdrIdx=i; cProv=pIdx; cDept=dIdx; break; }
+              }
+              if(hdrIdx<0){
+                if(stUp) stUp.textContent='⚠️ No se encontraron columnas "Proveedor" y "Departamento" en el archivo.';
+                if(typeof _showToast==='function') _showToast('⚠️ Plantilla sin columnas Proveedor/Departamento','orange',3500);
+                return;
+              }
+              // Mapa Proveedor(normalizado) -> Departamento
+              var mapa = {};
+              for(var r=hdrIdx+1;r<rows.length;r++){
+                var row=rows[r]||[];
+                var pv=String(row[cProv]||'').trim();
+                var dv=String(row[cDept]||'').trim();
+                if(pv && dv) mapa[pv.toUpperCase()] = dv;
+              }
+              // Aplicar a los inputs de Departamento ya renderizados, por proveedor
+              var aplicados=0;
+              ov.querySelectorAll('._fix_dept_merc').forEach(function(deptInp){
+                var idx=parseInt(deptInp.dataset.idx,10);
+                var linea = d.invLines[idx];
+                if(!linea) return;
+                var provNorm=(linea.prov||'').trim().toUpperCase();
+                if(mapa[provNorm]){ deptInp.value = mapa[provNorm]; aplicados++; }
+              });
+              if(stUp) stUp.textContent = aplicados>0
+                ? '✅ '+aplicados+' línea(s) actualizada(s) desde la plantilla. Revisa y presiona "Recalcular y Guardar".'
+                : '⚠️ No se encontraron coincidencias por nombre de proveedor.';
+              if(typeof _showToast==='function') _showToast(aplicados>0?'✅ Departamentos cargados desde plantilla':'⚠️ Sin coincidencias de proveedor','orange',3500);
+            }catch(err){
+              if(stUp) stUp.textContent='❌ Error leyendo el archivo: '+err.message;
+            }
+          }
+          if(typeof XLSX==='undefined'){
+            if(stUp) stUp.textContent='⏳ Cargando librería...';
+            var s=document.createElement('script');
+            s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+            s.onload=_procesar;
+            s.onerror=function(){ if(stUp) stUp.textContent='❌ Sin conexión para cargar librería.'; };
+            document.head.appendChild(s);
+          } else { _procesar(); }
+        };
+        reader.readAsArrayBuffer(file);
+      };
+      inp.click();
+    };
+  })();
 
   // Tabs
   var tabG = ov.querySelector('#_fix_tab_gastos'), tabM = ov.querySelector('#_fix_tab_merc');
@@ -14528,6 +14614,43 @@ function _corregirRubroUI(idx){
         cambios++;
       }
     });
+    // ── Departamento por línea de mercancía + regenerar encabezado (Tipo de
+    //    Mercancía) del embarque — mismo criterio que el auto-fill al cargar
+    //    plantilla nueva: suma por departamento, % sobre el total mercancía,
+    //    top 3 + "+N más". Si el embarque no traía Departamento en la
+    //    plantilla original, esto reemplaza el fallback genérico (Término ·
+    //    Tipo · Equipo · Origen) por el desglose real. ──
+    var _deptCambio = false;
+    ov.querySelectorAll('._fix_dept_merc').forEach(function(inp){
+      var i = parseInt(inp.dataset.idx,10);
+      var nuevoDept = inp.value.trim();
+      if(d.invLines[i] && (d.invLines[i].deptCat||d.invLines[i].dept||'') !== nuevoDept){
+        d.invLines[i].deptCat = nuevoDept;
+        _deptCambio = true;
+        cambios++;
+      }
+    });
+    if(_deptCambio){
+      var _mLin = (d.invLines||[]).filter(function(l){ return (l.tipoFac||'mercancia')==='mercancia'; });
+      var _mTot = _mLin.reduce(function(s,l){ return s+(l.costo||0); },0);
+      var _dSum = {};
+      _mLin.forEach(function(l){
+        var k=(l.deptCat||l.dept||'').trim();
+        if(k){ _dSum[k]=(_dSum[k]||0)+(l.costo||0); }
+      });
+      var _dAll = Object.entries(_dSum).sort(function(a,b){return b[1]-a[1];})
+        .map(function(e){ var p=_mTot>0?(e[1]/_mTot*100).toFixed(0):0; return e[0]+' '+p+'%'; });
+      if(_dAll.length){
+        var _dTop = _dAll.slice(0,3);
+        if(_dAll.length>3) _dTop.push('+'+(_dAll.length-3)+' más');
+        var _nuevoDesc = _dTop.join(', ');
+        d.desc = _nuevoDesc;
+        if(d.snap){
+          if(!d.snap.campos) d.snap.campos = {};
+          d.snap.campos.s1_desc_emb = _nuevoDesc;
+        }
+      }
+    }
     // ── Régimen: SIEMPRE guardar, sin importar si cambió o no ──
     if(_nuevoTipoZL){
       d.tipo = _nuevoTipoZL;
@@ -16830,6 +16953,7 @@ async function procesarEmbarque(){
         var _cb3    = window._sc1_base||window._lastCIF||0;
         var _baseFact3 = (_isSab3 && (_sn3.sc3?.mercHomol||0)>0) ? _sn3.sc3.mercHomol : _cb3;
         var _fv3    = (_baseFact3>0&&_lb3>0) ? (((_lb3/_baseFact3)-1)*100).toFixed(2)+'%' : '—';
+        _updateEstatusBadge('procesado');
         _showProcessingOverlay(nro, desc, _cb3, _ahorroDisplay, _lb3, _fv3, function(){
           _guardarYRecargar(_nroGuardar);
         });
@@ -16859,6 +16983,7 @@ async function procesarEmbarque(){
   var _factorVal = (_baseFactorUse > 0 && _landedVal > 0)
     ? (((_landedVal / _baseFactorUse) - 1) * 100).toFixed(2) + '%'
     : '—';
+  _updateEstatusBadge('procesado');
   _showProcessingOverlay(nro, desc, _cifBase2, _ahorroDisplay, _landedVal, _factorVal, function(){
     _guardarYRecargar(_nroGuardar);
   });
@@ -34057,8 +34182,25 @@ function _actualizarVistaPreviaComparativo(){
     cmpHtml+=_vpRow('📦','Costo No Mercancía', fmt2(noMerc3),'var(--orange-l)');
     cmpHtml+=_vpRow('🧾','ITBMS', '—','var(--muted)');
     cmpHtml+=_vpRow('📘','Costo Inventario (Homologado)', fmt2(merc3+noMerc3),'var(--blue-l)');
-    cmpHtml+=_vpRow('🏁','Costo Grande Global', fmt2(landed3),'var(--muted)');
-    cmpHtml+=_vpRow('📊','Factor Importación', factor3,'var(--orange-l)');
+    // El Gasto Complementario (Esc. Regular) se traslada dólar por dólar al Landed
+    // de Sababa vía el puente de Master Value (sc3.mv se ajusta para igualar ambos
+    // Landed) — por eso "antes" del Gasto Complementario es simplemente landed3
+    // menos ese mismo monto, igual que ya se hace en la columna Regular arriba.
+    if(hayGastoComp1){
+      var landed3Antes = landed3 - gastoComp1;
+      var factor3Antes = merc3>0 ? (((landed3Antes-merc3)/merc3)*100) : 0;
+      cmpHtml+='<div style="display:flex;gap:10px;align-items:flex-start">'
+        +'<div style="flex:1">'+_vpRow('🏁','Costo Landed (antes de G.C.)', fmt2(landed3Antes),'var(--muted)')+'</div>'
+        +'<div style="flex:1;border-left:1px solid var(--border);padding-left:10px">'+_vpRow('🏁','Costo Landed (ajustado)', fmt2(landed3),'var(--green-l)')+'</div>'
+        +'</div>';
+      cmpHtml+='<div style="display:flex;gap:10px;align-items:flex-start">'
+        +'<div style="flex:1">'+_vpRow('📊','Factor Importación (antes)', factor3Antes.toFixed(2)+'%','var(--muted)')+'</div>'
+        +'<div style="flex:1;border-left:1px solid var(--border);padding-left:10px">'+_vpRow('📊','Factor Importación (ajustado)', factor3,'var(--orange-l)')+'</div>'
+        +'</div>';
+    } else {
+      cmpHtml+=_vpRow('🏁','Costo Grande Global', fmt2(landed3),'var(--muted)');
+      cmpHtml+=_vpRow('📊','Factor Importación', factor3,'var(--orange-l)');
+    }
   } else {
     if(titleEl) titleEl.innerHTML='🔵 Escenario Cif Express';
     var cif2 = sc2.base||sc1.base||0;
