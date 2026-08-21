@@ -519,7 +519,23 @@ body[style*="color-scheme: light"] #portal-content tr td[style*="background:#1c2
 #splash.corporate-bg .erp-circuit{filter:none;opacity:1;}
 #splash-hero-bg{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:0;}
 #splash-hero-bg::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 40%,rgba(88,166,255,.07) 0%,transparent 70%);}
-.erp-circuit{position:absolute;width:100%;height:100%;top:0;left:0;overflow:hidden;pointer-events:none;z-index:0;}
+.erp-circuit{position:absolute;width:100%;height:100%;top:0;left:0;overflow:hidden;pointer-events:none;z-index:0;transition:left .6s cubic-bezier(.4,0,.2,1),width .6s cubic-bezier(.4,0,.2,1);}
+/* ── Split de escritorio: login a la izquierda, arte/diagrama a la derecha ──
+   En móvil no cambia nada (sigue siendo el overlay de siempre a pantalla
+   completa). Desde ~900px, el diagrama de fondo (.erp-circuit) se confina a
+   la mitad derecha y el bloque de login (#splash-hero) a la mitad
+   izquierda, con una línea divisoria sutil. Al presionar "Ingresar al
+   Sistema", showSplashNav() ya agrega las clases .hero-gone/.app-mode a
+   #splash — aquí solo enganchamos esas mismas clases para que el panel
+   derecho "corra" y se expanda a pantalla completa mientras aparece la
+   pantalla de carga encima, sin tocar la lógica JS existente. */
+@media (min-width:900px){
+  #splash-hero{width:48%!important;box-sizing:border-box;transition:opacity .4s,transform .4s;}
+  #splash-hero::after{content:'';position:absolute;top:8%;bottom:8%;left:48%;width:1px;background:linear-gradient(180deg,transparent,rgba(88,166,255,.35),transparent);}
+  .erp-circuit{left:50%;width:50%;}
+  #splash:not(.hero-gone):not(.app-mode) .erp-circuit::before{content:'';position:absolute;inset:0;background:linear-gradient(90deg,rgba(2,8,20,.55) 0%,transparent 18%);pointer-events:none;z-index:1;}
+  #splash.hero-gone .erp-circuit,#splash.app-mode .erp-circuit{left:0;width:100%;}
+}
 .erp-circuit svg{width:100%;height:100%;opacity:.12;}
 #splash.nature-bg{background:linear-gradient(160deg,#071510 0%,#0b2218 30%,#071c12 60%,#082015 100%)!important;}
 #splash.petrol-bg{background:linear-gradient(160deg,#041018 0%,#071c2e 35%,#051520 70%,#061822 100%)!important;}
@@ -16882,6 +16898,12 @@ async function procesarEmbarque(){
     if(_tenia) _pushDeletedListToCloud().catch(function(){});
   }
 
+  // ── Estatus persistente: se guarda en el propio registro para que, al
+  //    reabrirlo después (otro día, otro dispositivo), la app sepa que este
+  //    embarque ya quedó completamente procesado y lo muestre así — antes
+  //    esto solo vivía en el badge de pantalla y se perdía en el siguiente
+  //    reload automático o al reabrir desde Historial. ──
+  snap.estatus = 'procesado';
   // Si es actualización de un pendiente, reemplazar en lugar de agregar
   const _updIdx = window._pendienteUpdateIdx;
   if(typeof _updIdx === 'number' && _updIdx >= 0){
@@ -17203,7 +17225,7 @@ document.addEventListener('DOMContentLoaded', function(){
     const el = document.getElementById(id);
     if(el) el.addEventListener('input', function(){
       const cur = document.getElementById('s1_estatus_txt')?.textContent||'';
-      if(cur==='Nuevo'||cur==='') _updateEstatusBadge('editando');
+      if(cur==='Nuevo'||cur===''||cur==='✅ Procesado') _updateEstatusBadge('editando');
     });
   });
 });
@@ -17427,8 +17449,13 @@ function reabrirEmbarquePendiente(idx){
   const tabEl = document.querySelector('[onclick*="switchTab"][onclick*="sim"]') || document.querySelector('.tab');
   if(typeof switchTab === 'function') switchTab('sim', tabEl);
 
-  // ── 11. Update estatus badge to "Reabierto" ──
-  _updateEstatusBadge('reabierto');
+  // ── 11. Update estatus badge ──
+  // Si el embarque ya había quedado totalmente procesado, se muestra así
+  // (fiel al estado real guardado) hasta que el usuario realmente modifique
+  // algo — recién ahí pasa a "En edición". Solo se marca "Reabierto" de
+  // entrada cuando lo que se reabre es un embarque que había quedado
+  // pendiente/incompleto (nunca llegó a procesarse).
+  _updateEstatusBadge(d.estatus === 'procesado' ? 'procesado' : 'reabierto');
 
   _showToast('✏️ Embarque ' + d.nro + ' restaurado — verifica, edita y confirma.', 'orange', 5000);
   setTimeout(function(){ if(typeof _enableAllApplyBtns==='function') _enableAllApplyBtns(); }, 300);
@@ -22902,23 +22929,57 @@ function _calcCostoInventario(d){
 //    solo a mes/año/valorFobTotal (lo único que necesita esta gráfica). Si el
 //    archivo fuente se actualiza con nuevos contenedores, este bloque debe
 //    volver a regenerarse/copiarse igual para mantenerlo al día.
-var _CONT_DATA = [{"mes":1,"anio":2025,"fob":40698.0},{"mes":1,"anio":2025,"fob":103851.8},{"mes":1,"anio":2025,"fob":10950.53},{"mes":1,"anio":2025,"fob":86018.4},{"mes":1,"anio":2025,"fob":110462.5},{"mes":1,"anio":2025,"fob":112783.8},{"mes":1,"anio":2025,"fob":53687.16},{"mes":null,"anio":null,"fob":17605.84},{"mes":null,"anio":null,"fob":25940.84},{"mes":1,"anio":2025,"fob":21883.2},{"mes":1,"anio":2025,"fob":56672.25},{"mes":2,"anio":2025,"fob":54210.0},{"mes":2,"anio":2025,"fob":120222.5},{"mes":2,"anio":2025,"fob":103060.8},{"mes":2,"anio":2025,"fob":30845.06},{"mes":2,"anio":2025,"fob":12393.0},{"mes":3,"anio":2025,"fob":65482.65},{"mes":3,"anio":2025,"fob":29979.6},{"mes":3,"anio":2025,"fob":78980.8},{"mes":3,"anio":2025,"fob":47467.6},{"mes":3,"anio":2025,"fob":61238.9},{"mes":3,"anio":2025,"fob":29873.34},{"mes":3,"anio":2025,"fob":105044.25},{"mes":3,"anio":2025,"fob":61877.54},{"mes":3,"anio":2025,"fob":53741.5},{"mes":3,"anio":2025,"fob":10446.55},{"mes":3,"anio":2025,"fob":47032.17},{"mes":3,"anio":2025,"fob":122474.0},{"mes":3,"anio":2025,"fob":8938.89},{"mes":3,"anio":2025,"fob":9831.33},{"mes":3,"anio":2025,"fob":13123.05},{"mes":3,"anio":2025,"fob":227449.2},{"mes":3,"anio":2025,"fob":9300.8},{"mes":3,"anio":2025,"fob":8868.85},{"mes":3,"anio":2025,"fob":168575.45},{"mes":null,"anio":null,"fob":12393.0},{"mes":4,"anio":2025,"fob":7469.0},{"mes":4,"anio":2025,"fob":133278.75},{"mes":4,"anio":2025,"fob":59658.0},{"mes":4,"anio":2025,"fob":57987.5},{"mes":4,"anio":2025,"fob":29852.26},{"mes":4,"anio":2025,"fob":83202.0},{"mes":4,"anio":2025,"fob":46554.14},{"mes":4,"anio":2025,"fob":190120.65},{"mes":4,"anio":2025,"fob":96943.2},{"mes":4,"anio":2025,"fob":51161.2},{"mes":4,"anio":2025,"fob":142371.25},{"mes":4,"anio":2025,"fob":94823.25},{"mes":4,"anio":2025,"fob":55345.48},{"mes":4,"anio":2025,"fob":93511.31},{"mes":4,"anio":2025,"fob":143513.2},{"mes":4,"anio":2025,"fob":102400.5},{"mes":4,"anio":2025,"fob":32290.4},{"mes":4,"anio":2025,"fob":57666.8},{"mes":4,"anio":2025,"fob":131978.0},{"mes":4,"anio":2025,"fob":53341.2},{"mes":4,"anio":2025,"fob":25635.8},{"mes":4,"anio":2025,"fob":52606.5},{"mes":4,"anio":2025,"fob":16528.0},{"mes":4,"anio":2025,"fob":18831.0},{"mes":5,"anio":2025,"fob":117167.27},{"mes":5,"anio":2025,"fob":84342.0},{"mes":5,"anio":2025,"fob":50097.7},{"mes":5,"anio":2025,"fob":40657.7},{"mes":5,"anio":2025,"fob":53856.8},{"mes":5,"anio":2025,"fob":144249.75},{"mes":5,"anio":2025,"fob":51583.75},{"mes":5,"anio":2025,"fob":90988.1},{"mes":5,"anio":2025,"fob":112594.45},{"mes":5,"anio":2025,"fob":24824.12},{"mes":5,"anio":2025,"fob":59463.04},{"mes":5,"anio":2025,"fob":107897.9},{"mes":5,"anio":2025,"fob":69598.2},{"mes":5,"anio":2025,"fob":70260.1},{"mes":5,"anio":2025,"fob":86446.4},{"mes":5,"anio":2025,"fob":36641.1},{"mes":6,"anio":2025,"fob":20272.14},{"mes":5,"anio":2025,"fob":30046.18},{"mes":6,"anio":2025,"fob":46077.6},{"mes":5,"anio":2025,"fob":84472.21},{"mes":5,"anio":2025,"fob":13599.0},{"mes":5,"anio":2025,"fob":69885.43},{"mes":6,"anio":2025,"fob":29188.5},{"mes":6,"anio":2025,"fob":109170.0},{"mes":6,"anio":2025,"fob":49500.0},{"mes":6,"anio":2025,"fob":23426.0},{"mes":6,"anio":2025,"fob":31152.3},{"mes":6,"anio":2025,"fob":251178.0},{"mes":6,"anio":2025,"fob":98426.0},{"mes":6,"anio":2025,"fob":46901.2},{"mes":6,"anio":2025,"fob":150009.19},{"mes":6,"anio":2025,"fob":126573.41},{"mes":6,"anio":2025,"fob":61815.26},{"mes":6,"anio":2025,"fob":159519.1},{"mes":6,"anio":2025,"fob":85163.42},{"mes":6,"anio":2025,"fob":19283.4},{"mes":6,"anio":2025,"fob":26748.41},{"mes":6,"anio":2025,"fob":17002.67},{"mes":6,"anio":2025,"fob":15661.6},{"mes":6,"anio":2025,"fob":31948.36},{"mes":6,"anio":2025,"fob":19958.4},{"mes":6,"anio":2025,"fob":32464.2},{"mes":6,"anio":2025,"fob":16651.66},{"mes":6,"anio":2025,"fob":28912.93},{"mes":6,"anio":2025,"fob":102017.5},{"mes":7,"anio":2025,"fob":21891.44},{"mes":7,"anio":2025,"fob":45336.0},{"mes":7,"anio":2025,"fob":81173.95},{"mes":7,"anio":2025,"fob":19459.5},{"mes":7,"anio":2025,"fob":137103.7},{"mes":7,"anio":2025,"fob":78819.45},{"mes":7,"anio":2025,"fob":18704.2},{"mes":null,"anio":null,"fob":139718.15},{"mes":7,"anio":2025,"fob":29898.59},{"mes":7,"anio":2025,"fob":22927.08},{"mes":7,"anio":2025,"fob":110797.8},{"mes":7,"anio":2025,"fob":40744.8},{"mes":7,"anio":2025,"fob":39927.0},{"mes":7,"anio":2025,"fob":123110.02},{"mes":7,"anio":2025,"fob":37510.35},{"mes":7,"anio":2025,"fob":39228.11},{"mes":7,"anio":2025,"fob":22800.0},{"mes":7,"anio":2025,"fob":70822.35},{"mes":7,"anio":2025,"fob":182524.45},{"mes":7,"anio":2025,"fob":49500.0},{"mes":7,"anio":2025,"fob":15750.0},{"mes":7,"anio":2025,"fob":42170.4},{"mes":8,"anio":2025,"fob":42621.65},{"mes":null,"anio":null,"fob":43241.02},{"mes":null,"anio":null,"fob":33386.03},{"mes":8,"anio":2025,"fob":26783.05},{"mes":7,"anio":2025,"fob":42622.0},{"mes":7,"anio":2025,"fob":61405.2},{"mes":7,"anio":2025,"fob":48259.68},{"mes":8,"anio":2025,"fob":152157.0},{"mes":8,"anio":2025,"fob":31397.4},{"mes":null,"anio":null,"fob":11465.1},{"mes":8,"anio":2025,"fob":21940.0},{"mes":null,"anio":null,"fob":61459.19},{"mes":8,"anio":2025,"fob":38923.89},{"mes":8,"anio":2025,"fob":91258.64},{"mes":8,"anio":2025,"fob":16756.3},{"mes":8,"anio":2025,"fob":15712.62},{"mes":9,"anio":2025,"fob":23409.0},{"mes":8,"anio":2025,"fob":30811.96},{"mes":9,"anio":2025,"fob":22960.14},{"mes":9,"anio":2025,"fob":37439.79},{"mes":9,"anio":2025,"fob":57672.71},{"mes":9,"anio":2025,"fob":54656.4},{"mes":9,"anio":2025,"fob":20979.0},{"mes":9,"anio":2025,"fob":35684.0},{"mes":9,"anio":2025,"fob":0},{"mes":9,"anio":2025,"fob":33829.43},{"mes":9,"anio":2025,"fob":16270.9},{"mes":9,"anio":2025,"fob":13599.9},{"mes":9,"anio":2025,"fob":84769.3},{"mes":9,"anio":2025,"fob":54926.87},{"mes":null,"anio":null,"fob":50613.93},{"mes":null,"anio":null,"fob":103298.08},{"mes":9,"anio":2025,"fob":27549.06},{"mes":9,"anio":2025,"fob":31109.34},{"mes":9,"anio":2025,"fob":37890.86},{"mes":9,"anio":2025,"fob":13607.06},{"mes":9,"anio":2025,"fob":112545.75},{"mes":9,"anio":2025,"fob":14680.8},{"mes":9,"anio":2025,"fob":32145.82},{"mes":9,"anio":2025,"fob":34560.1},{"mes":9,"anio":2025,"fob":56038.32},{"mes":9,"anio":2025,"fob":33406.3},{"mes":9,"anio":2025,"fob":18744.89},{"mes":9,"anio":2025,"fob":53103.12},{"mes":9,"anio":2025,"fob":75909.6},{"mes":10,"anio":2025,"fob":15655.25},{"mes":9,"anio":2025,"fob":54775.2},{"mes":9,"anio":2025,"fob":20860.2},{"mes":10,"anio":2025,"fob":22675.47},{"mes":null,"anio":null,"fob":12540.57},{"mes":10,"anio":2025,"fob":8686.0},{"mes":10,"anio":2025,"fob":121011.5},{"mes":null,"anio":null,"fob":35166.54},{"mes":10,"anio":2025,"fob":23643.15},{"mes":10,"anio":2025,"fob":24583.5},{"mes":10,"anio":2025,"fob":19417.23},{"mes":10,"anio":2025,"fob":20795.76},{"mes":10,"anio":2025,"fob":35160.44},{"mes":10,"anio":2025,"fob":101560.5},{"mes":10,"anio":2025,"fob":91519.65},{"mes":null,"anio":null,"fob":75908.75},{"mes":10,"anio":2025,"fob":173967.81},{"mes":10,"anio":2025,"fob":87856.94},{"mes":10,"anio":2025,"fob":110753.5},{"mes":10,"anio":2025,"fob":156287.15},{"mes":10,"anio":2025,"fob":178504.0},{"mes":10,"anio":2025,"fob":10856.19},{"mes":null,"anio":null,"fob":31064.21},{"mes":10,"anio":2025,"fob":13442.24},{"mes":10,"anio":2025,"fob":8686.0},{"mes":10,"anio":2025,"fob":21732.0},{"mes":10,"anio":2025,"fob":7920.0},{"mes":10,"anio":2025,"fob":15960.0},{"mes":10,"anio":2025,"fob":13599.9},{"mes":10,"anio":2025,"fob":94806.25},{"mes":10,"anio":2025,"fob":49500.0},{"mes":null,"anio":null,"fob":41202.6},{"mes":null,"anio":null,"fob":28674.4},{"mes":10,"anio":2025,"fob":125127.55},{"mes":10,"anio":2025,"fob":24843.0},{"mes":10,"anio":2025,"fob":121509.5},{"mes":11,"anio":2025,"fob":13771.15},{"mes":11,"anio":2025,"fob":25873.9},{"mes":11,"anio":2025,"fob":215391.6},{"mes":10,"anio":2025,"fob":27880.97},{"mes":11,"anio":2025,"fob":160309.3},{"mes":10,"anio":2025,"fob":12495.0},{"mes":11,"anio":2025,"fob":181710.55},{"mes":11,"anio":2025,"fob":181710.55},{"mes":11,"anio":2025,"fob":3000.0},{"mes":11,"anio":2025,"fob":95619.5},{"mes":11,"anio":2025,"fob":21457.8},{"mes":11,"anio":2025,"fob":15236.28},{"mes":11,"anio":2025,"fob":175800.66},{"mes":11,"anio":2025,"fob":106777.0},{"mes":null,"anio":null,"fob":56895.34},{"mes":11,"anio":2025,"fob":113151.0},{"mes":11,"anio":2025,"fob":61714.85},{"mes":11,"anio":2025,"fob":135937.0},{"mes":11,"anio":2025,"fob":17354.64},{"mes":11,"anio":2025,"fob":120502.55},{"mes":12,"anio":2025,"fob":27873.12},{"mes":12,"anio":2025,"fob":18711.0},{"mes":null,"anio":null,"fob":34216.88},{"mes":12,"anio":2025,"fob":54275.5},{"mes":12,"anio":2025,"fob":58098.12},{"mes":12,"anio":2025,"fob":28682.64},{"mes":12,"anio":2025,"fob":35085.2},{"mes":12,"anio":2025,"fob":97142.69},{"mes":12,"anio":2025,"fob":77810.0},{"mes":12,"anio":2025,"fob":184963.26},{"mes":12,"anio":2025,"fob":70095.4},{"mes":12,"anio":2025,"fob":28615.35},{"mes":12,"anio":2025,"fob":22800.0},{"mes":1,"anio":2025,"fob":36400.72},{"mes":12,"anio":2025,"fob":37176.32},{"mes":2,"anio":2025,"fob":28509.4},{"mes":3,"anio":2025,"fob":20064.0},{"mes":4,"anio":2025,"fob":25877.79},{"mes":4,"anio":2025,"fob":30744.72},{"mes":5,"anio":2025,"fob":18755.0},{"mes":5,"anio":2025,"fob":25182.09},{"mes":6,"anio":2025,"fob":18935.74},{"mes":8,"anio":2025,"fob":17778.6},{"mes":null,"anio":null,"fob":12850.0},{"mes":null,"anio":null,"fob":12850.0},{"mes":11,"anio":2025,"fob":11474.38},{"mes":12,"anio":2025,"fob":0},{"mes":2,"anio":2025,"fob":6481.25},{"mes":3,"anio":2025,"fob":3108},{"mes":4,"anio":2025,"fob":6930.47},{"mes":7,"anio":2025,"fob":21885},{"mes":8,"anio":2025,"fob":7364},{"mes":null,"anio":null,"fob":9717.36},{"mes":9,"anio":2025,"fob":3772},{"mes":9,"anio":2025,"fob":3000},{"mes":9,"anio":2025,"fob":7447.8},{"mes":10,"anio":2025,"fob":24405.75},{"mes":11,"anio":2025,"fob":9919.28},{"mes":12,"anio":2025,"fob":3230},{"mes":11,"anio":2025,"fob":175289.4},{"mes":10,"anio":2025,"fob":49500},{"mes":12,"anio":2025,"fob":43195.3},{"mes":null,"anio":null,"fob":14400},{"mes":1,"anio":2026,"fob":67990.25},{"mes":1,"anio":2026,"fob":89238.61},{"mes":null,"anio":2026,"fob":20970.5},{"mes":1,"anio":2026,"fob":18974.8},{"mes":1,"anio":2026,"fob":89536.15},{"mes":1,"anio":2026,"fob":34890.54},{"mes":1,"anio":2026,"fob":32763.03},{"mes":2,"anio":2026,"fob":29801.36},{"mes":1,"anio":2026,"fob":191355.95},{"mes":2,"anio":2026,"fob":52494.0},{"mes":2,"anio":2026,"fob":57987.48},{"mes":2,"anio":2026,"fob":218940.46},{"mes":2,"anio":2026,"fob":39679.25},{"mes":2,"anio":2026,"fob":22895.25},{"mes":2,"anio":2026,"fob":162585.65},{"mes":2,"anio":2026,"fob":108541.5},{"mes":3,"anio":2026,"fob":118010.5},{"mes":3,"anio":2026,"fob":81812.0},{"mes":3,"anio":2026,"fob":134047.5},{"mes":3,"anio":2026,"fob":98193.13},{"mes":3,"anio":2026,"fob":19519.37},{"mes":3,"anio":2026,"fob":10187.1},{"mes":3,"anio":2026,"fob":28975.0},{"mes":3,"anio":2026,"fob":28975.0},{"mes":3,"anio":2026,"fob":84500.0},{"mes":3,"anio":2026,"fob":102843.0},{"mes":3,"anio":2026,"fob":107741.9},{"mes":3,"anio":2026,"fob":80000.0},{"mes":3,"anio":2026,"fob":59111.0},{"mes":3,"anio":2026,"fob":70830.75},{"mes":3,"anio":2026,"fob":64475.0},{"mes":4,"anio":2026,"fob":67303.7},{"mes":4,"anio":2026,"fob":10187.1},{"mes":4,"anio":2026,"fob":45736.0},{"mes":4,"anio":2026,"fob":43422.0},{"mes":null,"anio":2026,"fob":29523.0},{"mes":null,"anio":2026,"fob":93235.75},{"mes":null,"anio":2026,"fob":64793.9},{"mes":4,"anio":2026,"fob":32581.9},{"mes":null,"anio":2026,"fob":53743.0},{"mes":null,"anio":2026,"fob":17728.4},{"mes":null,"anio":2026,"fob":104547.14},{"mes":null,"anio":2026,"fob":25012.8},{"mes":4,"anio":2026,"fob":124744.5},{"mes":4,"anio":2026,"fob":34045.4},{"mes":4,"anio":2026,"fob":170762.1},{"mes":null,"anio":2026,"fob":58589.25},{"mes":null,"anio":2026,"fob":29916.95},{"mes":null,"anio":2026,"fob":22800.0},{"mes":4,"anio":2026,"fob":33017.56},{"mes":4,"anio":2026,"fob":29312.45},{"mes":null,"anio":2026,"fob":51118.0},{"mes":4,"anio":2026,"fob":144466.5},{"mes":4,"anio":2026,"fob":33357.98},{"mes":4,"anio":2026,"fob":123800.85},{"mes":4,"anio":2026,"fob":44460.0},{"mes":5,"anio":2026,"fob":28371.12},{"mes":5,"anio":2026,"fob":35219.1},{"mes":5,"anio":2026,"fob":20906.09},{"mes":5,"anio":2026,"fob":23516.6},{"mes":5,"anio":2026,"fob":37952.0},{"mes":5,"anio":2026,"fob":78407.0},{"mes":5,"anio":2026,"fob":21668.5},{"mes":null,"anio":2026,"fob":135661.0},{"mes":5,"anio":2026,"fob":195347.4},{"mes":5,"anio":2026,"fob":114064.32},{"mes":5,"anio":2026,"fob":82893.25},{"mes":5,"anio":2026,"fob":24361.05},{"mes":5,"anio":2026,"fob":28052.0},{"mes":5,"anio":2026,"fob":57450.25},{"mes":5,"anio":2026,"fob":77977.6},{"mes":5,"anio":2026,"fob":124835.25},{"mes":5,"anio":2026,"fob":25104.03},{"mes":5,"anio":2026,"fob":9285.0},{"mes":5,"anio":2026,"fob":246769.13},{"mes":5,"anio":2026,"fob":25416.3},{"mes":5,"anio":2026,"fob":27174.4},{"mes":5,"anio":2026,"fob":14500.0},{"mes":5,"anio":2026,"fob":111445.75},{"mes":6,"anio":2026,"fob":82040.4},{"mes":6,"anio":2026,"fob":103562.0},{"mes":6,"anio":2026,"fob":6437.5},{"mes":6,"anio":2026,"fob":23961.76},{"mes":6,"anio":2026,"fob":49896.96},{"mes":6,"anio":2026,"fob":268000.0},{"mes":6,"anio":2026,"fob":105467.25},{"mes":6,"anio":2026,"fob":15138.0},{"mes":6,"anio":2026,"fob":30837.0},{"mes":null,"anio":2026,"fob":26740.85},{"mes":6,"anio":2026,"fob":55296.94},{"mes":6,"anio":2026,"fob":14720.0},{"mes":6,"anio":2026,"fob":22157.39},{"mes":6,"anio":2026,"fob":94492.63},{"mes":6,"anio":2026,"fob":32226.03},{"mes":6,"anio":2026,"fob":99851.15},{"mes":6,"anio":2026,"fob":31882.88},{"mes":6,"anio":2026,"fob":25302.55},{"mes":6,"anio":2026,"fob":53452.22},{"mes":6,"anio":2026,"fob":45056.64},{"mes":6,"anio":2026,"fob":16884.0},{"mes":7,"anio":2026,"fob":50200.95},{"mes":7,"anio":2026,"fob":9600.0},{"mes":7,"anio":2026,"fob":10481.0},{"mes":null,"anio":2026,"fob":10026.0},{"mes":7,"anio":2026,"fob":52652.8},{"mes":7,"anio":2026,"fob":20467.95},{"mes":7,"anio":2026,"fob":169446.96},{"mes":6,"anio":2026,"fob":42974.17},{"mes":null,"anio":2026,"fob":88676.65},{"mes":null,"anio":2026,"fob":88147.85},{"mes":null,"anio":2026,"fob":43658.04},{"mes":null,"anio":2026,"fob":55869.75},{"mes":null,"anio":2026,"fob":44397.04},{"mes":null,"anio":2026,"fob":61052.7},{"mes":null,"anio":2026,"fob":58379.07},{"mes":null,"anio":2026,"fob":672.0},{"mes":null,"anio":2026,"fob":381201.4},{"mes":null,"anio":2026,"fob":0},{"mes":null,"anio":2026,"fob":39777.0},{"mes":null,"anio":2026,"fob":113886.48},{"mes":null,"anio":2026,"fob":117006.0},{"mes":null,"anio":2026,"fob":0},{"mes":null,"anio":2026,"fob":44301.0},{"mes":null,"anio":2026,"fob":67301.28},{"mes":null,"anio":2026,"fob":25680.0},{"mes":null,"anio":2026,"fob":51543.88},{"mes":null,"anio":2026,"fob":36621.5},{"mes":null,"anio":2026,"fob":66830.8},{"mes":null,"anio":2026,"fob":8802.8},{"mes":null,"anio":2026,"fob":615.88},{"mes":null,"anio":2026,"fob":195303.0},{"mes":null,"anio":2026,"fob":61621.2},{"mes":null,"anio":2026,"fob":6558.0},{"mes":null,"anio":2026,"fob":5824.2},{"mes":null,"anio":2026,"fob":16126.0},{"mes":null,"anio":2026,"fob":0},{"mes":null,"anio":2026,"fob":0},{"mes":null,"anio":2026,"fob":0},{"mes":null,"anio":2026,"fob":0},{"mes":null,"anio":2026,"fob":0},{"mes":null,"anio":2026,"fob":0},{"mes":null,"anio":2026,"fob":0},{"mes":null,"anio":2026,"fob":104102.5},{"mes":null,"anio":2026,"fob":0},{"mes":null,"anio":2026,"fob":99961.95},{"mes":null,"anio":2026,"fob":4609.8}];
-
+// ── Camiones Recibidos — Sababa vs CIF Express ──
+// Reemplaza el antiguo comparativo de contenedores (que usaba datos
+// estáticos copiados de "Cuadro de Importación Estadístico", ajenos a esta
+// app). Ahora se calcula 100% en vivo desde los propios embarques que ya
+// procesaste (tendData): se cuentan los que llegaron por transporte
+// terrestre (Camión/Furgón — viaTransporte === 'LAND'), agrupados por mes,
+// separados por corredor (Sababa vs CIF Express) usando el mismo campo
+// "esc" que ya guarda cada embarque al procesarse.
 function _renderContainerComparativo(){
   var canvas = document.getElementById('cont-cmp-canvas');
   if(!canvas) return;
-  var years = [...new Set(_CONT_DATA.map(function(d){return d.anio;}).filter(Boolean))].sort();
-  if(!years.length) return;
-  var yA = years[years.length-2] !== undefined ? years[years.length-2] : years[0];
-  var yB = years[years.length-1];
-  function monthly(y){
-    var counts=new Array(12).fill(0), fob=new Array(12).fill(0);
-    _CONT_DATA.forEach(function(d){
-      if(d.anio===y && d.mes){ counts[d.mes-1]++; fob[d.mes-1]+=d.fob||0; }
-    });
-    return {counts:counts, fob:fob};
+  var data = (typeof tendData!=='undefined' ? tendData : []) || [];
+  var camiones = data.filter(function(d){ return d && d.viaTransporte==='LAND'; });
+  if(!camiones.length){
+    var ctxEmpty = canvas.getContext('2d');
+    var Wempty = canvas.getBoundingClientRect().width || canvas.offsetWidth || 280;
+    canvas.width = Wempty; canvas.height = 60; canvas.style.height='60px'; canvas.style.width='100%';
+    ctxEmpty.clearRect(0,0,Wempty,60);
+    ctxEmpty.fillStyle='rgba(139,148,158,.7)'; ctxEmpty.font='11px Inter'; ctxEmpty.textAlign='center';
+    ctxEmpty.fillText('Aún no hay embarques por camión procesados para comparar.', Wempty/2, 32);
+    var legendElEmpty = document.getElementById('cont-cmp-legend');
+    if(legendElEmpty) legendElEmpty.innerHTML='';
+    return;
   }
-  var mA = monthly(yA), mB = monthly(yB);
+  // Últimos 12 meses con datos (respecto al mes más reciente registrado)
+  function ymKey(fechaStr){
+    var s=(fechaStr||'').toString();
+    var m=s.match(/^(\d{4})-(\d{2})/);
+    return m ? {y:parseInt(m[1],10), m:parseInt(m[2],10)} : null;
+  }
+  var claves = camiones.map(function(d){ return ymKey(d.fecha); }).filter(Boolean);
+  if(!claves.length) return;
+  claves.sort(function(a,b){ return (a.y*12+a.m)-(b.y*12+b.m); });
+  var ultimo = claves[claves.length-1];
+  var meses12=[];
+  for(var i=11;i>=0;i--){
+    var idx = ultimo.y*12+(ultimo.m-1)-i;
+    var yy=Math.floor(idx/12), mm=(idx%12)+1;
+    meses12.push({y:yy,m:mm});
+  }
+  var MESES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  var sabCounts=new Array(12).fill(0), cifCounts=new Array(12).fill(0);
+  var sabBultos=new Array(12).fill(0), cifBultos=new Array(12).fill(0);
+  camiones.forEach(function(d){
+    var k=ymKey(d.fecha); if(!k) return;
+    var pos = meses12.findIndex(function(mm){ return mm.y===k.y && mm.m===k.m; });
+    if(pos<0) return;
+    var esSababa = (d.esc||'').toLowerCase().indexOf('sababa')>=0;
+    if(esSababa){ sabCounts[pos]++; sabBultos[pos]+=(d.bultos||0); }
+    else { cifCounts[pos]++; cifBultos[pos]+=(d.bultos||0); }
+  });
   var dpr = window.devicePixelRatio||1;
   var W = canvas.getBoundingClientRect().width || canvas.offsetWidth;
   if(!W || W<10){
@@ -22934,35 +22995,34 @@ function _renderContainerComparativo(){
   var ctx=canvas.getContext('2d');
   ctx.scale(dpr,dpr);
   ctx.clearRect(0,0,W,H);
-  var MESES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   var pad={l:28,r:8,t:16,b:22};
   var cw=W-pad.l-pad.r, ch=H-pad.t-pad.b;
-  var maxV=Math.max.apply(null, mA.counts.concat(mB.counts).concat([1]));
+  var maxV=Math.max.apply(null, sabCounts.concat(cifCounts).concat([1]));
   var groupW = cw/12;
   var barW = Math.max(6, Math.min(14, groupW/2 - 3));
-  for(var i=0;i<=4;i++){
-    var gy=pad.t+ch*(1-i/4);
+  for(var gi=0;gi<=4;gi++){
+    var gy=pad.t+ch*(1-gi/4);
     ctx.strokeStyle='rgba(48,54,61,.4)'; ctx.lineWidth=1; ctx.setLineDash([4,4]);
     ctx.beginPath(); ctx.moveTo(pad.l,gy); ctx.lineTo(pad.l+cw,gy); ctx.stroke();
     ctx.setLineDash([]);
     ctx.fillStyle='rgba(139,148,158,.7)'; ctx.font='9px Inter'; ctx.textAlign='right';
-    ctx.fillText(Math.round(maxV*i/4), pad.l-5, gy+3);
+    ctx.fillText(Math.round(maxV*gi/4), pad.l-5, gy+3);
   }
   var bars=[];
   for(var m=0;m<12;m++){
     var gx = pad.l + groupW*m;
     var xA = gx + groupW/2 - barW - 2;
     var xB = gx + groupW/2 + 2;
-    var hA = ch*(mA.counts[m]/maxV);
-    var hB = ch*(mB.counts[m]/maxV);
-    ctx.fillStyle = 'rgba(31,111,235,.75)';
+    var hA = ch*(sabCounts[m]/maxV);
+    var hB = ch*(cifCounts[m]/maxV);
+    ctx.fillStyle = 'rgba(240,136,62,.85)'; // Sababa — naranja, igual que el resto de la app
     ctx.fillRect(xA, pad.t+ch-hA, barW, hA);
-    ctx.fillStyle = 'rgba(63,185,80,.85)';
+    ctx.fillStyle = 'rgba(31,111,235,.75)'; // CIF Express — azul
     ctx.fillRect(xB, pad.t+ch-hB, barW, hB);
     ctx.fillStyle='rgba(139,148,158,.8)'; ctx.font='9px Inter'; ctx.textAlign='center';
-    ctx.fillText(MESES[m], gx+groupW/2, pad.t+ch+14);
-    bars.push({x:xA,y:pad.t+ch-hA,w:barW,h:Math.max(hA,2),year:yA,month:m,count:mA.counts[m],fob:mA.fob[m]});
-    bars.push({x:xB,y:pad.t+ch-hB,w:barW,h:Math.max(hB,2),year:yB,month:m,count:mB.counts[m],fob:mB.fob[m]});
+    ctx.fillText(MESES[meses12[m].m-1], gx+groupW/2, pad.t+ch+14);
+    bars.push({x:xA,y:pad.t+ch-hA,w:barW,h:Math.max(hA,2),corredor:'Sababa',mes:meses12[m].m,anio:meses12[m].y,count:sabCounts[m],bultos:sabBultos[m]});
+    bars.push({x:xB,y:pad.t+ch-hB,w:barW,h:Math.max(hB,2),corredor:'CIF Express',mes:meses12[m].m,anio:meses12[m].y,count:cifCounts[m],bultos:cifBultos[m]});
   }
   canvas._bars = bars;
   canvas._meses = MESES;
@@ -22979,8 +23039,8 @@ function _renderContainerComparativo(){
   var legendEl = document.getElementById('cont-cmp-legend');
   if(legendEl){
     legendEl.innerHTML =
-      '<span style="display:inline-flex;align-items:center;gap:4px;margin-right:12px"><span style="width:9px;height:9px;border-radius:2px;background:rgba(31,111,235,.85);display:inline-block"></span>'+yA+'</span>'+
-      '<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:2px;background:rgba(63,185,80,.9);display:inline-block"></span>'+yB+'</span>';
+      '<span style="display:inline-flex;align-items:center;gap:4px;margin-right:12px"><span style="width:9px;height:9px;border-radius:2px;background:rgba(240,136,62,.85);display:inline-block"></span>Sababa</span>'+
+      '<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:2px;background:rgba(31,111,235,.85);display:inline-block"></span>CIF Express</span>';
   }
 }
 // Hit-test de barras del comparativo de contenedores + tooltip flotante
@@ -22995,9 +23055,9 @@ function _contCmpHover(ev, canvasArg){
     if(mx>=b.x && mx<=b.x+b.w && my>=b.y-2 && my<=b.y+b.h) hit=b;
   });
   if(!hit){ if(typeof _provTipHide==='function') _provTipHide(); return; }
-  var html = '📦 <b>'+canvas._meses[hit.month]+' '+hit.year+'</b><br>'
-    + 'Contenedores: <b>'+hit.count+'</b><br>'
-    + 'Valor FOB: <b>$'+Number(hit.fob||0).toLocaleString('en-US',{maximumFractionDigits:0})+'</b>';
+  var html = '🚛 <b>'+canvas._meses[hit.mes-1]+' '+hit.anio+' — '+hit.corredor+'</b><br>'
+    + 'Camiones: <b>'+hit.count+'</b><br>'
+    + 'Bultos: <b>'+Number(hit.bultos||0).toLocaleString('en-US')+'</b>';
   if(typeof _provTipShow==='function') _provTipShow(ev, html);
 }
 
@@ -23152,13 +23212,13 @@ function renderDashboardKPIs(data){
       <div class="kpi-card g" style="grid-column:1 / -1;display:block">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
           <span class="kpi-icon" style="margin-bottom:0">📦</span>
-          <div class="kpi-lbl" style="margin-bottom:0">Comparativo de Contenedores — Cuadro de Importación</div>
+          <div class="kpi-lbl" style="margin-bottom:0">🚛 Camiones Recibidos — Sababa vs CIF Express</div>
           <span id="cont-cmp-legend" style="margin-left:auto;font-size:10px;color:var(--muted)"></span>
         </div>
         <div style="position:relative">
           <canvas id="cont-cmp-canvas" style="width:100%;display:block"></canvas>
         </div>
-        <div style="font-size:9px;color:var(--muted);margin-top:4px">Datos copiados de "Cuadro de Importación Estadístico" — pasa el cursor sobre una barra para ver el detalle.</div>
+        <div style="font-size:9px;color:var(--muted);margin-top:4px">Embarques por camión/furgón (transporte terrestre) de tus propios embarques procesados, por corredor — pasa el cursor sobre una barra para ver el detalle.</div>
       </div>
     </div>
 
@@ -34121,6 +34181,13 @@ function _aplicarDaiAjustado(){
 function _vpRow(icon,lbl,val,color){
   return '<div><div style="font-size:9px;color:var(--muted);font-weight:600;margin-bottom:2px">'+icon+' '+lbl+'</div><div style="font-size:13px;font-weight:800;color:'+color+';font-family:\'IBM Plex Mono\',monospace">'+val+'</div></div>';
 }
+function _vpDetalle(items){
+  var rows = items.filter(function(it){ return it && Math.abs(it[1])>0.004; }).map(function(it){
+    return '<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);padding:1px 0"><span>'+it[0]+'</span><span style="font-family:\'IBM Plex Mono\',monospace;font-weight:700">$'+Math.abs(it[1]).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</span></div>';
+  }).join('');
+  if(!rows) return '';
+  return '<div style="background:rgba(255,255,255,.02);border-left:2px solid rgba(240,136,62,.35);border-radius:4px;padding:4px 8px;margin:2px 0 4px 0">'+rows+'</div>';
+}
 function _actualizarVistaPreviaComparativo(){
   var fmt2=function(v){return '$'+(v||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});};
   function gv(id){var el=document.getElementById(id); return el?el.value:'';}
@@ -34128,8 +34195,16 @@ function _actualizarVistaPreviaComparativo(){
   var regHtml='';
   regHtml+=_vpRow('💼','Valor Mercancía', gv('disp_valor_merc')||'—','var(--blue-l)');
   regHtml+=_vpRow('📦','Costo No Mercancía', gv('disp_costo_no_merc')||'—','var(--orange-l)');
-  regHtml+=_vpRow('🧾','ITBMS', gv('disp_itbms_total')||'—','var(--muted)');
-
+  // ── Desglose real de "Costo No Mercancía" — de dónde sale cada dólar,
+  //    para que se pueda sustentar el número aunque el embarque ya esté
+  //    procesado y no se pueda volver a abrir el formulario original. ──
+  regHtml+=_vpDetalle([
+    ['🏛️ Impuestos (Arancel DAI + Tasa Aduana + Uso Sistema)', pf('disp_ar_pago')+pf('s1_tasa')+pf('s1_uso_sistema')],
+    ['🧑‍💼 Honorarios', pf('disp_hon1')],
+    ['🚚 Acarreo (equipo)', pf('s1_acarreo')*(pf('s1_equipos')||1)],
+    ['📄 DMCE (equipo)', pf('s1_dmce')],
+    ['🤝 Agente', pf('s1_agente')]
+  ]);
   // FIX: "Costo Inventario" no restaba el Gasto Complementario (Equipo) — por eso
   // no calzaba 1:1 contra el Costo Inventario (Homologado) de Sababa. Se reemplaza
   // por el desglose real: Costo Landed Costeable = Valor Merc. + No Merc., y si hay
@@ -34142,6 +34217,16 @@ function _actualizarVistaPreviaComparativo(){
   var factorOrig1 = vMerc1>0 ? (noMerc1/vMerc1*100) : 0;
   var factorAdj1  = vMerc1>0 ? (((landedCosteableAdj1-vMerc1)/vMerc1)*100) : 0;
   var hayGastoComp1 = Math.abs(gastoComp1)>0.004;
+  // El Gasto Complementario no afecta la Mercancía — se aplica sobre el Costo No
+  // Mercancía. Se muestra esta reconciliación pegada al desglose de arriba para
+  // que quede claro dónde entra el ajuste, aparte del resumen a nivel Landed de
+  // más abajo (que es el mismo ajuste, visto a nivel del total del embarque).
+  if(hayGastoComp1){
+    regHtml+='<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);padding:2px 0"><span>Total Costo No Mercancía (antes)</span><span style="font-family:\'IBM Plex Mono\',monospace;font-weight:700">'+fmt2(noMerc1)+'</span></div>'
+      +'<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--orange-l);padding:1px 0"><span>📎 Gasto Complementario</span><span style="font-family:\'IBM Plex Mono\',monospace;font-weight:700">'+(gastoComp1>=0?'+':'-')+'$'+Math.abs(gastoComp1).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</span></div>'
+      +'<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--green-l);font-weight:800;padding:1px 0 4px 0;border-top:1px solid var(--border);margin-top:2px"><span>Total Costo No Mercancía (ajustado)</span><span style="font-family:\'IBM Plex Mono\',monospace">'+fmt2(noMerc1+gastoComp1)+'</span></div>';
+  }
+  regHtml+=_vpRow('🧾','ITBMS', gv('disp_itbms_total')||'—','var(--muted)');
 
   regHtml+=_vpRow('🧮','Costo Landed (Costeable)', fmt2(landedCosteable1),'var(--blue-l)');
   if(hayGastoComp1){
@@ -34180,6 +34265,19 @@ function _actualizarVistaPreviaComparativo(){
     var factor3 = merc3>0?((noMerc3/merc3)*100).toFixed(2)+'%':'—';
     cmpHtml+=_vpRow('💼','Valor Mercancía (Homologado)', fmt2(merc3),'var(--blue-l)');
     cmpHtml+=_vpRow('📦','Costo No Mercancía', fmt2(noMerc3),'var(--orange-l)');
+    // ── Desglose real de "Costo No Mercancía" de Sababa — de dónde sale cada
+    //    dólar (comisión, flete, gastos de origen, Master Value/puente). ──
+    cmpHtml+=_vpDetalle([
+      ['🤝 Comisión Sababa', com3],
+      ['🚢 Flete', fl3],
+      ['📋 Gastos de Origen', ag3],
+      ['🌉 Master Value (puente)', mv3]
+    ]);
+    if(hayGastoComp1){
+      cmpHtml+='<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);padding:2px 0"><span>Total Costo No Mercancía (antes)</span><span style="font-family:\'IBM Plex Mono\',monospace;font-weight:700">'+fmt2(noMerc3-gastoComp1)+'</span></div>'
+        +'<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--orange-l);padding:1px 0"><span>📎 Gasto Complementario</span><span style="font-family:\'IBM Plex Mono\',monospace;font-weight:700">'+(gastoComp1>=0?'+':'-')+'$'+Math.abs(gastoComp1).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</span></div>'
+        +'<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--green-l);font-weight:800;padding:1px 0 4px 0;border-top:1px solid var(--border);margin-top:2px"><span>Total Costo No Mercancía (ajustado)</span><span style="font-family:\'IBM Plex Mono\',monospace">'+fmt2(noMerc3)+'</span></div>';
+    }
     cmpHtml+=_vpRow('🧾','ITBMS', '—','var(--muted)');
     cmpHtml+=_vpRow('📘','Costo Inventario (Homologado)', fmt2(merc3+noMerc3),'var(--blue-l)');
     // El Gasto Complementario (Esc. Regular) se traslada dólar por dólar al Landed
@@ -34189,10 +34287,9 @@ function _actualizarVistaPreviaComparativo(){
     if(hayGastoComp1){
       var landed3Antes = landed3 - gastoComp1;
       var factor3Antes = merc3>0 ? (((landed3Antes-merc3)/merc3)*100) : 0;
-      cmpHtml+='<div style="display:flex;gap:10px;align-items:flex-start">'
-        +'<div style="flex:1">'+_vpRow('🏁','Costo Landed (antes de G.C.)', fmt2(landed3Antes),'var(--muted)')+'</div>'
-        +'<div style="flex:1;border-left:1px solid var(--border);padding-left:10px">'+_vpRow('🏁','Costo Landed (ajustado)', fmt2(landed3),'var(--green-l)')+'</div>'
-        +'</div>';
+      cmpHtml+=_vpRow('🏁','Costo Landed (antes de G.C.)', fmt2(landed3Antes),'var(--muted)');
+      cmpHtml+=_vpRow('📎','Gasto Complementario', (gastoComp1>=0?'+':'-')+'$'+Math.abs(gastoComp1).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}),'var(--orange-l)');
+      cmpHtml+=_vpRow('✅','Costo Landed (ajustado)', fmt2(landed3),'var(--green-l)');
       cmpHtml+='<div style="display:flex;gap:10px;align-items:flex-start">'
         +'<div style="flex:1">'+_vpRow('📊','Factor Importación (antes)', factor3Antes.toFixed(2)+'%','var(--muted)')+'</div>'
         +'<div style="flex:1;border-left:1px solid var(--border);padding-left:10px">'+_vpRow('📊','Factor Importación (ajustado)', factor3,'var(--orange-l)')+'</div>'
@@ -34220,6 +34317,11 @@ function _actualizarVistaPreviaComparativo(){
     var factor2=cif2>0?(((sc2.factor||1)-1)*100).toFixed(2)+'%':'—';
     cmpHtml+=_vpRow('💼','Valor Mercancía', fmt2(cif2),'var(--blue-l)');
     cmpHtml+=_vpRow('📦','Costo No Mercancía', fmt2(noMerc2),'var(--orange-l)');
+    cmpHtml+=_vpDetalle([
+      ['🏛️ Arancel DAI', ar2],
+      ['🧑‍💼 Honorarios (3% CIF)', hon2],
+      ['📋 Flete + Tasa + Master Value (puente)', noMerc2-ar2-hon2]
+    ]);
     cmpHtml+=_vpRow('🧾','ITBMS', fmt2(itbms2),'var(--muted)');
     cmpHtml+=_vpRow('📘','Costo Inventario', fmt2(costoInv2),'var(--blue-l)');
     cmpHtml+=_vpRow('🏁','Costo Grande Global', fmt2(landed2),'var(--muted)');
