@@ -519,22 +519,24 @@ body[style*="color-scheme: light"] #portal-content tr td[style*="background:#1c2
 #splash.corporate-bg .erp-circuit{filter:none;opacity:1;}
 #splash-hero-bg{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:0;}
 #splash-hero-bg::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 40%,rgba(88,166,255,.07) 0%,transparent 70%);}
-.erp-circuit{position:absolute;width:100%;height:100%;top:0;left:0;overflow:hidden;pointer-events:none;z-index:0;transition:left .6s cubic-bezier(.4,0,.2,1),width .6s cubic-bezier(.4,0,.2,1);}
-/* ── Split de escritorio: login a la izquierda, arte/diagrama a la derecha ──
-   En móvil no cambia nada (sigue siendo el overlay de siempre a pantalla
-   completa). Desde ~900px, el diagrama de fondo (.erp-circuit) se confina a
-   la mitad derecha y el bloque de login (#splash-hero) a la mitad
-   izquierda, con una línea divisoria sutil. Al presionar "Ingresar al
-   Sistema", showSplashNav() ya agrega las clases .hero-gone/.app-mode a
-   #splash — aquí solo enganchamos esas mismas clases para que el panel
-   derecho "corra" y se expanda a pantalla completa mientras aparece la
-   pantalla de carga encima, sin tocar la lógica JS existente. */
+.erp-circuit{position:absolute;width:100%;height:100%;top:0;left:0;overflow:hidden;pointer-events:none;z-index:0;}
+/* ── Escritorio: panel de login flotante a la izquierda, arte de fondo a
+   pantalla completa detrás ──
+   Nada de línea divisoria a la mitad — así se veía como pantalla dañada.
+   En vez de partir la pantalla en dos, el diagrama de fondo (.erp-circuit)
+   se queda SIEMPRE a ancho completo, y el bloque de login (#splash-hero) es
+   un panel angosto tipo "glass card" que flota sobre la esquina izquierda,
+   con su propio fondo y una sombra suave que se difumina hacia la derecha
+   — el mismo patrón que usan los ERP/SaaS profesionales (Stripe, Azure,
+   SAP Fiori) para sus pantallas de inicio. En móvil no cambia nada. */
 @media (min-width:900px){
-  #splash-hero{width:48%!important;box-sizing:border-box;transition:opacity .4s,transform .4s;}
-  #splash-hero::after{content:'';position:absolute;top:8%;bottom:8%;left:48%;width:1px;background:linear-gradient(180deg,transparent,rgba(88,166,255,.35),transparent);}
-  .erp-circuit{left:50%;width:50%;}
-  #splash:not(.hero-gone):not(.app-mode) .erp-circuit::before{content:'';position:absolute;inset:0;background:linear-gradient(90deg,rgba(2,8,20,.55) 0%,transparent 18%);pointer-events:none;z-index:1;}
-  #splash.hero-gone .erp-circuit,#splash.app-mode .erp-circuit{left:0;width:100%;}
+  #splash-hero{
+    width:36%!important; min-width:360px; max-width:520px;
+    box-sizing:border-box;
+    background:linear-gradient(155deg,rgba(3,12,9,.86) 0%,rgba(4,15,11,.72) 55%,rgba(4,15,11,.35) 100%);
+    box-shadow:60px 0 90px -20px rgba(0,0,0,.4);
+    transition:opacity .4s,transform .4s;
+  }
 }
 .erp-circuit svg{width:100%;height:100%;opacity:.12;}
 #splash.nature-bg{background:linear-gradient(160deg,#071510 0%,#0b2218 30%,#071c12 60%,#082015 100%)!important;}
@@ -1358,7 +1360,7 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
     <div class="splash-title" style="text-align:left;">Gestión Integral de<br>Compras y Costeo</div>
 
     <button class="splash-btn" onclick="showSplashNav()" style="margin-left:0;">▶ &nbsp; Ingresar al Sistema</button>
-    <div class="splash-ver" style="text-align:left;">Grupo Primavera Holding · Departamento de Tráfico · ZLC Panamá</div>
+    <div class="splash-ver" style="text-align:left;">Grupo Primavera Holding · Departamento de Tráfico</div>
   </div>
 
   <!-- PANTALLA INTERMEDIA: imagen de marca al ingresar (Compras & Costeo) -->
@@ -9616,35 +9618,19 @@ function applyTheme(name){
   root.style.setProperty('--orange-l', ac.orange);
   root.style.setProperty('--blue-l', ac.blue);
   root.style.setProperty('--red-l', ac.red);
-  // Update splash background for nature themes
+  // ── El splash/login SIEMPRE se queda en el tema oscuro "verde hojas" —
+  //    el tema elegido por el usuario (corporativo, negro, etc.) solo debe
+  //    verse DENTRO de la app (Sidebar, KPIs, tarjetas), nunca en la
+  //    pantalla de inicio. Antes esto cambiaba el fondo del splash a un
+  //    tema claro/corporativo que se veía deslavado — ahora se ignora ahí.
   const splash=document.getElementById('splash');
   if(splash){
     splash.classList.remove('nature-bg','petrol-bg','black-bg','corporate-bg');
-    // Restore dark banner if leaving corporate
-    if(name!=='corporate'){
-      var circ2=splash?splash.querySelector('.erp-circuit'):null;
-      if(circ2 && typeof _erpBannerDark==='function') circ2.innerHTML=_erpBannerDark();
-    }
-    if(name==='forest') splash.classList.add('nature-bg');
-    else if(name==='petrol') splash.classList.add('petrol-bg');
-    else if(name==='black') splash.classList.add('black-bg');
-    else if(name==='corporate') {
-      splash.classList.add('corporate-bg');
-      // Swap banner to light-mode colorful version
-      var circ = splash.querySelector('.erp-circuit');
-      if(circ) circ.innerHTML = _erpBannerLight();
-    }
-    // Toggle nav card borders for light themes
+    splash.classList.add('nature-bg');
+    var circ2=splash.querySelector('.erp-circuit');
+    if(circ2 && typeof _erpBannerDark==='function') circ2.innerHTML=_erpBannerDark();
     var navCards = document.querySelectorAll('.splash-nav-btn');
-    navCards.forEach(function(c){
-      if(name==='corporate' || name==='light'){
-        c.style.border='1px solid rgba(0,80,180,.15)';
-        c.style.boxShadow='0 1px 4px rgba(0,60,150,.08)';
-      } else {
-        c.style.border='';
-        c.style.boxShadow='';
-      }
-    });
+    navCards.forEach(function(c){ c.style.border=''; c.style.boxShadow=''; });
   }
 }
 function applyCustomColor(hex, target){
@@ -22924,24 +22910,38 @@ function _calcCostoInventario(d){
 }
 
 
-// ── Comparativo de Contenedores — copia (duplicada, decisión ago-2026) del
-//    array CONTAINERS de "Cuadro de Importación Estadístico 2025", reducida
-//    solo a mes/año/valorFobTotal (lo único que necesita esta gráfica). Si el
-//    archivo fuente se actualiza con nuevos contenedores, este bloque debe
-//    volver a regenerarse/copiarse igual para mantenerlo al día.
 // ── Camiones Recibidos — Sababa vs CIF Express ──
 // Reemplaza el antiguo comparativo de contenedores (que usaba datos
 // estáticos copiados de "Cuadro de Importación Estadístico", ajenos a esta
 // app). Ahora se calcula 100% en vivo desde los propios embarques que ya
 // procesaste (tendData): se cuentan los que llegaron por transporte
-// terrestre (Camión/Furgón — viaTransporte === 'LAND'), agrupados por mes,
-// separados por corredor (Sababa vs CIF Express) usando el mismo campo
-// "esc" que ya guarda cada embarque al procesarse.
+// terrestre (Camión/Furgón), agrupados por mes, separados por corredor
+// (Sababa vs CIF Express) usando el mismo campo "esc" que ya guarda cada
+// embarque al procesarse.
+// ── Detección de "es camión" con respaldo ──
+// El campo viaTransporte='LAND' es reciente — embarques procesados ANTES de
+// que existiera ese campo no lo tienen guardado y quedarían fuera del
+// conteo aunque sí hayan llegado por camión. Por eso, si no está presente,
+// se infiere del campo "tipo" (ZL = Zona Libre = despacho local, siempre
+// por camión) o del tipo de equipo/descripción guardados, que sí existen
+// desde hace más tiempo.
+function _esCamionRecibido(d){
+  if(!d) return false;
+  if(d.viaTransporte) return d.viaTransporte==='LAND';
+  var te = (d.tipoEquipo||'').toLowerCase();
+  if(te.indexOf('cami')>=0 || te.indexOf('furg')>=0 || te.indexOf('terrestre')>=0) return true;
+  if(d.tipo==='ZL') return true;
+  if(d.snap && d.snap.tipo==='ZL') return true;
+  var texto=((d.desc||'')+' '+(d.origen||'')+' '+(d.esc||'')).toLowerCase();
+  if(texto.indexOf('camion')>=0 || texto.indexOf('camión')>=0 || texto.indexOf('zona libre')>=0) return true;
+  return false;
+}
 function _renderContainerComparativo(){
+ try{
   var canvas = document.getElementById('cont-cmp-canvas');
   if(!canvas) return;
   var data = (typeof tendData!=='undefined' ? tendData : []) || [];
-  var camiones = data.filter(function(d){ return d && d.viaTransporte==='LAND'; });
+  var camiones = data.filter(_esCamionRecibido);
   if(!camiones.length){
     var ctxEmpty = canvas.getContext('2d');
     var Wempty = canvas.getBoundingClientRect().width || canvas.offsetWidth || 280;
@@ -23042,6 +23042,9 @@ function _renderContainerComparativo(){
       '<span style="display:inline-flex;align-items:center;gap:4px;margin-right:12px"><span style="width:9px;height:9px;border-radius:2px;background:rgba(240,136,62,.85);display:inline-block"></span>Sababa</span>'+
       '<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:2px;background:rgba(31,111,235,.85);display:inline-block"></span>CIF Express</span>';
   }
+ }catch(err){
+  console.error('Camiones Recibidos — error al renderizar:', err);
+ }
 }
 // Hit-test de barras del comparativo de contenedores + tooltip flotante
 // (reutiliza el mismo _provTipShow/_provTipHide de Top 10 Proveedores).
@@ -28987,7 +28990,8 @@ function initSupabase(){
     }
     _sb = window.supabase.createClient(_SB_URL, _SB_KEY);
     window._sb = _sb; // exponer globalmente para PLN y filtros
-    console.log('Supabase conectado');
+    // Conectado — sin log visible en consola (mensajes de depuración internos
+    // no deben quedar a la vista, aunque no afecten la función real).
     // Update cloud badge if present
     var badge = document.getElementById('cloud-status-badge');
     if(badge){
