@@ -775,11 +775,24 @@ async function exportExcel() {
   pyodide.globals.set('summary_json', JSON.stringify(summaryData));
 
   const b64 = await pyodide.runPythonAsync(`
-import openpyxl, io, json, base64
+import openpyxl, io, json, base64, unicodedata
 from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
 from copy import copy as _copy
 from datetime import datetime
+
+def _norm(s):
+    if s is None: return ''
+    s = str(s).strip().lower()
+    return ''.join(c for c in unicodedata.normalize('NFKD', s) if not unicodedata.combining(c))
+
+def _find_col(ws, *names):
+    # Busca por nombre de encabezado en la fila 4 (no por posición fija).
+    targets = [_norm(n) for n in names]
+    for cell in ws[4]:
+        if _norm(cell.value) in targets:
+            return cell.column - 1  # índice 0-based
+    return None
 
 adj_list      = json.loads(result_rows_json)
 adjusted_rows = dict((r['row'], r) for r in adj_list)
@@ -824,8 +837,21 @@ for r in adj_list:
         ws_main.cell(row=r['row'], column=4).value = round(r['adj_d'], 2)
         ws_main.cell(row=r['row'], column=5).value = round(r['adj_e'], 2)
 
-# Eliminar columnas AE(31), AF(32), AG(33)
-ws_main.delete_cols(31, 3)
+# Eliminar SOLO las columnas de apoyo interno (ID, Costo Unitario, Costo Total)
+# localizándolas por su nombre de encabezado en fila 4 — NO por posición fija.
+# Así, cualquier columna nueva que el sistema origen agregue (ej. "ID", u otra
+# futura) se preserva automáticamente en el Excel corregido: solo se eliminan
+# estas 3 columnas de ayuda, sin importar en qué posición estén ni cuántas
+# columnas nuevas haya alrededor.
+_cols_a_borrar = []
+for _name in ('ID', 'Costo Unitario', 'Costo Total'):
+    _idx0 = _find_col(ws_main, _name)
+    if _idx0 is not None:
+        _cols_a_borrar.append(_idx0 + 1)  # a 1-based para openpyxl
+
+# Borrar de derecha a izquierda para no desalinear los índices restantes
+for _col in sorted(_cols_a_borrar, reverse=True):
+    ws_main.delete_cols(_col, 1)
 
 # ── Construir workbook final ─────────────────────────────────────────────
 wb_final = openpyxl.Workbook()
