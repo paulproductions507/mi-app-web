@@ -492,14 +492,32 @@ async function showDiffPreview() {
   pyodide.globals.set('file_bytes_preview', fileBytes);
   try {
     const diffResult = await pyodide.runPythonAsync(`
-import openpyxl, io
+import openpyxl, io, unicodedata
+
+def _norm(s):
+    if s is None: return ''
+    s = str(s).strip().lower()
+    return ''.join(c for c in unicodedata.normalize('NFKD', s) if not unicodedata.combining(c))
+
+def _find_col(ws, *names):
+    # Busca por nombre de encabezado en la fila 4 (no por posición fija),
+    # así no se rompe si el sistema origen agrega/mueve columnas (ej. "ID").
+    targets = [_norm(n) for n in names]
+    for cell in ws[4]:
+        if _norm(cell.value) in targets:
+            return cell.column - 1  # índice 0-based para values_only rows
+    return None
+
 _wb = openpyxl.load_workbook(io.BytesIO(bytes(file_bytes_preview)), data_only=True)
 _ws = _wb.active
 _e1 = float(_ws['E1'].value or 0)
+_idx_total = _find_col(_ws, 'Costo Total')
+if _idx_total is None:
+    _idx_total = 31  # fallback al layout clásico si no se encuentra el encabezado
 _sum_af = 0
 for _row in _ws.iter_rows(min_row=5, max_row=_ws.max_row, values_only=True):
     _c  = _row[2]   # col C piezas
-    _af = _row[31]  # col AF total redondeado
+    _af = _row[_idx_total]   # columna "Costo Total" localizada por nombre
     if _c and isinstance(_c,(int,float)) and _c!=0 and _af is not None:
         try:
             if float(_c) > 0: _sum_af += round(float(_af), 2)
@@ -531,19 +549,40 @@ async function processFile() {
   pyodide.globals.set('file_bytes', fileBytes);
 
   const result = await pyodide.runPythonAsync(`
-import openpyxl, io, json
+import openpyxl, io, json, unicodedata
+
+def _norm(s):
+    if s is None: return ''
+    s = str(s).strip().lower()
+    return ''.join(c for c in unicodedata.normalize('NFKD', s) if not unicodedata.combining(c))
+
+def _find_col(ws, *names):
+    # Busca por nombre de encabezado en la fila 4 (no por posición fija),
+    # así no se rompe si el sistema origen agrega/mueve columnas (ej. "ID").
+    targets = [_norm(n) for n in names]
+    for cell in ws[4]:
+        if _norm(cell.value) in targets:
+            return cell.column - 1  # índice 0-based para values_only rows
+    return None
 
 wb = openpyxl.load_workbook(io.BytesIO(bytes(file_bytes)), data_only=True)
 ws_name = wb.sheetnames[0]
 ws = wb[ws_name]
 e1 = float(ws['E1'].value or 0)
 
-# FUENTE DE VERDAD: leer AE (col 31) y AF (col 32) directamente del Excel
-# AE = costo unitario ya redondeado a 2 dec por el prorrateo original
-# AF = AE * C  (total a 2 dec)
-# AG = AF - E  (diferencia por línea)
-# Σ AF - E1 = diferencia total real que hay que absorber
+# FUENTE DE VERDAD: leer "Costo Unitario" y "Costo Total" LOCALIZANDO LA COLUMNA
+# POR SU ENCABEZADO en fila 4, en vez de por posición fija (AE/AF).
+# Esto evita que un cambio en el archivo origen (p.ej. columna "ID" agregada)
+# desalinee las columnas y arrastre valores incorrectos (ej. el ID como costo).
+# Costo Unitario = costo ya redondeado a 2 dec por el prorrateo original
+# Costo Total    = Costo Unitario * C  (total a 2 dec)
+# Σ Costo Total - E1 = diferencia total real que hay que absorber
 # NO recalcular desde E — eso da un valor diferente
+
+_idx_ae = _find_col(ws, 'Costo Unitario')
+_idx_af = _find_col(ws, 'Costo Total')
+if _idx_ae is None: _idx_ae = 30  # fallback al layout clásico
+if _idx_af is None: _idx_af = 31  # fallback al layout clásico
 
 rows = []
 for i, row in enumerate(ws.iter_rows(min_row=5, max_row=ws.max_row, values_only=True), start=5):
@@ -551,8 +590,8 @@ for i, row in enumerate(ws.iter_rows(min_row=5, max_row=ws.max_row, values_only=
     e  = row[4]   # col E — landed total exacto (4 dec)
     b  = row[1]   # col B — descripcion
     a  = row[0]   # col A — SKU
-    ae = row[30]  # col AE — costo unitario redondeado a 2 dec
-    af = row[31]  # col AF — total redondeado (AE * C)
+    ae = row[_idx_ae]  # columna "Costo Unitario" localizada por nombre
+    af = row[_idx_af]  # columna "Costo Total" localizada por nombre
     if c and isinstance(c,(int,float)) and c!=0 and ae is not None and af is not None:
         try:
             pzas  = int(float(c))
