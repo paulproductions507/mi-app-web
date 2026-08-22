@@ -520,23 +520,21 @@ body[style*="color-scheme: light"] #portal-content tr td[style*="background:#1c2
 #splash-hero-bg{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:0;}
 #splash-hero-bg::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 40%,rgba(88,166,255,.07) 0%,transparent 70%);}
 .erp-circuit{position:absolute;width:100%;height:100%;top:0;left:0;overflow:hidden;pointer-events:none;z-index:0;}
-/* ── Escritorio: panel de login flotante a la izquierda, arte de fondo a
-   pantalla completa detrás ──
-   Nada de línea divisoria a la mitad — así se veía como pantalla dañada.
-   En vez de partir la pantalla en dos, el diagrama de fondo (.erp-circuit)
-   se queda SIEMPRE a ancho completo, y el bloque de login (#splash-hero) es
-   un panel angosto tipo "glass card" que flota sobre la esquina izquierda,
-   con su propio fondo y una sombra suave que se difumina hacia la derecha
-   — el mismo patrón que usan los ERP/SaaS profesionales (Stripe, Azure,
-   SAP Fiori) para sus pantallas de inicio. En móvil no cambia nada. */
+/* ── Escritorio: pantalla de login dividida en dos paneles limpios ──
+   Panel izquierdo (sólido, ~40%): logo, título y botón de acceso.
+   Panel derecho (resto del ancho): el diagrama de la app, bien visible,
+   sobre un verde oscuro propio — con una línea divisoria simple y nítida
+   entre ambos, sin efectos de vidrio ni degradados que se vean "cortados".
+   En móvil no cambia nada — sigue siendo el overlay de siempre. */
 @media (min-width:900px){
   #splash-hero{
-    width:36%!important; min-width:360px; max-width:520px;
+    width:40%!important; min-width:380px; max-width:560px;
     box-sizing:border-box;
-    background:linear-gradient(155deg,rgba(3,12,9,.86) 0%,rgba(4,15,11,.72) 55%,rgba(4,15,11,.35) 100%);
-    box-shadow:60px 0 90px -20px rgba(0,0,0,.4);
+    background:#0a1513;
+    border-right:1px solid rgba(255,255,255,.08);
     transition:opacity .4s,transform .4s;
   }
+  .erp-circuit svg{opacity:.4!important;}
 }
 .erp-circuit svg{width:100%;height:100%;opacity:.12;}
 #splash.nature-bg{background:linear-gradient(160deg,#071510 0%,#0b2218 30%,#071c12 60%,#082015 100%)!important;}
@@ -952,7 +950,17 @@ body.theme-light #_provTooltip{background:#fff;border-color:#d8e6df;box-shadow:0
    en el borde izquierdo real de la pantalla — fuera de la columna
    centrada — igual que un disparador de sidebar convencional. */
 .zlh-topnav{
-  position:fixed; left:16px; top:16px; z-index:20; width:auto; box-sizing:border-box;
+  /* FIX: antes era position:fixed, pero su ancestro #splash-nav tiene
+     transform (para la animación de entrada), lo que en algunos
+     navegadores móviles hace que un "fixed" adentro de un ancestro con
+     transform no seudo-flote de forma confiable al hacer scroll dentro de
+     ese mismo panel (que es quien realmente scrollea, no la ventana).
+     position:sticky es la forma correcta y predecible de lograr "el botón
+     se queda flotando en su misma posición mientras el usuario baja" —
+     se pega al llegar a top:16px del panel que scrollea (#splash-nav) y
+     viaja con el scroll de ahí en adelante, en vez de depender de un
+     truco de posicionamiento fixed anidado. */
+  position:sticky; top:16px; z-index:20; width:auto; box-sizing:border-box;
   display:flex; align-items:center; gap:3px;
   background:var(--zsurf); border:1px solid var(--zborder); border-radius:14px;
   padding:7px; margin-bottom:0;
@@ -1423,6 +1431,19 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
 
     <!-- FULL-WIDTH HEADER: título, KPIs, embarques por mes y resumen — todo lo que NO es navegación va aquí, a lo ancho -->
     <div class="zlh-header-full">
+      <!-- El botón Menú va PRIMERO en el orden del documento (aunque
+           visualmente ya quedaba arriba-izquierda con position:fixed) para
+           que, ahora con position:sticky, su punto de partida en pantalla
+           sea el mismo de siempre — y a partir de ahí se queda flotando
+           pegado mientras el usuario baja, en vez de perderse con el
+           scroll del panel. -->
+      <nav class="zlh-topnav" id="zlhTopNav">
+        <button class="zlh-topnav-trigger-btn" id="zlhFlyoutTrigger" onclick="_zlhFlyoutToggle()">
+          <span class="zlh-topnav-brand">🛃</span>
+          Menú
+          <span class="car">▸</span>
+        </button>
+      </nav>
       <div class="zlh-topbar">
         <button onclick="_tendToggleFmt()" class="zlh-theme-btn _tend-fmt-btn zlh-fmt-btn" title="Cambiar formato de montos">$k</button>
         <button onclick="toggleTheme()" id="theme-toggle-btn" class="zlh-theme-btn">
@@ -1437,16 +1458,6 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
       <div class="zlh-eyebrow">Grupo Primavera Holding · Automatizado</div>
       <div class="zlh-sub">Simulación, ahorro y desembolso de importaciones y compras Zona Libre de Colón, con KPIs y tendencias en tiempo real.</div>
 
-      <!-- BARRA DE NAVEGACIÓN — un solo botón "Módulos" arriba. Al pasar el
-           cursor (o tocarlo en celular) abre el cajón grande de siempre,
-           con ícono + nombre + descripción, deslizándose hacia la derecha. -->
-      <nav class="zlh-topnav" id="zlhTopNav">
-        <button class="zlh-topnav-trigger-btn" id="zlhFlyoutTrigger" onclick="_zlhFlyoutToggle()">
-          <span class="zlh-topnav-brand">🛃</span>
-          Menú
-          <span class="car">▸</span>
-        </button>
-      </nav>
       <div class="zlh-topnav-backdrop" id="zlhTopNavBackdrop" onclick="_zlhFlyoutClose()"></div>
 
       <aside class="zlh-flyout" id="zlhFlyout">
@@ -22940,19 +22951,19 @@ function _renderContainerComparativo(){
  try{
   var canvas = document.getElementById('cont-cmp-canvas');
   if(!canvas) return;
+  function _dibujarMensaje(msg){
+    var ctxM = canvas.getContext('2d');
+    var Wm = canvas.getBoundingClientRect().width || canvas.offsetWidth || canvas.parentElement?.clientWidth || 280;
+    canvas.width = Wm; canvas.height = 60; canvas.style.height='60px'; canvas.style.width='100%';
+    ctxM.clearRect(0,0,Wm,60);
+    ctxM.fillStyle='rgba(139,148,158,.7)'; ctxM.font='11px Inter'; ctxM.textAlign='center';
+    ctxM.fillText(msg, Wm/2, 32);
+    var legendElM = document.getElementById('cont-cmp-legend');
+    if(legendElM) legendElM.innerHTML='';
+  }
   var data = (typeof tendData!=='undefined' ? tendData : []) || [];
   var camiones = data.filter(_esCamionRecibido);
-  if(!camiones.length){
-    var ctxEmpty = canvas.getContext('2d');
-    var Wempty = canvas.getBoundingClientRect().width || canvas.offsetWidth || 280;
-    canvas.width = Wempty; canvas.height = 60; canvas.style.height='60px'; canvas.style.width='100%';
-    ctxEmpty.clearRect(0,0,Wempty,60);
-    ctxEmpty.fillStyle='rgba(139,148,158,.7)'; ctxEmpty.font='11px Inter'; ctxEmpty.textAlign='center';
-    ctxEmpty.fillText('Aún no hay embarques por camión procesados para comparar.', Wempty/2, 32);
-    var legendElEmpty = document.getElementById('cont-cmp-legend');
-    if(legendElEmpty) legendElEmpty.innerHTML='';
-    return;
-  }
+  if(!camiones.length){ _dibujarMensaje('Aún no hay embarques por camión procesados para comparar.'); return; }
   // Últimos 12 meses con datos (respecto al mes más reciente registrado)
   function ymKey(fechaStr){
     var s=(fechaStr||'').toString();
@@ -22960,7 +22971,7 @@ function _renderContainerComparativo(){
     return m ? {y:parseInt(m[1],10), m:parseInt(m[2],10)} : null;
   }
   var claves = camiones.map(function(d){ return ymKey(d.fecha); }).filter(Boolean);
-  if(!claves.length) return;
+  if(!claves.length){ _dibujarMensaje('No se pudo leer la fecha de esos embarques.'); return; }
   claves.sort(function(a,b){ return (a.y*12+a.m)-(b.y*12+b.m); });
   var ultimo = claves[claves.length-1];
   var meses12=[];
@@ -22982,9 +22993,30 @@ function _renderContainerComparativo(){
   });
   var dpr = window.devicePixelRatio||1;
   var W = canvas.getBoundingClientRect().width || canvas.offsetWidth;
+  // ── Espera robusta a que el contenedor tenga tamaño real ──
+  // Antes esto reintentaba 5 veces cada 80ms y luego se rendía en
+  // silencio (canvas en blanco, sin aviso) si el widget vivía dentro de un
+  // modal/pestaña cuya animación de apertura tardaba más de ese medio
+  // segundo. Ahora, si el ancho todavía es 0, se muestra un aviso visible
+  // Y se engancha un ResizeObserver que dispara el dibujo real en cuanto
+  // el contenedor obtenga tamaño — sin límite de reintentos ni carreras
+  // contra temporizadores fijos.
   if(!W || W<10){
-    var _r=(canvas._retries||0)+1; canvas._retries=_r;
-    if(_r<=5){ requestAnimationFrame(function(){ setTimeout(_renderContainerComparativo,80); }); }
+    _dibujarMensaje('Cargando…');
+    if(!canvas._roBound && typeof ResizeObserver!=='function'){
+      // Navegador muy viejo sin ResizeObserver: vuelve al reintento simple.
+      var _r=(canvas._retries||0)+1; canvas._retries=_r;
+      if(_r<=25){ setTimeout(_renderContainerComparativo,120); }
+      return;
+    }
+    if(!canvas._roBound){
+      canvas._roBound = true;
+      var ro = new ResizeObserver(function(entries){
+        var w2 = entries[0] && entries[0].contentRect ? entries[0].contentRect.width : 0;
+        if(w2 >= 10){ ro.disconnect(); canvas._roBound=false; _renderContainerComparativo(); }
+      });
+      ro.observe(canvas.parentElement || canvas);
+    }
     return;
   }
   canvas._retries=0;
@@ -23044,6 +23076,17 @@ function _renderContainerComparativo(){
   }
  }catch(err){
   console.error('Camiones Recibidos — error al renderizar:', err);
+  try{
+    var canvasErr = document.getElementById('cont-cmp-canvas');
+    if(canvasErr){
+      var ctxErr = canvasErr.getContext('2d');
+      var Werr = canvasErr.getBoundingClientRect().width || 280;
+      canvasErr.width = Werr; canvasErr.height = 60;
+      ctxErr.clearRect(0,0,Werr,60);
+      ctxErr.fillStyle='rgba(248,81,73,.75)'; ctxErr.font='11px Inter'; ctxErr.textAlign='center';
+      ctxErr.fillText('No se pudo cargar este gráfico — pulsa el botón 👎 para avisarnos.', Werr/2, 32);
+    }
+  }catch(e2){}
  }
 }
 // Hit-test de barras del comparativo de contenedores + tooltip flotante
