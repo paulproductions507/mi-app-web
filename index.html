@@ -523,37 +523,37 @@ body[style*="color-scheme: light"] #portal-content tr td[style*="background:#1c2
 #splash-hero-bg::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 40%,rgba(88,166,255,.07) 0%,transparent 70%);}
 .erp-circuit{position:absolute;width:100%;height:100%;top:0;left:0;overflow:hidden;pointer-events:none;z-index:0;transition:left .6s cubic-bezier(.4,0,.2,1),width .6s cubic-bezier(.4,0,.2,1);}
 /* ── Escritorio: pantalla de login dividida en dos paneles ──
-   FIX (ago-2026, v2): la versión anterior le daba a #splash-hero un
-   fondo sólido propio (#0a1513) que quedaba como una franja/caja oscura
-   flotando sobre el diagrama — porque .erp-circuit ya no estaba confinado
-   a la mitad derecha (ocupaba el 100% del ancho) y el panel izquierdo lo
-   tapaba a medias. Ahora ambos paneles son TRANSPARENTES — el único fondo
-   es el gradiente verde de #splash, que corre parejo de punta a punta —
-   y cada mitad tiene su propio contenido: texto/botón a la izquierda,
-   diagrama confinado a la derecha. La división entre ambas es una línea
-   vertical con degradado verde→azul y remates redondeados/brillantes en
-   las puntas — sin cajas negras ni bordes duros. En móvil no cambia
-   nada — sigue siendo el overlay de siempre. */
+   FIX (ago-2026, v3): dos problemas reales de la versión anterior:
+   1) #splash-hero es position:absolute sin left:0 — dentro de #splash
+      (que es un flex container con align-items:center), un elemento
+      absoluto SIN left/right explícitos toma como posición base la que
+      tendría si no fuera absoluto, que con align-items:center queda
+      CENTRADA. Por eso el panel de 44% aparecía centrado en la pantalla
+      en vez de pegado al borde izquierdo real, y el ícono/título se
+      veían "a la mitad" en vez de a la izquierda. Ahora left:0 fuerza el
+      panel contra el borde real.
+   2) La línea divisoria (antes un trazo brillante verde→azul con puntos)
+      no combinaba con el resto y además no coincidía con el borde real
+      del panel (por el bug de arriba). Se reemplaza por una FRANJA de
+      degradado (oscuro→tenue), de arriba a abajo completo, igual al
+      efecto que ya se ve de forma natural donde el panel izquierdo se
+      encuentra con el diagrama — sin línea de color suelta. */
 @media (min-width:900px){
   #splash-hero{
+    left:0; right:auto;
     width:44%!important; min-width:360px; max-width:540px;
     box-sizing:border-box; background:transparent;
     transition:opacity .4s,transform .4s;
   }
   #splash-hero::after{
     content:'';
-    position:absolute; left:100%; top:9%; bottom:9%; width:2px;
-    margin-left:-1px;
-    background:
-      radial-gradient(circle, var(--blue-l) 0%, transparent 72%) top center / 11px 11px no-repeat,
-      radial-gradient(circle, var(--green-l) 0%, transparent 72%) bottom center / 11px 11px no-repeat,
-      linear-gradient(180deg, var(--green-l) 0%, var(--blue-l) 50%, var(--green-l) 100%) center / 2px 100% no-repeat;
-    box-shadow:0 0 22px rgba(63,185,80,.3);
+    position:absolute; left:100%; top:0; bottom:0; width:130px; margin-left:-65px;
+    background:linear-gradient(90deg, rgba(3,10,9,.55) 0%, rgba(3,10,9,.22) 45%, rgba(63,185,80,.05) 75%, transparent 100%);
     pointer-events:none;
   }
   .erp-circuit{left:44%; width:56%;}
   .erp-circuit svg{opacity:.5!important;}
-  #splash:not(.hero-gone):not(.app-mode) .erp-circuit::before{content:'';position:absolute;inset:0;background:linear-gradient(90deg,rgba(2,8,20,.35) 0%,transparent 16%);pointer-events:none;z-index:1;}
+  #splash:not(.hero-gone):not(.app-mode) .erp-circuit::before{content:'';position:absolute;inset:0;background:linear-gradient(90deg,rgba(2,8,20,.4) 0%,transparent 20%);pointer-events:none;z-index:1;}
   #splash.hero-gone .erp-circuit,#splash.app-mode .erp-circuit{left:0;width:100%;}
 }
 .erp-circuit svg{width:100%;height:100%;opacity:.12;}
