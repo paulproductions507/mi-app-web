@@ -514,27 +514,47 @@ body[style*="color-scheme: light"] #portal-content tr td[style*="background:#1c2
 
 /* SPLASH */
 #splash{position:fixed;inset:0;background:linear-gradient(135deg,#0a0f1a 0%,#0d1f35 50%,#0a0f1a 100%);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .5s ease,transform .5s ease;overflow:hidden;min-height:100dvh;width:100%;}
-#splash.black-bg{background:#000000!important;}
-#splash.corporate-bg{background:linear-gradient(160deg,#f0f4f8 0%,#e8f0fa 40%,#deeaf8 100%)!important;}
-#splash.corporate-bg .erp-circuit{filter:none;opacity:1;}
+/* FIX (ago-2026): la pantalla de inicio (splash) se queda SIEMPRE con el
+   tema oscuro verde/azul, sin importar el tema elegido en Configuración
+   (Corporativo, Negro, etc.) — ese tema solo debe verse DENTRO de la app,
+   nunca aquí. Antes existían overrides '.corporate-bg'/'body.theme-light'
+   que volvían el splash a un fondo claro deslavado; se eliminaron. */
 #splash-hero-bg{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:0;}
 #splash-hero-bg::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 40%,rgba(88,166,255,.07) 0%,transparent 70%);}
-.erp-circuit{position:absolute;width:100%;height:100%;top:0;left:0;overflow:hidden;pointer-events:none;z-index:0;}
-/* ── Escritorio: pantalla de login dividida en dos paneles limpios ──
-   Panel izquierdo (sólido, ~40%): logo, título y botón de acceso.
-   Panel derecho (resto del ancho): el diagrama de la app, bien visible,
-   sobre un verde oscuro propio — con una línea divisoria simple y nítida
-   entre ambos, sin efectos de vidrio ni degradados que se vean "cortados".
-   En móvil no cambia nada — sigue siendo el overlay de siempre. */
+.erp-circuit{position:absolute;width:100%;height:100%;top:0;left:0;overflow:hidden;pointer-events:none;z-index:0;transition:left .6s cubic-bezier(.4,0,.2,1),width .6s cubic-bezier(.4,0,.2,1);}
+/* ── Escritorio: pantalla de login dividida en dos paneles ──
+   FIX (ago-2026, v2): la versión anterior le daba a #splash-hero un
+   fondo sólido propio (#0a1513) que quedaba como una franja/caja oscura
+   flotando sobre el diagrama — porque .erp-circuit ya no estaba confinado
+   a la mitad derecha (ocupaba el 100% del ancho) y el panel izquierdo lo
+   tapaba a medias. Ahora ambos paneles son TRANSPARENTES — el único fondo
+   es el gradiente verde de #splash, que corre parejo de punta a punta —
+   y cada mitad tiene su propio contenido: texto/botón a la izquierda,
+   diagrama confinado a la derecha. La división entre ambas es una línea
+   vertical con degradado verde→azul y remates redondeados/brillantes en
+   las puntas — sin cajas negras ni bordes duros. En móvil no cambia
+   nada — sigue siendo el overlay de siempre. */
 @media (min-width:900px){
   #splash-hero{
-    width:40%!important; min-width:380px; max-width:560px;
-    box-sizing:border-box;
-    background:#0a1513;
-    border-right:1px solid rgba(255,255,255,.08);
+    width:44%!important; min-width:360px; max-width:540px;
+    box-sizing:border-box; background:transparent;
     transition:opacity .4s,transform .4s;
   }
-  .erp-circuit svg{opacity:.4!important;}
+  #splash-hero::after{
+    content:'';
+    position:absolute; left:100%; top:9%; bottom:9%; width:2px;
+    margin-left:-1px;
+    background:
+      radial-gradient(circle, var(--blue-l) 0%, transparent 72%) top center / 11px 11px no-repeat,
+      radial-gradient(circle, var(--green-l) 0%, transparent 72%) bottom center / 11px 11px no-repeat,
+      linear-gradient(180deg, var(--green-l) 0%, var(--blue-l) 50%, var(--green-l) 100%) center / 2px 100% no-repeat;
+    box-shadow:0 0 22px rgba(63,185,80,.3);
+    pointer-events:none;
+  }
+  .erp-circuit{left:44%; width:56%;}
+  .erp-circuit svg{opacity:.5!important;}
+  #splash:not(.hero-gone):not(.app-mode) .erp-circuit::before{content:'';position:absolute;inset:0;background:linear-gradient(90deg,rgba(2,8,20,.35) 0%,transparent 16%);pointer-events:none;z-index:1;}
+  #splash.hero-gone .erp-circuit,#splash.app-mode .erp-circuit{left:0;width:100%;}
 }
 .erp-circuit svg{width:100%;height:100%;opacity:.12;}
 #splash.nature-bg{background:linear-gradient(160deg,#071510 0%,#0b2218 30%,#071c12 60%,#082015 100%)!important;}
@@ -571,18 +591,13 @@ body[style*="color-scheme: light"] #portal-content tr td[style*="background:#1c2
 .splash-btn:hover{box-shadow:0 10px 40px rgba(31,143,127,.5);}
 #splash-loading{background:linear-gradient(135deg,#050f0d 0%,#0b1f1a 50%,#050f0d 100%);}
 
-/* Variante clara del panel KPI / hero / carga — activada por "Modo Claro" (body.theme-light) */
-body.theme-light #splash-nav.zlh-panel{
-  --zbg:#f2f8f6; --zsurf:#ffffff; --zsurf2:#eaf4f1; --zborder:#d5e6e0;
-  --ztext:#0d211c; --zmuted:#4f6d64; --zdim:#6c8880;
-  --zt:#127a5f; --zt2:#0d5a46; --zg:#a9761f; --znavy:#2f5f92;
-}
-body.theme-light #splash{background:linear-gradient(135deg,#eef6f3 0%,#e3f1ec 50%,#eef6f3 100%)!important;}
-body.theme-light .erp-circuit svg{filter:hue-rotate(-52deg) saturate(.9) brightness(1.3); opacity:.08;}
-body.theme-light .splash-title{color:#0d2b22;}
-body.theme-light .splash-ver{color:#4f6d64;}
-body.theme-light #splash-loading{background:linear-gradient(135deg,#eef6f3 0%,#e3f1ec 50%,#eef6f3 100%)!important;}
-body.theme-light #splash-loading .sl-title{color:#0d2b22;}
+/* FIX (ago-2026): antes, elegir un tema claro (Corporativo/Claro) en
+   Configuración añadía la clase body.theme-light y ESO también volvía
+   claro/deslavado el splash-nav, el splash y la pantalla de carga
+   intermedia — justo lo que no se quiere. Se eliminaron esos overrides:
+   la pantalla de inicio y el panel de módulos se quedan siempre en la
+   paleta verde/azul oscura de --zbg/--zsurf/etc. definida más abajo,
+   pase lo que pase con el tema elegido para el resto de la app. */
 
 /* ===== Pantalla intermedia de carga (branding Compras & Costeo) al ingresar ===== */
 #splash-loading{
@@ -601,32 +616,8 @@ body.theme-light #splash-loading .sl-title{color:#0d2b22;}
 /* SPLASH NAV BUTTONS */
 .splash-nav-btn{display:flex;align-items:center;gap:14px;background:var(--cb);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:14px 16px;cursor:pointer;text-align:left;width:100%;transition:transform .15s,border-color .15s;}
 .splash-nav-btn:hover{transform:translateX(4px);border-color:var(--c);}
-#splash.corporate-bg .splash-nav-btn{border:1px solid rgba(80,120,255,.2)!important;box-shadow:0 1px 8px rgba(0,60,200,.05)!important;background:rgba(255,255,255,.12)!important;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);}
-#splash.corporate-bg .splash-nav-btn div:first-of-type{color:#0a3d8f!important;font-weight:800!important;}
-#splash.corporate-bg .splash-nav-btn div:last-of-type{color:#374151!important;}
-#splash.corporate-bg #splash-nav{background:rgba(255,255,255,.08)!important;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-top:1px solid rgba(100,140,255,.2)!important;box-shadow:0 -4px 30px rgba(0,80,200,.06)!important;z-index:10;}
-#splash.corporate-bg .splash-kpi-chip{background:rgba(255,255,255,.25);border:1px solid rgba(80,120,255,.25);backdrop-filter:blur(8px);}
 /* Dept accordion emb/pzas badges - orange in light mode */
 body[style*="color-scheme: light"] [style*="color:#8b949e"]{color:#c45200!important;font-weight:600!important;}
-/* Light/corporate splash hero fixes */
-#splash.corporate-bg .splash-title {
-  color: #0a3d8f !important;
-  text-shadow: 0 2px 8px rgba(255,255,255,.8), 0 1px 2px rgba(0,60,180,.15);
-  font-weight: 800 !important;
-}
-#splash.corporate-bg .splash-ver {
-  color: #3b6cb7 !important;
-  font-weight: 500 !important;
-}
-#splash.corporate-bg .splash-btn {
-  background: linear-gradient(135deg, #0052cc, #0077e6) !important;
-  color: #ffffff !important;
-  box-shadow: 0 4px 24px rgba(0,82,204,.35) !important;
-  border: 1px solid rgba(0,82,204,.3) !important;
-}
-#splash.corporate-bg .splash-btn:hover {
-  box-shadow: 0 8px 32px rgba(0,82,204,.5) !important;
-}
 
 /* ── Light scheme: force dark readable text everywhere ── */
 body[style*="color-scheme: light"] {
@@ -950,18 +941,23 @@ body.theme-light #_provTooltip{background:#fff;border-color:#d8e6df;box-shadow:0
    en el borde izquierdo real de la pantalla — fuera de la columna
    centrada — igual que un disparador de sidebar convencional. */
 .zlh-topnav{
-  /* FIX: antes era position:fixed, pero su ancestro #splash-nav tiene
-     transform (para la animación de entrada), lo que en algunos
-     navegadores móviles hace que un "fixed" adentro de un ancestro con
-     transform no seudo-flote de forma confiable al hacer scroll dentro de
-     ese mismo panel (que es quien realmente scrollea, no la ventana).
-     position:sticky es la forma correcta y predecible de lograr "el botón
-     se queda flotando en su misma posición mientras el usuario baja" —
-     se pega al llegar a top:16px del panel que scrollea (#splash-nav) y
-     viaja con el scroll de ahí en adelante, en vez de depender de un
-     truco de posicionamiento fixed anidado. */
-  position:sticky; top:16px; z-index:20; width:auto; box-sizing:border-box;
-  display:flex; align-items:center; gap:3px;
+  /* FIX (ago-2026, v2): el intento anterior con position:sticky causaba
+     dos problemas nuevos — (1) al ser un <nav> de bloque con width:auto
+     dentro de un contenedor ancho, se ESTIRABA a todo el ancho disponible
+     (width:auto en un elemento de bloque = 100% del contenedor, no
+     "lo justo para su contenido"), dejando el botón "Menú" como una barra
+     larga en vez de un botón compacto; y (2) al vivir dentro de la columna
+     centrada de 900px, no quedaba "afuera, a la izquierda" como antes.
+     Se vuelve a position:fixed en la esquina real de la pantalla — la
+     razón real por la que antes no flotaba bien NO era fixed en sí, sino
+     que #splash-nav aplicaba `transform:translateY(0)` (ver JS más abajo)
+     y CUALQUIER transform, incluso translateY(0), convierte a ese
+     ancestro en el contenedor de referencia de sus descendientes fixed.
+     Se corrigió allá (transform:'none' en vez de 'translateY(0)'), así
+     que fixed ahora sí ancla contra la ventana real de forma confiable.
+     width:fit-content evita que el botón se estire. */
+  position:fixed; left:16px; top:16px; z-index:20; width:fit-content; box-sizing:border-box;
+  display:inline-flex; align-items:center; gap:3px;
   background:var(--zsurf); border:1px solid var(--zborder); border-radius:14px;
   padding:7px; margin-bottom:0;
   box-shadow:0 1px 2px rgba(0,0,0,.2), 0 8px 24px -10px rgba(0,0,0,.4);
@@ -9741,7 +9737,15 @@ function showSplashNav(){
   _zlhPopulateMonthly();
   if(typeof _zlhPopulateOrigenes==='function'){ try{ _zlhPopulateOrigenes(); }catch(e){ console.warn('Orígenes:',e); } }
   setTimeout(()=>{
-    if(nav){ nav.classList.add('nav-visible'); nav.style.transform='translateY(0)'; }
+    // FIX (ago-2026): usar transform:'none' en vez de 'translateY(0)'. Se
+    // ven idénticos, pero CUALQUIER transform distinto de "none" —incluso
+    // translateY(0)— convierte a este panel en el contenedor de referencia
+    // de sus descendientes position:fixed (el botón Menú, el cajón lateral
+    // y el fondo esmerilado). Eso era lo que hacía que el sidebar pareciera
+    // "cortado" antes de llegar hasta el mapa: sus 0/bottom:0 ya no
+    // apuntaban a la ventana real. Con 'none' el fixed vuelve a anclar
+    // contra la ventana, y el cajón cubre toda la pantalla de verdad.
+    if(nav){ nav.classList.add('nav-visible'); nav.style.transform='none'; }
     requestAnimationFrame(()=>{ if(typeof _zlhAlignRailIcons==='function') _zlhAlignRailIcons(); });
     setTimeout(()=>{
       const loading2=document.getElementById('splash-loading');
@@ -10027,7 +10031,7 @@ function volverInicio(){
     splash.style.transition='opacity .35s ease, transform .35s ease';
     // Go directly to nav panel — skip hero (y asegurar que quede totalmente oculto, sin superponerse)
     if(hero){ hero.style.opacity='0'; hero.style.transform='translateY(-30px)'; hero.style.transition='none'; hero.classList.add('hero-gone'); }
-    if(nav){ nav.classList.add('nav-visible'); nav.style.transform='translateY(0)'; nav.style.transition='none'; }
+    if(nav){ nav.classList.add('nav-visible'); nav.style.transform='none'; nav.style.transition='none'; }
     splash.classList.add('app-mode');
     // Refrescar KPIs / recordatorio / tendencia — evita que el inicio se
     // quede "helado" mostrando datos del embarque que se trabajó antes de entrar.
@@ -22938,11 +22942,21 @@ function _calcCostoInventario(d){
 // desde hace más tiempo.
 function _esCamionRecibido(d){
   if(!d) return false;
+  // FIX (ago-2026): Zona Libre es SIEMPRE despacho terrestre — esta
+  // comprobación debe ir PRIMERO. Antes, si d.viaTransporte ya tenía un
+  // valor (aunque fuera 'SEA', mal guardado por el bug histórico de
+  // jul-2026 — ver nota junto a donde se arma viaTransporte más arriba en
+  // el archivo), la función devolvía false de inmediato y nunca llegaba a
+  // revisar tipo==='ZL'. Resultado: todos los embarques de Zona Libre
+  // procesados antes de esa fecha quedaban excluidos del conteo, y con
+  // pocos o cero embarques por camión detectados el gráfico se veía en
+  // blanco ("Aún no hay embarques por camión procesados"). Ahora Zona
+  // Libre manda sobre cualquier viaTransporte heredado incorrectamente.
+  if(d.tipo==='ZL') return true;
+  if(d.snap && d.snap.tipo==='ZL') return true;
   if(d.viaTransporte) return d.viaTransporte==='LAND';
   var te = (d.tipoEquipo||'').toLowerCase();
   if(te.indexOf('cami')>=0 || te.indexOf('furg')>=0 || te.indexOf('terrestre')>=0) return true;
-  if(d.tipo==='ZL') return true;
-  if(d.snap && d.snap.tipo==='ZL') return true;
   var texto=((d.desc||'')+' '+(d.origen||'')+' '+(d.esc||'')).toLowerCase();
   if(texto.indexOf('camion')>=0 || texto.indexOf('camión')>=0 || texto.indexOf('zona libre')>=0) return true;
   return false;
