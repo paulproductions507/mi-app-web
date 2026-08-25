@@ -99,6 +99,15 @@ body.theme-light {
   --green:#1a7f37; --green-l:#116329; --green-dim:rgba(26,127,55,.1);
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+/* FIX (ago-2026): la pantalla de inicio (#splash-nav, con su propio
+   scroll interno overflow-y:auto) podía dejar al documento (html/body)
+   más alto que la ventana por contenido oculto detrás, mostrando una
+   SEGUNDA barra de scroll nativa del navegador junto a la del panel, que
+   no servía para nada (el contenido real vive dentro del panel). Se
+   bloquea el scroll del documento SOLO mientras esa pantalla de inicio
+   está activa (clase puesta/quitada por JS más abajo) — el resto de la
+   app sigue usando el scroll normal del documento como siempre. */
+body.zlh-nav-open{overflow:hidden;height:100%;}
 body{font-family:'Inter','IBM Plex Sans',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:13px;line-height:1.6;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;font-feature-settings:'tnum' 1,'kern' 1;letter-spacing:-.01em;}
 
 /* HEADER */
@@ -1166,7 +1175,7 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
 </head>
-<body>
+<body class="zlh-nav-open">
 <div id="_progress-bar"></div>
 
 <div id="spin"><div class="spin-box"><div class="spin-icon">⚙️</div><p style="margin-top:8px;font-size:12px;color:var(--muted)">Consultando arancel…</p></div></div>
@@ -1188,7 +1197,7 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
   <div class="splash-bg" id="splash-bg"></div>
 <!-- ERP Holographic Banner -->
   <div class="erp-circuit" aria-hidden="true">
-  <svg viewBox="95 55 250 260" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">
+  <svg viewBox="95 25 250 290" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">
     <defs>
       <!-- Deep blue dark background gradient -->
       <radialGradient id="bg" cx="55%" cy="48%" r="60%">
@@ -1209,7 +1218,7 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
       </radialGradient>
       <!-- Digital grid pattern -->
       <pattern id="grid" width="30" height="30" patternUnits="userSpaceOnUse">
-        <path d="M 30 0 L 0 0 0 30" fill="none" stroke="#1a4a7a" stroke-width=".4" opacity=".5"/>
+        <path d="M 30 0 L 0 0 0 30" fill="none" stroke="#1a4a7a" stroke-width=".3" opacity=".3"/>
       </pattern>
       <filter id="blur2">
         <feGaussianBlur stdDeviation="2"/>
@@ -1221,7 +1230,19 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
 
     <!-- Background -->
     <rect width="400" height="380" fill="url(#bg)"/>
-    <rect width="400" height="380" fill="url(#grid)" opacity=".4"/>
+    <rect width="400" height="380" fill="url(#grid)" opacity=".15"/>
+
+    <!-- FIX (ago-2026): mini gráfica de barras — antes vivía en el panel
+         decorativo izquierdo (x=0-85), que quedó fuera del recorte del
+         viewBox. Se trae de vuelta arriba, centrada sobre el nodo
+         ADUANAL, para que no se pierda ese detalle. -->
+    <g opacity=".55">
+      <rect x="195" y="48" width="7" height="14" rx="1" fill="#0077cc"/>
+      <rect x="206" y="38" width="7" height="24" rx="1" fill="#0099ff"/>
+      <rect x="217" y="32" width="7" height="30" rx="1" fill="#00aaff"/>
+      <rect x="228" y="40" width="7" height="22" rx="1" fill="#0099ff"/>
+      <rect x="239" y="46" width="7" height="16" rx="1" fill="#0077cc"/>
+    </g>
 
     <!-- Ambient glow behind center -->
     <circle cx="220" cy="185" r="120" fill="url(#glow)" filter="url(#gblur)"/>
@@ -1367,6 +1388,13 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
 
     <button class="splash-btn" onclick="showSplashNav()" style="margin-left:0;">▶ &nbsp; Ingresar al Sistema</button>
     <div class="splash-ver" style="text-align:left;">Grupo Primavera Holding · Departamento de Tráfico</div>
+    <!-- Mini gráfica de tendencia (alta/baja mensual) — vivía en el panel
+         decorativo derecho del diagrama; se trae aquí, debajo del texto,
+         para que no se pierda ese detalle visual. -->
+    <svg viewBox="0 0 140 46" style="width:120px;height:auto;margin-top:20px;opacity:.5;display:block" aria-hidden="true">
+      <polyline points="4,38 24,30 44,34 64,18 84,24 104,10 124,16" stroke="#3fb950" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="124" cy="16" r="3" fill="#3fb950"/>
+    </svg>
   </div>
 
   <!-- PANTALLA INTERMEDIA: imagen de marca al ingresar (Compras & Costeo) -->
@@ -1400,12 +1428,12 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
       <g transform="translate(150,86)">
         <rect x="0" y="0" width="70" height="94" rx="4" fill="#0e2a24" stroke="#1f8f7f" stroke-width="1.5"/>
         <path d="M -4 0 L 35 -22 L 74 0 Z" fill="#145f55" stroke="#1f8f7f" stroke-width="1.2"/>
-        <rect x="10" y="16" width="12" height="16" rx="1.5" fill="#58a6ff" opacity=".55"/>
-        <rect x="29" y="16" width="12" height="16" rx="1.5" fill="#58a6ff" opacity=".55"/>
-        <rect x="48" y="16" width="12" height="16" rx="1.5" fill="#58a6ff" opacity=".55"/>
-        <rect x="10" y="40" width="12" height="16" rx="1.5" fill="#58a6ff" opacity=".4"/>
-        <rect x="29" y="40" width="12" height="16" rx="1.5" fill="#58a6ff" opacity=".4"/>
-        <rect x="48" y="40" width="12" height="16" rx="1.5" fill="#58a6ff" opacity=".4"/>
+        <rect x="10" y="16" width="12" height="16" rx="1.5" fill="#3fb950" opacity=".55"/>
+        <rect x="29" y="16" width="12" height="16" rx="1.5" fill="#3fb950" opacity=".55"/>
+        <rect x="48" y="16" width="12" height="16" rx="1.5" fill="#3fb950" opacity=".55"/>
+        <rect x="10" y="40" width="12" height="16" rx="1.5" fill="#3fb950" opacity=".4"/>
+        <rect x="29" y="40" width="12" height="16" rx="1.5" fill="#3fb950" opacity=".4"/>
+        <rect x="48" y="40" width="12" height="16" rx="1.5" fill="#3fb950" opacity=".4"/>
         <rect x="26" y="64" width="18" height="30" rx="2" fill="#0a1513"/>
       </g>
       <!-- barras de tendencia ascendente -->
@@ -1487,11 +1515,6 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
         </div>
 
         <div class="zlh-nav-section">
-          <div class="zlh-nav-section-lbl">Sistema</div>
-          <button class="zlh-nav-item" onclick="iniciarApp('config')"><span class="zlh-nav-ico">⚙️</span><span><b>Configuración</b><small>Aranceles · Temas · Datos</small></span></button>
-        </div>
-
-        <div class="zlh-nav-section">
           <div class="zlh-nav-section-lbl">Otras Aplicaciones</div>
           <button class="zlh-nav-item" onclick="window.open('cuadro-importacion-estadistico-2025.html','_blank')"><span class="zlh-nav-ico">🗃️</span><span><b>Cuadro Importación</b><small>Equipos, puertos, deptos 2025</small></span></button>
           <button class="zlh-nav-item" onclick="window.open('https://darling-sunflower-e59d17.netlify.app','_blank')"><span class="zlh-nav-ico">🚚</span><span><b>Compras Zona Libre</b><small>Control Pedidos ZL</small></span></button>
@@ -1501,6 +1524,12 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
           <button class="zlh-nav-item" onclick="abrirTransito()"><span class="zlh-nav-ico">🚢</span><span><b>Mercancía en Tránsito</b><small>Control logístico en ruta</small></span></button>
           <button class="zlh-nav-item" onclick="window.open('AjusteProrrateo_v4-2.html','_blank')"><span class="zlh-nav-ico">📉</span><span><b>Ajuste de Prorrateo</b><small>Distribución de costos</small></span></button>
           <button class="zlh-nav-item" onclick="window.open('corregir-fecha.html','_blank')"><span class="zlh-nav-ico">📅</span><span><b>Corregir Fecha</b><small>Ajustar fecha de un embarque</small></span></button>
+        </div>
+
+        <!-- Sistema/Configuración SIEMPRE al final (nunca en medio del menú) -->
+        <div class="zlh-nav-section">
+          <div class="zlh-nav-section-lbl">Sistema</div>
+          <button class="zlh-nav-item" onclick="iniciarApp('config')"><span class="zlh-nav-ico">⚙️</span><span><b>Configuración</b><small>Aranceles · Temas · Datos</small></span></button>
         </div>
       </aside>
 
@@ -2362,9 +2391,21 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
         <!-- Estatus + campo oculto origen -->
         <input type="hidden" id="s1_origen_emb" value="">
         <div style="margin-bottom:4px"><label style="font-size:10px;color:var(--muted);font-weight:600">📌 Estatus</label>
-          <div id="s1_estatus_badge" style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:600;color:var(--muted);margin-top:4px">
+          <div id="s1_estatus_badge" style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;margin-top:4px">
             <span id="s1_estatus_dot" style="width:8px;height:8px;border-radius:50%;background:var(--muted);flex-shrink:0"></span>
-            <span id="s1_estatus_txt">Nuevo</span>
+            <!-- FIX (ago-2026): antes era solo texto de solo-lectura, controlado
+                 automáticamente — se quedaba en "En edición" aunque el embarque
+                 ya estuviera listo, y así salía también en el informe impreso
+                 (que lee este mismo texto). Ahora es un desplegable: el usuario
+                 puede forzar el estatus manualmente antes de guardar/imprimir. -->
+            <select id="s1_estatus_select" onchange="_updateEstatusBadge(this.value); window._estatusManualLock=true;" style="flex:1;background:transparent;border:none;color:inherit;font-size:12px;font-weight:600;cursor:pointer;outline:none">
+              <option value="nuevo">Nuevo</option>
+              <option value="editando">En edición</option>
+              <option value="reabierto">Reabierto</option>
+              <option value="pendiente">⏳ Pendiente</option>
+              <option value="procesado">✅ Procesado</option>
+            </select>
+            <span id="s1_estatus_txt" style="display:none">Nuevo</span>
           </div>
         </div>
       </div>
@@ -2602,27 +2643,6 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
         <button onclick="_cerrarModalEquipo()" style="background:rgba(218,54,51,.1);border:1px solid rgba(218,54,51,.25);color:var(--red-l);border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer">✕ Cerrar</button>
       </div>
       <div style="padding:16px 18px">
-        <!-- Costo Inventario Sistema / Diferencia -->
-        <div id="_eq_costoinv_wrap" style="margin-bottom:10px;background:rgba(88,166,255,.04);border:1px solid rgba(88,166,255,.15);border-radius:8px;padding:8px 10px">
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:4px">
-            <span style="font-size:10px;font-weight:700;color:var(--blue-l)">📘 Costo Inventario (Sistema)</span>
-            <span style="font-size:9px;color:var(--muted);font-weight:400">Manual — se compara vs. Costo Landed Global</span>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-            <div>
-              <label style="font-size:9px;color:var(--blue-l);font-weight:600;display:block;margin-bottom:3px">Costo Inventario Sistema (USD)</label>
-              <input type="number" id="s1_costo_inv_sistema" value="" placeholder="0.00" step="0.01" oninput="_calcDiferenciaInventario();calc();_actualizarSummaryEquipo()" style="width:100%;background:var(--bg);border:1px solid rgba(88,166,255,.35);border-radius:6px;padding:6px 8px;color:var(--blue-l);font-size:12px;font-weight:700;font-family:'IBM Plex Mono',monospace">
-            </div>
-            <div>
-              <label style="font-size:9px;color:var(--orange-l);font-weight:600;display:block;margin-bottom:3px">Diferencia (USD)</label>
-              <input type="number" id="_eq_diferencia_vis" readonly style="width:100%;background:var(--bg);border:1px solid rgba(240,136,62,.25);border-radius:6px;padding:6px 8px;color:var(--orange-l);font-size:12px;font-weight:700;font-family:'IBM Plex Mono',monospace">
-            </div>
-          </div>
-          <div style="margin-top:5px;font-size:9px;color:var(--muted);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-            <span>Costo Landed Global actual: <strong id="_eq_landed_ref" style="color:var(--muted)">—</strong></span>
-            <button type="button" onclick="_aplicarGastosComplementarios()" style="background:rgba(240,136,62,.12);border:1px solid rgba(240,136,62,.3);color:var(--orange-l);border-radius:5px;padding:2px 8px;font-size:9px;font-weight:700;cursor:pointer">⬇️ Aplicar a Gastos Complementarios</button>
-          </div>
-        </div>
         <div class="r2" style="margin-bottom:10px">
           <div class="field" style="margin-bottom:0"><label style="font-size:10px">Tipo de Equipo</label>
             <select id="s1_equipo" onchange="setEquipo(this.value);_renderContenedores();_actualizarSummaryEquipo()" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px">
@@ -2656,6 +2676,27 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
           <div class="field" style="margin-bottom:0"><label style="font-size:10px">DMCE / Otros (USD)</label>
             <input type="number" id="s1_dmce" value="" placeholder="Ej: 60.00" step="0.01" oninput="calc();_actualizarSummaryEquipo()">
             <p class="note" id="dmce-note">$60.00 fijo (0.00 si carga suelta)</p>
+          </div>
+        </div>
+        <!-- Costo Inventario Sistema / Diferencia -->
+        <div id="_eq_costoinv_wrap" style="margin-bottom:10px;background:rgba(88,166,255,.04);border:1px solid rgba(88,166,255,.15);border-radius:8px;padding:8px 10px">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:4px">
+            <span style="font-size:10px;font-weight:700;color:var(--blue-l)">📘 Costo Inventario (Sistema)</span>
+            <span style="font-size:9px;color:var(--muted);font-weight:400">Manual — se compara vs. Costo Landed Global</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div>
+              <label style="font-size:9px;color:var(--blue-l);font-weight:600;display:block;margin-bottom:3px">Costo Inventario Sistema (USD)</label>
+              <input type="number" id="s1_costo_inv_sistema" value="" placeholder="0.00" step="0.01" oninput="_calcDiferenciaInventario();calc();_actualizarSummaryEquipo()" style="width:100%;background:var(--bg);border:1px solid rgba(88,166,255,.35);border-radius:6px;padding:6px 8px;color:var(--blue-l);font-size:12px;font-weight:700;font-family:'IBM Plex Mono',monospace">
+            </div>
+            <div>
+              <label style="font-size:9px;color:var(--orange-l);font-weight:600;display:block;margin-bottom:3px">Diferencia (USD)</label>
+              <input type="number" id="_eq_diferencia_vis" readonly style="width:100%;background:var(--bg);border:1px solid rgba(240,136,62,.25);border-radius:6px;padding:6px 8px;color:var(--orange-l);font-size:12px;font-weight:700;font-family:'IBM Plex Mono',monospace">
+            </div>
+          </div>
+          <div style="margin-top:5px;font-size:9px;color:var(--muted);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span>Costo Landed Global actual: <strong id="_eq_landed_ref" style="color:var(--muted)">—</strong></span>
+            <button type="button" onclick="_aplicarGastosComplementarios()" style="background:rgba(240,136,62,.12);border:1px solid rgba(240,136,62,.3);color:var(--orange-l);border-radius:5px;padding:2px 8px;font-size:9px;font-weight:700;cursor:pointer">⬇️ Aplicar a Gastos Complementarios</button>
           </div>
         </div>
         <!-- Gasto Complementario -->
@@ -4505,7 +4546,7 @@ function _plnSetEmpalet(val){
   if(no) no.style.cssText=no.style.cssText.replace(/border:[^;]+;/,'')+(val?'border:2px solid rgba(248,81,73,.3);background:rgba(248,81,73,.08);color:var(--red-l);':'border:2px solid #f85149;background:rgba(248,81,73,.25);color:var(--red-l);');
 }
 function _erpBannerDark(){
-  return `<svg viewBox="95 55 250 260" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">
+  return `<svg viewBox="95 25 250 290" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">
     <defs>
       <radialGradient id="bg" cx="55%" cy="48%" r="60%">
         <stop offset="0%" stop-color="#0a2a4a" stop-opacity=".9"/>
@@ -4517,12 +4558,19 @@ function _erpBannerDark(){
         <stop offset="100%" stop-color="#003388" stop-opacity="0"/>
       </radialGradient>
       <pattern id="grid" width="30" height="30" patternUnits="userSpaceOnUse">
-        <path d="M 30 0 L 0 0 0 30" fill="none" stroke="#1a4a7a" stroke-width=".4" opacity=".5"/>
+        <path d="M 30 0 L 0 0 0 30" fill="none" stroke="#1a4a7a" stroke-width=".3" opacity=".3"/>
       </pattern>
       <filter id="gblur"><feGaussianBlur stdDeviation="6"/></filter>
     </defs>
     <rect width="400" height="380" fill="url(#bg)"/>
-    <rect width="400" height="380" fill="url(#grid)" opacity=".4"/>
+    <rect width="400" height="380" fill="url(#grid)" opacity=".15"/>
+    <g opacity=".55">
+      <rect x="195" y="48" width="7" height="14" rx="1" fill="#0077cc"/>
+      <rect x="206" y="38" width="7" height="24" rx="1" fill="#0099ff"/>
+      <rect x="217" y="32" width="7" height="30" rx="1" fill="#00aaff"/>
+      <rect x="228" y="40" width="7" height="22" rx="1" fill="#0099ff"/>
+      <rect x="239" y="46" width="7" height="16" rx="1" fill="#0077cc"/>
+    </g>
     <circle cx="220" cy="185" r="120" fill="url(#glow)" filter="url(#gblur)"/>
     <circle cx="220" cy="185" r="90" stroke="#00aaff" stroke-width=".6" fill="none" opacity=".25" stroke-dasharray="6 4"/>
     <circle cx="220" cy="185" r="115" stroke="#0077cc" stroke-width=".4" fill="none" opacity=".18" stroke-dasharray="3 6"/>
@@ -9748,6 +9796,7 @@ function showSplashNav(){
     // apuntaban a la ventana real. Con 'none' el fixed vuelve a anclar
     // contra la ventana, y el cajón cubre toda la pantalla de verdad.
     if(nav){ nav.classList.add('nav-visible'); nav.style.transform='none'; }
+    document.body.classList.add('zlh-nav-open');
     requestAnimationFrame(()=>{ if(typeof _zlhAlignRailIcons==='function') _zlhAlignRailIcons(); });
     setTimeout(()=>{
       const loading2=document.getElementById('splash-loading');
@@ -9934,6 +9983,7 @@ function iniciarApp(tab){
 
   setTimeout(()=>{
     splash.style.display='none';
+    document.body.classList.remove('zlh-nav-open');
     app.style.opacity='1';
     app.style.transform='translateX(0)';
 
@@ -10034,6 +10084,7 @@ function volverInicio(){
     // Go directly to nav panel — skip hero (y asegurar que quede totalmente oculto, sin superponerse)
     if(hero){ hero.style.opacity='0'; hero.style.transform='translateY(-30px)'; hero.style.transition='none'; hero.classList.add('hero-gone'); }
     if(nav){ nav.classList.add('nav-visible'); nav.style.transform='none'; nav.style.transition='none'; }
+    document.body.classList.add('zlh-nav-open');
     splash.classList.add('app-mode');
     // Refrescar KPIs / recordatorio / tendencia — evita que el inicio se
     // quede "helado" mostrando datos del embarque que se trabajó antes de entrar.
@@ -11359,6 +11410,17 @@ function _autoFillGastosProveedores(){
   // ── Reconstruir invLines — preservar facturas ya guardadas DE MANERA PERMANENTE ──
   // Guardar mapa de facturas guardadas antes de reconstruir (clave + línea completa,
   // no solo el número, para poder reinsertarla si esta ronda de cálculo no la regenera).
+  // FIX (ago-2026): la base de proveedores tiene una variante mal tipeada de Sababa
+  // ("SABABA IMPORT, S.A." — sin la S final, y su prefijo "S.I - ...") que NO
+  // coincidía con el nombre canónico que usa el cálculo automático ("SABABA
+  // IMPORTS, S.A."). Cuando una factura real quedaba guardada bajo esa variante,
+  // esta clave nunca "hacía match" con la línea recién calculada — así que en vez
+  // de solo copiarle el número de factura (como pasa normalmente), la línea vieja
+  // completa se reinsertaba aparte, duplicando la comisión en "Gastos del Embarque".
+  // Se normaliza cualquier variante de "Sababa Import(s)" a un solo nombre antes de
+  // comparar, para que el número de factura se adjunte a la línea recién calculada
+  // en vez de crear una segunda línea.
+  const _normProvSababa = (p) => /sababa\s*import/i.test(String(p||'')) ? 'SABABA IMPORTS, S.A.' : String(p||'');
   const _savedFacts = {};
   invLines.forEach(function(l){
     // Se preserva tanto lo formalmente guardado (_factSaved) como lo que el
@@ -11366,7 +11428,7 @@ function _autoFillGastosProveedores(){
     // en ambos casos es un dato que el usuario ya ingresó y no debe perderse
     // solo porque se recalculó el dashboard.
     if(l.numFact && String(l.numFact).trim()){
-      const key = (l.prov||'')+'|'+(l.tipoFac||'')+'|'+(l.oc||'');
+      const key = _normProvSababa(l.prov)+'|'+(l.tipoFac||'')+'|'+(l.oc||'');
       _savedFacts[key] = Object.assign({}, l);
     }
   });
@@ -11388,7 +11450,7 @@ function _autoFillGastosProveedores(){
   // Restaurar facturas guardadas en las líneas que SÍ se regeneraron este ciclo
   const _matchedKeys = {};
   invLines.forEach(function(l){
-    const key = (l.prov||'')+'|'+(l.tipoFac||'')+'|'+(l.oc||'');
+    const key = _normProvSababa(l.prov)+'|'+(l.tipoFac||'')+'|'+(l.oc||'');
     if(_savedFacts[key]){
       l.numFact = _savedFacts[key].numFact;
       l.nfac    = _savedFacts[key].nfac;
@@ -11412,13 +11474,21 @@ function _autoFillGastosProveedores(){
   // Bruta s/Pago Fiscal"), aquí se fusionan en una sola: se conserva la que ya tiene
   // número de factura guardado (o la más reciente si ninguna lo tiene) y se descarta
   // la otra. Así nunca se ven "Comisión Sababa" / "Master Value" repetidos ni se
-  // inflan los totales de las tarjetas comparativas.
+  // inflan los totales de las tarjetas comparativas. (Reutiliza _normProvSababa
+  // definido arriba, por si aun así se cuela algún duplicado por otra vía.)
+  // FIX (ago-2026): la base de proveedores tiene una variante mal tipeada
+  // ("SABABA IMPORT, S.A." — sin la S final, y su prefijo "S.I - ...") que
+  // NO coincidía con el nombre canónico que usa el cálculo automático
+  // ("SABABA IMPORTS, S.A."). Por eso, cuando una factura real quedaba
+  // asociada a esa variante mal escrita, la comisión aparecía dos veces en
+  // "Gastos del Embarque" — una bajo cada nombre — aunque fuera exactamente
+  // el mismo cálculo. Reutiliza el _normProvSababa definido más arriba.
   (function _dedupInvLinesAutoGasto(){
     const vistos = {};
     const limpio = [];
     invLines.forEach(function(l){
       if(!l._autoGasto){ limpio.push(l); return; }
-      const key = (l.prov||'')+'|'+(l.tipoFac||'')+'|'+(l.oc||'');
+      const key = _normProvSababa(l.prov)+'|'+(l.tipoFac||'')+'|'+(l.oc||'');
       const prevIdx = vistos[key];
       if(prevIdx===undefined){
         vistos[key] = limpio.length;
@@ -17208,6 +17278,7 @@ function _marcarPendienteYCerrar(){
 function _updateEstatusBadge(estado){
   const dot = document.getElementById('s1_estatus_dot');
   const txt = document.getElementById('s1_estatus_txt');
+  const sel = document.getElementById('s1_estatus_select');
   if(!dot||!txt) return;
   const map = {
     'nuevo'     : {color:'var(--muted)',   label:'Nuevo'},
@@ -17220,6 +17291,8 @@ function _updateEstatusBadge(estado){
   dot.style.background = s.color;
   txt.textContent = s.label;
   txt.style.color = s.color;
+  if(sel && sel.value !== (map[estado]?estado:'nuevo')) sel.value = map[estado]?estado:'nuevo';
+  if(sel) sel.style.color = s.color;
 }
 
 // Auto-update estatus when fields change
@@ -17227,6 +17300,10 @@ document.addEventListener('DOMContentLoaded', function(){
   ['s1_cif','s1_fob','s1_nro_emb'].forEach(function(id){
     const el = document.getElementById(id);
     if(el) el.addEventListener('input', function(){
+      // FIX (ago-2026): si el usuario ya forzó el estatus manualmente con el
+      // desplegable, no lo pises de vuelta a "En edición" solo porque tocó
+      // otro campo — respeta su elección hasta que él mismo la cambie.
+      if(window._estatusManualLock) return;
       const cur = document.getElementById('s1_estatus_txt')?.textContent||'';
       if(cur==='Nuevo'||cur===''||cur==='✅ Procesado') _updateEstatusBadge('editando');
     });
@@ -28011,10 +28088,13 @@ function _toggleContenedorField(val){
   var lbl = document.getElementById('lbl-nro-contenedor');
   var inp = document.getElementById('s1_nro_cont');
   if(!blk) return;
-  // Marítimo/contenedor → N° Contenedor. Furgón/Camión terrestre → N° Placa/Cabezal (no lleva contenedor, pero sí identificador del vehículo).
-  var esTerrestre = val === 'Furgón' || val === 'Camión' || val === 'Consolidado Terrestre';
+  // FIX (ago-2026): "N° de Placa / Cabezal" solo aplica a Furgón (equipo
+  // configurado con cabezal/placa propios). Camión, Consolidado Terrestre
+  // y Zona Libre en general NO llevan ese dato — antes se mostraba también
+  // para Camión, obligando a llenar un campo que no aplicaba.
+  var esFurgon = val === 'Furgón';
   var showContenedor = val === 'Contenedor directo' || val === 'Consolidado Marítimo';
-  if(esTerrestre){
+  if(esFurgon){
     blk.style.display = '';
     if(lbl) lbl.textContent = 'N° de Placa / Cabezal';
     if(inp) inp.placeholder = 'Ej: PA-1234A';
