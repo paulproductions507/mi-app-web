@@ -2678,12 +2678,22 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
             <p class="note" id="dmce-note">$60.00 fijo (0.00 si carga suelta)</p>
           </div>
         </div>
+        <!-- Fecha y multi-contenedores -->
+        <div id="modal-contenedores-wrap" style="display:none;margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;color:var(--blue-l);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px" id="modal-contenedores-hdr">🚢 Equipos — N° y Fecha de Llegada</div>
+          <div id="modal-contenedores-list"></div>
+          <p class="note" style="margin-top:4px;font-size:10px">Asigna las facturas a cada contenedor en Proveedores.</p>
+        </div>
         <!-- Costo Inventario Sistema / Diferencia -->
         <div id="_eq_costoinv_wrap" style="margin-bottom:10px;background:rgba(88,166,255,.04);border:1px solid rgba(88,166,255,.15);border-radius:8px;padding:8px 10px">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:4px">
             <span style="font-size:10px;font-weight:700;color:var(--blue-l)">📘 Costo Inventario (Sistema)</span>
             <span style="font-size:9px;color:var(--muted);font-weight:400">Manual — se compara vs. Costo Landed Global</span>
           </div>
+          <label style="display:flex;align-items:center;gap:6px;margin-bottom:6px;cursor:pointer">
+            <input type="checkbox" id="chk_costeable" checked onchange="_calcDiferenciaInventario();calc();_actualizarSummaryEquipo()" style="width:14px;height:14px;accent-color:var(--blue-l)">
+            <span style="font-size:9px;color:var(--blue-l);font-weight:600">Comparar contra el monto costeable (excluye ITBMS: Arancel/DAI, Tasa Aduana, Uso de Sistema, Honorarios, Acarreo, DMCE, Flete y Gastos de Origen). Desmárcalo para comparar contra el total con ITBMS incluido.</span>
+          </label>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
             <div>
               <label style="font-size:9px;color:var(--blue-l);font-weight:600;display:block;margin-bottom:3px">Costo Inventario Sistema (USD)</label>
@@ -2703,12 +2713,6 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
         <div class="field" style="margin-bottom:10px">
           <label style="font-size:10px">📎 Gasto Complementario (USD) <span style="font-size:9px;color:var(--muted);font-weight:400">— suma directa al Landed</span></label>
           <input type="number" id="s1_gasto_comp" value="" placeholder="0.00" step="0.01" oninput="calc();_actualizarSummaryEquipo()">
-        </div>
-        <!-- Fecha y multi-contenedores -->
-        <div id="modal-contenedores-wrap" style="display:none;margin-bottom:10px">
-          <div style="font-size:10px;font-weight:700;color:var(--blue-l);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px" id="modal-contenedores-hdr">🚢 Equipos — N° y Fecha de Llegada</div>
-          <div id="modal-contenedores-list"></div>
-          <p class="note" style="margin-top:4px;font-size:10px">Asigna las facturas a cada contenedor en Proveedores.</p>
         </div>
         <!-- Check No DMCE/Acarreo -->
         <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:10px 12px;background:rgba(240,136,62,.05);border:1px solid rgba(240,136,62,.2);border-radius:8px">
@@ -34341,12 +34345,14 @@ function _actualizarVistaPreviaComparativo(){
   // ── Desglose real de "Costo No Mercancía" — de dónde sale cada dólar,
   //    para que se pueda sustentar el número aunque el embarque ya esté
   //    procesado y no se pueda volver a abrir el formulario original. ──
+  var _esFleteAplica = (typeof termino!=='undefined' && termino==='FOB' && typeof tipo!=='undefined' && tipo==='EXT');
   regHtml+=_vpDetalle([
     ['🏛️ Impuestos (Arancel DAI + Tasa Aduana + Uso Sistema)', pf('disp_ar_pago')+pf('s1_tasa')+pf('s1_uso_sistema')],
     ['🧑‍💼 Honorarios', pf('disp_hon1')],
+    ['🚢 Flete', _esFleteAplica ? pf('s1_flete_fob') : 0],
     ['🚚 Acarreo (equipo)', pf('s1_acarreo')*(pf('s1_equipos')||1)],
     ['📄 DMCE (equipo)', pf('s1_dmce')],
-    ['🤝 Agente', pf('s1_agente')]
+    ['🤝 Gasto Origen y Destino', pf('s1_agente')]
   ]);
   // FIX: "Costo Inventario" no restaba el Gasto Complementario (Equipo) — por eso
   // no calzaba 1:1 contra el Costo Inventario (Homologado) de Sababa. Se reemplaza
@@ -34505,11 +34511,24 @@ function _calcDiferenciaInventario(){
   var landedEl=document.getElementById('disp_costo_landed_global');
   var landedRaw=landedEl?(landedEl.value||''):'';
   var landed=parseFloat(landedRaw.toString().replace(/[^0-9.\-]/g,''))||0;
+  // FIX (ago-2026): "Costo Inventario (Sistema)" es un monto COSTEABLE (Arancel/
+  // DAI, Tasa Aduana, Uso de Sistema, Honorarios, Acarreo, DMCE, Flete, Gastos de
+  // Origen) — NO incluye ITBMS. Compararlo contra el Costo Landed Global (que sí
+  // incluye ITBMS) desalinea la Diferencia siempre por el monto del ITBMS. Con el
+  // check "Costeable" activado (por defecto) se le resta el ITBMS al Landed antes
+  // de comparar; desmarcado, se compara contra el total tal cual, para cuando el
+  // escenario realmente sea sin ITBMS/con ITBMS incluido en el inventario.
+  var chkCosteable = document.getElementById('chk_costeable');
+  var esCosteable = !chkCosteable || chkCosteable.checked;
+  var itbmsEl = document.getElementById('disp_itbms_total');
+  var itbmsRaw = itbmsEl?(itbmsEl.value||''):'';
+  var itbms = parseFloat(itbmsRaw.toString().replace(/[^0-9.\-]/g,''))||0;
+  var base = esCosteable ? (landed - itbms) : landed;
   var tieneInv = invEl && invEl.value !== '';
   var inv=parseFloat(invEl?.value||0)||0;
-  var dif=inv-landed;
+  var dif=inv-base;
   window._lastDifInventario = tieneInv ? dif : null;
-  if(refEl) refEl.textContent='$'+landed.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  if(refEl) refEl.textContent='$'+base.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+(esCosteable?' (costeable, sin ITBMS)':' (con ITBMS)');
   if(difEl) difEl.value = tieneInv ? dif.toFixed(2) : '';
 }
 function _aplicarGastosComplementarios(){
