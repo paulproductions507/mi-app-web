@@ -823,7 +823,7 @@ wb_orig = openpyxl.load_workbook(io.BytesIO(bytes(file_bytes)))
 wb_main = openpyxl.load_workbook(io.BytesIO(bytes(file_bytes)))
 ws_main = wb_main.active
 
-# ── HOJA 1: Aplicar ajustes en D y E, borrar AE/AF/AG ──────────────────
+# ── HOJA 1: Aplicar ajustes en D y E ────────────────────────────────────
 # D = costo unitario ajustado a 2 decimales
 # E = D * C (total a 2 decimales, suma exacta con E1)
 for row_num, r in adjusted_rows.items():
@@ -837,24 +837,22 @@ for r in adj_list:
         ws_main.cell(row=r['row'], column=4).value = round(r['adj_d'], 2)
         ws_main.cell(row=r['row'], column=5).value = round(r['adj_e'], 2)
 
-# Eliminar SOLO las columnas de apoyo interno (ID, Costo Unitario, Costo Total)
-# localizándolas por su nombre de encabezado en fila 4 — NO por posición fija.
-# Así, cualquier columna nueva que el sistema origen agregue (ej. "ID", u otra
-# futura) se preserva automáticamente en el Excel corregido: solo se eliminan
-# estas 3 columnas de ayuda, sin importar en qué posición estén ni cuántas
-# columnas nuevas haya alrededor.
-_cols_a_borrar = []
-for _name in ('ID', 'Costo Unitario', 'Costo Total'):
-    _idx0 = _find_col(ws_main, _name)
-    if _idx0 is not None:
-        _cols_a_borrar.append(_idx0 + 1)  # a 1-based para openpyxl
-
-# Borrar de derecha a izquierda para no desalinear los índices restantes
-for _col in sorted(_cols_a_borrar, reverse=True):
-    ws_main.delete_cols(_col, 1)
 
 # ── Construir workbook final ─────────────────────────────────────────────
 wb_final = openpyxl.Workbook()
+
+# Preservar el tema de color ORIGINAL del archivo (paleta de colores).
+# Sin esto, el libro nuevo usa el tema por defecto de Excel, y como los
+# estilos de las celdas apuntan a "color N de la paleta" (no a un RGB fijo),
+# el mismo índice de color cambia de verde a salmón/naranja al perder la
+# paleta original. Copiando el theme.xml original, los colores calzan igual.
+wb_final.loaded_theme = wb_orig.loaded_theme
+
+# NOTA: ya NO se eliminan columnas (ID, Costo Unitario, Costo Total, etc.)
+# de "Prorrateo Ajustado". El sistema empresarial exige que la cantidad y
+# estructura de columnas del Excel corregido sea IDÉNTICA a la del Excel
+# original descargado, o rechaza la subida. Se preservan todas las columnas
+# tal cual vinieron, incluidas las que el sistema origen agregue a futuro.
 
 # PESTAÑA 1: Ajustada (para subir al sistema empresarial)
 ws_p = wb_final.active
