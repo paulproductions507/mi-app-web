@@ -14221,6 +14221,12 @@ function _corregirRubroUI(idx){
   var rubroOpts = Object.entries(_RUBRO_LABELS_FIX).map(function(e){ return '<option value="'+e[0]+'">'+e[1]+'</option>'; }).join('');
   var tipoActual = d.tipo || (d.snap&&d.snap.tipo) || d.tipoProveedor || '';
 
+  var nroActual = String(d.nro||'');
+  var nroEmbHtml = '<div style="background:var(--bg);border:1px solid rgba(240,136,62,.3);border-radius:10px;padding:12px;margin-bottom:14px">'
+    +'<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:8px">🔢 N° de Embarque</div>'
+    +'<input id="_fix_nro_emb" type="text" value="'+nroActual.replace(/"/g,'&quot;')+'" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:7px;padding:8px 10px;color:var(--text);font-size:13px;font-weight:700;box-sizing:border-box">'
+    +'<div id="_fix_nro_emb_warn" style="font-size:9px;color:var(--muted);margin-top:6px;line-height:1.4">Corrige aquí si el número fue tecleado mal. Si este embarque tiene tarjetas en Planeación de Carga, revísalas después de guardar — no se renombran automáticamente.</div>'
+    +'</div>';
   var tipoZLHtml = '<div style="background:var(--bg);border:1px solid rgba(45,212,191,.3);border-radius:10px;padding:12px;margin-bottom:14px">'
     +'<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:8px">Régimen Aduanero</div>'
     +'<div style="display:flex;gap:8px">'
@@ -14371,10 +14377,11 @@ function _corregirRubroUI(idx){
 
   function _lineaGastoHtml(l,realIdx){
     var sel = rubroOpts.replace('value="'+(l.tipoFac||'')+'"','value="'+(l.tipoFac||'')+'" selected');
-    return '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px">'
+    return '<div id="_fix_linea_wrap_'+realIdx+'" data-linea-idx="'+realIdx+'" style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px">'
       +'<div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:6px;align-items:center">'
         +'<div style="font-size:12px;font-weight:700;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(l.prov||'—')+'</div>'
         +'<input type="number" step="0.01" data-monto-idx="'+realIdx+'" class="_fix_monto_gasto" value="'+Number(l.costo||0).toFixed(2)+'" style="width:100px;text-align:right;background:var(--s2);border:1px solid rgba(240,136,62,.4);border-radius:6px;padding:5px 7px;color:var(--orange-l);font-family:monospace;font-size:12px;font-weight:800">'
+        +'<button type="button" class="_fix_del_linea" data-del-idx="'+realIdx+'" title="Eliminar esta factura" style="background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.35);color:#f85149;border-radius:6px;padding:5px 8px;font-size:12px;cursor:pointer;flex-shrink:0">🗑️</button>'
       +'</div>'
       +'<div style="font-size:10px;color:var(--muted);margin-bottom:6px">Factura: '+(l.numFact||l.nfac||'—')+'</div>'
       +'<select data-idx="'+realIdx+'" class="_fix_rubro_sel" style="width:100%;background:var(--s2);border:1px solid rgba(240,136,62,.3);border-radius:7px;padding:7px 9px;color:var(--text);font-size:12px">'+sel+'</select>'
@@ -14386,11 +14393,12 @@ function _corregirRubroUI(idx){
     var selMerc = rubroOptsMerc.replace('value="'+tipoAct+'"','value="'+tipoAct+'" selected');
     var esRara = tipoAct !== 'mercancia';
     var deptVal = (l.deptCat||l.dept||'').toString().replace(/"/g,'&quot;');
-    return '<div style="background:var(--bg);border:1px solid '+(esRara?'rgba(248,81,73,.4)':'var(--border)')+';border-radius:10px;padding:10px 12px;margin-bottom:8px">'
+    return '<div id="_fix_linea_wrap_'+realIdx+'" data-linea-idx="'+realIdx+'" style="background:var(--bg);border:1px solid '+(esRara?'rgba(248,81,73,.4)':'var(--border)')+';border-radius:10px;padding:10px 12px;margin-bottom:8px">'
       +(esRara?'<div style="font-size:9px;color:#f85149;font-weight:700;margin-bottom:6px">⚠️ Esta línea NO es mercancía — reclasifícala abajo</div>':'')
       +'<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:6px">'
         +'<div style="font-size:12px;font-weight:700;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(l.prov||l.desc||'Mercancía')+'</div>'
         +'<input type="number" step="0.01" data-monto-idx="'+realIdx+'" class="_fix_monto_merc" value="'+Number(l.costo||0).toFixed(2)+'" style="width:110px;text-align:right;background:var(--s2);border:1px solid rgba(88,166,255,.4);border-radius:6px;padding:5px 7px;color:var(--blue-l);font-family:monospace;font-size:12px;font-weight:800">'
+        +'<button type="button" class="_fix_del_linea" data-del-idx="'+realIdx+'" title="Eliminar esta factura" style="background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.35);color:#f85149;border-radius:6px;padding:5px 8px;font-size:12px;cursor:pointer;flex-shrink:0">🗑️</button>'
       +'</div>'
       +'<div style="font-size:10px;color:var(--muted);margin-bottom:6px">Factura: '+(l.numFact||l.nfac||'—')+'</div>'
       +'<select data-idx="'+realIdx+'" class="_fix_tipo_merc_sel" style="width:100%;background:var(--s2);border:1px solid '+(esRara?'rgba(248,81,73,.4)':'rgba(88,166,255,.3)')+';border-radius:7px;padding:7px 9px;color:var(--text);font-size:12px;margin-bottom:6px">'+selMerc+'</select>'
@@ -14410,6 +14418,7 @@ function _corregirRubroUI(idx){
   ov.innerHTML = '<div style="background:var(--s1);border:1px solid var(--border);border-radius:16px;padding:22px;max-width:420px;width:100%;max-height:82vh;overflow-y:auto">'
     +'<div style="font-size:13px;font-weight:800;color:var(--text);margin-bottom:4px">🏷️ Corregir Embarque</div>'
     +'<div style="font-size:11px;color:var(--muted);margin-bottom:14px">Embarque: <strong style="color:var(--orange-l)">'+d.nro+'</strong> — edita montos, rubro, régimen y ahorro. Todo se recalcula y guarda en la nube.</div>'
+    +nroEmbHtml
     +tipoZLHtml
     +'<div id="_fix_origen_wrap">'+origenHtml+'</div>'
     +lugarHtml
@@ -14528,6 +14537,47 @@ function _corregirRubroUI(idx){
     tabM.style.borderBottomColor='#58a6ff'; tabM.style.color='#58a6ff';
     tabG.style.borderBottomColor='transparent'; tabG.style.color='var(--muted)';
   };
+
+  // ── Eliminar facturas duplicadas/erróneas: marcar/desmarcar; el borrado
+  //    real de d.invLines ocurre recién al presionar "Recalcular y Guardar" ──
+  var _lineasAEliminar = {};
+  ov.querySelectorAll('._fix_del_linea').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var i = btn.getAttribute('data-del-idx');
+      var wrap = ov.querySelector('#_fix_linea_wrap_'+i);
+      if(!wrap) return;
+      var marcada = !!_lineasAEliminar[i];
+      if(marcada){
+        delete _lineasAEliminar[i];
+        wrap.style.opacity = '1';
+        wrap.style.borderColor = 'var(--border)';
+        wrap.querySelectorAll('input,select').forEach(function(el){ el.disabled = false; });
+        btn.textContent = '🗑️';
+        btn.title = 'Eliminar esta factura';
+      } else {
+        _lineasAEliminar[i] = true;
+        wrap.style.opacity = '.45';
+        wrap.style.borderColor = '#f85149';
+        wrap.querySelectorAll('input,select').forEach(function(el){ el.disabled = true; });
+        btn.textContent = '↩️';
+        btn.title = 'Restaurar esta factura';
+      }
+    });
+  });
+
+  // ── N° de Embarque: aviso en vivo si el nuevo número ya existe en otro embarque ──
+  var _inNroEmb = ov.querySelector('#_fix_nro_emb'), _nroEmbWarn = ov.querySelector('#_fix_nro_emb_warn');
+  if(_inNroEmb) _inNroEmb.addEventListener('input', function(){
+    var v = _inNroEmb.value.trim();
+    var dup = v && v!==nroActual && tendData.some(function(x){ return x && x!==d && String(x.nro)===v; });
+    if(dup){
+      _nroEmbWarn.textContent = '⚠️ Ya existe otro embarque con ese número — elige uno distinto.';
+      _nroEmbWarn.style.color = '#f85149';
+    } else {
+      _nroEmbWarn.textContent = 'Corrige aquí si el número fue tecleado mal. Si este embarque tiene tarjetas en Planeación de Carga, revísalas después de guardar — no se renombran automáticamente.';
+      _nroEmbWarn.style.color = 'var(--muted)';
+    }
+  });
 
   var _nuevoTipoZL = tipoActual;
   var btnZL = ov.querySelector('#_fix_tipo_zl'), btnExt = ov.querySelector('#_fix_tipo_ext');
@@ -14680,6 +14730,20 @@ function _corregirRubroUI(idx){
       if(_fresco) d = _fresco;
     }
     var cambios = 0;
+    // ── N° de Embarque: renombrar si cambió (validando que no choque con otro) ──
+    var _inNroFinal = ov.querySelector('#_fix_nro_emb');
+    if(_inNroFinal){
+      var _nuevoNro = _inNroFinal.value.trim();
+      if(_nuevoNro && _nuevoNro !== String(d.nro||'')){
+        var _choque = tendData.find(function(x){ return x && x!==d && String(x.nro)===_nuevoNro; });
+        if(_choque){
+          alert('Ya existe otro embarque con el número "'+_nuevoNro+'". Cambia el número antes de guardar.');
+          return;
+        }
+        d.nro = _nuevoNro;
+        cambios++;
+      }
+    }
     ov.querySelectorAll('._fix_rubro_sel').forEach(function(sel){
       var i = parseInt(sel.dataset.idx,10);
       var nuevo = sel.value;
@@ -14845,6 +14909,18 @@ function _corregirRubroUI(idx){
         d._overrideFin = {mercOrig:_fm, mercHomol:_fh, costoNM:_fn, itbms:_fi, landed:_fl};
         cambios++;
       }
+    }
+    // ── Eliminar del embarque las facturas marcadas con 🗑️ (ej. duplicadas
+    //    por error del sistema). Se hace de último, con los índices
+    //    ORIGINALES ya usados arriba, y en orden descendente para no
+    //    invalidar los índices de las líneas restantes al hacer splice. ──
+    var _idxAEliminar = Object.keys(_lineasAEliminar).map(function(k){ return parseInt(k,10); })
+      .filter(function(n){ return !isNaN(n); }).sort(function(a,b){ return b-a; });
+    if(_idxAEliminar.length){
+      _idxAEliminar.forEach(function(i){
+        if(d.invLines[i]) d.invLines.splice(i,1);
+      });
+      cambios += _idxAEliminar.length;
     }
     ov.remove();
     if(cambios===0){ if(typeof _showToast==='function') _showToast('ℹ️ No hubo cambios','orange',2500); return; }
