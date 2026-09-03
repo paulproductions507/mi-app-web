@@ -1119,6 +1119,13 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
 .zlh-kpi-strip .splash-kpi-chip::before{content:''; position:absolute; top:0; left:0; right:0; height:3px; background:linear-gradient(90deg,var(--zt),var(--zg));}
 .zlh-kpi-strip .splash-kpi-chip-val{font-family:var(--zmono) !important; font-size:clamp(15px,1.75vw,22px) !important; color:var(--ztext) !important; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; line-height:1.15;}
 .zlh-kpi-strip .splash-kpi-chip-lbl{font-family:var(--zmono) !important; font-size:10px !important; letter-spacing:.06em; text-transform:uppercase; color:var(--zdim) !important; margin-top:8px !important;}
+/* ── Estado "verificando con la nube" — ver showSplashNav() / window.onload.
+   Atenúa los chips mientras el número mostrado es solo la copia local
+   (localStorage), antes de confirmar contra Supabase. No dispara ninguna
+   llamada de red extra — es puramente visual. ── */
+.zlh-kpi-strip.zlh-syncing .splash-kpi-chip{opacity:.55; transition:opacity .35s ease;}
+.zlh-kpi-strip.zlh-syncing .splash-kpi-chip-val::after{content:' ⋯'; font-size:10px; opacity:.7;}
+.zlh-kpi-strip .splash-kpi-chip{transition:opacity .35s ease;}
 @media(max-width:900px){ .zlh-kpi-strip{grid-template-columns:repeat(2,1fr);} }
 
 .zlh-section-lbl{font-family:var(--zmono); font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--zdim); margin:4px auto 10px; max-width:900px; width:100%; box-sizing:border-box;}
@@ -9789,6 +9796,14 @@ function showSplashNav(){
   // Populate KPI chips + monthly breakdown from tendData (fuente única, respeta toggle $k/$Completo)
   _zlhPopulateKPIs();
   _zlhPopulateMonthly();
+  // ── Estos números salen de la copia local (localStorage) mientras la
+  //    sincronización con la nube corre en segundo plano — se marcan como
+  //    "verificando" hasta que esa sincronización confirme el total real
+  //    (ver window.onload → _pullTendFromCloud → se quita esta clase).
+  //    Así, si el usuario mira/hace captura de pantalla justo al abrir la
+  //    app, no confunde un número que aún puede cambiar con el definitivo. ──
+  var _splashKpiStrip=document.getElementById('splash-kpi-strip');
+  if(_splashKpiStrip) _splashKpiStrip.classList.add('zlh-syncing');
   if(typeof _zlhPopulateOrigenes==='function'){ try{ _zlhPopulateOrigenes(); }catch(e){ console.warn('Orígenes:',e); } }
   setTimeout(()=>{
     // FIX (ago-2026): usar transform:'none' en vez de 'translateY(0)'. Se
@@ -14128,10 +14143,61 @@ function _flushSaveTendData(){
     _syncChain = _syncChain.then(function(){ return _syncTendToCloud(); }).catch(function(e){ console.error('Cloud sync chain error:', e); });
   }
 }
+
+// ── FIX CRÍTICO (sept-2026): embarques procesados en el celular que
+//    "desaparecían" en otros dispositivos. Causa real: _flushSaveTendData()
+//    dispara la subida a la nube con el fetch normal del cliente de
+//    Supabase — pero si el usuario cierra la pestaña o cambia de app justo
+//    después de procesar (muy común en celular), el sistema operativo puede
+//    congelar/matar esa petición a medio camino ANTES de que llegue a
+//    Supabase, sin avisar a nadie. El embarque queda guardado solo en
+//    localStorage de ESE dispositivo hasta que lo vuelva a abrir — mientras
+//    tanto, la nube (y todos los demás dispositivos) simplemente no lo
+//    tienen. Esto no se veía como error porque no lo era: la petición nunca
+//    llegó a fallar, solo nunca llegó a terminar.
+//    Solución: en el momento exacto de cerrar/ocultar la pestaña, además
+//    del intento normal, se dispara EN PARALELO una petición con
+//    keepalive:true — una bandera estándar del navegador que garantiza que
+//    esa petición puntual se complete aunque la pestaña se cierre. Solo se
+//    usa en este momento crítico (no es una sincronización periódica
+//    nueva), y solo reenvía los embarques que de todas formas ya estaban
+//    pendientes de subir — mismo tráfico que ya iba a salir, simplemente
+//    con la garantía de que sí llega. Si por lo que sea no llega, el
+//    embarque queda marcado pendiente (igual que hoy) y se reintenta solo
+//    la próxima vez que se abra la app en ese dispositivo. ──
+function _flushSaveTendDataKeepalive(){
+  if(_saveDebounceTimer){ clearTimeout(_saveDebounceTimer); _saveDebounceTimer=null; }
+  if(!window._sb || typeof _SB_URL==='undefined' || typeof _SB_KEY==='undefined') return;
+  try{
+    var cambios = (tendData||[]).filter(function(d){
+      if(!d || !d.nro) return false;
+      var key = String(d.nro).trim().toUpperCase();
+      return (window._lastSyncedTs[key]||0) !== (d.ts||0);
+    });
+    if(!cambios.length) return;
+    var endpoint = _SB_URL.replace(/\/$/,'') + '/rest/v1/rpc/upsert_embarque_master';
+    cambios.forEach(function(d){
+      try{
+        fetch(endpoint, {
+          method:'POST',
+          keepalive:true,
+          headers:{ 'Content-Type':'application/json', 'apikey':_SB_KEY, 'Authorization':'Bearer '+_SB_KEY },
+          body: JSON.stringify({ p_nro: d.nro, p_registro: d })
+        }).catch(function(){});
+      }catch(e){}
+    });
+    // No se marca como sincronizado aquí (no hay forma fiable de leer la
+    // respuesta de una petición keepalive en este momento) — se deja
+    // pendiente a propósito para que _asegurarReintentoSync() lo confirme
+    // apenas la app vuelva a abrirse, sin duplicar tráfico periódico.
+    _marcarSyncPendiente();
+  }catch(e){}
+}
 if(typeof window!=='undefined'){
-  window.addEventListener('beforeunload', function(){ if(_saveDebounceTimer) _flushSaveTendData(); });
+  window.addEventListener('beforeunload', function(){ _flushSaveTendDataKeepalive(); });
+  window.addEventListener('pagehide', function(){ _flushSaveTendDataKeepalive(); });
   document.addEventListener('visibilitychange', function(){
-    if(document.visibilityState==='hidden' && _saveDebounceTimer) _flushSaveTendData();
+    if(document.visibilityState==='hidden') _flushSaveTendDataKeepalive();
   });
 }
 
@@ -15736,6 +15802,11 @@ async function _syncManualTend(btn){
   if(typeof renderDashboardKPIs==='function') renderDashboardKPIs();
   if(typeof renderTopProvs==='function') renderTopProvs();
   updateCmpNroList();
+  // Refrescar también los números de la portada (EMB. del año, Ahorro
+  // Total, Embarques por Mes) — antes se quedaban con el valor viejo
+  // hasta recargar la página, aunque el historial sí se hubiera actualizado.
+  if(typeof _zlhPopulateKPIs==='function') _zlhPopulateKPIs();
+  if(typeof _zlhPopulateMonthly==='function') _zlhPopulateMonthly();
   _showToast('✅ '+tendData.length+' embarques cargados desde la nube','green',3000);
   if(btn){ btn.disabled=false; btn.textContent='☁️ Sincronizar Nube'; }
 }
@@ -23428,17 +23499,6 @@ function renderDashboardKPIs(data){
         <div class="kpi-val">${totalFact}</div>
         <div class="kpi-sub">Líneas de factura totales</div>
       </div>
-      <div class="kpi-card g" style="grid-column:1 / -1;display:block">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-          <span class="kpi-icon" style="margin-bottom:0">📦</span>
-          <div class="kpi-lbl" style="margin-bottom:0">🚛 Camiones Recibidos — Sababa vs CIF Express</div>
-          <span id="cont-cmp-legend" style="margin-left:auto;font-size:10px;color:var(--muted)"></span>
-        </div>
-        <div style="position:relative">
-          <canvas id="cont-cmp-canvas" style="width:100%;display:block"></canvas>
-        </div>
-        <div style="font-size:9px;color:var(--muted);margin-top:4px">Embarques por camión/furgón (transporte terrestre) de tus propios embarques procesados, por corredor — pasa el cursor sobre una barra para ver el detalle.</div>
-      </div>
     </div>
 
     <!-- SUB-PESTAÑAS: Departamento / Origen / Costos — todo sujeto a los mismos filtros de arriba -->
@@ -23604,7 +23664,7 @@ function renderDashboardKPIs(data){
     });
   }, 1200);
   // ── Comparativo de Contenedores (dato duplicado de Cuadro de Importación) ──
-  setTimeout(function(){ if(typeof _renderContainerComparativo==='function') _renderContainerComparativo(); }, 60);
+  setTimeout(function(){ /* Camiones Recibidos — oculto por pedido del usuario (sept-2026); función _renderContainerComparativo() se deja intacta por si se reactiva */ }, 60);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -29308,6 +29368,7 @@ function initSupabase(){
 }
 
 var _tendRealtimeChannel = null;
+var _tendRealtimeReady = false;
 function _initTendRealtime(){
   if(!_sb || _tendRealtimeChannel) return;
   try{
@@ -29323,19 +29384,49 @@ function _initTendRealtime(){
           _pullTendFromCloud(true).then(function(changed){
             if(changed && typeof renderTend==='function' && document.getElementById('tendencias')) renderTend();
             if(changed && typeof _zlhPopulateOrigenes==='function'){ try{ _zlhPopulateOrigenes(); }catch(e){ console.warn('Orígenes:',e); } }
+            // ── FIX (sept-2026): el aviso en tiempo real SÍ traía el dato
+            //    actualizado a tendData, pero nunca refrescaba los números
+            //    de la portada (EMB. del año, Ahorro Total, Embarques por
+            //    Mes) — solo el historial interno de Tendencias. Por eso
+            //    dos computadoras con la pestaña abierta podían recibir la
+            //    señal correctamente y aun así mostrar cifras distintas en
+            //    la portada durante toda la sesión, hasta recargar. ──
+            if(changed && typeof _zlhPopulateKPIs==='function') _zlhPopulateKPIs();
+            if(changed && typeof _zlhPopulateMonthly==='function') _zlhPopulateMonthly();
           }).catch(function(){});
         }
       })
-      .subscribe();
+      // ── FIX (sept-2026): antes se llamaba a .send() sin confirmar que el
+      //    canal ya estaba unido (SUBSCRIBED) — si un dispositivo enviaba su
+      //    aviso justo tras abrir la app (muy común: procesa el primer
+      //    embarque del día a los pocos segundos), Supabase Realtime lo
+      //    descarta en silencio porque la conexión aún no había terminado
+      //    de establecerse. Sin error visible, así que nadie lo notaba.
+      //    Ahora se guarda el estado real de la conexión y, mientras no esté
+      //    lista, cualquier intento de avisar cae de inmediato al respaldo
+      //    normal (el pull de 5 min / al abrir la app) en vez de perderse. ──
+      .subscribe(function(status){
+        _tendRealtimeReady = (status === 'SUBSCRIBED');
+        if(status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT'){
+          _tendRealtimeReady = false;
+          // Reintenta unirse una vez pasados unos segundos — sin esto, una
+          // desconexión momentánea (wifi, suspensión del equipo) dejaba el
+          // canal muerto por el resto de la sesión, sin avisar a nadie.
+          _tendRealtimeChannel = null;
+          setTimeout(function(){ if(typeof _initTendRealtime==='function') _initTendRealtime(); }, 8000);
+        }
+      });
   }catch(e){ /* Realtime opcional (mejora sobre HTTPS) — sin canal, sigue el respaldo por pull cada 5 min. Silencioso a propósito: no es un error para el usuario. */ }
 }
 // Avisa a los demás dispositivos que un embarque cambió — sin mandar datos,
 // solo el número y el timestamp. Se llama al final de _syncTendToCloud().
 function _avisarEmbarqueActualizado(nro, ts){
   try{
-    if(_tendRealtimeChannel){
+    if(_tendRealtimeChannel && _tendRealtimeReady){
       _tendRealtimeChannel.send({ type:'broadcast', event:'EMBARQUE_UPDATED', payload:{ nro:nro, ts:ts } });
     }
+    // Si el canal aún no está listo, no pasa nada: el respaldo de 5 min
+    // (o el próximo _syncTendToCloud exitoso) se encarga de avisar.
   }catch(e){ /* si falla el aviso, la red de seguridad de 5 min lo cubre igual */ }
 }
 
@@ -32774,74 +32865,18 @@ window.onload=function(){
     if(typeof _populateProveedorFilter==='function') _populateProveedorFilter();
     if(typeof _updateTendSubtitle==='function') _updateTendSubtitle();
     updateCmpNroList();
-    // Update splash chips quietly
-    const fmtK=n=>window._fmtMoney(n);
-    // ── Embarques: contar únicos por N° de embarque (sin duplicados) ──
-    const embNrosUnicos = new Set(tendData.map(d=>(d.nro||'').trim().toUpperCase()).filter(Boolean));
-    const totalEmbUnicos = embNrosUnicos.size || tendData.length;
-    const skE=document.getElementById('sk-embarques'); if(skE) skE.textContent=totalEmbUnicos||'0';
-    const totalAhorro=_calcAhorroTotalGlobal();
-    const totalCIF=tendData.reduce((s,d)=>s+(d.cif||0),0);
-    const skA=document.getElementById('sk-ahorro');  if(skA) skA.textContent=fmtK(totalAhorro);
-    const skC=document.getElementById('sk-cif');     if(skC) skC.textContent=fmtK(totalCIF);
-    // ── Facturas Mercancía: contar por número único (sin duplicados entre embarques) ──
-    const facMercSet = new Set();
-    tendData.forEach(d=>{
-      (d.snap?.invLines||d.invLines||[]).forEach(l=>{
-        if((l.tipoFac||'mercancia')==='mercancia' && (l.numFact||l.nfac||'').trim()){
-          facMercSet.add((l.numFact||l.nfac||'').trim().toUpperCase());
-        } else if((l.tipoFac||'mercancia')==='mercancia'){
-          facMercSet.add('__nonum_'+Math.random()); // sin número: contar cada una
-        }
-      });
-    });
-    const totalFacMercBruto=tendData.reduce((s,d)=>s+(d.snap?.invLines||d.invLines||[]).filter(l=>(l.tipoFac||'mercancia')==='mercancia').length,0);
-    // Usar conteo único si hay N°s, sino el conteo bruto
-    const facMercConNum=tendData.reduce((s,d)=>s+(d.snap?.invLines||d.invLines||[]).filter(l=>(l.tipoFac||'mercancia')==='mercancia'&&!!(l.numFact||l.nfac||'').trim()).length,0);
-    const facMercSinNum=totalFacMercBruto-facMercConNum;
-    const facMercUnicosConNum=new Set();
-    tendData.forEach(d=>{(d.snap?.invLines||d.invLines||[]).forEach(l=>{if((l.tipoFac||'mercancia')==='mercancia'&&(l.numFact||l.nfac||'').trim())facMercUnicosConNum.add((l.numFact||l.nfac||'').trim().toUpperCase());});});
-    const totalFacMerc=facMercUnicosConNum.size+facMercSinNum;
-    // ── Facturas Servicio: contar por número único ──
-    const facServUnicoConNum=new Set();
-    let facServSinNum=0;
-    tendData.forEach(d=>{
-      (d.snap?.invLines||d.invLines||[]).forEach(l=>{
-        if(l.tipoFac && l.tipoFac!=='mercancia'){
-          const n=(l.numFact||l.nfac||'').trim();
-          if(n) facServUnicoConNum.add(n.toUpperCase());
-          else facServSinNum++;
-        }
-      });
-    });
-    const totalFacServ=facServUnicoConNum.size+facServSinNum;
-    // ── Landed y Costo Inventario: mostrar el mayor de los dos ──
-    const totalLanded=tendData.reduce((s,d)=>{
-      if(d._overrideFin) return s+(d._overrideFin.landed||0);
-      const snap=d.snap||{};
-      const isSab=(d.esc||'').toLowerCase().includes('sababa');
-      const landedVal=isSab?(snap.sc3?.landedG||snap.sc3?.landed1||0):(snap.sc1?.landedG||snap.sc1?.landed1||0);
-      return s+(landedVal||0);
-    },0);
-    const totalHomolInv=tendData.reduce((s,d)=>{
-      if(d._overrideFin) return s+(d._overrideFin.mercOrig||0);
-      return ((d.snap?.sc3?.mercHomol||0)>0&&(d.snap?.sc3?.comision||0)>0)?s+(d.snap.sc3.mercHomol||0):s;
-    },0);
-    const skLanded=document.getElementById('sk-landed'); if(skLanded) skLanded.textContent=fmtK(totalLanded)||'—';
-    // Mostrar solo el mayor entre Landed y Costo Inventario (homologado)
-    const skCostoInvEl=document.getElementById('sk-costo-inv');
-    if(skCostoInvEl){
-      if(totalHomolInv>totalLanded){
-        skCostoInvEl.textContent=fmtK(totalHomolInv);
-        skCostoInvEl.closest('.splash-kpi-chip').style.display='';
-        if(skLanded) skLanded.closest('.splash-kpi-chip').style.display='none';
-      } else {
-        skCostoInvEl.closest('.splash-kpi-chip').style.display='none';
-      }
-    }
-    const skFM=document.getElementById('sk-fac-merc'); if(skFM) skFM.textContent=totalFacMerc||'0';
-    const skFS=document.getElementById('sk-fac-serv'); if(skFS) skFS.textContent=totalFacServ||'0';
-    const skF=document.getElementById('sk-facturas');if(skF) skF.textContent=(totalFacMerc+totalFacServ)||'0';
+    // ── Actualizar chips del splash usando SIEMPRE la misma función que las
+    //    calcula en cualquier otro punto de la app (_zlhPopulateKPIs) — antes
+    //    este bloque tenía su PROPIO cálculo duplicado (conteo de embarques
+    //    sin filtrar por año, mientras el chip dice "Emb. 2026"), lo que
+    //    podía mostrar un número distinto al que se ve en otros momentos de
+    //    la sesión aunque los datos ya estuvieran sincronizados. Una sola
+    //    fuente de verdad = un solo número posible, sin llamadas extra a
+    //    la nube. ──
+    if(typeof _zlhPopulateKPIs==='function') _zlhPopulateKPIs();
+    if(typeof _zlhPopulateMonthly==='function') _zlhPopulateMonthly();
+    var _splashSyncing=document.getElementById('splash-kpi-strip');
+    if(_splashSyncing) _splashSyncing.classList.remove('zlh-syncing');
 
     // ── Sincronización automática en segundo plano — DESACTIVADA (jul-2026) ──
     // A petición explícita del usuario: esta re-sincronización cada 60s podía
