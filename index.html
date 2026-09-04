@@ -922,18 +922,6 @@ body.theme-light #_provTooltip{background:#fff;border-color:#d8e6df;box-shadow:0
      scroll, de arriba a abajo. */
   overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch;
 }
-/* ── FIX (sept-2026): "Modo Claro" cambiaba el ícono/etiqueta del botón
-   pero el panel principal (donde vive el usuario casi toda la sesión: KPIs,
-   Historial, menú) se quedaba SIEMPRE con la paleta oscura fija de arriba
-   (--zbg/--zsurf/etc.), sin ningún override para theme-light — por eso el
-   botón "parecía" no hacer nada. La pantalla azul de bienvenida (#splash,
-   antes de entrar) se deja tal cual, oscura siempre, a pedido explícito del
-   usuario — este override es solo para el panel de después de "Ingresar al
-   Sistema", que es donde de verdad se necesita que el tema se sienta vivo. */
-body.theme-light #splash-nav.zlh-panel{
-  --zbg:#f6f8fa; --zsurf:#ffffff; --zsurf2:#eef2f5; --zborder:#d8e0e6;
-  --ztext:#1f2328; --zmuted:#57606a; --zdim:#7d8590;
-}
 /* -- full-width header banner (título + KPIs), arriba de todo -- */
 .zlh-header-full{
   flex-shrink:0; width:100%; box-sizing:border-box;
@@ -4488,30 +4476,7 @@ let arts=[
 // =====================================================
 // HELPERS
 // =====================================================
-// ── FIX CRÍTICO (sept-2026): la app clona el formulario dentro de cada
-//    modal (Sababa, CIF Express, Facturas/Proveedores...) para mostrarlo —
-//    eso significa que MISMO id (ej. "s1_cif", "s1_fob") existe DOS veces
-//    en el documento a la vez: el original (oculto, detrás) y el clon
-//    visible dentro del modal. document.getElementById() con un id
-//    duplicado siempre devuelve el PRIMERO que encuentra en el documento —
-//    no necesariamente el que el usuario está viendo y editando en ese
-//    momento. Si calc()/calcSab2() leían por accidente el original (con un
-//    valor viejo o parcial) en vez del clon recién editado, el resultado
-//    salía mal — esto es justo lo que se describía como "es como si
-//    metiera la plantilla de nuevo, el valor se duplica": no es que el
-//    dato se duplicara en la plantilla, es que a veces se sumaban/leían
-//    dos fuentes distintas para el mismo campo. Ahora v() SIEMPRE prioriza
-//    el valor del clon visible dentro del modal abierto (si hay uno
-//    abierto) sobre el original oculto — mismo patrón ya usado y probado
-//    en _tabCloneEl()/_sabEl()/_cifEl() para casos puntuales, generalizado
-//    aquí para TODA lectura de campo en calc()/calcSab2()/etc. ──
-const v=id=>{
-  var overlay = document.getElementById('tab-modal-overlay');
-  var body = (overlay && overlay.classList.contains('open')) ? document.getElementById('tab-modal-body') : null;
-  var el = body ? body.querySelector('#'+id) : null;
-  if(!el) el = document.getElementById(id);
-  return parseFloat(el?.value)||0;
-};
+const v=id=>parseFloat(document.getElementById(id)?.value)||0;
 const fmt=n=>isNaN(n)?'$—':'$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
 const fmtP=n=>(n*100).toFixed(4)+'%';
 const lookupArt=desc=>{const q=desc.toUpperCase().trim();const f=arts.find(a=>q.includes(a.d)||a.d.split(' ').every(w=>q.includes(w)));return f?f.p:null;};
@@ -8732,9 +8697,6 @@ function switchTab(id,el){
     alert('🔒 Modo Único activo: CIF Express y Sababa Imports bloqueados.');
     return;
   }
-  // ── Recordar la sección en la URL (sept-2026), igual que openTabModal —
-  //    así F5 puede reabrir aquí mismo en vez de reiniciar desde el inicio. ──
-  try{ history.replaceState(null, '', '#'+id); }catch(e){}
   document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
   const pane=document.getElementById('tab-'+id);
@@ -9831,27 +9793,19 @@ function showSplashNav(){
   if(loading) loading.classList.add('active');
   // Ocultar por completo el hero (evita que quede "montado" detrás del panel)
   setTimeout(()=>{ if(hero) hero.classList.add('hero-gone'); const _sp=document.getElementById('splash'); if(_sp) _sp.classList.add('app-mode'); }, 420);
-  // ── FIX (sept-2026): antes los KPI de la portada se llenaban de inmediato
-  //    con lo que hubiera en localStorage, y solo se corregían (si hacía
-  //    falta) ~1-2s después cuando terminaba la sincronización en segundo
-  //    plano — es decir, el usuario podía llegar a VER un número
-  //    equivocado (144) antes de que se corrigiera solo a 153. Ahora la
-  //    pantalla de carga (la misma barra verde de siempre) espera a que
-  //    esa sincronización esté lista ANTES de mostrar cualquier número —
-  //    así el primer número que se ve ya es el correcto, no uno que luego
-  //    cambia. Si no hay conexión (o Supabase tarda demasiado), después de
-  //    3.5s se muestra igual lo que haya en el dispositivo, marcado como
-  //    "sin confirmar" en vez de dejar al usuario esperando indefinidamente. ──
-  var _catchup = window._tendCatchupPromise || Promise.resolve();
-  var _timeout = new Promise(function(res){ setTimeout(res, 3500); });
-  var _minCosmetic = new Promise(function(res){ setTimeout(res, 900); }); // no menos de esto, para que la animación no se sienta "cortada"
-  Promise.all([ Promise.race([_catchup, _timeout]).catch(function(){}), _minCosmetic ]).then(function(){
-    // Populate KPI chips + monthly breakdown from tendData (fuente única, respeta toggle $k/$Completo)
-    _zlhPopulateKPIs();
-    _zlhPopulateMonthly();
-    var _splashKpiStrip=document.getElementById('splash-kpi-strip');
-    if(_splashKpiStrip) _splashKpiStrip.classList.remove('zlh-syncing');
-    if(typeof _zlhPopulateOrigenes==='function'){ try{ _zlhPopulateOrigenes(); }catch(e){ console.warn('Orígenes:',e); } }
+  // Populate KPI chips + monthly breakdown from tendData (fuente única, respeta toggle $k/$Completo)
+  _zlhPopulateKPIs();
+  _zlhPopulateMonthly();
+  // ── Estos números salen de la copia local (localStorage) mientras la
+  //    sincronización con la nube corre en segundo plano — se marcan como
+  //    "verificando" hasta que esa sincronización confirme el total real
+  //    (ver window.onload → _pullTendFromCloud → se quita esta clase).
+  //    Así, si el usuario mira/hace captura de pantalla justo al abrir la
+  //    app, no confunde un número que aún puede cambiar con el definitivo. ──
+  var _splashKpiStrip=document.getElementById('splash-kpi-strip');
+  if(_splashKpiStrip) _splashKpiStrip.classList.add('zlh-syncing');
+  if(typeof _zlhPopulateOrigenes==='function'){ try{ _zlhPopulateOrigenes(); }catch(e){ console.warn('Orígenes:',e); } }
+  setTimeout(()=>{
     // FIX (ago-2026): usar transform:'none' en vez de 'translateY(0)'. Se
     // ven idénticos, pero CUALQUIER transform distinto de "none" —incluso
     // translateY(0)— convierte a este panel en el contenedor de referencia
@@ -9869,7 +9823,7 @@ function showSplashNav(){
       drawNavTrend(); drawSplashChart(); _zlhPopulateReminder(); drawHomeTrend();
       if(typeof _zlhAlignRailIcons==='function') _zlhAlignRailIcons();
     }, 300);
-  });
+  }, 900);
 }
 
 // ── KPIs de la pantalla de inicio (splash-nav) — YTD 2026 ──
@@ -10135,7 +10089,6 @@ function volverInicio(){
   const app=document.getElementById('app-wrapper');
   const hero=document.getElementById('splash-hero');
   const nav=document.getElementById('splash-nav');
-  try{ history.replaceState(null, '', location.pathname+location.search); }catch(e){}
   document.body.classList.remove('costeo-mode');
   // Slide app out
   app.style.transition='opacity .3s ease, transform .3s ease';
@@ -13955,30 +13908,6 @@ const _TEND_MASTER_KEY  = '_TEND_MASTER';
 //    propio registro chiquito e independiente, que SÍ se resube cada vez
 //    que cambia (borrar o reprocesar) — sin tocar el documento grande.
 const _DELETED_LIST_KEY = '_DELETED_LIST';
-// ── ÍNDICE LIVIANO (sept-2026, egress + integridad): un registro chiquito
-//    con SOLO {N° embarque: fecha de guardado} de TODOS los embarques —
-//    unos pocos KB aunque haya cientos de embarques, muy distinto al
-//    maestro completo (que trae cada línea de factura, montos, todo).
-//    Se resube junto con cada sincronización normal. Al abrir la app (o
-//    entrar a Tendencias), primero se compara este índice contra lo que
-//    ya hay en el dispositivo: si coincide exacto, no hace falta bajar
-//    NADA más — ese es el caso más común durante una sesión de trabajo.
-//    Si no coincide, recién ahí se baja el maestro completo, exactamente
-//    como se hacía antes. Esto es lo que evita "escanear a ciegas" el
-//    documento grande cada vez que alguien abre la app en cualquiera de
-//    los dispositivos. ──
-const _TEND_INDEX_KEY = '_TEND_INDEX';
-async function _pushTendIndexToCloud(){
-  if(!window._sb) return;
-  try{
-    var idx = {};
-    (window.tendData||[]).forEach(function(d){ if(d && d.nro) idx[String(d.nro).trim().toUpperCase()] = d.ts||0; });
-    await window._sb.from('simulador_sesiones').upsert(
-      { nombre:_TEND_INDEX_KEY, datos: JSON.stringify(idx), updated_at:new Date().toISOString() },
-      { onConflict:'nombre' }
-    );
-  }catch(e){ /* si falla, el próximo pull simplemente no encontrará índice y bajará el maestro completo — nunca se pierde nada, solo se pierde el ahorro de tráfico esa vez */ }
-}
 async function _pushDeletedListToCloud(){
   if(!window._sb) return;
   try{
@@ -15194,8 +15123,6 @@ async function _syncTendToCloud(){
       _marcarSyncPendiente();
       return;
     }
-    // Mantener el índice liviano al día — solo si hubo algo que subir.
-    if(cambios.length && typeof _pushTendIndexToCloud==='function') await _pushTendIndexToCloud();
     _limpiarSyncPendiente();
   } catch(e){
     console.error('Cloud sync error:', e);
@@ -15685,40 +15612,14 @@ function _reconIrACorregir(nro){
 
 async function _pullTendFromCloud(force){
   if(!_sb) return false;
-  // ── FIX (sept-2026, tráfico + integridad): antes esto se limitaba a "no
-  //    repetir la descarga del maestro completo si ya pasó hace menos de
-  //    5 minutos" — un límite de TIEMPO, no de CONTENIDO. Eso significaba
-  //    que si un dispositivo llevaba horas con la pestaña abierta, podía
-  //    quedarse mostrando embarques desactualizados por horas sin darse
-  //    cuenta, mientras que en otro escenario se podía volver a bajar el
-  //    maestro completo aunque nada hubiera cambiado.
-  //    Ahora se compara primero un ÍNDICE LIVIANO (solo N° de embarque +
-  //    fecha de guardado de cada uno — unos pocos KB) contra lo que ya
-  //    hay en este dispositivo. Si coincide exacto, no se baja NADA más:
-  //    ni el maestro, ni nada — costo casi cero, y se puede llamar cada
-  //    vez que se abre la app o la pestaña de Tendencias sin preocuparse
-  //    por el tráfico. Solo cuando el índice muestra una diferencia real
-  //    (o se fuerza explícitamente, ej. el botón "☁️ Sincronizar Nube")
-  //    se baja el documento completo — exactamente igual que antes. ──
-  if(!force){
-    if((Date.now() - (window._lastPullAt||0)) < 8000) return false; // solo para evitar llamadas en cascada, no para ahorrar tráfico
-    try{
-      const { data: idxRow } = await _sb.from('simulador_sesiones').select('datos').eq('nombre', _TEND_INDEX_KEY).maybeSingle();
-      if(idxRow && idxRow.datos){
-        const idxCloud = typeof idxRow.datos==='string' ? JSON.parse(idxRow.datos||'{}') : (idxRow.datos||{});
-        const idxLocal = {};
-        (window.tendData||[]).forEach(function(d){ if(d && d.nro) idxLocal[String(d.nro).trim().toUpperCase()] = d.ts||0; });
-        const keysCloud = Object.keys(idxCloud), keysLocal = Object.keys(idxLocal);
-        const igual = keysCloud.length===keysLocal.length && keysCloud.every(function(k){ return idxCloud[k]===idxLocal[k]; });
-        if(igual){ window._lastPullAt = Date.now(); return false; }
-        // Si no coincide, seguimos abajo y bajamos el maestro completo —
-        // es la única forma de traer el CONTENIDO de lo que cambió, ya
-        // que hoy vive todo en un solo documento (ver notas de _syncTendToCloud).
-      }
-      // Si no hay índice todavía (primera vez), no bloqueamos — seguimos
-      // abajo y bajamos el maestro completo como respaldo seguro.
-    }catch(e){ /* si falla la lectura del índice, seguimos con el pull normal de siempre — nunca se pierde nada, solo se pierde el ahorro de tráfico esa vez */ }
-  }
+  // ── FIX (ago-2026, egress): antes, cada vez que se entraba a la pestaña
+  //    "Tendencias" (o se abría la app, o varios otros flujos) se volvía a
+  //    descargar el maestro COMPLETO — aunque ya se hubiera descargado hace
+  //    unos segundos. Eso es lectura repetida del mismo dato, que sí cuenta
+  //    como egress. Ahora, salvo que se pida explícitamente con force=true
+  //    (por ejemplo el botón manual "☁️ Sincronizar Nube"), si ya se hizo
+  //    un pull hace menos de 5 minutos simplemente no se repite. ──
+  if(!force && (Date.now() - window._lastPullAt) < 5*60*1000) return false;
   try {
     // 1. Leer el registro maestro
     const { data: masterData, error: masterErr } = await _sb
@@ -17658,13 +17559,6 @@ function reabrirEmbarquePendiente(idx){
   { const fdEl=document.getElementById('s1_fecha_despacho'); if(fdEl) fdEl.value=d.fechaDespacho||''; }
   if(typeof _toggleFechasEmbarque==='function') _toggleFechasEmbarque();
   if(d.gastoComp){ const gc=document.getElementById('s1_gasto_comp'); if(gc) gc.value=d.gastoComp||''; }
-  // Al cargar un embarque guardado, este Gasto Complementario NO viene de
-  // haber presionado el botón "Aplicar diferencia Master Value" en esta
-  // sesión — resetear el rastreo de idempotencia (ver _aplicarDifMV930 /
-  // _aplicarDifMV0Cif) para que, si el usuario lo presiona aquí, descuente
-  // desde cero y no desde el ajuste de un embarque distinto.
-  window._mv930YaAplicadoValor = 0;
-  window._mv0CifYaAplicadoValor = 0;
   if(d.usoSistema){ const us=document.getElementById('s1_uso_sistema'); if(us) us.value=d.usoSistema||''; }
   // Restaurar selectores de origen país/ciudad
   if(typeof _restaurarOrigenEmb==='function') _restaurarOrigenEmb(d.origen||'');
@@ -18363,19 +18257,6 @@ function deleteTend(idx){
   }
   tendData.splice(idx,1);
   saveTendData(); // sincroniza maestro + lista negra a Supabase
-  // ── FIX (sept-2026): una eliminación es un cambio tan real como un
-  //    embarque nuevo — antes no avisaba a nadie ni actualizaba el índice
-  //    liviano, así que otro dispositivo con la app abierta seguía viendo
-  //    el embarque borrado hasta su próximo pull completo. Ahora, igual
-  //    que al procesar uno nuevo: se actualiza el índice (para que el
-  //    chequeo rápido de la próxima apertura lo detecte) y se avisa por el
-  //    mismo canal en tiempo real, para que los dispositivos que tengan la
-  //    app abierta en ese momento lo quiten de su local storage al toque,
-  //    sin esperar a nada. ──
-  if(d && d.nro){
-    if(typeof _pushTendIndexToCloud==='function') _pushTendIndexToCloud().catch(function(){});
-    if(typeof _avisarEmbarqueEliminado==='function') _avisarEmbarqueEliminado(d.nro);
-  }
   renderTend();
   renderTopProvs();
   updateCmpNroList();
@@ -29515,26 +29396,6 @@ function _initTendRealtime(){
           }).catch(function(){});
         }
       })
-      // ── FIX (sept-2026): una eliminación es tan real como un embarque
-      //    nuevo, así que necesita su propio aviso — quitarlo directo del
-      //    local storage de cada dispositivo abierto, sin esperar a que
-      //    alguien vuelva a abrir Tendencias. Nunca se descarga nada para
-      //    esto, solo se borra localmente lo que ya no debe estar. ──
-      .on('broadcast', {event:'EMBARQUE_DELETED'}, function(msg){
-        var nro = msg && msg.payload && msg.payload.nro;
-        if(!nro) return;
-        console.log('📡 Señal recibida: embarque eliminado', nro);
-        var antes = (window.tendData||[]).length;
-        window.tendData = (window.tendData||[]).filter(function(d){ return String(d.nro).trim().toUpperCase() !== String(nro).trim().toUpperCase(); });
-        tendData = window.tendData;
-        if(window.tendData.length !== antes){
-          if(typeof saveTendData==='function') saveTendData(); // solo reescribe localStorage, no vuelve a subir nada
-          if(typeof renderTend==='function' && document.getElementById('tendencias')) renderTend();
-          if(typeof _zlhPopulateKPIs==='function') _zlhPopulateKPIs();
-          if(typeof _zlhPopulateMonthly==='function') _zlhPopulateMonthly();
-          if(typeof _zlhPopulateOrigenes==='function'){ try{ _zlhPopulateOrigenes(); }catch(e){} }
-        }
-      })
       // ── FIX (sept-2026): antes se llamaba a .send() sin confirmar que el
       //    canal ya estaba unido (SUBSCRIBED) — si un dispositivo enviaba su
       //    aviso justo tras abrir la app (muy común: procesa el primer
@@ -29567,17 +29428,6 @@ function _avisarEmbarqueActualizado(nro, ts){
     // Si el canal aún no está listo, no pasa nada: el respaldo de 5 min
     // (o el próximo _syncTendToCloud exitoso) se encarga de avisar.
   }catch(e){ /* si falla el aviso, la red de seguridad de 5 min lo cubre igual */ }
-}
-// Avisa a los demás dispositivos que un embarque fue ELIMINADO — igual de
-// liviano (solo el número), pero con su propio evento porque la acción es
-// distinta: los demás dispositivos deben QUITARLO de su local storage al
-// toque, no ir a buscarlo a la nube. Se llama al final de deleteTend().
-function _avisarEmbarqueEliminado(nro){
-  try{
-    if(_tendRealtimeChannel && _tendRealtimeReady){
-      _tendRealtimeChannel.send({ type:'broadcast', event:'EMBARQUE_DELETED', payload:{ nro:nro } });
-    }
-  }catch(e){ /* si falla el aviso, el chequeo de índice de la próxima apertura lo detecta igual */ }
 }
 
 
@@ -32989,15 +32839,8 @@ window.onload=function(){
   // Inicializar bloque Honorarios CIF Express si compar=cifexp por defecto
   setTimeout(function(){ if(typeof updateCifExpDisplays==='function') updateCifExpDisplays(); }, 300);
   // ── Cargar embarques desde Supabase (única fuente de verdad) ──
-  // Envuelto en una promesa reutilizable: showSplashNav() la espera antes
-  // de mostrar los KPI de la portada, para no enseñar un número que sabemos
-  // que puede estar desactualizado (ver fix sept-2026 más abajo).
-  window._tendCatchupPromise = (async function(){
-    // Antes esperaba 700ms fijos "por si acaso" el SDK de Supabase no había
-    // cargado. Ahora la espera es corta (150ms) porque el SDK se carga por
-    // <script> normal antes de este punto casi siempre; si de verdad no
-    // está listo, el fallback de abajo (400ms + reintento) lo cubre igual.
-    await new Promise(r => setTimeout(r, 150));
+  (async function(){
+    await new Promise(r => setTimeout(r, 700));
     if(!_sb){ initSupabase(); await new Promise(r => setTimeout(r, 400)); }
     if(!_sb) return;
     // Silent load — no badge, no interruption to user
@@ -33034,7 +32877,6 @@ window.onload=function(){
     if(typeof _zlhPopulateMonthly==='function') _zlhPopulateMonthly();
     var _splashSyncing=document.getElementById('splash-kpi-strip');
     if(_splashSyncing) _splashSyncing.classList.remove('zlh-syncing');
-    return pulled;
 
     // ── Sincronización automática en segundo plano — DESACTIVADA (jul-2026) ──
     // A petición explícita del usuario: esta re-sincronización cada 60s podía
@@ -33126,28 +32968,6 @@ window.onload=function(){
       }
     },{passive:true});
   })();
-
-  // ── Recordar sección al recargar (F5) — sept-2026 ──
-  // Antes, recargar la página (F5) siempre te mandaba a la pantalla de
-  // inicio, sin importar en qué parte de la app estuvieras trabajando.
-  // Ahora, cada vez que se abre una sección (openTabModal / switchTab /
-  // volverInicio) se anota en la URL (ej. ".../#tendencias") sin recargar
-  // nada — es solo una marca. Al recargar, se lee esa marca y se reabre
-  // exactamente esa sección en vez de reiniciar desde cero. Se espera a
-  // que la app termine de alinear los datos con la nube (mismo mecanismo
-  // que usan los KPI de la portada) para no reabrir la sección con
-  // información que se sabe desactualizada.
-  try{
-    var _restoreTab = (location.hash||'').replace('#','').trim();
-    var _validTabs = ['sim','cifexp','sababa','facturas','tendencias','config','histprovs','histfact','resumen','factdisp','aranceles','comparativo','unico','planeacion','plantillas'];
-    if(_restoreTab && _validTabs.indexOf(_restoreTab)!==-1){
-      var _catchupR = window._tendCatchupPromise || Promise.resolve();
-      var _timeoutR = new Promise(function(res){ setTimeout(res, 3500); });
-      Promise.race([_catchupR, _timeoutR]).catch(function(){}).then(function(){
-        if(typeof iniciarApp==='function') iniciarApp(_restoreTab);
-      });
-    }
-  }catch(e){}
 };
 
 
@@ -34246,12 +34066,6 @@ body.costeo-mode #tab-facturas .page {
     overlay.setAttribute('data-tab', tabId);
     overlay.classList.add('open');
     document.body.style.overflow = 'hidden';
-    // ── Recordar la sección en la URL (sept-2026) — así, si el usuario
-    //    presiona F5 o recarga, la app puede reabrir directo en esta
-    //    sección en vez de empezar siempre desde cero. Ver window.onload,
-    //    donde se lee este hash al iniciar. replaceState (no pushState)
-    //    para no llenar el historial de "atrás" con cada pestaña abierta. ──
-    try{ history.replaceState(null, '', '#'+tabId); }catch(e){}
 
     // Clone + render after modal is visible (2 frames for paint)
     setTimeout(function(){
@@ -34360,7 +34174,6 @@ body.costeo-mode #tab-facturas .page {
 
     // Tabs informativos → ir al menú principal
     if(INICIO_MODAL_TABS.indexOf(currentTab) !== -1){
-      try{ history.replaceState(null, '', location.pathname+location.search); }catch(e){}
       if(typeof volverInicio === 'function') { volverInicio(); return; }
     }
 
@@ -34371,11 +34184,9 @@ body.costeo-mode #tab-facturas .page {
     var bgPane = document.getElementById('tab-'+targetPane);
     if(!bgPane){ targetPane = 'sim'; bgPane = document.getElementById('tab-sim'); }
     if(!bgPane){
-      try{ history.replaceState(null, '', location.pathname+location.search); }catch(e){}
       if(typeof volverInicio === 'function') { volverInicio(); return; }
       return;
     }
-    try{ history.replaceState(null, '', '#'+targetPane); }catch(e){}
 
     // Mostrar el pane de costeo
     document.querySelectorAll('.tab-pane').forEach(function(p){ p.classList.remove('on'); });
@@ -34987,20 +34798,8 @@ function _aplicarDifMV930(){
   // así que este getElementById siempre apunta al campo real, sin ambigüedad.
   var gcEl=document.getElementById('s1_gasto_comp');
   var actual=parseFloat(gcEl?.value||0)||0;
-  // ── FIX CRÍTICO (sept-2026): este botón SUMABA la diferencia cada vez que
-  //    se presionaba, en vez de REEMPLAZAR el ajuste anterior. Si el usuario
-  //    volvía a entrar al modal de Sababa (ej. a poner el N° de factura) y
-  //    presionaba "Aplicar" de nuevo, la diferencia se sumaba una segunda
-  //    vez encima de la primera — y una tercera, una cuarta — inflando el
-  //    Gasto Complementario cada vez más. Eso es lo que se veía reflejado
-  //    en Comparativo como un monto y un % disparado (ej. 400% en vez de
-  //    ~20-26%). Ahora se descuenta primero lo que este MISMO botón ya
-  //    había aplicado antes, así el resultado converge siempre al ajuste
-  //    correcto sin importar cuántas veces se presione. ──
-  var yaAplicado = window._mv930YaAplicadoValor||0;
-  var nuevo=actual - yaAplicado + window._lastDifMV930;
+  var nuevo=actual+window._lastDifMV930;
   if(gcEl) gcEl.value=nuevo.toFixed(2);
-  window._mv930YaAplicadoValor = window._lastDifMV930;
   calc();
   if(typeof calcSab2==='function') calcSab2();
   if(typeof _actualizarSummaryEquipo==='function') _actualizarSummaryEquipo();
@@ -35060,15 +34859,8 @@ function _aplicarDifMV0Cif(){
   // getElementById siempre apunta al campo real, sin ambigüedad.
   var gcEl=document.getElementById('s1_gasto_comp');
   var actual=parseFloat(gcEl?.value||0)||0;
-  // ── Mismo FIX que _aplicarDifMV930 (ver ahí el detalle completo): antes
-  //    sumaba la diferencia cada vez que se presionaba el botón, en vez de
-  //    reemplazar el ajuste anterior — se descuenta primero lo que este
-  //    mismo botón ya había aplicado, para que sea a prueba de clics
-  //    repetidos y de reabrir el modal varias veces. ──
-  var yaAplicado = window._mv0CifYaAplicadoValor||0;
-  var nuevo=actual - yaAplicado + window._lastDifMV0Cif;
+  var nuevo=actual+window._lastDifMV0Cif;
   if(gcEl) gcEl.value=nuevo.toFixed(2);
-  window._mv0CifYaAplicadoValor = window._lastDifMV0Cif;
   calc();
   if(typeof updateCifExpDisplays==='function') updateCifExpDisplays();
   if(typeof _actualizarSummaryEquipo==='function') _actualizarSummaryEquipo();
