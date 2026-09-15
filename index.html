@@ -2495,6 +2495,26 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
   <input type="number" id="disp_hon2" readonly style="display:none">
 
   <!-- ═══ MODAL IMPUESTOS ═══ -->
+  <!-- ── AÑADIDO (sept-2026): modal "Embarques del Mes" — acceso directo desde
+       las tarjetas de "Embarques por Mes" del hub principal. Lista los
+       embarques de ese mes (N°, departamentos, tipo, valor inventario,
+       landed, piezas) con buscador; cada fila abre el modal de detalle que
+       ya existe (abrirModuloComparativo_idx), sin duplicar esa lógica. ── -->
+  <div id="_modal_embmes_overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:99990;overflow-y:auto;padding:16px 8px" onclick="if(event.target===this)_cerrarModalEmbarquesMes()">
+    <div style="background:var(--s1);border-radius:14px;max-width:640px;margin:0 auto;box-shadow:0 16px 48px rgba(0,0,0,.5);border:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border)">
+        <span style="font-size:16px">📦</span>
+        <span id="_embmes_titulo" style="font-size:14px;font-weight:800;color:var(--text);flex:1">Embarques del mes</span>
+        <button onclick="_cerrarModalEmbarquesMes()" style="background:rgba(218,54,51,.1);border:1px solid rgba(218,54,51,.25);color:var(--red-l);border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer">✕ Cerrar</button>
+      </div>
+      <div style="padding:12px 18px 0">
+        <input type="text" id="_embmes_buscador" placeholder="🔍 Buscar por N° de embarque o descripción..." oninput="_filtrarModalEmbarquesMes()"
+          style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:12px;color:var(--text);box-sizing:border-box">
+      </div>
+      <div id="_embmes_lista" style="padding:10px 18px 18px;max-height:70vh;overflow-y:auto"></div>
+    </div>
+  </div>
+
   <div id="_modal_imp_overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:99990;overflow-y:auto;padding:16px 8px" onclick="if(event.target===this)_cerrarModalImpuestos()">
     <div style="background:var(--s1);border-radius:14px;max-width:520px;margin:0 auto;box-shadow:0 16px 48px rgba(0,0,0,.5);border:1px solid var(--border)">
       <div style="display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border)">
@@ -10020,10 +10040,98 @@ function _zlhPopulateMonthly(){
   const counts=new Array(_curM+1).fill(0);
   _data.forEach(d=>{ const fd=new Date(d.fecha||d.date); const m=fd.getMonth(); if(m>=0 && m<=_curM) counts[m]++; });
   const meses=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  window._zlhCurY = _curY;
   strip.innerHTML = counts.map((c,i)=>
-    '<div class="zlh-month-chip"><div class="zlh-month-chip-val">'+c+'</div><div class="zlh-month-chip-lbl">'+meses[i]+'</div></div>'
+    '<div class="zlh-month-chip" style="cursor:pointer" onclick="_abrirModalEmbarquesMes('+i+')"><div class="zlh-month-chip-val">'+c+'</div><div class="zlh-month-chip-lbl">'+meses[i]+'</div></div>'
   ).join('');
 }
+
+// ── AÑADIDO (sept-2026): modal "Embarques del Mes" ──
+function _abrirModalEmbarquesMes(monthIdx){
+  var ov=document.getElementById('_modal_embmes_overlay'); if(!ov) return;
+  var meses=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  var anio = window._zlhCurY || new Date().getFullYear();
+  window._embmesActual = {mes:monthIdx, anio:anio};
+  var titEl=document.getElementById('_embmes_titulo');
+  if(titEl) titEl.textContent='📦 Embarques de '+meses[monthIdx]+' '+anio;
+  var buscador=document.getElementById('_embmes_buscador'); if(buscador) buscador.value='';
+  ov.style.display='block'; document.body.style.overflow='hidden';
+  _renderModalEmbarquesMes();
+}
+function _cerrarModalEmbarquesMes(){
+  var ov=document.getElementById('_modal_embmes_overlay'); if(!ov) return;
+  ov.style.display='none'; document.body.style.overflow='';
+}
+function _filtrarModalEmbarquesMes(){ _renderModalEmbarquesMes(); }
+function _renderModalEmbarquesMes(){
+  var cont=document.getElementById('_embmes_lista'); if(!cont) return;
+  var ctx=window._embmesActual; if(!ctx){ cont.innerHTML=''; return; }
+  var q=(document.getElementById('_embmes_buscador')?.value||'').trim().toUpperCase();
+
+  // Mismo criterio de dedup que _zlhPopulateMonthly, pero guardando el índice
+  // real en tendData (necesario para abrir el detalle correcto).
+  var raw=[];
+  (tendData||[]).forEach(function(d,idx){
+    if(!d || (!d.fecha && !d.date)) return;
+    var fd=new Date(d.fecha||d.date);
+    if(fd.getFullYear()!==ctx.anio || fd.getMonth()!==ctx.mes) return;
+    raw.push({d:d, idx:idx});
+  });
+  var dedup=new Map();
+  raw.forEach(function(r){
+    var k=(r.d.nro||'').trim().toUpperCase()||('_ts_'+(r.d.ts||Math.random()));
+    var ex=dedup.get(k);
+    if(!ex || (r.d.ts||0) > (ex.d.ts||0)) dedup.set(k, r);
+  });
+  var items=Array.from(dedup.values());
+
+  if(q){
+    items=items.filter(function(r){
+      var nro=(r.d.nro||'').toUpperCase();
+      var desc=(r.d.desc||'').toUpperCase();
+      return nro.includes(q) || desc.includes(q);
+    });
+  }
+  items.sort(function(a,b){ return (b.d.ts||0)-(a.d.ts||0); });
+
+  if(!items.length){
+    cont.innerHTML='<div style="text-align:center;padding:32px;color:var(--muted);font-size:12px">'+(q?'Sin resultados para tu búsqueda.':'Sin embarques procesados en este mes.')+'</div>';
+    return;
+  }
+
+  cont.innerHTML = items.map(function(r){
+    var d=r.d;
+    var ci = (typeof _calcCostoInventario==='function') ? _calcCostoInventario(d) : {mercInv:0,landedG:0,landed1:0};
+    var valorInv = ci.mercInv||0;
+    var landed = ci.landedG||ci.landed1||0;
+    var allLines = (d.snap&&d.snap.invLines)||d.invLines||[];
+    var mercLines = allLines.filter(function(l){ return (l.tipoFac||'mercancia')==='mercancia'; });
+    var piezas = mercLines.reduce(function(s,l){ return s+(parseInt(l.piezas)||0); },0);
+    var deptos = Array.from(new Set(mercLines.map(function(l){ return l.deptCat||l.dept||''; }).filter(Boolean)));
+    var deptoTxt = deptos.length ? deptos.slice(0,3).join(', ')+(deptos.length>3?' +'+(deptos.length-3):'') : '—';
+    var tipoRaw = (d.snap&&d.snap.tipo)||d.tipo||'ZL';
+    var tipoNorm = (tipoRaw==='EXT'||tipoRaw==='IMP') ? 'IMP' : 'ZL';
+    var tipoLbl = tipoNorm==='IMP' ? 'Importación' : 'Zona Libre';
+    var tipoColor = tipoNorm==='IMP' ? 'var(--blue-l)' : 'var(--green-l)';
+    var tipoBg = tipoNorm==='IMP' ? 'rgba(88,166,255,.1)' : 'rgba(63,185,80,.1)';
+    return '<div onclick="_cerrarModalEmbarquesMes();abrirModuloComparativo_idx('+r.idx+')" '
+      +'style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:8px;cursor:pointer" '
+      +'onmouseenter="this.style.background=\'rgba(255,255,255,.03)\'" onmouseleave="this.style.background=\'var(--bg)\'">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px">'
+      +'<span style="font-size:12px;font-weight:800;color:var(--orange-l)">'+(d.nro||'—')+'</span>'
+      +'<span style="font-size:9px;font-weight:700;color:'+tipoColor+';background:'+tipoBg+';border-radius:4px;padding:2px 6px">'+tipoLbl+'</span>'
+      +'</div>'
+      +'<div style="font-size:11px;color:var(--text);margin-bottom:6px;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden">'+(d.desc||'Sin descripción')+'</div>'
+      +'<div style="font-size:10px;color:var(--muted);margin-bottom:8px">🏷️ '+deptoTxt+'</div>'
+      +'<div style="display:flex;gap:14px;flex-wrap:wrap;font-family:\'IBM Plex Mono\',monospace">'
+      +'<div><div style="font-size:8px;color:var(--muted);font-weight:700">VALOR INVENTARIO</div><div style="font-size:11px;font-weight:700;color:var(--text)">'+(window._fmtMoney?window._fmtMoney(valorInv):('$'+valorInv.toFixed(2)))+'</div></div>'
+      +'<div><div style="font-size:8px;color:var(--muted);font-weight:700">LANDED</div><div style="font-size:11px;font-weight:700;color:var(--green-l)">'+(window._fmtMoney?window._fmtMoney(landed):('$'+landed.toFixed(2)))+'</div></div>'
+      +'<div><div style="font-size:8px;color:var(--muted);font-weight:700">PIEZAS</div><div style="font-size:11px;font-weight:700;color:var(--text)">'+piezas.toLocaleString('en-US')+'</div></div>'
+      +'</div>'
+      +'</div>';
+  }).join('');
+}
+
 function drawNavTrend(){
   const canvas=document.getElementById('nav-trend-canvas');
   if(!canvas) return;
@@ -11366,6 +11474,23 @@ function _autoFillGastosProveedores(){
     if(costo > 0.005) G.push(Object.assign({tipoFac, deptCat:'GASTOS', prov, oc, costo:R(costo), _autoGasto:true, numFact, nfac:numFact}, extra));
   };
 
+  // ── AÑADIDO (sept-2026): las líneas de gasto auto-generadas (Tesoro
+  //    Nacional: arancel/ITBMS/tasa/uso; Sababa: comisión/ITBMS; CIF
+  //    Express: honorarios/ITBMS) se desglosan en varias LÍNEAS para poder
+  //    sacar estadísticas por concepto, pero en la realidad cada grupo es
+  //    UNA sola factura del proveedor. Antes cada línea se guardaba con
+  //    numFact='' (vacío), y el conteo de "Facturas Procesadas" trata cada
+  //    línea sin número como una factura aparte — así 5 líneas de Tesoro
+  //    Nacional se contaban como 5 facturas, y Sababa (comisión + ITBMS)
+  //    como 2, en vez de 1 cada una. Ahora se les asigna un número
+  //    sintético compartido por grupo y por embarque (nunca choca con un
+  //    N° de factura real tecleado por el usuario), así el conteo —que ya
+  //    dedupea por numFact— las agrupa correctamente. ──
+  const _nroEmbActualAG = (document.getElementById('s1_nro_emb')?.value||'').trim() || ('SN'+(window._lastSnap?.ts||Date.now()));
+  const _numAutoTesoro = 'AUTOGEN-'+_nroEmbActualAG+'-TESORO';
+  const _numAutoCifExp = 'AUTOGEN-'+_nroEmbActualAG+'-CIFEXP';
+  const _numAutoSababa = 'AUTOGEN-'+_nroEmbActualAG+'-SABABA';
+
   const tasa     = sc1.tasa    || 0;
   const form1    = sc1.form1   || 0;  // Uso del sistema
   const arancel  = sc1.arancel || 0;
@@ -11380,14 +11505,14 @@ function _autoFillGastosProveedores(){
   // ══════════════════════════════════════════════════════
   if(isLiq){
     // TESORO NACIONAL — todos los impuestos
-    add('liquidacion', 'TESORO NACIONAL', 'Arancel',         arancel);
-    add('itbms',       'TESORO NACIONAL', 'ITBMS s/Arancel', itbmsAr);
-    add('liquidacion', 'TESORO NACIONAL', 'Tasa Aduana',     tasa);
-    add('itbms',       'TESORO NACIONAL', 'ITBMS s/Tasa',    itbmsTasa);
-    add('liquidacion', 'TESORO NACIONAL', 'Uso Sistema',     form1);
+    add('liquidacion', 'TESORO NACIONAL', 'Arancel',         arancel,  _numAutoTesoro);
+    add('itbms',       'TESORO NACIONAL', 'ITBMS s/Arancel', itbmsAr,  _numAutoTesoro);
+    add('liquidacion', 'TESORO NACIONAL', 'Tasa Aduana',     tasa,     _numAutoTesoro);
+    add('itbms',       'TESORO NACIONAL', 'ITBMS s/Tasa',    itbmsTasa,_numAutoTesoro);
+    add('liquidacion', 'TESORO NACIONAL', 'Uso Sistema',     form1,    _numAutoTesoro);
     // DMCE y Acarreo — solo Liq. Aduanal y solo si NO es modo único
     if(!isUnico){
-      add('liquidacion', 'TESORO NACIONAL',       'DMCE',    dmce);
+      add('liquidacion', 'TESORO NACIONAL',       'DMCE',    dmce,    _numAutoTesoro);
       add('acarreo',     'ACARREO / TRANSPORTE',  'Acarreo', acarreo);
     }
     // Gastos agente/destino — auto-agregar si el usuario lo tiene en el form
@@ -11427,10 +11552,10 @@ function _autoFillGastosProveedores(){
       ? window._itbms_manual_cif
       : (sc2.itbms || 0);
     const cifUsoReal   = (sc2.form2 !== undefined && sc2.form2 !== null && sc2.form2 !== '') ? sc2.form2 : 3;  // Uso del Sistema propio de CIF Express; default 3, NUNCA hereda de Liquidación (form1)
-    add('itbms',       'TESORO NACIONAL', 'ITBMS s/Pago Arancelario', cifItbmsReal);
-    add('liquidacion', 'TESORO NACIONAL', 'Tasa Aduana',               tasa);
-    add('itbms',       'TESORO NACIONAL', 'ITBMS s/Tasa',              itbmsTasa);
-    add('liquidacion', 'TESORO NACIONAL', 'Uso Sistema',               cifUsoReal);
+    add('itbms',       'TESORO NACIONAL', 'ITBMS s/Pago Arancelario', cifItbmsReal, _numAutoTesoro);
+    add('liquidacion', 'TESORO NACIONAL', 'Tasa Aduana',               tasa,        _numAutoTesoro);
+    add('itbms',       'TESORO NACIONAL', 'ITBMS s/Tasa',              itbmsTasa,   _numAutoTesoro);
+    add('liquidacion', 'TESORO NACIONAL', 'Uso Sistema',               cifUsoReal,  _numAutoTesoro);
 
     // CIF EXPRESS TRÁMITE S.A. — Honorarios 3% CIF, desglosados
     const honTotal = sc2.hon   || 0;
@@ -11438,9 +11563,9 @@ function _autoFillGastosProveedores(){
     const honG     = Math.max(0, honTotal - honNG);     // Porción GRAVADA
     const itbmsHon = sc2.itbmsHon || R(honG * itbPct); // ITBMS sobre lo gravado
 
-    add('honorarios', 'CIF EXPRESS TRÁMITE S.A.', 'Honorarios — Monto No Gravado', honNG);
-    add('honorarios', 'CIF EXPRESS TRÁMITE S.A.', 'Honorarios — Monto Gravado',    honG);
-    add('itbms',      'CIF EXPRESS TRÁMITE S.A.', 'ITBMS s/Monto Gravado',         itbmsHon);
+    add('honorarios', 'CIF EXPRESS TRÁMITE S.A.', 'Honorarios — Monto No Gravado', honNG,    _numAutoCifExp);
+    add('honorarios', 'CIF EXPRESS TRÁMITE S.A.', 'Honorarios — Monto Gravado',    honG,     _numAutoCifExp);
+    add('itbms',      'CIF EXPRESS TRÁMITE S.A.', 'ITBMS s/Monto Gravado',         itbmsHon, _numAutoCifExp);
 
     // MASTER VALUE — absorbe diferencia Liq vs CIF
     const mv2 = sc2.mv || 0;
@@ -11480,9 +11605,9 @@ function _autoFillGastosProveedores(){
                           : (sc3.itbmsHomol || 0);
     const comBrutaReal  = Math.max(0, comisionReal - itbmsHomolReal);
 
-    add('honorarios', 'SABABA IMPORTS, S.A.', 'Comisión Bruta s/Pago Fiscal', comBrutaReal);
+    add('honorarios', 'SABABA IMPORTS, S.A.', 'Comisión Bruta s/Pago Fiscal', comBrutaReal, _numAutoSababa);
     // ITBMS Homologado va como "Otros Gastos" — es un costo que entra al inventario
-    add('itbms',      'SABABA IMPORTS, S.A.', 'ITBMS Homologado (costeo inventario)', itbmsHomolReal, '', {_sabItbms:true, _label:'Honorarios / ITBMS'});
+    add('itbms',      'SABABA IMPORTS, S.A.', 'ITBMS Homologado (costeo inventario)', itbmsHomolReal, _numAutoSababa, {_sabItbms:true, _label:'Honorarios / ITBMS'});
 
     // Master Value: manual si fue editado, sino se recalcula como la CIFRA EXACTA que
     // hace cuadrar el Costo Landed de Sababa contra el de Liq. Aduanal (sc1) — así absorbe
