@@ -8898,6 +8898,29 @@ function updateCifExpDisplays(){
   });
 }
 
+// ── AÑADIDO (sept-2026): autocompletado de origen para Zona Libre ──
+// Se dispara cuando el usuario elige "Zona Libre" como tipo de proveedor
+// (o al abrir un Nuevo Embarque que ya trae ZL por defecto). Rellena
+// País=Panamá, Ciudad/Puerto=Zona Libre de Colón y Tipo de Embarque=Camión.
+// Todo queda editable: si el usuario lo cambia manualmente después, ese
+// cambio se respeta — esto solo pone el valor inicial más común.
+function _autoLlenarOrigenZL(){
+  var selPais = document.getElementById('s1_pais_emb');
+  if(selPais){
+    selPais.value = 'Panamá';
+    if(typeof _actualizarCiudades==='function') _actualizarCiudades('Panamá');
+    var selCiudad = document.getElementById('s1_ciudad_emb');
+    if(selCiudad) selCiudad.value = 'Zona Libre de Colón';
+    if(typeof _toggleOtroPaisEmb==='function') _toggleOtroPaisEmb();
+    if(typeof _toggleOtroCiudadEmb==='function') _toggleOtroCiudadEmb();
+    if(typeof _sincronizarOrigenEmb==='function') _sincronizarOrigenEmb();
+  }
+  var selTipoEmb = document.getElementById('s1_tipo_emb');
+  if(selTipoEmb && !selTipoEmb.value){
+    selTipoEmb.value = 'Camión';
+    if(typeof _toggleContenedorField==='function') _toggleContenedorField('Camión');
+  }
+}
 function setTipo(val, el){
   tipo = val;
   // Update button states
@@ -8905,6 +8928,11 @@ function setTipo(val, el){
     el.parentElement.querySelectorAll('.seg-btn').forEach(b=>b.classList.remove('on','g','b'));
     el.classList.add('on','g');
   }
+  // ── AÑADIDO (sept-2026): al elegir Zona Libre como tipo de proveedor,
+  //    autocompletar País de Origen = Panamá, Ciudad/Puerto Origen = Zona
+  //    Libre de Colón, y Tipo de Embarque = Camión por defecto (el usuario
+  //    sigue pudiendo cambiar cualquiera de los tres manualmente después). ──
+  if(val==='ZL') _autoLlenarOrigenZL();
   // FOB only available for EXT
   const fobBtn = document.getElementById('btn-fob-termino');
   if(fobBtn) fobBtn.style.opacity = (val==='EXT') ? '1' : '.4';
@@ -32556,6 +32584,42 @@ function _motoresMapeado(rows) {
   var cPiezas = col(['PIEZA','UNIDAD','QTY','CANTIDAD','PIECES','UNITS']);
   var cOCH    = col(['OC_HOMOLOGADA','OC HOMOLOGADA','HOMOLOGADA']);
   var cMH     = col(['MONTO_HOMOLOGADO','MONTO HOMOLOGADO','HOMOLOGADO']);
+  // ── AÑADIDO (sept-2026): columna opcional "FECHA_PEDIDO" — solo viene en
+  //    plantillas de Zona Libre (col. L); en Importación esta columna no
+  //    existe y cFechaPedido simplemente queda en -1, sin afectar nada más. ──
+  var cFechaPedido = col(['FECHA_PEDIDO','FECHA PEDIDO','FECHA DE PEDIDO']);
+
+  // Acepta DD/MM/AAAA, AAAA-MM-DD, MM/DD/AAAA (con día>12 como desambiguador)
+  // y fechas seriales de Excel (numero de días desde 1899-12-30). Devuelve
+  // siempre 'AAAA-MM-DD' o '' si no se pudo interpretar — así el resto de la
+  // app siempre recibe el mismo formato sin importar cómo la haya escrito
+  // quien armó la plantilla.
+  function _parseFechaPedido(raw){
+    if(raw===undefined||raw===null||raw==='') return '';
+    // Fecha serial de Excel (número puro)
+    if(typeof raw==='number' || /^\d+(\.\d+)?$/.test(String(raw).trim())){
+      var serial=parseFloat(raw);
+      if(serial>20000 && serial<60000){ // rango razonable de fechas (años ~1954-2064)
+        var ms=Math.round((serial-25569)*86400*1000); // 25569 = días entre 1899-12-30 y 1970-01-01
+        var dJs=new Date(ms);
+        if(!isNaN(dJs.getTime())) return dJs.getUTCFullYear()+'-'+String(dJs.getUTCMonth()+1).padStart(2,'0')+'-'+String(dJs.getUTCDate()).padStart(2,'0');
+      }
+    }
+    var s=String(raw).trim();
+    var mIso=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if(mIso) return mIso[1]+'-'+mIso[2].padStart(2,'0')+'-'+mIso[3].padStart(2,'0');
+    var mSlash=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+    if(mSlash){
+      var p1=parseInt(mSlash[1],10), p2=parseInt(mSlash[2],10), anio=mSlash[3];
+      // Si el primer número no puede ser mes (>12), es DD/MM/AAAA; si el
+      // segundo no puede ser mes, es MM/DD/AAAA; si ambos son ambiguos
+      // (≤12), se asume DD/MM/AAAA por ser el formato usual en Panamá.
+      var dia, mes;
+      if(p1>12){ dia=p1; mes=p2; } else if(p2>12){ mes=p1; dia=p2; } else { dia=p1; mes=p2; }
+      return anio+'-'+String(mes).padStart(2,'0')+'-'+String(dia).padStart(2,'0');
+    }
+    return '';
+  }
 
   // Fallbacks por posición (estructura nueva: A=PROV B=TIPO C=RUBRO D=FACT E=MONTO F=OC G=BULTOS H=TRASP I=PIEZAS)
   if (cProv < 0) cProv = 0;
@@ -32623,6 +32687,7 @@ function _motoresMapeado(rows) {
     var piezas = cPiezas >= 0 ? parseInt(String(r[cPiezas]||'').replace(/[^0-9]/g,''))||0 : 0;
     var ocH = cOCH >= 0 ? String(r[cOCH]||'').trim() : '';
     var mH  = cMH  >= 0 ? parseFloat(String(r[cMH]||'').replace(/[^0-9.-]/g,''))||0 : 0;
+    var fechaPedido = cFechaPedido >= 0 ? _parseFechaPedido(r[cFechaPedido]) : '';
 
     if (!prov && monto === 0) return;
 
@@ -32689,6 +32754,7 @@ function _motoresMapeado(rows) {
       prov: finalProv, deptCat: deptCat, costo: monto, bultos: bultos,
       traspaso: trasp, piezas: piezas, oc: ocVal, nfac: nfac,
       tipoFac: tipoFac, numFact: nfac, ocHomologada: ocH, montoHomologado: mH,
+      fechaPedido: fechaPedido,
       _match: match
     });
 
@@ -34744,6 +34810,14 @@ function _abrirModalEmbarque(){
   _actualizarResumenEmbarque();
   _initCombosBuscables();
   if(typeof _toggleFechasEmbarque==='function') _toggleFechasEmbarque();
+  // ── AÑADIDO (sept-2026): si es un embarque NUEVO (país de origen todavía
+  //    vacío) y el tipo activo es Zona Libre, autocompletar Panamá / Zona
+  //    Libre de Colón / Camión — no toca embarques que ya tienen país
+  //    guardado (edición de uno existente). ──
+  var _selPaisChk = document.getElementById('s1_pais_emb');
+  if(_selPaisChk && !_selPaisChk.value && typeof tipo!=='undefined' && tipo==='ZL'){
+    _autoLlenarOrigenZL();
+  }
 }
 
 function _cerrarModalEmbarque(){
