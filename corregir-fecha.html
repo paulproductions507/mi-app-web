@@ -29,10 +29,10 @@
   <div class="sub">Herramienta aislada — solo cambia el campo de fecha del embarque indicado directamente en Supabase. No abre el editor, no toca la plantilla ni ningún otro campo.</div>
 
   <label>N° de Embarque</label>
-  <input id="nro" type="text" value="22089">
+  <input id="nro" type="text" value="">
 
   <label>Fecha correcta</label>
-  <input id="fecha" type="date" value="2026-06-11">
+  <input id="fecha" type="date" value="">
 
   <button id="btnBuscar">🔍 Buscar embarque</button>
   <div id="found" class="found"></div>
@@ -54,7 +54,7 @@ function showMsg(text, type){
   m.textContent = text;
 }
 
-let _cache = { master: null, idx: -1 };
+let _cache = { registro: null };
 
 $('btnBuscar').onclick = async function(){
   const nro = $('nro').value.trim();
@@ -74,10 +74,12 @@ $('btnBuscar').onclick = async function(){
     const idx = tendData.findIndex(d => d && d.nro && String(d.nro).trim().toUpperCase() === nro.toUpperCase());
     if(idx === -1){
       showMsg('No se encontró el embarque "' + nro + '" en el maestro de Supabase.', 'err');
-      _cache = { master: null, idx: -1 };
+      _cache = { registro: null };
       return;
     }
-    _cache = { master: parsed, idx };
+    // Guardamos solo ESTE registro (una copia), no el arreglo completo —
+    // así no hay nada que pueda "arrastrar" datos viejos de otros embarques.
+    _cache = { registro: JSON.parse(JSON.stringify(tendData[idx])) };
     const d = tendData[idx];
     $('found').style.display = 'block';
     $('found').innerHTML = '📦 Encontrado: <strong>' + (d.nro||'') + '</strong> — ' + (d.desc||'Embarque') +
@@ -96,44 +98,48 @@ $('btnBuscar').onclick = async function(){
 $('btnGuardar').onclick = async function(){
   const nuevaFecha = $('fecha').value;
   if(!nuevaFecha){ showMsg('Selecciona una fecha válida.', 'err'); return; }
-  if(_cache.idx === -1 || !_cache.master){ showMsg('Primero busca el embarque.', 'err'); return; }
+  if(!_cache.registro){ showMsg('Primero busca el embarque.', 'err'); return; }
   $('btnGuardar').disabled = true;
   $('btnGuardar').textContent = '⏳ Guardando...';
   try{
-    // Re-leer el maestro justo antes de escribir, para no pisar cambios
-    // recientes de otro dispositivo (mismo criterio de seguridad que la app).
-    const { data, error } = await sb.from('simulador_sesiones')
-      .select('datos').eq('nombre', MASTER_KEY).maybeSingle();
-    if(error) throw error;
-    const parsed = JSON.parse(data.datos);
-    const tendData = Array.isArray(parsed.tendData) ? parsed.tendData : [];
     const nro = $('nro').value.trim();
-    const idx = tendData.findIndex(d => d && d.nro && String(d.nro).trim().toUpperCase() === nro.toUpperCase());
-    if(idx === -1) throw new Error('El embarque ya no está en el maestro (¿fue eliminado?).');
 
-    // ── Único cambio: la fecha. Todo lo demás del registro queda intacto. ──
-    // FIX: se actualiza 'ts' para que esta corrección siempre gane cualquier
-    // fusión futura con otro dispositivo que tenga una copia vieja en memoria.
-    tendData[idx].fecha = nuevaFecha;
-    if(tendData[idx].snap) tendData[idx].snap.fecha = nuevaFecha;
-    tendData[idx].fechaDoc = nuevaFecha;
-    tendData[idx].ts = Date.now();
+    // ── FIX (sept-2026): ANTES esta herramienta releía el maestro completo,
+    //    cambiaba la fecha de un solo embarque en su copia local, y volvía a
+    //    escribir el ARREGLO ENTERO de vuelta a Supabase con un upsert
+    //    normal. Ese "leer todo → escribir todo" es peligroso: si entre tu
+    //    lectura y tu escritura CUALQUIER otro dispositivo (iPhone,
+    //    Westland) subió un embarque nuevo por la app, esa escritura tuya
+    //    lo pisaba y lo borraba del maestro — porque tu copia, aunque
+    //    fresca, ya había quedado vieja para ese momento, y se subió
+    //    completa igual. Esto coincide exactamente con los embarques que
+    //    "desaparecían" después de usar esta herramienta.
+    //
+    //    Ahora se usa la misma función seguraque usa la app principal
+    //    (upsert_embarque_master): solo modifica ESTE registro dentro del
+    //    maestro, sin tocar ni sobrescribir nada de lo que otros
+    //    dispositivos hayan subido mientras tanto. Cero riesgo de pisar
+    //    embarques ajenos, sin importar cuándo se ejecute esto. ──
+    const registroActualizado = _cache.registro;
+    registroActualizado.fecha = nuevaFecha;
+    if(registroActualizado.snap) registroActualizado.snap.fecha = nuevaFecha;
+    registroActualizado.fechaDoc = nuevaFecha;
+    registroActualizado.ts = Date.now();
 
-    const payload = {
-      nombre: MASTER_KEY,
-      datos: JSON.stringify({
-        tendData: tendData,
-        deleted: parsed.deleted || [],
-        updated_at: new Date().toISOString()
-      }),
-      updated_at: new Date().toISOString()
-    };
-    const { error: upErr } = await sb.from('simulador_sesiones').upsert(payload, { onConflict: 'nombre' });
-    if(upErr) throw upErr;
+    const { error: rpcErr } = await sb.rpc('upsert_embarque_master', {
+      p_nro: nro,
+      p_registro: registroActualizado
+    });
+    if(rpcErr) throw rpcErr;
 
-    showMsg('✅ Fecha del embarque ' + nro + ' corregida a ' + nuevaFecha + '. Ya quedó en Supabase — la próxima vez que abras la app (o toques "☁️ Sincronizar Nube") la verás en el mes correcto.', 'ok');
+    showMsg('✅ Fecha del embarque ' + nro + ' corregida a ' + nuevaFecha + '. Ya quedó en Supabase — la próxima vez que abras la app (o toques "🔄 Forzar Sincronización") la verás en el mes correcto.', 'ok');
     $('btnGuardar').style.display = 'none';
     $('found').style.display = 'none';
+    _cache = { registro: null };
+    // Campos listos para corregir el siguiente embarque sin tener que borrar nada a mano.
+    $('nro').value = '';
+    $('fecha').value = '';
+    $('nro').focus();
   }catch(e){
     showMsg('Error al guardar: ' + e.message, 'err');
   }finally{
