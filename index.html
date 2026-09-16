@@ -10096,7 +10096,16 @@ function _renderModalEmbarquesMes(){
       return nro.includes(q) || desc.includes(q);
     });
   }
-  items.sort(function(a,b){ return (b.d.ts||0)-(a.d.ts||0); });
+  // Orden descendente por N° de embarque (mayor a menor) — antes ordenaba
+  // por fecha de procesamiento (ts), que no siempre coincide con el N° si
+  // se reabre/edita un embarque viejo (su ts se actualiza a "ahora" y salta
+  // al principio aunque su número sea más chico).
+  items.sort(function(a,b){
+    var na = parseInt(String(a.d.nro||'').replace(/[^0-9]/g,''),10);
+    var nb = parseInt(String(b.d.nro||'').replace(/[^0-9]/g,''),10);
+    if(!isNaN(na) && !isNaN(nb) && na!==nb) return nb-na;
+    return (b.d.ts||0)-(a.d.ts||0);
+  });
 
   if(!items.length){
     cont.innerHTML='<div style="text-align:center;padding:32px;color:var(--muted);font-size:12px">'+(q?'Sin resultados para tu búsqueda.':'Sin embarques procesados en este mes.')+'</div>';
