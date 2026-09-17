@@ -2602,6 +2602,15 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
           <span style="font-size:11px;font-weight:700;color:var(--orange-l)">🏛️ Total a Pagar en Aduana</span>
           <span id="_imp_total_vis" style="font-size:15px;font-weight:800;color:var(--orange-l);font-family:'IBM Plex Mono',monospace">—</span>
         </div>
+        <div class="field" style="margin-top:10px;padding:10px 12px;background:rgba(139,148,158,.08);border:1px solid rgba(139,148,158,.25);border-radius:8px">
+          <label style="font-weight:700">🧾 N° Factura Tesoro Nacional
+            <span style="font-size:9px;font-weight:400;color:var(--muted)">— se automapea a Arancel, ITBMS, Tasa, Uso Sistema y DMCE en Facturas del Embarque</span>
+          </label>
+          <div style="display:flex;gap:6px;margin-top:4px">
+            <input type="text" id="s1_nfact_tesoro" placeholder="Ej: TN-2025-001" style="flex:1;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px">
+            <button type="button" onclick="_setGrupoFactura('TESORO', document.getElementById('s1_nfact_tesoro').value)" style="flex-shrink:0;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:6px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">💾 Guardar</button>
+          </div>
+        </div>
       </div>
       <div style="padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px">
         <button onclick="_guardarModalImpuestos()" style="flex:1;background:rgba(240,136,62,.15);border:1px solid rgba(240,136,62,.4);color:var(--orange-l);border-radius:8px;padding:10px;font-size:12px;font-weight:800;cursor:pointer">✅ Guardar</button>
@@ -3364,6 +3373,15 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
           💡 <strong style="color:var(--blue-l)">Fórmula:</strong> Exento = Total × 72% (sugerido) · Gravado = Total − Exento · ITBMS = Gravado × 7%
         </div>
       </div>
+      <div class="field" style="margin-top:8px;padding:10px 12px;background:rgba(63,185,80,.06);border:1px solid rgba(63,185,80,.2);border-radius:8px">
+        <label style="color:var(--green-l);font-weight:700">🧾 N° Factura CIF Express
+          <span style="font-size:9px;font-weight:400;color:var(--muted)">— se automapea a Honorarios (gravado/no gravado) e ITBMS en Facturas del Embarque</span>
+        </label>
+        <div style="display:flex;gap:6px;margin-top:4px">
+          <input type="text" id="s2_nfact_cif" placeholder="Ej: CIF-2025-001" style="flex:1;background:var(--s2);border:1px solid rgba(63,185,80,.3);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px">
+          <button type="button" onclick="_setGrupoFactura('CIFEXP', document.getElementById('s2_nfact_cif').value)" style="flex-shrink:0;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:6px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">💾 Guardar</button>
+        </div>
+      </div>
       <div class="field" style="margin-top:12px">
         <label style="font-weight:700">Master Value (diferencia Esc.#1 − Esc.#2)
           <span style="font-size:9px;font-weight:400;color:var(--muted);margin-left:6px">editable · máx ±$5</span>
@@ -3520,6 +3538,16 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
         <p class="note" id="s2_pago_formula_note"></p>
       </div>
       <div id="s2_alert" class="alert"></div>
+
+      <div class="field" style="margin-top:8px;padding:10px 12px;background:rgba(240,136,62,.06);border:1px solid rgba(240,136,62,.2);border-radius:8px">
+        <label style="color:var(--orange-l);font-weight:700">🧾 N° Factura Sababa
+          <span style="font-size:9px;font-weight:400;color:var(--muted)">— se automapea a Comisión e ITBMS Homologado en Facturas del Embarque</span>
+        </label>
+        <div style="display:flex;gap:6px;margin-top:4px">
+          <input type="text" id="s2_nfact_sababa" placeholder="Ej: SAB-2025-001" style="flex:1;background:var(--s2);border:1px solid rgba(240,136,62,.3);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px">
+          <button type="button" onclick="_setGrupoFactura('SABABA', document.getElementById('s2_nfact_sababa').value)" style="flex-shrink:0;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:6px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">💾 Guardar</button>
+        </div>
+      </div>
 
       <div class="sep-lbl">Comisión + Proveedores</div>
       <div class="field" style="margin-top:-4px;margin-bottom:10px">
@@ -9967,8 +9995,13 @@ function _zlhPopulateKPIs(){
   const _mercFactSet=new Set(); let _mercSinNum=0;
   _mercL.forEach(l=>{ const n=(l.numFact||l.nfac||'').trim(); if(n) _mercFactSet.add(n.toUpperCase()); else _mercSinNum++; });
   const facMerc=_mercFactSet.size + _mercSinNum;
-  const _servFactSet=new Set(); let _servSinNum=0;
-  _servL.forEach(l=>{ const n=(l.numFact||l.nfac||'').trim(); if(n) _servFactSet.add(n.toUpperCase()); else _servSinNum++; });
+  const _servFactSet=new Set(); let _servSinNum=0; const _servGrpSeen=new Set();
+  _servL.forEach(l=>{
+    const n=(l.numFact||l.nfac||'').trim();
+    if(n) _servFactSet.add(n.toUpperCase());
+    else if(l._grupoFactura){ if(!_servGrpSeen.has(l._grupoFactura)) { _servGrpSeen.add(l._grupoFactura); _servSinNum++; } }
+    else _servSinNum++;
+  });
   const facServ=_servFactSet.size + _servSinNum;
   const _mesStr=String(_curY);
   const skE=document.getElementById('sk-embarques'); if(skE) skE.textContent=_mesData.length||'0';
@@ -11465,6 +11498,34 @@ function _updateContenedorBadge(idx, sel){
 // con los proveedores correctos según el escenario activo.
 // El usuario revisa y confirma al presionar Procesar.
 // ══════════════════════════════════════════════════════════════════
+// ── N° Factura auto-mapeado desde los paneles de Tesoro/Sababa/CIF Express ──
+// Permite escribir el número de factura real UNA vez, en el panel del
+// escenario correspondiente, y que se aplique automáticamente a todas las
+// líneas auto-generadas de ese proveedor en "Facturas del Embarque"
+// (Proveedores), sin tener que ir línea por línea. También queda guardado
+// en window._pendingNFactura para que se re-aplique en cada recálculo
+// (ej. al presionar "Calcular" o "Aplicar" después de escribir el N°).
+window._pendingNFactura = window._pendingNFactura || {};
+function _setGrupoFactura(grupo, val){
+  val = (val||'').trim();
+  window._pendingNFactura[grupo] = val;
+  if(!val) return;
+  var kwMap = {SABABA:'SABABA', CIFEXP:'CIF EXPRESS', TESORO:'TESORO NACIONAL'};
+  var kw = kwMap[grupo] || grupo;
+  var lineas = (typeof invLines!=='undefined' && invLines) ? invLines : (window.invLines||[]);
+  var count = 0;
+  lineas.forEach(function(l){
+    if((l.prov||'').toUpperCase().includes(kw)){
+      l.numFact = val; l.nfac = val; l._factSaved = true;
+      count++;
+    }
+  });
+  if(typeof renderInvLines==='function') renderInvLines();
+  if(typeof _showToast==='function'){
+    if(count>0) _showToast('✅ N° Factura aplicado a '+count+' línea'+(count!==1?'s':'')+' de '+kw, 'green', 2500);
+    else _showToast('💾 N° Factura guardado — se aplicará al calcular el embarque', 'blue', 3000);
+  }
+}
 function _autoFillGastosProveedores(){
   const snap = window._lastSnap;
   if(!snap) return;
@@ -11492,14 +11553,18 @@ function _autoFillGastosProveedores(){
   //    Nacional: arancel/ITBMS/tasa/uso; Sababa: comisión/ITBMS; CIF
   //    Express: honorarios/ITBMS) se desglosan en varias LÍNEAS para poder
   //    sacar estadísticas por concepto, pero en la realidad cada grupo es
-  //    UNA sola factura del proveedor. Antes cada línea se guardaba con
-  //    numFact='' (vacío), y el conteo de "Facturas Procesadas" trata cada
-  //    línea sin número como una factura aparte — así 5 líneas de Tesoro
-  //    Nacional se contaban como 5 facturas, y Sababa (comisión + ITBMS)
-  //    como 2, en vez de 1 cada una. Ahora se les asigna un número
-  //    sintético compartido por grupo y por embarque (nunca choca con un
-  //    N° de factura real tecleado por el usuario), así el conteo —que ya
-  //    dedupea por numFact— las agrupa correctamente. ──
+  //    UNA sola factura del proveedor. Se les asigna un identificador
+  //    sintético compartido por grupo y por embarque en el campo INTERNO
+  //    `_grupoFactura` (nunca se muestra al usuario ni se guarda como N°
+  //    de Factura real). El conteo de "Facturas Procesadas" usa
+  //    `_grupoFactura` para agrupar las líneas sin número tecleado, así
+  //    5 líneas de Tesoro Nacional cuentan como 1 factura y Sababa
+  //    (comisión + ITBMS) como 1, en vez de contarlas por separado.
+  //    ACTUALIZADO (sept-2026): el campo visible "N° Factura" (numFact/
+  //    nfac) queda VACÍO para que el usuario pueda escribir o pegar ahí
+  //    el número real de la factura del proveedor (Tesoro/Sababa/CIF
+  //    Express/Master Value), en vez de mostrarle el identificador
+  //    interno AUTOGEN-... como si fuera el número de factura. ──
   const _nroEmbActualAG = (document.getElementById('s1_nro_emb')?.value||'').trim() || ('SN'+(window._lastSnap?.ts||Date.now()));
   const _numAutoTesoro = 'AUTOGEN-'+_nroEmbActualAG+'-TESORO';
   const _numAutoCifExp = 'AUTOGEN-'+_nroEmbActualAG+'-CIFEXP';
@@ -11519,14 +11584,14 @@ function _autoFillGastosProveedores(){
   // ══════════════════════════════════════════════════════
   if(isLiq){
     // TESORO NACIONAL — todos los impuestos
-    add('liquidacion', 'TESORO NACIONAL', 'Arancel',         arancel,  _numAutoTesoro);
-    add('itbms',       'TESORO NACIONAL', 'ITBMS s/Arancel', itbmsAr,  _numAutoTesoro);
-    add('liquidacion', 'TESORO NACIONAL', 'Tasa Aduana',     tasa,     _numAutoTesoro);
-    add('itbms',       'TESORO NACIONAL', 'ITBMS s/Tasa',    itbmsTasa,_numAutoTesoro);
-    add('liquidacion', 'TESORO NACIONAL', 'Uso Sistema',     form1,    _numAutoTesoro);
+    add('liquidacion', 'TESORO NACIONAL', 'Arancel',         arancel,  '', {_grupoFactura:_numAutoTesoro});
+    add('itbms',       'TESORO NACIONAL', 'ITBMS s/Arancel', itbmsAr,  '', {_grupoFactura:_numAutoTesoro});
+    add('liquidacion', 'TESORO NACIONAL', 'Tasa Aduana',     tasa,     '', {_grupoFactura:_numAutoTesoro});
+    add('itbms',       'TESORO NACIONAL', 'ITBMS s/Tasa',    itbmsTasa,'', {_grupoFactura:_numAutoTesoro});
+    add('liquidacion', 'TESORO NACIONAL', 'Uso Sistema',     form1,    '', {_grupoFactura:_numAutoTesoro});
     // DMCE y Acarreo — solo Liq. Aduanal y solo si NO es modo único
     if(!isUnico){
-      add('liquidacion', 'TESORO NACIONAL',       'DMCE',    dmce,    _numAutoTesoro);
+      add('liquidacion', 'TESORO NACIONAL',       'DMCE',    dmce,    '', {_grupoFactura:_numAutoTesoro});
       add('acarreo',     'ACARREO / TRANSPORTE',  'Acarreo', acarreo);
     }
     // Gastos agente/destino — auto-agregar si el usuario lo tiene en el form
@@ -11566,10 +11631,10 @@ function _autoFillGastosProveedores(){
       ? window._itbms_manual_cif
       : (sc2.itbms || 0);
     const cifUsoReal   = (sc2.form2 !== undefined && sc2.form2 !== null && sc2.form2 !== '') ? sc2.form2 : 3;  // Uso del Sistema propio de CIF Express; default 3, NUNCA hereda de Liquidación (form1)
-    add('itbms',       'TESORO NACIONAL', 'ITBMS s/Pago Arancelario', cifItbmsReal, _numAutoTesoro);
-    add('liquidacion', 'TESORO NACIONAL', 'Tasa Aduana',               tasa,        _numAutoTesoro);
-    add('itbms',       'TESORO NACIONAL', 'ITBMS s/Tasa',              itbmsTasa,   _numAutoTesoro);
-    add('liquidacion', 'TESORO NACIONAL', 'Uso Sistema',               cifUsoReal,  _numAutoTesoro);
+    add('itbms',       'TESORO NACIONAL', 'ITBMS s/Pago Arancelario', cifItbmsReal, '', {_grupoFactura:_numAutoTesoro});
+    add('liquidacion', 'TESORO NACIONAL', 'Tasa Aduana',               tasa,        '', {_grupoFactura:_numAutoTesoro});
+    add('itbms',       'TESORO NACIONAL', 'ITBMS s/Tasa',              itbmsTasa,   '', {_grupoFactura:_numAutoTesoro});
+    add('liquidacion', 'TESORO NACIONAL', 'Uso Sistema',               cifUsoReal,  '', {_grupoFactura:_numAutoTesoro});
 
     // CIF EXPRESS TRÁMITE S.A. — Honorarios 3% CIF, desglosados
     const honTotal = sc2.hon   || 0;
@@ -11577,9 +11642,9 @@ function _autoFillGastosProveedores(){
     const honG     = Math.max(0, honTotal - honNG);     // Porción GRAVADA
     const itbmsHon = sc2.itbmsHon || R(honG * itbPct); // ITBMS sobre lo gravado
 
-    add('honorarios', 'CIF EXPRESS TRÁMITE S.A.', 'Honorarios — Monto No Gravado', honNG,    _numAutoCifExp);
-    add('honorarios', 'CIF EXPRESS TRÁMITE S.A.', 'Honorarios — Monto Gravado',    honG,     _numAutoCifExp);
-    add('itbms',      'CIF EXPRESS TRÁMITE S.A.', 'ITBMS s/Monto Gravado',         itbmsHon, _numAutoCifExp);
+    add('honorarios', 'CIF EXPRESS TRÁMITE S.A.', 'Honorarios — Monto No Gravado', honNG,    '', {_grupoFactura:_numAutoCifExp});
+    add('honorarios', 'CIF EXPRESS TRÁMITE S.A.', 'Honorarios — Monto Gravado',    honG,     '', {_grupoFactura:_numAutoCifExp});
+    add('itbms',      'CIF EXPRESS TRÁMITE S.A.', 'ITBMS s/Monto Gravado',         itbmsHon, '', {_grupoFactura:_numAutoCifExp});
 
     // MASTER VALUE — absorbe diferencia Liq vs CIF
     const mv2 = sc2.mv || 0;
@@ -11619,9 +11684,9 @@ function _autoFillGastosProveedores(){
                           : (sc3.itbmsHomol || 0);
     const comBrutaReal  = Math.max(0, comisionReal - itbmsHomolReal);
 
-    add('honorarios', 'SABABA IMPORTS, S.A.', 'Comisión Bruta s/Pago Fiscal', comBrutaReal, _numAutoSababa);
+    add('honorarios', 'SABABA IMPORTS, S.A.', 'Comisión Bruta s/Pago Fiscal', comBrutaReal, '', {_grupoFactura:_numAutoSababa});
     // ITBMS Homologado va como "Otros Gastos" — es un costo que entra al inventario
-    add('itbms',      'SABABA IMPORTS, S.A.', 'ITBMS Homologado (costeo inventario)', itbmsHomolReal, _numAutoSababa, {_sabItbms:true, _label:'Honorarios / ITBMS'});
+    add('itbms',      'SABABA IMPORTS, S.A.', 'ITBMS Homologado (costeo inventario)', itbmsHomolReal, '', {_grupoFactura:_numAutoSababa, _sabItbms:true, _label:'Honorarios / ITBMS'});
 
     // Master Value: manual si fue editado, sino se recalcula como la CIFRA EXACTA que
     // hace cuadrar el Costo Landed de Sababa contra el de Liq. Aduanal (sc1) — así absorbe
@@ -11703,6 +11768,22 @@ function _autoFillGastosProveedores(){
       invLines.push(_savedFacts[key]);
     }
   });
+  // ── Aplicar N° Factura pendiente (el usuario lo escribió en el panel de
+  //    Tesoro/Sababa/CIF Express antes o después de calcular) a cualquier
+  //    línea recién generada que aún no tenga número guardado. ──
+  (function _aplicarPendingNFactura(){
+    var pend = window._pendingNFactura; if(!pend) return;
+    var kwMap = {SABABA:'SABABA', CIFEXP:'CIF EXPRESS', TESORO:'TESORO NACIONAL'};
+    Object.keys(pend).forEach(function(g){
+      var val=(pend[g]||'').trim(); if(!val) return;
+      var kw = kwMap[g]||g;
+      invLines.forEach(function(l){
+        if(!l.numFact && (l.prov||'').toUpperCase().includes(kw)){
+          l.numFact=val; l.nfac=val; l._factSaved=true;
+        }
+      });
+    });
+  })();
   // ── Red de seguridad anti-duplicado ──
   // Si por una recalculación repetida (ej. abrir el Dashboard de Sababa varias veces
   // seguidas) llega a haber dos líneas de gasto automático con la MISMA clave real
@@ -17006,21 +17087,35 @@ function _asignConfirmar(){
   var snap = window._asignSnap;
   var map  = window._asignMap||{};
   var gastoLines = (snap.invLines||[]).filter(function(l){ return !l.tipoFac || l.tipoFac === 'mercancia'; });
-  
+  var contenedores = window._contenedores||[];
+  // Fecha de llegada más reciente entre todos los equipos — se usa como
+  // fecha "principal" cuando una factura queda asignada a "Ambos equipos".
+  var _fechaMasReciente = contenedores.reduce(function(max, c){
+    if(!c.fecha) return max;
+    return (!max || c.fecha > max) ? c.fecha : max;
+  }, '');
+
   // Save assignment to each line
   gastoLines.forEach(function(l, i){
     var asignIdx = (map[i] !== undefined) ? map[i] : 0;
     if(asignIdx === -1){
-      // Ambos equipos — assign to all
+      // Ambos equipos — assign to all, hereda la fecha más reciente entre los equipos
       l._equipoIdx = -1;
-      l._equipoNum = (window._contenedores||[]).map(function(c){ return c.num||''; }).filter(Boolean).join(' + ');
+      l._equipoNum = contenedores.map(function(c){ return c.num||''; }).filter(Boolean).join(' + ');
       l._ambosEquipos = true;
+      if(_fechaMasReciente) l.fechaLlegada = _fechaMasReciente;
     } else {
       l._equipoIdx = asignIdx;
-      l._equipoNum = (window._contenedores||[])[asignIdx]?.num || '';
+      l._equipoNum = contenedores[asignIdx]?.num || '';
       l._ambosEquipos = false;
+      // La factura hereda la fecha de llegada DE SU EQUIPO específico —
+      // si los camiones llegan en fechas distintas, cada factura se queda
+      // con la fecha real de su propio equipo, no con la del embarque completo.
+      var _fechaEquipo = contenedores[asignIdx]?.fecha || '';
+      if(_fechaEquipo) l.fechaLlegada = _fechaEquipo;
     }
   });
+  if(typeof renderInvLines==='function') renderInvLines();
   
   // Update snap in tendData
   var idx = tendData.findIndex(function(d){ return d.nro === snap.nro; });
@@ -29567,6 +29662,30 @@ function _guardarFactura(idx, inputId, opts){
       }
     });
   }
+  // Propagar a CIF Express Trámite (honorarios NG/G + ITBMS son una sola factura)
+  if(prov.includes('CIF EXPRESS')){
+    invLines.forEach(function(l,j){
+      if(j!==idx && (l.prov||'').toUpperCase().includes('CIF EXPRESS')){
+        l.numFact=val; l.nfac=val; l._factSaved=true;
+        var el=document.getElementById('nfact-gasto-'+j)||document.getElementById('nfact-merc-'+j);
+        if(el){ el.value=val; _lockFactInput(el, j); }
+        propagados++;
+      }
+    });
+  }
+  // Propagar por grupo interno (_grupoFactura) — cubre cualquier otro caso
+  // donde varias líneas auto-generadas pertenezcan a la misma factura real.
+  var grupo = invLines[idx]._grupoFactura;
+  if(grupo){
+    invLines.forEach(function(l,j){
+      if(j!==idx && l._grupoFactura===grupo && (l.numFact||'')!==val){
+        l.numFact=val; l.nfac=val; l._factSaved=true;
+        var el=document.getElementById('nfact-gasto-'+j)||document.getElementById('nfact-merc-'+j);
+        if(el){ el.value=val; _lockFactInput(el, j); }
+        propagados++;
+      }
+    });
+  }
 
   var btn = opts.btn;
 
@@ -35128,8 +35247,22 @@ function _actualizarVistaPreviaComparativo(){
     // no calzaba con el Dashboard del Escenario #3 (ver Base de Cálculo — Sababa Imports).
     var mv3 = sc3.mv||0;
     var noMerc3 = com3+fl3+ag3+mv3;
+    // ITBMS de la plantilla — facturas de servicio con rubro "ITBMS" que el
+    // usuario agrega/sube manualmente en Sababa (NO el ITBMS interno de la
+    // comisión, que ya viene embebido dentro de "Comisión Sababa" arriba y
+    // es un gasto costeable aparte — por eso se excluye aquí con !_sabItbms).
+    var itbms3 = (snap.invLines||[]).filter(function(l){
+      return l.tipoFac==='itbms' && !l._sabItbms;
+    }).reduce(function(s,l){ return s + (parseFloat(l.costo)||0); }, 0);
+    // Costo Landed COSTEABLE = Valor Mercancía + Costo No Mercancía. Este es
+    // el que MANDA para el Factor de Importación/Costeo (Costo No Mercancía
+    // ÷ Valor Mercancía Homologado) — NO se le suma el ITBMS.
     var landed3 = merc3+noMerc3;
     var factor3 = merc3>0?((noMerc3/merc3)*100).toFixed(2)+'%':'—';
+    // Costo Landed GLOBAL (informativo) = Costeable + ITBMS — solo para
+    // conciliar contra el sistema empresarial/inventario; no altera el
+    // Factor de Costeo ni la reconciliación de Gasto Complementario de abajo.
+    var landedGlobal3 = landed3 + itbms3;
     cmpHtml+=_vpRow('💼','Valor Mercancía (Homologado)', fmt2(merc3),'var(--blue-l)');
     cmpHtml+=_vpRow('📦','Costo No Mercancía', fmt2(noMerc3),'var(--orange-l)');
     // ── Desglose real de "Costo No Mercancía" de Sababa — de dónde sale cada
@@ -35145,8 +35278,9 @@ function _actualizarVistaPreviaComparativo(){
         +'<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--orange-l);padding:1px 0"><span>📎 Gasto Complementario</span><span style="font-family:\'IBM Plex Mono\',monospace;font-weight:700">'+(gastoComp1>=0?'+':'-')+'$'+Math.abs(gastoComp1).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</span></div>'
         +'<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--green-l);font-weight:800;padding:1px 0 4px 0;border-top:1px solid var(--border);margin-top:2px"><span>Total Costo No Mercancía (ajustado)</span><span style="font-family:\'IBM Plex Mono\',monospace">'+fmt2(noMerc3)+'</span></div>';
     }
-    cmpHtml+=_vpRow('🧾','ITBMS', '—','var(--muted)');
-    cmpHtml+=_vpRow('📘','Costo Inventario (Homologado)', fmt2(merc3+noMerc3),'var(--blue-l)');
+    cmpHtml+=_vpRow('🧾','ITBMS', fmt2(itbms3),'var(--muted)');
+    cmpHtml+=_vpRow('📘','Costo Inventario (Homologado)', fmt2(landed3),'var(--blue-l)');
+    cmpHtml+=_vpRow('🌐','Costo Landed Global (c/ITBMS — informativo)', fmt2(landedGlobal3),'var(--muted)');
     // El Gasto Complementario (Esc. Regular) se traslada dólar por dólar al Landed
     // de Sababa vía el puente de Master Value (sc3.mv se ajusta para igualar ambos
     // Landed) — por eso "antes" del Gasto Complementario es simplemente landed3
