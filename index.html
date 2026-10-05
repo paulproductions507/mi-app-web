@@ -3828,9 +3828,9 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
       </div>
 
       <div>
-        <label style="font-size:10px;color:var(--muted);font-weight:600;display:block;margin-bottom:3px">BUSCAR (Nro. embarque · descripción · tipo)</label>
+        <label style="font-size:10px;color:var(--muted);font-weight:600;display:block;margin-bottom:3px">BUSCAR (N° de embarque)</label>
         <div style="display:flex;gap:6px">
-          <input type="text" id="tf_buscar" placeholder="Ej: 22035 · zapatos..." oninput="_applyTendFilters()"
+          <input type="text" id="tf_buscar" placeholder="Ej: 22035" oninput="_applyTendFilters()"
             style="flex:1;min-width:0;background:var(--s2);border:1px solid var(--border);border-radius:7px;padding:7px 10px;color:var(--text);font-size:12px;box-sizing:border-box">
           <div style="display:flex;flex-direction:column;border:1px solid var(--border);border-radius:7px;overflow:hidden;flex-shrink:0;width:22px">
             <button type="button" onclick="_tfBuscarStep(1)" title="Embarque siguiente" style="flex:1;width:100%;background:var(--s2);border:none;border-bottom:1px solid var(--border);color:var(--muted);font-size:9px;line-height:1;padding:4px 0;cursor:pointer">▲</button>
@@ -14220,15 +14220,8 @@ const _DELETED_LIST_KEY = '_DELETED_LIST';
 //    los dispositivos. ──
 const _TEND_INDEX_KEY = '_TEND_INDEX';
 async function _pushTendIndexToCloud(){
-  if(!window._sb) return;
-  try{
-    var idx = {};
-    (window.tendData||[]).forEach(function(d){ if(d && d.nro) idx[String(d.nro).trim().toUpperCase()] = d.ts||0; });
-    await window._sb.from('simulador_sesiones').upsert(
-      { nombre:_TEND_INDEX_KEY, datos: JSON.stringify(idx), updated_at:new Date().toISOString() },
-      { onConflict:'nombre' }
-    );
-  }catch(e){ /* si falla, el próximo pull simplemente no encontrará índice y bajará el maestro completo — nunca se pierde nada, solo se pierde el ahorro de tráfico esa vez */ }
+  // OBSOLETO (oct-2026): el índice ahora se lee directo de la tabla `embarques`
+  // (columnas nro + ts). Se deja la función vacía para no romper llamadas existentes.
 }
 async function _pushDeletedListToCloud(){
   if(!window._sb) return;
@@ -14493,18 +14486,17 @@ function _flushSaveTendDataKeepalive(){
   try{
     var cambios = (tendData||[]).filter(function(d){
       if(!d || !d.nro) return false;
-      var key = String(d.nro).trim().toUpperCase();
-      return (window._lastSyncedTs[key]||0) !== (d.ts||0);
+      return (window._lastSyncedTs[_embKey(d)]||0) !== _embTs(d);
     });
     if(!cambios.length) return;
-    var endpoint = _SB_URL.replace(/\/$/,'') + '/rest/v1/rpc/upsert_embarque_master';
+    var endpoint = _SB_URL.replace(/\/$/,'') + '/rest/v1/embarques?on_conflict=nro';
     cambios.forEach(function(d){
       try{
         fetch(endpoint, {
           method:'POST',
           keepalive:true,
-          headers:{ 'Content-Type':'application/json', 'apikey':_SB_KEY, 'Authorization':'Bearer '+_SB_KEY },
-          body: JSON.stringify({ p_nro: d.nro, p_registro: d })
+          headers:{ 'Content-Type':'application/json', 'apikey':_SB_KEY, 'Authorization':'Bearer '+_SB_KEY, 'Prefer':'resolution=merge-duplicates,return=minimal' },
+          body: JSON.stringify([ _embFilaDe(d) ])
         }).catch(function(){});
       }catch(e){}
     });
@@ -15417,43 +15409,137 @@ window._rescatar = _rescatarEmbarqueCloud;
 //    seguidas (como hacían varios sitios del código) ya no cuesta nada
 //    extra: si nada cambió, no se envía nada. ──
 window._lastSyncedTs = window._lastSyncedTs || {};
+// ══════════════════════════════════════════════════════════════
+// TABLA `embarques` (oct-2026) — UNA FILA POR EMBARQUE.
+// Antes todo vivía en un único documento gigante (_TEND_MASTER) y cada
+// guardado obligaba a Postgres a reescribir ese documento completo →
+// agotaba el presupuesto de Disk IO de Supabase y los guardados fallaban.
+// Ahora cada embarque es su propia fila (nro, ts, registro): guardar uno
+// escribe SOLO esa fila. El índice (nro + ts) es liviano y permite
+// comparar nube vs. este dispositivo sin descargar nada más.
+// ══════════════════════════════════════════════════════════════
+function _embTs(d){ return Math.floor(Number(d && d.ts) || 0); }
+function _embKey(d){ return String(d.nro).trim().toUpperCase(); }
+function _embFilaDe(d){
+  return { nro:_embKey(d), ts:_embTs(d), registro:d, updated_at:new Date().toISOString() };
+}
+function _embConTimeout(p, ms){
+  return Promise.race([ p, new Promise(function(_,rej){ setTimeout(function(){ rej(new Error('Tiempo de espera agotado ('+Math.round(ms/1000)+'s) — Supabase no respondió')); }, ms); }) ]);
+}
+// Índice liviano de la nube: { 'NRO': ts } — solo 2 columnas por embarque.
+// Devuelve null si falla (tabla inexistente, sin permisos, sin red).
+async function _embLeerIndice(){
+  const idx = {};
+  const PAG = 1000;
+  try{
+    for(let desde=0; ; desde+=PAG){
+      const r = await _embConTimeout(_sb.from('embarques').select('nro, ts').order('nro').range(desde, desde+PAG-1), 25000);
+      if(r.error){
+        console.error('Índice de embarques error:', r.error);
+        if(typeof _showToast==='function') _showToast('⚠️ No se pudo leer la tabla embarques: '+(r.error.message||r.error.code),'red',6000);
+        return null;
+      }
+      (r.data||[]).forEach(function(x){ idx[String(x.nro).trim().toUpperCase()] = Number(x.ts)||0; });
+      if(!r.data || r.data.length < PAG) break;
+    }
+  }catch(e){
+    console.error('Índice de embarques error:', e);
+    if(typeof _showToast==='function') _showToast('⚠️ No se pudo leer la nube: '+(e.message||e),'red',6000);
+    return null;
+  }
+  return idx;
+}
+// Trae el contenido completo SOLO de los N° pedidos (en lotes de 10).
+async function _embTraerRegistros(nros){
+  const out = new Map();
+  for(let i=0;i<nros.length;i+=10){
+    const lote = nros.slice(i,i+10);
+    try{
+      const r = await _embConTimeout(_sb.from('embarques').select('nro, registro').in('nro', lote), 30000);
+      if(r.error){ console.error('Traer embarques error:', r.error); continue; }
+      (r.data||[]).forEach(function(x){ if(x && x.registro) out.set(String(x.nro).trim().toUpperCase(), x.registro); });
+    }catch(e){ console.error('Traer embarques error:', e); }
+  }
+  return out;
+}
+
+window._lastSyncedTs = window._lastSyncedTs || {};
+// Sube a la tabla `embarques` SOLO los embarques nuevos o modificados
+// (ts distinto al último confirmado en la nube), en lotes de 10.
 async function _syncTendToCloud(){
   if(!_sb) { _marcarSyncPendiente(); return; }
   try {
     const cambios = (tendData||[]).filter(function(d){
       if(!d || !d.nro) return false;
-      const key = String(d.nro).trim().toUpperCase();
-      return (window._lastSyncedTs[key]||0) !== (d.ts||0);
+      return (window._lastSyncedTs[_embKey(d)]||0) !== _embTs(d);
     });
     let huboError = false;
-    for(const d of cambios){
-      const key = String(d.nro).trim().toUpperCase();
-      const _r = await _sb.rpc('upsert_embarque_master', { p_nro: d.nro, p_registro: d });
+    for(let i=0;i<cambios.length;i+=10){
+      const lote = cambios.slice(i,i+10);
+      const _r = await _embConTimeout(_sb.from('embarques').upsert(lote.map(_embFilaDe), { onConflict:'nro' }), 30000);
       if(_r && _r.error){
-        console.error('RPC upsert_embarque_master error:', d.nro, _r.error);
+        console.error('Upsert embarques error:', lote.map(function(d){return d.nro;}), _r.error);
         huboError = true;
         continue;
       }
-      window._lastSyncedTs[key] = d.ts || Date.now();
-      // Realtime (ago-2026): avisar a los demás dispositivos que ESTE
-      // embarque cambió, para que hagan un pull dirigido en vez de esperar
-      // hasta 5 min. Solo viaja el número y el ts — nunca el registro.
-      if(typeof _avisarEmbarqueActualizado==='function') _avisarEmbarqueActualizado(d.nro, d.ts);
+      lote.forEach(function(d){
+        window._lastSyncedTs[_embKey(d)] = _embTs(d);
+        // Realtime: avisar a los demás dispositivos (solo N° y ts, nunca el registro).
+        if(typeof _avisarEmbarqueActualizado==='function') _avisarEmbarqueActualizado(d.nro, d.ts);
+      });
     }
     if(huboError){
+      window._syncFallos = (window._syncFallos||0) + 1;
+      window._syncProximoIntento = Date.now() + Math.min(15000 * Math.pow(2, window._syncFallos), 600000);
       if(typeof _showToast==='function') _showToast('⚠️ Algunos embarques no se pudieron sincronizar con la nube','red',6000);
       _marcarSyncPendiente();
       return;
     }
-    // Mantener el índice liviano al día — solo si hubo algo que subir.
-    if(cambios.length && typeof _pushTendIndexToCloud==='function') await _pushTendIndexToCloud();
+    window._syncFallos = 0; window._syncProximoIntento = 0;
     _limpiarSyncPendiente();
   } catch(e){
+    window._syncFallos = (window._syncFallos||0) + 1;
+    window._syncProximoIntento = Date.now() + Math.min(15000 * Math.pow(2, window._syncFallos), 600000);
     console.error('Cloud sync error:', e);
     if(typeof _showToast==='function') _showToast('⚠️ No se pudo sincronizar con la nube: '+(e.message||e),'red',6000);
     _marcarSyncPendiente();
     throw e;
   }
+}
+
+// ── SINCRONIZACIÓN DIARIA AUTOMÁTICA (oct-2026) ──
+// Una vez al día (la primera vez que la app está abierta ese día; si la
+// pestaña queda abierta pasada la medianoche, un chequeo cada hora lo
+// detecta) concilia este dispositivo con la nube: trae lo que falte o esté
+// más nuevo en la nube y sube lo que falte o esté más nuevo aquí. Cuesta
+// casi nada: el índice (nro + ts) y solo los embarques que difieran.
+async function _syncDiarioAuto(){
+  try{
+    if(!window._sb || window._syncDiarioEnCurso) return;
+    var hoy = _hoyLocalISO();
+    if(localStorage.getItem('_ultimoSyncDiario') === hoy) return;
+    window._syncDiarioEnCurso = true;
+    var cambio = await _pullTendFromCloud(true);   // trae faltantes/modificados y sube lo local pendiente
+    if(!window._pullOk) return;                    // no se pudo leer la nube — se reintenta en el próximo chequeo
+    await _syncTendToCloud();                      // red de seguridad: sube cualquier resto
+    if(!window._syncPendiente){
+      try{ localStorage.setItem('_ultimoSyncDiario', hoy); }catch(e){}
+      console.log('☁️ Sincronización diaria completada:', hoy);
+    }
+    if(cambio){
+      if(typeof renderTend==='function' && document.getElementById('tendencias')) renderTend();
+      if(typeof _zlhPopulateKPIs==='function') _zlhPopulateKPIs();
+      if(typeof _zlhPopulateMonthly==='function') _zlhPopulateMonthly();
+    }
+  }catch(e){ console.warn('Sync diario:', e && e.message ? e.message : e); }
+  finally{ window._syncDiarioEnCurso = false; }
+}
+function _iniciarSyncDiario(){
+  if(window._syncDiarioIniciado) return;
+  window._syncDiarioIniciado = true;
+  setTimeout(_syncDiarioAuto, 6000);                        // al abrir la app
+  setInterval(_syncDiarioAuto, 60*60*1000);                 // chequeo horario (solo actúa si cambió el día)
+  document.addEventListener('visibilitychange', function(){ if(document.visibilityState==='visible') _syncDiarioAuto(); });
 }
 
 // ── Cola de reintento — si un guardado a la nube falla (sin red,
@@ -15491,7 +15577,8 @@ async function _procesarBorradosPendientes(){
   for(const nro of lista){
     try{
       const _r = await _sb.from('simulador_sesiones').delete().eq('nombre', nro);
-      if(_r && _r.error) restantes.push(nro);
+      const _r3 = await _sb.from('embarques').delete().eq('nro', String(nro).trim().toUpperCase());
+      if((_r && _r.error) || (_r3 && _r3.error)) restantes.push(nro);
     }catch(e){ restantes.push(nro); }
   }
   try{ localStorage.setItem('_borradosPendientes', JSON.stringify(restantes)); }catch(e){}
@@ -15502,6 +15589,7 @@ function _asegurarReintentoSync(){
     var hayBorradosPendientes = false;
     try{ hayBorradosPendientes = (JSON.parse(localStorage.getItem('_borradosPendientes')||'[]').length>0); }catch(e){}
     if(!window._syncPendiente && !hayBorradosPendientes){ clearInterval(window._syncRetryTimer); window._syncRetryTimer=null; return; }
+    if(Date.now() < (window._syncProximoIntento||0)) return; // pausa creciente tras fallos: no martillar a Supabase
     if(!_sb && typeof initSupabase==='function') initSupabase();
     if(_sb){
       if(typeof _syncTendToCloud==='function') _syncTendToCloud().catch(function(){});
@@ -15951,32 +16039,19 @@ async function _pullTendFromCloud(force){
   //    por el tráfico. Solo cuando el índice muestra una diferencia real
   //    (o se fuerza explícitamente, ej. el botón "☁️ Sincronizar Nube")
   //    se baja el documento completo — exactamente igual que antes. ──
-  if(!force){
-    if((Date.now() - (window._lastPullAt||0)) < 8000) return false; // solo para evitar llamadas en cascada, no para ahorrar tráfico
-    try{
-      const { data: idxRow } = await _sb.from('simulador_sesiones').select('datos').eq('nombre', _TEND_INDEX_KEY).maybeSingle();
-      if(idxRow && idxRow.datos){
-        const idxCloud = typeof idxRow.datos==='string' ? JSON.parse(idxRow.datos||'{}') : (idxRow.datos||{});
-        const idxLocal = {};
-        (window.tendData||[]).forEach(function(d){ if(d && d.nro) idxLocal[String(d.nro).trim().toUpperCase()] = d.ts||0; });
-        const keysCloud = Object.keys(idxCloud), keysLocal = Object.keys(idxLocal);
-        const igual = keysCloud.length===keysLocal.length && keysCloud.every(function(k){ return idxCloud[k]===idxLocal[k]; });
-        if(igual){ window._lastPullAt = Date.now(); return false; }
-        // Si no coincide, seguimos abajo y bajamos el maestro completo —
-        // es la única forma de traer el CONTENIDO de lo que cambió, ya
-        // que hoy vive todo en un solo documento (ver notas de _syncTendToCloud).
-      }
-      // Si no hay índice todavía (primera vez), no bloqueamos — seguimos
-      // abajo y bajamos el maestro completo como respaldo seguro.
-    }catch(e){ /* si falla la lectura del índice, seguimos con el pull normal de siempre — nunca se pierde nada, solo se pierde el ahorro de tráfico esa vez */ }
-  }
+  window._pullOk = false;
+  if(!force && (Date.now() - (window._lastPullAt||0)) < 8000) return false; // solo evita llamadas en cascada
   try {
-    // 1. Leer el registro maestro
-    const { data: masterData, error: masterErr } = await _sb
-      .from('simulador_sesiones')
-      .select('datos, updated_at')
-      .eq('nombre', _TEND_MASTER_KEY)
-      .maybeSingle();
+    // 1. Índice liviano de la tabla `embarques` (nro + ts). Nada más se
+    //    descarga si este dispositivo ya coincide con la nube.
+    const cloudIdx = await _embLeerIndice();
+    if(cloudIdx === null) return false;   // tabla inexistente / sin red — ya se avisó
+    window._pullOk = true;
+    const idxLocal = {};
+    (window.tendData||[]).forEach(function(d){ if(d && d.nro) idxLocal[_embKey(d)] = _embTs(d); });
+    const _kc = Object.keys(cloudIdx), _kl = Object.keys(idxLocal);
+    const _igual = _kc.length===_kl.length && _kc.every(function(k){ return cloudIdx[k]===idxLocal[k]; });
+    if(_igual && !force){ window._lastPullAt = Date.now(); return false; }
 
     let cloudTend = [];
     // ── Mismo fix que en _syncTendToCloud: si un N° está vivo AHORA en el
@@ -15987,12 +16062,16 @@ async function _pullTendFromCloud(force){
     (window.tendData||[]).forEach(d=>{ if(d && d.nro) nrosVivosLocal.add(String(d.nro).trim().toUpperCase()); });
     let deletedSet = new Set(window._deletedEmbarques || []);
 
-    if(!masterErr && masterData){
-      try {
-        const parsed = JSON.parse(masterData.datos||'{}');
-        cloudTend = Array.isArray(parsed.tendData) ? parsed.tendData : [];
-      } catch(e){ cloudTend = []; }
-    }
+    // 2. Traer SOLO lo que falta aquí o que en la nube es más nuevo.
+    //    Lo que coincide (o que aquí es más nuevo) se toma del dispositivo.
+    const _localPorNro = new Map();
+    (window.tendData||[]).forEach(function(d){ if(d && d.nro) _localPorNro.set(_embKey(d), d); });
+    const _traer = _kc.filter(function(k){ const l=_localPorNro.get(k); return !l || cloudIdx[k] > _embTs(l); });
+    const _traidos = await _embTraerRegistros(_traer);
+    _kc.forEach(function(k){
+      if(_traidos.has(k)) cloudTend.push(_traidos.get(k));
+      else if(_localPorNro.has(k)) cloudTend.push(_localPorNro.get(k));
+    });
 
     // ── FIX CRÍTICO (ago-2026): la lista negra YA NO se lee del campo
     //    'deleted' embebido en el maestro — ese campo queda congelado para
@@ -16027,7 +16106,11 @@ async function _pullTendFromCloud(force){
     //    usuario abre ESE embarque puntual — nunca las 112 juntas. ──
     let sesionesNuevas = 0;
 
-    if(!cloudTend.length) return false;
+    if(!cloudTend.length){
+      // Nube vacía: si aquí hay embarques, sembrarlos en la nube.
+      if((window.tendData||[]).length && typeof _syncTendToCloud==='function') _syncTendToCloud().catch(function(){});
+      return false;
+    }
 
     // 3. Filtrar también el maestro contra la lista negra
     // (cubre el caso donde el maestro aún tiene el registro antes de sync)
@@ -16097,12 +16180,9 @@ async function _pullTendFromCloud(force){
     //    (no lo que es localOnly, eso sí necesita subirse) — así
     //    _syncTendToCloud() no reenvía por RPC algo que la nube ya tiene. ──
     window._lastSyncedTs = window._lastSyncedTs || {};
-    const localOnlyKeys = new Set(localOnly.map(d => d.nro ? String(d.nro).trim().toUpperCase() : ''));
-    cloudTend.forEach(rec => {
-      if(!rec || !rec.nro) return;
-      const key = String(rec.nro).trim().toUpperCase();
-      if(!localOnlyKeys.has(key)) window._lastSyncedTs[key] = rec.ts || 0;
-    });
+    // Lo "sincronizado" es lo que la nube dice tener (índice), no lo que hay aquí:
+    // así, lo que solo existe aquí o es más nuevo aquí queda pendiente y se sube.
+    Object.keys(cloudIdx).forEach(k => { window._lastSyncedTs[k] = cloudIdx[k]; });
 
     // 4. Correcciones y migraciones en memoria
     // ── Como _syncTendToCloud() ahora solo sube lo que cambió de `ts`
@@ -16126,7 +16206,7 @@ async function _pullTendFromCloud(force){
 
     // 5. Si encontramos embarques nuevos en sesiones individuales,
     //    actualizar el maestro para que la próxima vez ya estén ahí
-    if(sesionesNuevas > 0){
+    if(sesionesNuevas > 0 || (tendData||[]).some(function(d){ return d && d.nro && (window._lastSyncedTs[_embKey(d)]||0) !== _embTs(d); })){
       console.log(`☁️ ${sesionesNuevas} embarque(s) nuevos encontrados en sesiones → consolidando en maestro`);
       _syncTendToCloud();
     }
@@ -16163,65 +16243,65 @@ async function _forzarSincronizacionCompleta(btn){
     return;
   }
   try{
-    // 1. Traer el maestro TAL CUAL está en la nube — sin fusionar todavía,
-    //    para poder comparar con la verdad de cada lado por separado.
-    const { data: masterData, error: masterErr } = await _sb
-      .from('simulador_sesiones')
-      .select('datos, updated_at')
-      .eq('nombre', _TEND_MASTER_KEY)
-      .maybeSingle();
-    if(masterErr) throw masterErr;
-    var cloudTend = [];
-    if(masterData){
-      try{ var parsed = JSON.parse(masterData.datos||'{}'); cloudTend = Array.isArray(parsed.tendData) ? parsed.tendData : []; }catch(e){ cloudTend = []; }
-    }
+    // 1. Índice liviano de la nube (nro + ts) — no se descarga ningún embarque todavía.
+    const cloudIdx = await _embLeerIndice();
+    if(cloudIdx === null) throw new Error('No se pudo leer la tabla embarques (¿ya se ejecutó el SQL de migración?)');
 
-    var localList  = (tendData||[]).filter(function(d){ return d && d.nro; });
-    var sinNro     = (tendData||[]).length - localList.length;
-    var cloudList  = cloudTend.filter(function(d){ return d && d.nro; });
-    var cloudNros  = new Set(cloudList.map(function(d){ return String(d.nro).trim().toUpperCase(); }));
-    var localNros  = new Set(localList.map(function(d){ return String(d.nro).trim().toUpperCase(); }));
-    var soloLocal  = localList.filter(function(d){ return !cloudNros.has(String(d.nro).trim().toUpperCase()); });
-    var soloNube   = cloudList.filter(function(d){ return !localNros.has(String(d.nro).trim().toUpperCase()); });
+    var localList = (tendData||[]).filter(function(d){ return d && d.nro; });
+    var sinNro    = (tendData||[]).length - localList.length;
+    var localPorNro = new Map(); localList.forEach(function(d){ localPorNro.set(_embKey(d), d); });
+    var deleted = window._deletedEmbarques || new Set();
 
-    // 2. Mostrar el diagnóstico ANTES de tocar nada, para decidir con datos reales
+    var soloLocal = [], localNuevo = [], soloNube = [], nubeNuevo = [];
+    localList.forEach(function(d){
+      var k = _embKey(d);
+      if(!(k in cloudIdx)) soloLocal.push(d);
+      else if(_embTs(d) > cloudIdx[k]) localNuevo.push(d);
+    });
+    Object.keys(cloudIdx).forEach(function(k){
+      var l = localPorNro.get(k);
+      if(!l){ if(!deleted.has(k)) soloNube.push(k); }
+      else if(cloudIdx[k] > _embTs(l)) nubeNuevo.push(k);
+    });
+    var lista = function(a){ return a.slice(0,15).map(function(x){ return typeof x==='string'?x:x.nro; }).join(', ') + (a.length>15?', …':''); };
+
     var resumenPrevio = '📊 DIAGNÓSTICO DE SINCRONIZACIÓN\n\n'
       + 'En este dispositivo: ' + localList.length + ' embarque(s) con N° válido'
       + (sinNro ? ('\n⚠️ ' + sinNro + ' registro(s) local(es) SIN N° de embarque — no se pueden sincronizar, revísalos aparte') : '')
-      + '\nEn Supabase (nube): ' + cloudList.length + ' embarque(s)\n\n'
-      + '➜ Solo en este dispositivo (se subirán ahora): ' + soloLocal.length
-      + (soloLocal.length ? ('\n   ' + soloLocal.slice(0,15).map(function(d){return d.nro;}).join(', ') + (soloLocal.length>15?', …':'')) : '')
-      + '\n➜ Solo en la nube (se traerán ahora): ' + soloNube.length
-      + (soloNube.length ? ('\n   ' + soloNube.slice(0,15).map(function(d){return d.nro;}).join(', ') + (soloNube.length>15?', …':'')) : '')
-      + '\n\n¿Continuar con la sincronización forzada?';
+      + '\nEn Supabase (nube): ' + Object.keys(cloudIdx).length + ' embarque(s)\n\n'
+      + '➜ Solo aquí (se suben): ' + soloLocal.length + (soloLocal.length ? ('\n   ' + lista(soloLocal)) : '')
+      + '\n➜ Modificados aquí (se suben): ' + localNuevo.length + (localNuevo.length ? ('\n   ' + lista(localNuevo)) : '')
+      + '\n➜ Solo en la nube (se traen): ' + soloNube.length + (soloNube.length ? ('\n   ' + lista(soloNube)) : '')
+      + '\n➜ Modificados en la nube (se traen): ' + nubeNuevo.length + (nubeNuevo.length ? ('\n   ' + lista(nubeNuevo)) : '')
+      + '\n\n¿Continuar con la sincronización?';
     if(!confirm(resumenPrevio)){
       if(btn){ btn.disabled=false; btn.textContent=txtOriginal; }
       return;
     }
 
-    // 3. Subir a la nube TODO lo que falte allá — uno por uno, sin
-    //    depender de _lastSyncedTs, y guardando el motivo real si falla.
-    var enviados=0, fallidos=0, erroresDetalle=[];
-    for(var i=0;i<soloLocal.length;i++){
-      var d = soloLocal[i];
-      if(btn) btn.textContent = '⏳ Subiendo ' + (i+1) + '/' + soloLocal.length + '...';
+    // 2. Subir (nuevos + modificados), en lotes de 10
+    var subir = soloLocal.concat(localNuevo), enviados = 0, fallidos = 0, erroresDetalle = [];
+    for(var i=0;i<subir.length;i+=10){
+      var lote = subir.slice(i,i+10);
+      if(btn) btn.textContent = '⏳ Subiendo ' + Math.min(i+10,subir.length) + '/' + subir.length + '...';
       try{
-        var _r = await _sb.rpc('upsert_embarque_master', { p_nro: d.nro, p_registro: d });
-        if(_r && _r.error){ fallidos++; erroresDetalle.push(d.nro + ': ' + _r.error.message); }
-        else { enviados++; window._lastSyncedTs[String(d.nro).trim().toUpperCase()] = d.ts || Date.now(); }
-      }catch(e){ fallidos++; erroresDetalle.push(d.nro + ': ' + (e.message||e)); }
+        var _r = await _embConTimeout(_sb.from('embarques').upsert(lote.map(_embFilaDe), { onConflict:'nro' }), 30000);
+        if(_r && _r.error){ fallidos += lote.length; erroresDetalle.push(lote.map(function(d){return d.nro;}).join(',') + ': ' + _r.error.message); }
+        else { enviados += lote.length; lote.forEach(function(d){ window._lastSyncedTs[_embKey(d)] = _embTs(d); }); }
+      }catch(e){ fallidos += lote.length; erroresDetalle.push(lote.map(function(d){return d.nro;}).join(',') + ': ' + (e.message||e)); }
     }
 
-    // 4. Traer localmente lo que solo estaba en la nube
+    // 3. Traer (faltantes + más nuevos en la nube) — solo esos registros
     if(btn) btn.textContent = '⏳ Trayendo faltantes...';
+    var traidosMap = await _embTraerRegistros(soloNube.concat(nubeNuevo));
     var traidos = 0;
-    soloNube.forEach(function(rec){
-      var key = String(rec.nro).trim().toUpperCase();
-      if(!tendData.find(function(t){ return t.nro && String(t.nro).trim().toUpperCase()===key; })){
-        tendData.push(rec);
-        traidos++;
-      }
+    traidosMap.forEach(function(rec, k){
+      var pos = tendData.findIndex(function(t){ return t && t.nro && _embKey(t)===k; });
+      if(pos>=0) tendData[pos] = rec; else tendData.push(rec);
+      window._lastSyncedTs[k] = cloudIdx[k];
+      traidos++;
     });
+    window.tendData = tendData;
     if(traidos){ saveTendData(); }
 
     renderTend();
@@ -16230,14 +16310,14 @@ async function _forzarSincronizacionCompleta(btn){
     if(typeof updateCmpNroList==='function') updateCmpNroList();
 
     var resumenFinal = '✅ SINCRONIZACIÓN COMPLETADA\n\n'
-      + 'Subidos a la nube: ' + enviados + (soloLocal.length ? (' de ' + soloLocal.length) : '') + '\n'
+      + 'Subidos a la nube: ' + enviados + (subir.length ? (' de ' + subir.length) : '') + '\n'
       + (fallidos ? ('⚠️ Fallaron ' + fallidos + ':\n' + erroresDetalle.slice(0,10).join('\n') + (erroresDetalle.length>10?'\n…':'') + '\n\n') : '')
       + 'Traídos de la nube: ' + traidos + '\n\n'
       + 'Total ahora en este dispositivo: ' + tendData.length + ' embarque(s)'
-      + (fallidos ? '\n\nRevisa los que fallaron — puede ser un problema puntual con esos registros (dato corrupto o muy pesado). El resto ya quedó sincronizado.' : '\n\nEste dispositivo y la nube deberían coincidir ahora. Repite este mismo botón en tus otros dispositivos (iPhone, Westland) para que todos queden igual.');
+      + (fallidos ? '\n\nRevisa los que fallaron — el resto ya quedó sincronizado.' : '\n\nEste dispositivo y la nube deberían coincidir ahora.');
     alert(resumenFinal);
   }catch(e){
-    alert('❌ Error durante la sincronización forzada:\n\n' + (e.message||e) + '\n\nNo se perdió ningún dato local — puedes intentarlo de nuevo.');
+    alert('❌ Error durante la sincronización:\n\n' + (e.message||e) + '\n\nNo se perdió ningún dato local — puedes intentarlo de nuevo.');
   } finally {
     if(btn){ btn.disabled=false; btn.textContent=txtOriginal; }
   }
@@ -16377,16 +16457,11 @@ async function repararAhorroCifExpress(){
   }
   // Persistir a Supabase, igual que el resto del sistema guarda tendData
   try{
-    if(_sb){
-      const payload = { tendData: tendData, deleted: Array.from(window._deletedEmbarques||[]), updated_at: new Date().toISOString() };
-      const r = await _sb.from('simulador_sesiones').upsert(
-        { nombre:_SB_MASTER||'_TEND_MASTER', datos: JSON.stringify(payload), updated_at: new Date().toISOString() },
-        { onConflict:'nombre' }
-      );
-      if(r.error){ console.warn('Error guardando en Supabase:', r.error); }
-      else { console.log('✅ Guardado en la nube.'); }
-    }
+    // ts nuevo a lo corregido → la sincronización por embarque lo detecta y sube solo esas filas
+    var _nrosCorr = new Set(corregidos.map(function(c){ return String(c.nro).trim().toUpperCase(); }));
+    tendData.forEach(function(d){ if(d && d.nro && _nrosCorr.has(_embKey(d))) d.ts = Date.now(); });
     localStorage.setItem('_tendData_v2', JSON.stringify(tendData));
+    if(_sb){ await _syncTendToCloud(); console.log('✅ Guardado en la nube.'); }
   }catch(e){ console.warn('Error al persistir:', e); }
   if(typeof _showToast==='function') _showToast('✅ '+corregidos.length+' embarque(s) CIF Express corregido(s) y guardado(s).','green',5000);
   if(typeof renderTendencias==='function') renderTendencias();
@@ -16622,15 +16697,12 @@ function _getFilteredTendData(){
     }
     if(prov && (d.esc||'').trim()!==prov) return false;
     if(buscar){
-      // Expand searchable text to include tipo, proveedor names, and aliases
-      const _escL = (d.esc||'').toLowerCase();
-      const _tipoAlias = _escL.includes('sababa') ? 'zona libre zl sababa' :
-                         _escL.includes('cif') ? 'importacion cif exterior ext' :
-                         _escL.includes('liq') ? 'liquidacion aduanal' : '';
-      const _provNames = ((d.snap&&d.snap.invLines)||d.invLines||[]).map(function(l){return (l.prov||'').toLowerCase();}).join(' ');
-      const _ocNumbers = ((d.snap&&d.snap.invLines)||d.invLines||[]).map(function(l){return (l.oc||l.nfac||'').toLowerCase();}).join(' ');
-      const txt=[(d.nro||''),(d.desc||''),(d.esc||''),(d.tramiteTipo||''),(d.idFiscal||''),_tipoAlias,_provNames,_ocNumbers].join(' ').toLowerCase();
-      if(!_sinAcentos(txt).includes(_sinAcentos(buscar))) return false;
+      // (oct-2026) Búsqueda SOLO por N° de embarque. Antes se armaba un texto
+      // con descripción, tipo, proveedores, N° de OC/factura e ID fiscal, así
+      // que buscar "22180" también traía embarques cuyo OC, factura o
+      // descripción contenían esos mismos dígitos.
+      const _nroTxt = String(d.nro||'').trim().toLowerCase();
+      if(!_nroTxt.includes(buscar)) return false;
     }
     if(origen && typeof _origenMatchFiltro==='function'){
       if(!_origenMatchFiltro(d, origen)) return false;
@@ -18723,9 +18795,9 @@ function deleteTend(idx){
         }).catch(function(){ _encolarBorradoPendiente(_nroDel); });
         // ── También quitarlo del maestro — vía RPC, sin descargar/resubir
         //    el arreglo completo (ver auditoría ago-2026). ──
-        _sb.rpc('delete_embarque_master', { p_nro: _nroDel }).then(function(_r2){
-          if(_r2 && _r2.error) console.error('Error quitando '+_nroDel+' del maestro:', _r2.error);
-        }).catch(function(){});
+        _sb.from('embarques').delete().eq('nro', _nroDel.trim().toUpperCase()).then(function(_r2){
+          if(_r2 && _r2.error){ console.error('Error quitando '+_nroDel+' de embarques:', _r2.error); _encolarBorradoPendiente(_nroDel); }
+        }).catch(function(){ _encolarBorradoPendiente(_nroDel); });
         delete window._lastSyncedTs?.[_nroDel.toUpperCase()];
       } else {
         // Sin conexión a Supabase en este momento — encolar para reintentar
@@ -29876,6 +29948,7 @@ function initSupabase(){
     //    El pull de 5 min NO se elimina — queda como red de seguridad para
     //    cuando el dispositivo estuvo desconectado y no pudo recibir la señal.
     if(typeof _initTendRealtime==='function') _initTendRealtime();
+    if(typeof _iniciarSyncDiario==='function') _iniciarSyncDiario();
     if(typeof _fdInitRealtime==='function') _fdInitRealtime();
     if(typeof _plntInitRealtime==='function') _plntInitRealtime();
   }catch(e){
