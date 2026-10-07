@@ -24793,17 +24793,28 @@ function _renderGastosNoMerc(all){
   // ── Bases para porcentajes por rubro ──
   // Flete y Gastos Origen/Destino → % sobre costo inv. Importación
   // MV, Tesoro, Honorarios → % sobre costo inv. Total
-  var _baseIMP=0, _baseTotal=0;
+  var _baseIMP=0, _baseTotal=0, _origIMP=0, _origTotal=0, _nIMP=0, _nTotal=0;
   all.forEach(function(d){
     var r2=_calcCostoInventario(d);
     var tip=((d.snap&&d.snap.tipo)||d.tipo||'ZL').toUpperCase();
     var isIMP=(tip==='IMP'||tip==='EXT');
-    _baseTotal+=r2.costoInv;
-    if(isIMP) _baseIMP+=r2.costoInv;
+    _baseTotal+=r2.costoInv; _origTotal+=(r2.mercOrig||0); _nTotal++;
+    if(isIMP){ _baseIMP+=r2.costoInv; _origIMP+=(r2.mercOrig||0); _nIMP++; }
   });
   const _pctBase=(val,base)=>base>0?'('+parseFloat((val/base*100).toFixed(2))+'%)':'';
-  const _pctFlete=(val)=>_baseIMP>0?'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:var(--orange-l)">'+fmt2(val)+'</span><span style="font-size:10px;color:var(--muted);margin-left:8px">'+parseFloat((val/_baseIMP*100).toFixed(2))+'%</span>':'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:var(--orange-l)">'+fmt2(val)+'</span>';
-  const _pctTotal=(val)=>_baseTotal>0?'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:var(--orange-l)">'+fmt2(val)+'</span><span style="font-size:10px;color:var(--muted);margin-left:8px">'+parseFloat((val/_baseTotal*100).toFixed(2))+'%</span>':'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:var(--orange-l)">'+fmt2(val)+'</span>';
+  // (oct-2026) Cada rubro muestra DOS porcentajes, ambos con su base indicada:
+  //   · % s/ Original  → rubro ÷ Valor Mercancía Original (lo que se compró)
+  //   · % s/ Inventario → rubro ÷ Costo Inventario (mercancía + costos no mercancía)
+  // Antes solo se mostraba el segundo, sin etiqueta, y parecía "% de la compra".
+  const _pctDual=(val,baseInv,baseOrig)=>{
+    var amt='<span style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:var(--orange-l)">'+fmt2(val)+'</span>';
+    var lines='';
+    if(baseOrig>0) lines+='<span title="'+fmt2(val)+' ÷ Valor Mercancía Original '+fmt2(baseOrig)+'" style="display:block;font-size:10px;font-weight:700;color:var(--orange-l);white-space:nowrap">'+(val/baseOrig*100).toFixed(2)+'% s/ original</span>';
+    if(baseInv>0)  lines+='<span title="'+fmt2(val)+' ÷ Costo Inventario '+fmt2(baseInv)+'" style="display:block;font-size:10px;color:var(--muted);white-space:nowrap">'+(val/baseInv*100).toFixed(2)+'% s/ inventario</span>';
+    return amt+(lines?'<span style="margin-left:8px;text-align:right;line-height:1.3">'+lines+'</span>':'');
+  };
+  const _pctFlete=(val)=>_pctDual(val,_baseIMP,_origIMP);
+  const _pctTotal=(val)=>_pctDual(val,_baseTotal,_origTotal);
 
   const tesoro = rubros.tesoro;
   const rubroRows = Object.values(rubros)
@@ -24902,6 +24913,13 @@ function _renderGastosNoMerc(all){
       <span style="font-size:12px;font-weight:700;color:var(--text)">Total Costo No Mercancía</span>
       <span style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:800;color:var(--orange-l)">${window._fmtMoney(totalNoMerc)}</span>
     </div>
+  </div>
+
+  <!-- Base de los porcentajes -->
+  <div style="padding:8px 16px;font-size:10px;color:var(--muted);line-height:1.55;border-top:1px solid var(--border)">
+    <b style="color:var(--text)">Base de los porcentajes</b><br>
+    · Flete y Gastos Origen/Destino → ${_nIMP} embarque(s) de Importación: Original ${fmt2(_origIMP)} · Inventario ${fmt2(_baseIMP)}<br>
+    · Demás rubros → ${_nTotal} embarque(s): Original ${fmt2(_origTotal)} · Inventario ${fmt2(_baseTotal)}
   </div>
 
   <!-- ITBMS FISCAL — No costeable, separado de No Mercancía -->
