@@ -26377,6 +26377,17 @@ window._deptAbrirEmbarquesProveedor = function(dkey, provName){
 //  agrupando por país (nivel embarque) en vez de por departamento
 //  (nivel línea). Clic en un país abre desglose por ciudad/puerto.
 // ═══════════════════════════════════════════════════════════
+// (oct-2026) Un país = una sola entrada. "Panama" y "Panamá" (y "Espana"/"España")
+// aparecían como orígenes distintos según de dónde saliera el dato (formulario de costeo,
+// config. de proveedor, regla de Zona Libre). Se unifican sin importar acentos/mayúsculas.
+function _paisCanon(p){
+  var s = String(p||'').trim(); if(!s) return s;
+  var n = s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+  if(n==='panama') return 'Panamá';
+  if(n==='espana') return 'España';
+  return s;
+}
+function _paisEtiqueta(k){ return k==='Panamá' ? 'Panamá / Zona Libre' : k; }
 function _paisCiudadDe(d){
   // Resuelve {pais, ciudad} para un embarque probando, en orden, todas las
   // ubicaciones donde este dato puede vivir en este archivo (formulario de
@@ -26392,7 +26403,7 @@ function _paisCiudadDe(d){
     var tipoEmb = ((d.snap && d.snap.tipo) || d.tipo || '').toUpperCase();
     if(tipoEmb==='ZL') { pais='Panama'; ciudad = ciudad || 'Zona Libre de Colón'; }
   }
-  return { pais: pais || 'Sin especificar', ciudad: ciudad || 'Sin especificar' };
+  return { pais: _paisCanon(pais) || 'Sin especificar', ciudad: ciudad || 'Sin especificar' };
 }
 var _PAIS_FLAGS = {
   'USA':'🇺🇸','China':'🇨🇳','Mexico':'🇲🇽','Brasil':'🇧🇷','Colombia':'🇨🇴','India':'🇮🇳',
@@ -26400,6 +26411,8 @@ var _PAIS_FLAGS = {
   'Puerto Rico':'🇵🇷','Bangladesh':'🇧🇩','Indonesia':'🇮🇩','Malasia':'🇲🇾','Italia':'🇮🇹',
   'Espana':'🇪🇸','Alemania':'🇩🇪','Sin especificar':'❔'
 };
+_PAIS_FLAGS['Panamá'] = _PAIS_FLAGS['Panama'];
+_PAIS_FLAGS['España'] = _PAIS_FLAGS['Espana'];
 function _renderPaisChart(all){
   if(!all||!all.length) return '';
   var fmt2 = function(n){ return window._fmtMoney ? window._fmtMoney(n) : ('$'+Number(n||0).toFixed(2)); };
@@ -26440,7 +26453,7 @@ function _renderPaisChart(all){
     var nCiudades = Object.keys(v.ciudades).length;
     html += '<div onclick="window._paisAbrirCiudades(\''+k.replace(/'/g,"\\'")+'\')" style="cursor:pointer;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.08);background:var(--s2)">'
       +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
-      +'<span style="font-size:12px;font-weight:700;color:var(--text)">'+flag+' '+k+'</span>'
+      +'<span style="font-size:12px;font-weight:700;color:var(--text)">'+flag+' '+_paisEtiqueta(k)+'</span>'
       +'<div style="display:flex;gap:8px;align-items:center">'
       +'<span style="font-size:10px;color:var(--muted)">'+nCiudades+' ciudad'+(nCiudades!==1?'es':'')+' · '+pct+'%</span>'
       +'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:'+color+'">'+fmt2(v.monto)+'</span>'
@@ -26455,7 +26468,7 @@ function _renderPaisChart(all){
   html += '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">'
     + '<div style="flex:1;min-width:140px;background:rgba(240,136,62,.08);border:1px solid rgba(240,136,62,.25);border-radius:8px;padding:8px 10px;text-align:center">'
     + '<div style="font-size:9px;font-weight:700;color:var(--orange-l);margin-bottom:3px">🏆 TOP ORIGEN</div>'
-    + '<div style="font-size:12px;font-weight:800;color:var(--text)">'+(_PAIS_FLAGS[top[0]]||'🌍')+' '+top[0]+'</div>'
+    + '<div style="font-size:12px;font-weight:800;color:var(--text)">'+(_PAIS_FLAGS[top[0]]||'🌍')+' '+_paisEtiqueta(top[0])+'</div>'
     + '<div style="font-size:10px;color:var(--muted)">'+topPct+'% del total</div>'
     + '</div>'
     + '<div style="flex:1;min-width:140px;background:rgba(88,166,255,.08);border:1px solid rgba(88,166,255,.25);border-radius:8px;padding:8px 10px;text-align:center">'
@@ -26485,7 +26498,7 @@ window._paisAbrirCiudades = function(paisKey){
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:99998;display:flex;align-items:center;justify-content:center;padding:16px';
   modal.innerHTML = '<div style="background:var(--s1);border:1px solid var(--border);border-radius:14px;padding:18px;max-width:460px;width:100%;max-height:85vh;overflow-y:auto" onclick="event.stopPropagation()">'
     +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;gap:8px">'
-    +'<div style="font-size:14px;font-weight:700;color:var(--text);line-height:1.4">'+flag+' '+paisKey.replace(/</g,'&lt;')+'</div>'
+    +'<div style="font-size:14px;font-weight:700;color:var(--text);line-height:1.4">'+flag+' '+_paisEtiqueta(paisKey).replace(/</g,'&lt;')+'</div>'
     +'<button onclick="document.getElementById(\'_paisCiudadModal\').remove()" style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;flex-shrink:0;line-height:1">×</button>'
     +'</div>'
     +'<div style="font-size:11px;color:var(--muted);margin-bottom:12px">'+ciudades.length+' ciudad'+(ciudades.length!==1?'es':'')+' · Total '+fmt2(data.monto)+' · '+Number(data.piezas).toLocaleString()+' pzas — toca una ciudad para ver embarques</div>'
