@@ -2390,7 +2390,7 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
           <div id="blk-nro-contenedor" style="flex:1">
             <div class="field" style="margin-bottom:0">
               <label id="lbl-nro-contenedor" style="font-size:10px">N° Contenedor</label>
-              <input type="text" id="s1_nro_cont" placeholder="Ej: MSCU1234567" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;width:100%">
+              <input type="text" id="s1_nro_cont" placeholder="Se llena desde Equipo" readonly style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;width:100%;opacity:.85;cursor:not-allowed">
             </div>
           </div>
           <div style="flex:1">
@@ -11391,6 +11391,15 @@ function calc(){
 // Estado global de contenedores
 if(!window._contenedores) window._contenedores = []; // [{num:'MSCU123',fecha:'2026-05-08'}]
 
+// Hereda el/los N° de contenedor desde Equipo hacia Información del Embarque.
+function _syncNroContDesdeEquipo(){
+  var inp = document.getElementById('s1_nro_cont');
+  if(!inp) return;
+  var tipoEmb = (document.getElementById('s1_tipo_emb')||{}).value || '';
+  if(tipoEmb === 'Furgón') return; // placa/cabezal: manual
+  var nums = (window._contenedores||[]).map(function(c){ return (c.num||'').trim(); }).filter(Boolean);
+  inp.value = nums.join(',');
+}
 function _renderContenedores(){
   const equipo = document.getElementById('s1_equipo')?.value || '';
   const nEq    = parseInt(document.getElementById('s1_equipos')?.value)||1;
@@ -11410,7 +11419,7 @@ function _renderContenedores(){
   wrap.style.display = debemostrar ? 'block' : 'none';
   if(modalWrap) modalWrap.style.display = debemostrar ? 'block' : 'none';
 
-  if(!debemostrar){ window._contenedores=[]; return; }
+  if(!debemostrar){ window._contenedores=[]; _syncNroContDesdeEquipo(); return; }
 
   // Ajustar array al número actual
   while(window._contenedores.length < nEq) window._contenedores.push({num:'',fecha:''});
@@ -11449,7 +11458,7 @@ function _renderContenedores(){
         </div>
         <div style="display:flex;gap:8px">
           <input type="text" value="${c.num||''}" placeholder="Nº Contenedor (ej: MSCU1234567)"
-            oninput="window._contenedores[${i}].num=this.value"
+            oninput="window._contenedores[${i}].num=this.value;_syncNroContDesdeEquipo()"
             style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text);font-size:12px;font-family:'IBM Plex Mono',monospace">
           <input type="date" value="${c.fecha||''}"
             onchange="window._contenedores[${i}].fecha=this.value;_renderContenedores()"
@@ -11459,6 +11468,7 @@ function _renderContenedores(){
   }
   list.innerHTML = html;
   if(modalList) modalList.innerHTML = html;
+  _syncNroContDesdeEquipo();
 }
 
 function _toggleNoHonorarios(checked){
@@ -29103,7 +29113,15 @@ function _toggleContenedorField(val){
   } else {
     blk.style.display = showContenedor ? '' : 'none';
     if(lbl) lbl.textContent = 'N° Contenedor';
-    if(inp) inp.placeholder = 'Ej: MSCU1234567';
+    if(inp) inp.placeholder = 'Se llena desde Equipo';
+  }
+  // FIX (oct-2026): el N° Contenedor ya NO se escribe aquí — se hereda/mapea
+  // desde Equipo (_contenedores). Solo Furgón (placa/cabezal) sigue editable.
+  if(inp){
+    inp.readOnly = !esFurgon;
+    inp.style.cursor = esFurgon ? '' : 'not-allowed';
+    inp.style.opacity = esFurgon ? '' : '.85';
+    if(!esFurgon && typeof _syncNroContDesdeEquipo==='function') _syncNroContDesdeEquipo();
   }
   _toggleFechasEmbarque();
 }
@@ -35540,7 +35558,11 @@ function _actualizarVistaPreviaComparativo(){
     var merc3 = sc3.mercHomol>0?sc3.mercHomol:(sc1.base||0);
     var baseAj = sc3.baseAjustada>0?sc3.baseAjustada:(merc3*(1+itbPct));
     var com3 = sc3.comision>0?sc3.comision:(baseAj*(snap.sc3ComPct||0.10));
-    var fl3 = sc3.flete||snap.flete||0;
+    // FIX: el flete SOLO aplica si el término es FOB + Importación (flete real
+    // digitado). En CIF el flete ya viene dentro del valor — antes se tomaba
+    // snap.flete (estimado 5.06% del CIF) al cambiar a Importación y se inflaba
+    // el Costo No Mercancía y el Factor de Importación.
+    var fl3 = (typeof termino!=='undefined' && termino==='FOB' && typeof tipo!=='undefined' && tipo==='EXT') ? (sc3.flete||snap.flete||0) : 0;
     var ag3 = sc3.gastos||sc1.agente||0;
     // FIX: el Costo No Mercancía de Sababa debe incluir el Master Value (puente)
     // que ya calcula el motor (sc3.mv) — antes se omitía aquí y esta tarjeta
