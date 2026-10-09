@@ -17761,6 +17761,7 @@ async function procesarEmbarque(){
 
   // Enrich each invLine with computed arancel before saving
   const snapInvLines = JSON.parse(JSON.stringify(invLines||[])).map(l => {
+    if((l.tipoFac||'mercancia')==='mercancia' && typeof _origenLinea==='function'){ var _oL=_origenLinea(l); l.pais=_oL.pais; l.ciudad=_oL.ciudad; }
     // ar = costo * arPct (main rate) — use per-line si if available, else global arPct
     const _arPct = window._lastSnap?.arPct || 0;
     const _siPct = (typeof l.si === 'number' ? l.si : parseFloat(l.si)) || _arPct;
@@ -21746,7 +21747,7 @@ function _buildHistProvRows(){
       var _campos  = (d.snap&&d.snap.campos)||{};
       var _origenEmb = [
         d.origen||'',
-        d.pais||'',
+        _paisCanon(d.pais||''),
         _campos.s1_pais_emb||'',
         _campos.s1_ciudad_emb||'',
         _campos.s1_origen_emb||'',
@@ -24367,7 +24368,7 @@ function renderDashboardKPIs(data){
             var tipoSnap=((d.snap&&d.snap.tipo)||d.tipo||'').toUpperCase();
             if(tipoSnap==='EXT'||tipoSnap==='IMP') return false;
             if(tipoSnap==='ZL') return true;
-            var origen=(d.snap&&d.snap.campos&&d.snap.campos.s1_pais_origen||d.pais||'').toLowerCase();
+            var origen=_sinAcentos(d.snap&&d.snap.campos&&d.snap.campos.s1_pais_origen||d.pais||'').toLowerCase();
             return origen.includes('zona libre')||origen.includes('panama')||origen.includes('zlc')||origen===''||!origen;
           };
           var zlEmb   = all.filter(function(d){ return _clsZL(d); });
@@ -25681,14 +25682,12 @@ function exportDashboardExcel(){
       var ci=typeof _calcCostoInventario==='function'?_calcCostoInventario(d):null;
       var valorMercInv=ci?(ci.mercInv||costoOrig):costoOrig;
       var noMercTotal=ci?(ci.costoNM||0):0;
-      var pais=_paisCiudadDe(d).pais||'Sin especificar';
-      var _esPanama=/^panam/i.test(pais);
-      if(_esPanama){
-        var _tipoEmbD=((d.snap&&d.snap.tipo)||d.tipo||'ZL');
-        pais = (_tipoEmbD!=='EXT') ? 'Panamá (Zona Libre)' : 'Panamá (Importación)';
-      }
-      if(!origMap[pais]) origMap[pais]={};
+      var _basePais=_paisCiudadDe(d).pais||'Sin especificar';
+      var _tipoEmbD=((d.snap&&d.snap.tipo)||d.tipo||'ZL');
       mercLines.forEach(function(l){
+        var pais=l.pais?_paisCanon(l.pais):_basePais;
+        if(/^panam/i.test(pais)){ pais = (_tipoEmbD!=='EXT') ? 'Panamá (Zona Libre)' : 'Panamá (Importación)'; }
+        if(!origMap[pais]) origMap[pais]={};
         var dept=l.deptCat||l.dept||'Sin Categoría';
         if(!origMap[pais][dept]) origMap[pais][dept]={orig:0,inv:0,noMerc:0,piezas:0};
         var share=(l.costo||0)/costoOrig;
@@ -26398,6 +26397,82 @@ function _paisCanon(p){
   return s;
 }
 function _paisEtiqueta(k){ return k==='Panamá' ? 'Panamá / Zona Libre' : k; }
+// ── (oct-2026) ORIGEN POR FACTURA ──────────────────────────────────────────
+// Cada factura de mercancía hereda el origen del embarque (Info del embarque) y
+// se puede cambiar individualmente (embarques mixtos). Al procesar, cada factura
+// queda guardada con su país/ciudad, y los reportes por origen suman por factura.
+function _origenEmbarqueActual(){
+  function val(id){ var el=(typeof _visEl==='function')?_visEl(id):document.getElementById(id); return el?(el.value||''):''; }
+  var p=val('s1_pais_emb'); if(p==='__otro__') p=val('s1_pais_emb_otro');
+  var c=val('s1_ciudad_emb'); if(c==='__otro__') c=val('s1_ciudad_emb_otro');
+  return { pais:_paisCanon(p), ciudad:c };
+}
+function _origenLinea(l){
+  if(l && l.origenManual && (l.pais||l.ciudad)) return { pais:_paisCanon(l.pais||''), ciudad:l.ciudad||'' };
+  return _origenEmbarqueActual();
+}
+function _origenLineaHTML(i,l){
+  var o=_origenLinea(l), manual=!!l.origenManual;
+  var txt=(o.pais?_paisEtiqueta(o.pais):'Sin origen')+(o.ciudad?' · '+o.ciudad:'');
+  txt=txt.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;padding:5px 8px;background:rgba(88,166,255,.06);border:1px solid rgba(88,166,255,.22);border-radius:6px">'
+    +'<span style="font-size:8px;color:var(--blue-l);font-weight:700;text-transform:uppercase;letter-spacing:.03em;flex-shrink:0">🌎 Origen</span>'
+    +'<button type="button" onclick="_editarOrigenLinea('+i+')" title="Toca para cambiar el origen de esta factura" style="flex:1;min-width:0;text-align:left;background:none;border:none;color:var(--text);font-size:12px;font-weight:600;cursor:pointer;padding:2px 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+txt+'</button>'
+    +'<span style="font-size:9px;flex-shrink:0;color:'+(manual?'var(--orange-l)':'var(--muted)')+'">'+(manual?'editado':'del embarque')+'</span>'
+    +(manual?'<button type="button" onclick="_restablecerOrigenLinea('+i+')" title="Volver al origen del embarque" style="flex-shrink:0;background:none;border:1px solid var(--border);color:var(--muted);border-radius:5px;padding:1px 6px;font-size:11px;cursor:pointer">↺</button>':'')
+    +'</div>';
+}
+function _restablecerOrigenLinea(i){
+  var l=invLines[i]; if(!l) return;
+  delete l.origenManual; delete l.pais; delete l.ciudad;
+  renderInvLines();
+  if(typeof _showToast==='function') _showToast('🌎 Origen restablecido al del embarque','blue',2200);
+}
+function _editarOrigenLinea(i){
+  var l=invLines[i]; if(!l) return;
+  var o=_origenLinea(l);
+  var old=document.getElementById('_origenLineaOv'); if(old) old.remove();
+  var paises=[]; var selEmb=document.getElementById('s1_pais_emb');
+  if(selEmb) Array.from(selEmb.options).forEach(function(op){ if(op.value && op.value!=='__otro__') paises.push(_paisCanon(op.value)); });
+  if(o.pais && paises.indexOf(o.pais)<0) paises.push(o.pais);
+  paises=paises.filter(function(p,ix){ return paises.indexOf(p)===ix; }).sort(function(a,b){ return a.localeCompare(b,'es'); });
+  var optsP='<option value="">— País —</option>'+paises.map(function(p){ return '<option value="'+p.replace(/"/g,'&quot;')+'"'+(p===o.pais?' selected':'')+'>'+_paisEtiqueta(p)+'</option>'; }).join('')+'<option value="__otro__">✏️ Otro (escribir)…</option>';
+  var ov=document.createElement('div'); ov.id='_origenLineaOv';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100000;display:flex;align-items:center;justify-content:center;padding:16px';
+  var fs='width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:9px 10px;color:var(--text);font-size:13px;margin-top:4px';
+  ov.innerHTML='<div style="background:var(--s1,#161b22);border:1px solid var(--border);border-radius:12px;padding:16px;width:100%;max-width:360px">'
+    +'<div style="font-size:14px;font-weight:800;margin-bottom:4px">🌎 Origen de esta factura</div>'
+    +'<div style="font-size:11px;color:var(--muted);margin-bottom:10px">'+((l.prov||'Factura').replace(/</g,'&lt;'))+'</div>'
+    +'<label style="font-size:10px;color:var(--muted);font-weight:700">PAÍS</label><select id="_ol_pais" style="'+fs+'">'+optsP+'</select>'
+    +'<input id="_ol_pais_otro" type="text" placeholder="Escribe el país" style="'+fs+';display:none">'
+    +'<label style="font-size:10px;color:var(--muted);font-weight:700;display:block;margin-top:8px">CIUDAD / PUERTO</label><select id="_ol_ciudad" style="'+fs+'"></select>'
+    +'<input id="_ol_ciudad_otro" type="text" placeholder="Escribe la ciudad/puerto" style="'+fs+';display:none">'
+    +'<div style="display:flex;gap:8px;margin-top:14px"><button type="button" id="_ol_cancel" style="flex:1;background:var(--s2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:9px;font-size:12px;font-weight:700;cursor:pointer">Cancelar</button>'
+    +'<button type="button" id="_ol_ok" style="flex:1;background:rgba(63,185,80,.18);border:1px solid rgba(63,185,80,.45);color:var(--green-l);border-radius:8px;padding:9px;font-size:12px;font-weight:700;cursor:pointer">💾 Guardar</button></div></div>';
+  document.body.appendChild(ov);
+  var sp=ov.querySelector('#_ol_pais'), spo=ov.querySelector('#_ol_pais_otro'), sc=ov.querySelector('#_ol_ciudad'), sco=ov.querySelector('#_ol_ciudad_otro');
+  function ciudadesDe(p){ var m=window._CIUDADES_POR_PAIS||{}; return m[p] || m[p==='Panamá'?'Panama':p] || m[p==='Panamá'?'Panamá':p] || []; }
+  function llenarCiudades(p,sel){
+    var cs=ciudadesDe(p).slice(); if(sel && cs.indexOf(sel)<0) cs.unshift(sel);
+    sc.innerHTML='<option value="">— Ciudad —</option>'+cs.map(function(c){ return '<option value="'+String(c).replace(/"/g,'&quot;')+'"'+(c===sel?' selected':'')+'>'+c+'</option>'; }).join('')+'<option value="__otro__">✏️ Otra (escribir)…</option>';
+    sco.style.display='none';
+  }
+  llenarCiudades(o.pais,o.ciudad);
+  sp.onchange=function(){ spo.style.display=sp.value==='__otro__'?'block':'none'; llenarCiudades(sp.value==='__otro__'?'':sp.value,''); };
+  sc.onchange=function(){ sco.style.display=sc.value==='__otro__'?'block':'none'; };
+  ov.querySelector('#_ol_cancel').onclick=function(){ ov.remove(); };
+  ov.addEventListener('click',function(e){ if(e.target===ov) ov.remove(); });
+  ov.querySelector('#_ol_ok').onclick=function(){
+    var p=sp.value==='__otro__'?spo.value.trim():sp.value;
+    var c=sc.value==='__otro__'?sco.value.trim():sc.value;
+    if(!p){ if(typeof _showToast==='function') _showToast('Elige el país de origen','orange',2200); return; }
+    l.pais=_paisCanon(p); l.ciudad=c; l.origenManual=true;
+    ov.remove();
+    renderInvLines();
+    if(typeof _showToast==='function') _showToast('🌎 Origen de la factura: '+_paisEtiqueta(l.pais)+(c?' · '+c:''),'green',2500);
+    if(typeof _parpadeoSiModal==='function') _parpadeoSiModal();
+  };
+}
 function _paisCiudadDe(d){
   // Resuelve {pais, ciudad} para un embarque probando, en orden, todas las
   // ubicaciones donde este dato puede vivir en este archivo (formulario de
@@ -26429,18 +26504,34 @@ function _renderPaisChart(all){
   var byPais = {};
   all.forEach(function(d){
     var oc = _paisCiudadDe(d);
-    var k = oc.pais;
-    if(!byPais[k]) byPais[k] = { monto:0, piezas:0, ciudades:{} };
     var invL = (d.snap && d.snap.invLines) || d.invLines || [];
-    var montoEmb = invL.filter(function(l){return (l.tipoFac||'mercancia')==='mercancia';}).reduce(function(s,l){return s+(l.costo||0);},0) || d.cif || (d.snap&&d.snap.CIF) || 0;
-    var piezasEmb = invL.reduce(function(s,l){return s+(l.piezas||0);},0);
-    byPais[k].monto += montoEmb;
-    byPais[k].piezas += piezasEmb;
-    var ck = oc.ciudad;
-    if(!byPais[k].ciudades[ck]) byPais[k].ciudades[ck] = { monto:0, piezas:0, embarques:[] };
-    byPais[k].ciudades[ck].monto += montoEmb;
-    byPais[k].ciudades[ck].piezas += piezasEmb;
-    byPais[k].ciudades[ck].embarques.push({ nro:d.nro||'', costo:montoEmb, piezas:piezasEmb, dIdx: tendData.indexOf(d) });
+    var mercL = invL.filter(function(l){ return (l.tipoFac||'mercancia')==='mercancia'; });
+    var montoEmb = mercL.reduce(function(s,l){ return s+(l.costo||0); },0) || d.cif || (d.snap&&d.snap.CIF) || 0;
+    var piezasEmb = invL.reduce(function(s,l){ return s+(l.piezas||0); },0);
+    var partes;
+    if(mercL.some(function(l){ return l.pais; })){
+      // Embarque con origen por factura (incluye mixtos): se suma por el origen de cada factura
+      var gp = {};
+      mercL.forEach(function(l){
+        var p = l.pais ? _paisCanon(l.pais) : oc.pais;
+        var c = l.ciudad || (l.pais ? 'Sin especificar' : oc.ciudad);
+        var kk = p+'||'+c;
+        if(!gp[kk]) gp[kk] = { pais:p, ciudad:c, monto:0, piezas:0 };
+        gp[kk].monto += (l.costo||0); gp[kk].piezas += (l.piezas||0);
+      });
+      partes = Object.keys(gp).map(function(kk){ return gp[kk]; });
+    } else {
+      partes = [{ pais:oc.pais, ciudad:oc.ciudad, monto:montoEmb, piezas:piezasEmb }];
+    }
+    partes.forEach(function(pt){
+      var k = pt.pais;
+      if(!byPais[k]) byPais[k] = { monto:0, piezas:0, ciudades:{} };
+      byPais[k].monto += pt.monto; byPais[k].piezas += pt.piezas;
+      var ck = pt.ciudad;
+      if(!byPais[k].ciudades[ck]) byPais[k].ciudades[ck] = { monto:0, piezas:0, embarques:[] };
+      byPais[k].ciudades[ck].monto += pt.monto; byPais[k].ciudades[ck].piezas += pt.piezas;
+      byPais[k].ciudades[ck].embarques.push({ nro:d.nro||'', costo:pt.monto, piezas:pt.piezas, dIdx: tendData.indexOf(d) });
+    });
   });
 
   var entries = Object.entries(byPais).sort(function(a,b){ return b[1].monto - a[1].monto; });
@@ -28748,7 +28839,7 @@ function renderTopProvs(mode, deptFilter){
     else {
       // Fallback por escenario/origen
       const campos = d.snap?.campos || {};
-      const origen = (campos.s1_pais_origen||d.pais||'').toLowerCase();
+      const origen = _sinAcentos(campos.s1_pais_origen||d.pais||'').toLowerCase();
       embIsZL = origen.includes('zona libre')||origen.includes('panama')||
                 origen.includes('zlc')||esc.includes('zona libre');
     }
@@ -30468,6 +30559,7 @@ function renderInvLines(){
             +'<div style="flex:1"><div style="font-size:8px;color:var(--orange-l);font-weight:700;text-transform:uppercase;letter-spacing:.03em;margin-bottom:2px">🏭 Fecha de Llegada</div><input type="date" value="'+(l.fechaLlegada||'')+'" oninput="invLines['+i+'].fechaLlegada=this.value" style="width:100%;box-sizing:border-box;background:var(--s2);border:1px solid rgba(240,136,62,.25);border-radius:5px;padding:5px 8px;color:var(--orange-l);font-size:11px"></div>'
           +'</div>'
         ):'')
+        +_origenLineaHTML(i,l)
         +'<div style="display:flex;flex-direction:column;gap:4px;margin-bottom:5px;padding:5px 8px;background:rgba(167,113,247,.06);border-radius:6px;border:1px solid rgba(167,113,247,.2)">'
         +'<div style="font-size:9px;color:#a371f7;font-weight:700">🔗 Homologado</div>'
         +'<div style="display:flex;gap:6px">'
@@ -31374,6 +31466,7 @@ function _origenMatchFiltro(tendRecord, filtroOrigen){
   // un proveedor de alto volumen configurado como "China" debe coincidir en
   // TODOS sus embarques, no solo en los que no tengan ningún otro campo de
   // origen propio rellenado.
+  ((tendRecord.snap&&tendRecord.snap.invLines)||tendRecord.invLines||[]).forEach(function(l){ if(l){ candidatos.push(String(l.pais||'').toLowerCase()); candidatos.push(String(l.ciudad||'').toLowerCase()); } });
   if(window._pcCache) {
     var provs = ((tendRecord.invLines||[]).map(function(l){ return l.prov||''; }))
       .concat([(tendRecord.snap&&tendRecord.snap.invLines||[]).map(function(l){ return l.prov||''; })].flat ? [].flat.call((tendRecord.snap&&tendRecord.snap.invLines||[]).map(function(l){ return l.prov||''; })) : [])
@@ -31413,6 +31506,7 @@ function _selectRubro(val){
 }
 
 function _sincronizarOrigenEmb(){
+  try{ setTimeout(function(){ if(typeof renderInvLines==='function' && document.querySelector('[id="inv-lines"]')) renderInvLines(); },0); }catch(e){}
   const pais   = document.getElementById('s1_pais_emb')?.value   || '';
   const ciudad = document.getElementById('s1_ciudad_emb')?.value || '';
   const oculto = document.getElementById('s1_origen_emb');
