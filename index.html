@@ -11595,7 +11595,6 @@ function _fechaRecepcionMasiva(btn){
   if(!n){ if(typeof _showToast==='function') _showToast('No hay facturas de mercancía para asignar fecha','orange',2500); return; }
   if(typeof renderInvLines==='function') renderInvLines();
   if(typeof _showToast==='function') _showToast('✅ Fecha de recepción aplicada a '+n+' factura'+(n!==1?'s':''),'green',2500);
-  _parpadeoSiModal();
 }
 function _parpadeoSiModal(){
   var ov=document.getElementById('tab-modal-overlay');
@@ -11623,8 +11622,10 @@ function _parpadeoSiModal(){
       if(!ov || !ov.classList.contains('open')) return;
       if(TABS.indexOf(ov.getAttribute('data-tab')||'')<0) return;
       var oc = b.getAttribute('onclick')||'', tx = b.textContent||'';
-      if(!/guardar|aplicar|💾|_guardar|_aplicar/i.test(oc+' '+tx)) return;
-      if(/calcular|dashboard|cerrar|cancelar|eliminar|borrar/i.test(tx)) return;
+      // (oct-2026) SOLO "Guardar" hace el parpadeo. "Aplicar", "Calcular" y "Ver Dashboard" quedan exentos.
+      if(/aplicar|apply|dashboard|calcular|calcAndShow|calcSab2AndShow/i.test(oc+' '+tx)) return;
+      if(!/guardar|💾/i.test(oc+' '+tx)) return;
+      if(/cerrar|cancelar|eliminar|borrar/i.test(tx)) return;
       var t0 = Date.now();
       setTimeout(function(){
         // si la propia acción ya cerró/reabrió el modal (lápiz de Proveedores, Aplicar MV...), no repetir
@@ -11649,10 +11650,9 @@ function _parpadeoSiModal(){
           var ov = document.getElementById('tab-modal-overlay');
           var tab = (ov && ov.classList.contains('open')) ? (ov.getAttribute('data-tab')||'') : '';
           if(window._enParpadeoCalc || (tab!=='sababa' && tab!=='cifexp')) return orig.apply(self, args);
-          window._enParpadeoCalc = true;
+          // (oct-2026) Ver Dashboard / Calcular ya NO parpadean: solo guardan N° de factura en silencio y calculan.
           try{ _guardarNFacturasVisibles(); }catch(er){}
-          _parpadeoSiModal();
-          setTimeout(function(){ try{ orig.apply(self, args); } finally { window._enParpadeoCalc = false; } }, 400);
+          return orig.apply(self, args);
         };
         w._conParpadeo = true;
         window[nombre] = w;
@@ -13686,6 +13686,7 @@ function loadAgrupFromStorage(){
 // =====================================================
 function clearAll(){
   if(!confirm('¿Limpiar todos los datos e iniciar un nuevo embarque?')) return;
+  try{ if(typeof _borrDescartarActual==='function') _borrDescartarActual(); }catch(e){}
   window.location.reload();
 }
 
@@ -17892,6 +17893,7 @@ async function procesarEmbarque(){
     tendData.push(snap);
   }
   window._pendienteUpdateIdx = -1;
+  try{ if(typeof _borrAlProcesar==='function') _borrAlProcesar(snap); }catch(e){}
   // ── Foto inicial de Costo Inventario para detectar futuras diferencias ──
   if(typeof _setHistBaseline==='function') _setHistBaseline(snap);
   saveTendData();
@@ -37417,5 +37419,293 @@ window._plnModuloEmbarques = async function(){
   setInterval(_checarInactividad, 30000); // revisa cada 30s
 })();
 </script>
+<script id="borradores-embarque">
+/* ============================================================================
+   (oct-2026) BORRADORES DE EMBARQUE + RESPALDOS DE PROCESADOS  — bloque independiente
+   • Autoguarda en localStorage el embarque que se está costeando (no depende de la nube).
+   • Al entrar a "Calcular Costo" muestra un selector: Continuar / Reiniciar cálculos / Eliminar / Nuevo.
+   • Al PROCESAR un embarque guarda una copia de respaldo (original + últimas versiones) que
+     las correcciones manuales del dashboard NO modifican, y se puede abrir como copia nueva.
+   No toca el motor de cálculo: solo lee el formulario y, al restaurar, usa las mismas
+   funciones que "Reabrir embarque" (_clearFormSilent, setTipo/setTermino/setCompar, calc...).
+   ========================================================================== */
+(function(){
+  if(window._borrInstalado) return; window._borrInstalado = true;
+  var KEY_B='_borradores_embarque_v1', KEY_R='_respaldos_embarque_v1';
+  var MAX_B=15, MAX_R=40, MAX_VERS=6;
+  var EXTRA=['s1_gasto_comp','s1_hon_manual','chk_no_dmce_acarreo','chk_no_honorarios','s1_lugar_recep',
+    's1_etd','s1_eta_puerto','s1_fecha_despacho','s1_via_transporte','s1_tipo_emb','s1_ar_ajuste','s1_equipo','s1_equipos','s1_uso_sistema'];
+  // Campos que son RESULTADO del cálculo (no información): no se restauran al "Reiniciar cálculos"
+  var DERIV=['s1_cif_calc','sc_comision_display','s2_mv_display','s2_comision_display','s1_gasto_comp'];
+  var NO_REST=['s1_pais_emb','s1_ciudad_emb','s1_pais_emb_otro','s1_ciudad_emb_otro'];
+  // Banderas de la "máquina de cálculo" (ajustes manuales / rastreadores): se descartan al reiniciar
+  var FLAGS_CALC=['_mv_override_cif','_mv_manual_cif','_itbms_override_cif','_itbms_manual_cif','_comManualValue',
+    '_mvUserEdited','_mvManualValue','_mv930YaAplicadoValor','_mv0CifYaAplicadoValor','s2_comisionEditada',
+    'sc_comisionEditada','_s1TotalPagoEditado','_sc2_hon_ng_userEdited'];
+  var FLAGS_INFO=['_noDmceAcarreo','_noHonorarios','_honManual','_omitMV_sab','_omitMV_cif','_sab2Exento'];
+
+  function leer(k){ try{ var o=JSON.parse(localStorage.getItem(k)||'null'); return (o&&typeof o==='object')?o:{}; }catch(e){ return {}; } }
+  function escribir(k,o){ try{ localStorage.setItem(k,JSON.stringify(o)); return true; }catch(e){ return false; } }
+  function esc(s){ return (typeof esc2==='function') ? esc2(s) : String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  function toast(m,t,d){ if(typeof _showToast==='function') _showToast(m,t||'green',d||3000); }
+  function fmt(n){ return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  function hace(ts){
+    var s=Math.max(0,Math.round((Date.now()-ts)/1000));
+    if(s<60) return 'hace unos segundos'; if(s<3600) return 'hace '+Math.round(s/60)+' min';
+    if(s<86400) return 'hace '+Math.round(s/3600)+' h'; return 'hace '+Math.round(s/86400)+' d';
+  }
+  function fechaCorta(ts){ var d=new Date(ts); return d.toLocaleDateString('es-PA')+' '+d.toLocaleTimeString('es-PA',{hour:'2-digit',minute:'2-digit'}); }
+  function lineas(){ return (typeof invLines!=='undefined' && invLines) ? invLines : (window.invLines||[]); }
+  function g(name){ try{ return (typeof window[name]!=='undefined') ? window[name] : undefined; }catch(e){ return undefined; } }
+
+  // ───────────── CAPTURA del estado del formulario ─────────────
+  function valorEl(el){ return (el.type==='checkbox'||el.type==='radio') ? (el.checked?'__on__':'__off__') : el.value; }
+  function capturar(){
+    var campos={};
+    ['tab-sim','tab-cifexp','tab-sababa'].forEach(function(pid){
+      var pane=document.getElementById(pid); if(!pane) return;
+      pane.querySelectorAll('input,select,textarea').forEach(function(el){
+        if(!el.id || el.type==='file' || el.type==='button' || el.type==='password') return;
+        if(el.id in campos) return; campos[el.id]=valorEl(el);
+      });
+    });
+    EXTRA.forEach(function(id){ if(id in campos) return; var el=document.getElementById(id); if(el) campos[id]=valorEl(el); });
+    var flags={}; FLAGS_CALC.concat(FLAGS_INFO).forEach(function(k){ var v=g(k); if(v!==undefined) flags[k]=v; });
+    var reab=''; var idx=window._pendienteUpdateIdx;
+    if(typeof idx==='number' && idx>=0 && typeof tendData!=='undefined' && tendData[idx]) reab=tendData[idx].nro||'';
+    var p={ v:1,
+      tipo: typeof tipo!=='undefined'?tipo:'ZL', termino: typeof termino!=='undefined'?termino:'CIF',
+      compar: typeof compar!=='undefined'?compar:'cifexp', exon: typeof exon!=='undefined'?exon:true,
+      sabTipo: typeof sabTipo!=='undefined'?sabTipo:undefined, sab2Tipo: typeof sab2Tipo!=='undefined'?sab2Tipo:undefined,
+      sabTipoCmp: typeof sabTipoCmp!=='undefined'?sabTipoCmp:undefined,
+      campos:campos, invLines: JSON.parse(JSON.stringify(lineas())),
+      contenedores: JSON.parse(JSON.stringify(window._contenedores||[])), flags:flags, reabiertoNro:reab };
+    return p;
+  }
+  function totalDe(p){
+    var c=parseFloat(p.campos.s1_cif)||parseFloat(p.campos.s1_fob)||0;
+    if(c>0) return c;
+    return (p.invLines||[]).filter(function(l){ return (l.tipoFac||'mercancia')==='mercancia'; }).reduce(function(s,l){ return s+(parseFloat(l.costo)||0); },0);
+  }
+  function tieneContenido(p){
+    return !!((p.campos.s1_nro_emb||'').trim() || (parseFloat(p.campos.s1_cif)||0)>0 || (parseFloat(p.campos.s1_fob)||0)>0 || (p.invLines||[]).length);
+  }
+
+  // ───────────── AUTOGUARDADO ─────────────
+  function podarB(B,keepId){
+    var ids=Object.keys(B).sort(function(a,b){ return (B[b].ts||0)-(B[a].ts||0); });
+    ids.slice(MAX_B).forEach(function(id){ if(id!==keepId) delete B[id]; });
+  }
+  function guardarAhora(){
+    if(window._borrSuspendido) return;
+    var p; try{ p=capturar(); }catch(e){ return; }
+    if(!tieneContenido(p)) return;
+    var firma=JSON.stringify(p); if(firma===window._borrUltFirma) return;
+    window._borrUltFirma=firma;
+    if(!window._borradorId) window._borradorId='b'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+    var id=window._borradorId, nro=(p.campos.s1_nro_emb||'').trim();
+    var B=leer(KEY_B);
+    if(nro) Object.keys(B).forEach(function(k){ if(k!==id && (B[k].nro||'').toUpperCase()===nro.toUpperCase()) delete B[k]; });
+    B[id]={id:id, ts:Date.now(), nro:nro, desc:(p.campos.s1_desc_emb||'').trim(), total:totalDe(p), nFact:(p.invLines||[]).length, payload:p};
+    podarB(B,id);
+    if(!escribir(KEY_B,B)){
+      Object.keys(B).forEach(function(k){ if(k!==id) delete B[k]; });
+      if(!escribir(KEY_B,B) && !window._borrAvisoCuota){ window._borrAvisoCuota=true; toast('⚠️ No se pudo guardar el borrador local (almacenamiento lleno)','orange',5000); }
+    }
+    actualizarChip();
+  }
+  var _t=null; function programar(){ if(_t) clearTimeout(_t); _t=setTimeout(guardarAhora,1200); }
+  document.addEventListener('input',programar,true);
+  document.addEventListener('change',programar,true);
+  document.addEventListener('click',programar,true);
+  setInterval(guardarAhora,20000);
+  window.addEventListener('pagehide',guardarAhora);
+  window.addEventListener('beforeunload',guardarAhora);
+  document.addEventListener('visibilitychange',function(){ if(document.hidden) guardarAhora(); });
+
+  // ───────────── RESTAURAR ─────────────
+  function idxPorNro(nro){
+    if(!nro || typeof tendData==='undefined') return -1;
+    return tendData.findIndex(function(t){ return t && t.nro && String(t.nro).trim().toUpperCase()===String(nro).trim().toUpperCase(); });
+  }
+  function aplicar(p, modo){
+    var reiniciar=(modo==='reiniciar');
+    window._borrSuspendido=true;
+    try{
+      _clearFormSilent();
+      window._mv930YaAplicadoValor=0; window._mv0CifYaAplicadoValor=0;
+      function btn(attr,val){ if(!val) return; var b=document.querySelector('['+'onclick*="'+attr+"('"+val+"')"+'"]'); if(b&&b.click) b.click(); }
+      btn('setTipo',p.tipo); btn('setTermino',p.termino); btn('setCompar',p.compar);
+      if(p.exon!==undefined) exon=p.exon;
+      if(p.sabTipo) sabTipo=p.sabTipo; if(p.sab2Tipo!==undefined) sab2Tipo=p.sab2Tipo; if(p.sabTipoCmp) sabTipoCmp=p.sabTipoCmp;
+      Object.keys(p.campos||{}).forEach(function(id){
+        if(NO_REST.indexOf(id)>=0) return; if(reiniciar && DERIV.indexOf(id)>=0) return;
+        var el=document.getElementById(id); if(!el) return; var v=p.campos[id];
+        if(el.type==='checkbox'||el.type==='radio') el.checked=(v==='__on__'); else el.value=v;
+      });
+      var o=(p.campos||{}).s1_origen_emb; if(typeof _restaurarOrigenEmb==='function') _restaurarOrigenEmb(o||'');
+      var eq=document.getElementById('s1_equipo'); if(eq&&eq.value&&typeof setEquipo==='function') setEquipo(eq.value);
+      var te=document.getElementById('s1_tipo_emb'); if(te&&te.value&&typeof _toggleContenedorField==='function') _toggleContenedorField(te.value);
+      if(typeof _toggleFechasEmbarque==='function') _toggleFechasEmbarque();
+      window._contenedores=JSON.parse(JSON.stringify(p.contenedores||[]));
+      setTimeout(function(){ if(typeof _renderContenedores==='function') _renderContenedores(); },100);
+      // Banderas: la información se restaura siempre; los ajustes manuales del cálculo solo al "Continuar"
+      var fl=p.flags||{};
+      FLAGS_INFO.forEach(function(k){ if(k in fl) window[k]=fl[k]; });
+      if(!reiniciar) FLAGS_CALC.forEach(function(k){ if(k in fl) window[k]=fl[k]; });
+      var ch=document.getElementById('chk_no_dmce_acarreo'); if(ch) window._noDmceAcarreo=ch.checked;
+      var ch2=document.getElementById('chk_no_honorarios'); if(ch2) window._noHonorarios=ch2.checked;
+      if(typeof _toggleHonManual==='function') _toggleHonManual();
+      var L=JSON.parse(JSON.stringify(p.invLines||[]));
+      if(reiniciar) L=L.filter(function(l){ return !l._autoGasto; }); // se regeneran con el cálculo limpio
+      invLines=L; window.invLines=L;
+      if(typeof renderInvLines==='function') renderInvLines();
+      var ix=(modo==='continuar') ? idxPorNro(p.reabiertoNro) : -1;
+      window._pendienteUpdateIdx=ix;
+      if(typeof closeTabModal==='function') closeTabModal();
+      var tabEl=document.querySelector('[onclick*="switchTab"][onclick*="sim"]')||document.querySelector('.tab');
+      if(typeof switchTab==='function') switchTab('sim',tabEl);
+      if(typeof _updateEstatusBadge==='function') _updateEstatusBadge('editando');
+    }catch(e){ console.error('Borradores: error al restaurar',e); toast('⚠️ No se pudo restaurar completo: '+e.message,'red',5000); }
+    setTimeout(function(){
+      try{
+        if(typeof syncSC3fromSC1==='function') syncSC3fromSC1();
+        if(typeof calc==='function') calc();
+        if(typeof _restaurarModoFacturaSab==='function') _restaurarModoFacturaSab();
+        if(typeof _enableAllApplyBtns==='function') _enableAllApplyBtns();
+      }catch(e){ console.warn('Borradores: recálculo',e); }
+      window._borrUltFirma=null; window._borrSuspendido=false; actualizarChip();
+    },600);
+  }
+
+  // ───────────── ACCIONES (botones del selector) ─────────────
+  function cerrarSel(){ var o=document.getElementById('_embPickerOverlay'); if(o) o.remove(); }
+  window._borrAccion=function(acc,a,b){
+    if(acc==='cont'||acc==='reini'){
+      var it=leer(KEY_B)[a]; if(!it){ toast('Ese borrador ya no existe','orange'); return; }
+      if(acc==='reini' && !confirm('¿Reiniciar los cálculos de "'+(it.nro||'sin número')+'"?\n\nSe conservan los datos (facturas, montos, campos), pero se limpian el Gasto Complementario y los ajustes manuales/aplicados del cálculo (Master Value, ITBMS, comisión) para recalcular desde cero.')) return;
+      cerrarSel(); window._borradorId=it.id; aplicar(it.payload, acc==='cont'?'continuar':'reiniciar');
+      toast(acc==='cont' ? '📝 Borrador '+(it.nro||'')+' restaurado — sigue donde lo dejaste.' : '🔄 Borrador '+(it.nro||'')+' restaurado con cálculos reiniciados. Vuelve a aplicar los ajustes.', 'orange', 5000);
+    } else if(acc==='del'){
+      if(!confirm('¿Eliminar este borrador? No se puede deshacer.')) return;
+      var B=leer(KEY_B); delete B[a]; escribir(KEY_B,B); if(window._borradorId===a) window._borradorId=null;
+      abrirSelector(true); actualizarChip();
+    } else if(acc==='resp'){
+      var nro=decodeURIComponent(a), R=leer(KEY_R), e=R[nro]; var v=e&&e.versiones&&e.versiones[b];
+      if(!v){ toast('Ese respaldo ya no existe','orange'); return; }
+      if(!confirm('Abrir una COPIA del respaldo de "'+nro+'" ('+fechaCorta(v.ts)+') en el formulario?\n\nEl respaldo original no se modifica.')) return;
+      cerrarSel(); window._borradorId=null; aplicar(v.payload,'respaldo');
+      toast('📂 Copia del respaldo de '+nro+' abierta como borrador nuevo.','blue',5000);
+    }
+  };
+  window._borrNuevo=function(){ cerrarSel(); };
+  window._borrDescartarActual=function(){
+    try{ var B=leer(KEY_B); if(window._borradorId) delete B[window._borradorId]; escribir(KEY_B,B); window._borradorId=null; window._borrSuspendido=true; }catch(e){}
+  };
+
+  // ───────────── RESPALDO al PROCESAR (se llama desde procesarEmbarque) ─────────────
+  window._borrAlProcesar=function(snap){
+    try{
+      var p=capturar(), nro=((p.campos.s1_nro_emb||'')||(snap&&snap.nro)||'').trim();
+      if(nro){
+        var R=leer(KEY_R); var e=R[nro]||{nro:nro,versiones:[]};
+        e.versiones.unshift({ts:Date.now(), desc:(p.campos.s1_desc_emb||'').trim(), total:totalDe(p), payload:p});
+        if(e.versiones.length>MAX_VERS){ var orig=e.versiones[e.versiones.length-1]; e.versiones=e.versiones.slice(0,MAX_VERS-1); e.versiones.push(orig); } // conserva el ORIGINAL
+        R[nro]=e;
+        var ks=Object.keys(R).sort(function(a,b){ return R[b].versiones[0].ts-R[a].versiones[0].ts; });
+        ks.slice(MAX_R).forEach(function(k){ delete R[k]; });
+        if(!escribir(KEY_R,R)){ ks.slice(15).forEach(function(k){ delete R[k]; }); R[nro]=e; escribir(KEY_R,R); }
+      }
+      var B=leer(KEY_B);
+      Object.keys(B).forEach(function(k){ if(k===window._borradorId || (nro && (B[k].nro||'').toUpperCase()===nro.toUpperCase())) delete B[k]; });
+      escribir(KEY_B,B);
+    }catch(e){ console.warn('Borradores: respaldo',e); }
+    window._borradorId=null; window._borrSuspendido=true;
+  };
+
+  // ───────────── SELECTOR (modal) ─────────────
+  function abrirSelector(forzar){
+    cerrarSel();
+    var B=leer(KEY_B), R=leer(KEY_R);
+    var drafts=Object.keys(B).map(function(k){ return B[k]; })
+      .filter(function(d){ return d.id!==window._borradorId || forzar; })
+      .sort(function(a,b){ return b.ts-a.ts; });
+    var nrosB={}; drafts.forEach(function(d){ if(d.nro) nrosB[d.nro.toUpperCase()]=1; });
+    var enProceso=(typeof tendData!=='undefined'?tendData:[]).map(function(d,i){ return {d:d,idx:i}; })
+      .filter(function(o){ return o.d && (o.d.status==='pendiente'||o.d.status==='parcial'||o.d.status==='reabierto') && !nrosB[String(o.d.nro||'').toUpperCase()]; });
+    var resp=Object.keys(R).map(function(k){ return R[k]; }).sort(function(a,b){ return b.versiones[0].ts-a.versiones[0].ts; });
+    if(!forzar && !drafts.length && !enProceso.length) return;
+
+    var btnS='border:none;border-radius:8px;padding:7px 11px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap';
+    var h='<div style="background:var(--s1,#161b22);border:2px solid rgba(210,153,34,.3);border-radius:16px;padding:20px;width:100%;max-width:640px;max-height:85vh;overflow-y:auto;font-family:\'IBM Plex Sans\',sans-serif">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><div style="font-size:15px;font-weight:800;color:var(--orange-l)">📝 Embarques abiertos</div>'
+      +'<button onclick="_borrNuevo()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer">✕</button></div>'
+      +'<div style="font-size:11px;color:var(--muted);margin-bottom:14px">Elige uno para seguir editando, reinicia sus cálculos, elimínalo, o empieza uno nuevo.</div>';
+    if(drafts.length){
+      h+='<div style="font-size:11px;font-weight:700;color:var(--text);margin:4px 0 6px">Borradores sin procesar (este equipo)</div><div style="display:flex;flex-direction:column;gap:8px">';
+      drafts.forEach(function(d){
+        h+='<div style="background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:12px 14px">'
+          +'<div style="font-size:13px;font-weight:700;color:var(--text)">📦 Embarque '+esc(d.nro||'(sin número)')+'</div>'
+          +'<div style="font-size:11px;color:var(--muted);margin:2px 0 8px">'+esc(d.desc||'')+(d.desc?' · ':'')+fmt(d.total)+' · '+d.nFact+' línea'+(d.nFact!==1?'s':'')+' · editado '+hace(d.ts)+'</div>'
+          +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
+          +'<button onclick="_borrAccion(\'cont\',\''+d.id+'\')" style="'+btnS+';background:var(--orange-l);color:#1a1500">Continuar →</button>'
+          +'<button onclick="_borrAccion(\'reini\',\''+d.id+'\')" style="'+btnS+';background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.35);color:var(--blue-l)">🔄 Reiniciar cálculos</button>'
+          +'<button onclick="_borrAccion(\'del\',\''+d.id+'\')" style="'+btnS+';background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.35);color:var(--red-l,#f85149)">🗑 Eliminar</button>'
+          +'</div></div>';
+      });
+      h+='</div>';
+    } else if(forzar){ h+='<div style="font-size:12px;color:var(--muted);padding:6px 0">No hay borradores guardados.</div>'; }
+    if(enProceso.length){
+      h+='<div style="font-size:11px;font-weight:700;color:var(--text);margin:14px 0 6px">🟡 Guardados en Tendencias (pendiente / parcial / reabierto)</div><div style="display:flex;flex-direction:column;gap:8px">';
+      enProceso.forEach(function(o){ var d=o.d;
+        h+='<div style="background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:10px">'
+          +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;color:var(--text)">Embarque '+esc(d.nro||'—')+' <span style="font-size:9px;color:var(--orange-l)">'+esc(String(d.status||'').toUpperCase())+'</span></div>'
+          +'<div style="font-size:11px;color:var(--muted)">'+esc(d.desc||'')+' · '+esc(d.fecha||'')+' · '+fmt(d.cif)+'</div></div>'
+          +'<button onclick="document.getElementById(\'_embPickerOverlay\').remove();reabrirEmbarquePendiente('+o.idx+')" style="'+btnS+';background:var(--orange-l);color:#1a1500">Continuar →</button></div>';
+      });
+      h+='</div>';
+    }
+    if(resp.length){
+      h+='<details style="margin-top:14px"><summary style="cursor:pointer;font-size:11px;font-weight:700;color:var(--text)">📂 Respaldos de embarques procesados ('+resp.length+')</summary>'
+        +'<div style="font-size:10px;color:var(--muted);margin:6px 0">Copia de lo que se usó al procesar. Las correcciones manuales del dashboard no la modifican. Se abre como copia nueva.</div>'
+        +'<div style="display:flex;flex-direction:column;gap:6px">';
+      resp.forEach(function(e){
+        var key=encodeURIComponent(e.nro).replace(/'/g,'%27');
+        h+='<div style="background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:8px 12px"><div style="font-size:12px;font-weight:700;color:var(--text)">Embarque '+esc(e.nro)+'</div>';
+        e.versiones.forEach(function(v,i){
+          var et=(i===e.versiones.length-1 && e.versiones.length>1)?'Original':(i===0?'Última':'Versión');
+          h+='<div style="display:flex;align-items:center;gap:8px;margin-top:4px"><div style="flex:1;font-size:10px;color:var(--muted)">'+et+' · '+fechaCorta(v.ts)+' · '+fmt(v.total)+'</div>'
+            +'<button onclick="_borrAccion(\'resp\',\''+key+'\','+i+')" style="'+btnS+';padding:4px 9px;background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.35);color:var(--blue-l)">Abrir copia</button></div>';
+        });
+        h+='</div>';
+      });
+      h+='</div></details>';
+    }
+    h+='<button onclick="_borrNuevo()" style="margin-top:14px;width:100%;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.35);color:var(--green-l);border-radius:10px;padding:10px;font-size:12px;font-weight:700;cursor:pointer">➕ Empezar un embarque nuevo</button></div>';
+    var ov=document.createElement('div'); ov.id='_embPickerOverlay';
+    ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:99998;display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto';
+    ov.innerHTML=h; document.body.appendChild(ov);
+  }
+  window._borrAbrirSelector=abrirSelector;
+  // Reemplaza el selector anterior (que solo miraba Tendencias): ahora incluye borradores locales
+  window._mostrarSelectorEmbarquesEnProceso=function(){ abrirSelector(false); };
+
+  // ───────────── Chip para reabrir el selector ─────────────
+  function actualizarChip(){
+    var n=Object.keys(leer(KEY_B)).filter(function(k){ return k!==window._borradorId; }).length;
+    var c=document.getElementById('_borrChip');
+    if(!c){
+      c=document.createElement('button'); c.id='_borrChip'; c.type='button'; c.onclick=function(){ abrirSelector(true); };
+      c.style.cssText='position:fixed;left:10px;bottom:10px;z-index:900;background:var(--s2,#21262d);border:1px solid rgba(210,153,34,.45);color:var(--orange-l,#d29922);border-radius:999px;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;display:none';
+      document.body.appendChild(c);
+    }
+    c.textContent='📝 Borradores ('+n+')';
+    c.style.display=(n>0 && document.body.classList.contains('costeo-mode'))?'block':'none';
+  }
+  setInterval(actualizarChip,4000);
+  window.addEventListener('load',function(){ setTimeout(actualizarChip,1500); });
+})();
+</script>
+
 </body>
 </html>
