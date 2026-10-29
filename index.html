@@ -3482,7 +3482,7 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
         <!-- Diferencia: aplica en ZL y EXT CIF (viene automáticamente de PAGO_REALIZADO en plantilla) -->
         <div id="sab2-dif-cif-row" class="field" style="display:none"><label>Diferencia Sababa (± USD) <span class="info-btn" onclick="document.getElementById('dif-cif-info').classList.toggle('open')" style="font-style:normal">i</span></label>
           <div id="dif-cif-info" class="info-box">Diferencia entre el Total Pago de Sababa y la suma de Costo+Flete. Se aplica <strong>después</strong> de ÷1.07 para ajustar el FOB homologado. Si Sababa facturó de más → positivo (+). Si facturó de menos → negativo (−). Se hereda automáticamente desde el campo PAGO_REALIZADO de la plantilla.</div>
-          <input type="number" id="s2_dif_cif" value="" placeholder="0.00" step="0.01" oninput="calcSab2()">
+          <input type="number" id="s2_dif_cif" value="" placeholder="0.00" step="0.01" oninput="_s2DifManualCIF();calcSab2()">
         </div>
       </div>
 
@@ -9993,7 +9993,7 @@ function _zlhPopulateKPIs(){
   const totalAhorro=_calcAhorroTotalGlobal();
   // Acumulado del año en curso (YTD: enero → mes actual) — antes era solo el mes actual
   const _now=new Date(); const _curY=_now.getFullYear();
-  const _mesRaw=tendData.filter(d=>{ if(!d.fecha&&!d.date) return false; const fd=new Date(d.fecha||d.date); return fd.getFullYear()===_curY; });
+  const _mesRaw=tendData.filter(d=>{ const ym=_ymProcEmb(d); return !!ym && ym.y===_curY; });
   // Deduplicar por nro — evitar que embarques duplicados inflen los conteos
   const _mesDedup=new Map();
   _mesRaw.forEach(d=>{ const k=(d.nro||'').trim().toUpperCase()||('_ts_'+(d.ts||Math.random())); const ex=_mesDedup.get(k); if(!ex||(d.ts||0)>(ex.ts||0)) _mesDedup.set(k,d); });
@@ -10090,18 +10090,39 @@ function _zlhPopulateKPIs(){
   if(typeof _syncFmtBtns==='function') _syncFmtBtns();
 }
 
+// (oct-2026) Mes del embarque = mes en que se PROCESÓ (fechaProceso, guardada al procesar y que ya no
+// cambia con la herramienta de corrección / fecha de recepción). Se lee el texto AAAA-MM-DD directo,
+// sin new Date() (evita corrimientos por zona horaria). En embarques viejos sin fechaProceso: usa
+// fecha, y si esa fecha es futura (recepción posterior, ej. 01-nov) usa el mes en que se trabajó (ts).
+function _ymProcEmb(d){
+  if(!d) return null;
+  var ok=function(s){ return typeof s==='string' && /^\d{4}-\d{2}-\d{2}/.test(s) && s.slice(0,4)!=='0000'; };
+  var hoy=_hoyLocalISO(), f=null;
+  if(ok(d.fechaProceso)) f=d.fechaProceso.slice(0,10);
+  else if(d.snap && ok(d.snap.fechaProceso)) f=d.snap.fechaProceso.slice(0,10);
+  else {
+    f=(typeof _fechaEmbarqueReal==='function') ? _fechaEmbarqueReal(d) : (ok(d.fecha)?d.fecha.slice(0,10):null);
+    if(!f && ok(d.date)) f=d.date.slice(0,10);
+    if(f && f>hoy){
+      if(d.ts>0){ var x=new Date(d.ts); f=x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0'); }
+      if(!f || f>hoy) f=hoy;
+    }
+  }
+  if(!f) return null;
+  return {y:+f.slice(0,4), m:+f.slice(5,7)-1};
+}
 // ── Tarjeta "Embarques por Mes" del inicio — YTD, mismo criterio de dedup que los KPIs ──
 function _zlhPopulateMonthly(){
   const strip=document.getElementById('zlh-month-strip');
   if(!strip || !window.tendData) return;
   const _now=new Date(); const _curY=_now.getFullYear(); const _curM=_now.getMonth();
   const yEl=document.getElementById('zlh-month-year'); if(yEl) yEl.textContent=_curY;
-  const _raw=tendData.filter(d=>{ if(!d.fecha&&!d.date) return false; const fd=new Date(d.fecha||d.date); return fd.getFullYear()===_curY; });
+  const _raw=tendData.filter(d=>{ const ym=_ymProcEmb(d); return !!ym && ym.y===_curY; });
   const _dedup=new Map();
   _raw.forEach(d=>{ const k=(d.nro||'').trim().toUpperCase()||('_ts_'+(d.ts||Math.random())); const ex=_dedup.get(k); if(!ex||(d.ts||0)>(ex.ts||0)) _dedup.set(k,d); });
   const _data=Array.from(_dedup.values());
   const counts=new Array(_curM+1).fill(0);
-  _data.forEach(d=>{ const fd=new Date(d.fecha||d.date); const m=fd.getMonth(); if(m>=0 && m<=_curM) counts[m]++; });
+  _data.forEach(d=>{ const ym=_ymProcEmb(d); const m=ym?ym.m:-1; if(m>=0 && m<=_curM) counts[m]++; });
   const meses=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   window._zlhCurY = _curY;
   strip.innerHTML = counts.map((c,i)=>
@@ -10135,9 +10156,9 @@ function _renderModalEmbarquesMes(){
   // real en tendData (necesario para abrir el detalle correcto).
   var raw=[];
   (tendData||[]).forEach(function(d,idx){
-    if(!d || (!d.fecha && !d.date)) return;
-    var fd=new Date(d.fecha||d.date);
-    if(fd.getFullYear()!==ctx.anio || fd.getMonth()!==ctx.mes) return;
+    if(!d) return;
+    var ym=_ymProcEmb(d);
+    if(!ym || ym.y!==ctx.anio || ym.m!==ctx.mes) return;
     raw.push({d:d, idx:idx});
   });
   var dedup=new Map();
@@ -12476,7 +12497,26 @@ function _restaurarModoFacturaSab(){
 // Trata ese valor tecleado como el PAGO_REALIZADO real y limpio (reemplaza cualquier
 // valor previo contaminado), y recalcula la Diferencia respetando el checkbox actual.
 // Así se puede corregir un embarque ya importado sin tener que reimportar el Excel.
+function _s2EsFOB(){ return (typeof termino!=='undefined' && termino==='FOB') && sab2Tipo==='EXT'; }
+// Escribe un valor en TODAS las copias del campo (original oculto + clon del modal), sin pisar el que se está tecleando
+function _s2SetAll(id,val){ var act=document.activeElement; document.querySelectorAll('[id="'+id+'"]').forEach(function(el){ if(el!==act) el.value=val; }); }
+// Si el usuario edita la Diferencia a mano, el Total Pago pasa a derivarse (Base + Diferencia)
+function _s2DifManualCIF(){
+  document.querySelectorAll('[id="s2_pago"]').forEach(function(el){ el.dataset.autoSet='true'; });
+  document.querySelectorAll('[id="s2_dif_cif"]').forEach(function(el){ el.dataset.userSet='manual'; });
+}
 function _recalcDifDesdePagoManual(valStr){
+  // (oct-2026) Modo CIF / Zona Libre: la Diferencia se deriva en calcSab2() = Total Pago - (CIF - Traspaso).
+  if(sab2Tipo && !_s2EsFOB()){
+    const pm = parseFloat(valStr);
+    if(isNaN(pm) || pm<=0){
+      // Campo vaciado: vuelve a heredar del valor CIF del embarque
+      document.querySelectorAll('[id="s2_pago"]').forEach(function(el){ el.dataset.autoSet='true'; });
+      var d0 = parseFloat(document.getElementById('s1_dif_pago')?.value)||0;
+      document.querySelectorAll('[id="s2_dif_cif"]').forEach(function(el){ delete el.dataset.userSet; if(el!==document.activeElement) el.value = d0!==0 ? d0.toFixed(2) : ''; });
+    }
+    return;
+  }
   const pagoManual = parseFloat(valStr);
   if(isNaN(pagoManual) || pagoManual<=0) return;
   window._pagoRealizadoOriginalSab = pagoManual; // este valor tecleado pasa a ser la fuente limpia
@@ -12521,6 +12561,16 @@ function calcSab2(){
     diferencia = sab2Tipo==='EXT' ? v('s2_dif_cif') : v('s2_dif_cif'); // desde plantilla
     // Para ZL: base = CIF − Traspaso. Para EXT/CIF: base = CIF.
     baseLimpia = cif - traspaso;
+    // (oct-2026) Si el usuario pegó/tecleó el Total Pago Realizado (factura fiscal), ese valor manda:
+    // Diferencia = Pago - Base, reflejada de inmediato en el campo Diferencia.
+    const _pEl = _visEl('s2_pago');
+    if(_pEl && _pEl.dataset.autoSet==='false' && baseLimpia>0){
+      const _pm = parseFloat(_pEl.value);
+      if(!isNaN(_pm) && _pm>0){
+        diferencia = Math.round((_pm - baseLimpia)*100)/100;
+        _s2SetAll('s2_dif_cif', diferencia!==0 ? diferencia.toFixed(2) : '');
+      }
+    }
   }
 
   const rawCheck = isFOB ? (v('s2_fob')+v('s2_flete')) : v('s2_costo_zl');
@@ -12548,6 +12598,13 @@ function calcSab2(){
   const gravadoHomol = baseGravada / DIV;
   const itbmsHomol   = Math.round((baseGravada - gravadoHomol) * 100) / 100;
   const mercHomol    = gravadoHomol + exentoSab;
+  // (oct-2026) CIF/ZL: Total Pago Realizado hereda Base + Diferencia salvo que el usuario lo haya pegado a mano
+  if(!isFOB && baseAjust>0){
+    const _pe = _visEl('s2_pago');
+    if(_pe && _pe.dataset.autoSet!=='false') _s2SetAll('s2_pago', baseAjust.toFixed(2));
+    const _nt = fmt(baseLimpia)+((diferencia||0)!==0 ? (diferencia>0?' + ':' − ')+fmt(Math.abs(diferencia)) : '')+' = '+fmt(baseAjust)+' → ÷ '+DIV.toFixed(2)+' = '+fmt(mercHomol)+' · ITBMS '+fmt(itbmsHomol);
+    document.querySelectorAll('[id="s2_pago_formula_note"]').forEach(function(el){ el.textContent=_nt; });
+  }
 
   // Flete — solo aplica en FOB (en CIF ya está incluido en el valor)
   const fleteMain = isFOB ? v('s2_flete') : 0;
@@ -17785,7 +17842,7 @@ async function procesarEmbarque(){
     ? sab2Tipo
     : ((typeof tipo!=='undefined' && tipo) ? tipo : (typeof sab2Tipo!=='undefined' ? sab2Tipo : '')) || '';
   const snap={
-    nro: nro||`SIN-NRO-${Date.now()}`, desc, fecha,
+    nro: nro||`SIN-NRO-${Date.now()}`, desc, fecha, fechaProceso: fecha,
     // ── Ahorro: _ahorroTotal4C es la fuente única de verdad ──
     // Escrito por calcSab2() con la fórmula 4-Criterios correcta.
     ahorro: (function(){
@@ -29336,6 +29393,7 @@ function _unicoGuardarEstado(){
       tipoEmb:     document.getElementById('unico_tipo_emb')?.value || '',
       cartones:    document.getElementById('unico_cartones')?.value || '',
       fecha:       document.getElementById('unico_fecha')?.value || '',
+      fechaProceso: document.getElementById('unico_fecha')?.value || '',
       estatus:     document.getElementById('unico_estatus')?.value || '',
       cif:         document.getElementById('unico_cif')?.value || '',
       ar:          document.getElementById('unico_ar')?.value || '',
@@ -38217,6 +38275,53 @@ window._plnModuloEmbarques = async function(){
     }
   }
 
+  // ── (oct-2026) PDF de factura fiscal (DGI): lee el SUBTOTAL y lo manda a Total Pago Realizado de Sababa ──
+  function cargarPdfJs(){
+    return new Promise(function(res,rej){
+      if(window.pdfjsLib) return res(window.pdfjsLib);
+      var s=document.createElement('script'); s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+      s.onload=function(){ window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; res(window.pdfjsLib); };
+      s.onerror=function(){ rej(new Error('No se pudo cargar el lector de PDF (revisa internet)')); };
+      document.head.appendChild(s);
+    });
+  }
+  async function leerPDFFiscal(file){
+    var lab=document.getElementById('_pm_pdfn');
+    try{
+      if(lab) lab.textContent='Leyendo '+file.name+'…';
+      var lib=await cargarPdfJs(), pdf=await lib.getDocument({data:await file.arrayBuffer()}).promise, lines=[];
+      for(var p=1;p<=pdf.numPages;p++){
+        var tc=await (await pdf.getPage(p)).getTextContent(), rows=[];
+        tc.items.forEach(function(it){
+          if(!it.str || !it.str.trim()) return;
+          var y=it.transform[5], x=it.transform[4], r=rows.find(function(r){ return Math.abs(r.y-y)<=3; });
+          if(!r){ r={y:y,it:[]}; rows.push(r); } r.it.push({x:x,s:it.str});
+        });
+        rows.sort(function(a,b){ return b.y-a.y; }).forEach(function(r){
+          r.it.sort(function(a,b){ return a.x-b.x; });
+          lines.push(r.it.map(function(i){ return i.s; }).join(' ').replace(/\s+/g,' ').trim());
+        });
+      }
+      var num=function(s){ return parseFloat(String(s).replace(/,/g,'')); }, sub=null, totPago=null, m;
+      lines.forEach(function(l){
+        if(sub===null && (m=/(?:^|\s)Subtotal\s+(?!sin\b)([\d,]+\.\d{2})/i.exec(l))) sub=num(m[1]);
+        if(totPago===null && (m=/Total de pago\s+([\d,]+\.\d{2})/i.exec(l))) totPago=num(m[1]);
+      });
+      if(sub===null || !(sub>0)){ if(lab) lab.textContent='⚠️ No encontré el Subtotal en '+file.name; toast('⚠️ No encontré el Subtotal en el PDF','orange',4000); return; }
+      document.querySelectorAll('[id="s2_pago"]').forEach(function(el){ el.value=sub.toFixed(2); el.dataset.autoSet='false'; });
+      if(typeof sab2Tipo!=='undefined' && sab2Tipo){
+        if(typeof _recalcDifDesdePagoManual==='function') _recalcDifDesdePagoManual(sub);
+        if(typeof calcSab2==='function') calcSab2();
+      }
+      var f2=function(n){ return '$'+n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
+      if(lab) lab.innerHTML='✅ '+esc(file.name)+' · Subtotal '+f2(sub)+' → Total Pago Realizado'+((totPago!==null && Math.abs(totPago-sub)>=0.005)?' <span style="color:#f0883e">(el PDF dice Total de pago '+f2(totPago)+')</span>':'');
+      toast('✅ Total Pago Realizado = '+f2(sub),'green',3500);
+    }catch(err){
+      if(lab) lab.textContent='⚠️ '+(err&&err.message||err);
+      toast('⚠️ No se pudo leer el PDF','orange',4000);
+    }
+  }
+
   window._pmAbrir = function(){
     cerrar(); normalize();
     var ov=document.createElement('div'); ov.id='_pm_ov';
@@ -38250,6 +38355,11 @@ window._plnModuloEmbarques = async function(){
         +'<span style="margin-left:auto;display:flex;gap:6px;align-items:center;font-size:11px">Fecha recibida p/ vacías <input type="date" id="_pm_fecha" style="background:var(--s2,#21262d);border:1px solid var(--border,#30363d);border-radius:6px;padding:4px;color:inherit"><button class="pmb" data-act="fecha">Aplicar</button></span>'
         +'<label style="font-size:11px;display:flex;gap:4px;align-items:center;width:100%"><input type="checkbox" id="_pm_hom"'+(S.usarHomolSiVacio?' checked':'')+'> Si la fila no trae valor original, usar el monto homologado de la OC</label>'
       +'</div>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:8px;border:1px solid var(--border,#30363d);border-radius:10px;margin-bottom:8px">'
+        +'<button class="pmb o" data-act="pdffiscal">🧾 PDF factura fiscal Sababa</button>'
+        +'<input type="file" id="_pm_pdf" accept=".pdf,application/pdf" style="display:none">'
+        +'<span id="_pm_pdfn" style="font-size:11px;color:var(--muted,#8b949e)">Sube el PDF fiscal: lee el Subtotal y lo pone en Total Pago Realizado de Sababa</span>'
+      +'</div>'
       +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
         +'<input id="_pm_nombre" placeholder="Nombre para guardarla en la nube (opcional al aplicar)" style="flex:2;min-width:220px;background:var(--s2,#21262d);border:1px solid var(--border,#30363d);border-radius:8px;padding:8px 10px;color:inherit;font-size:12px">'
         +'<input id="_pm_user" placeholder="Usuario" value="'+esc(u||'Paul Rovira')+'" style="flex:1;min-width:120px;background:var(--s2,#21262d);border:1px solid var(--border,#30363d);border-radius:8px;padding:8px 10px;color:inherit;font-size:12px">'
@@ -38266,6 +38376,7 @@ window._plnModuloEmbarques = async function(){
       else if(a==='aplicar') ejecutar(true);
       else if(a==='actualizar'){ (window._provCustomPull?window._provCustomPull():Promise.resolve()).then(function(){ refrescarDatalist(); actualizarTabla(false); }); }
       else if(a==='art') document.getElementById('_pm_art').click();
+      else if(a==='pdffiscal') document.getElementById('_pm_pdf').click();
       else if(a==='addrow'){ for(var i=0;i<10;i++) S.rows.push(new Array(S.cols.length).fill('')); render(); }
       else if(a==='addcol'){ S.cols.push('IGNORAR'); normalize(); render(); }
       else if(a==='limpiar'){ if(confirm('¿Borrar todo lo pegado?')){ S.rows=[]; S.art=null; S.artNombre=''; normalize(); render(); var n=document.getElementById('_pm_artn'); if(n) n.textContent='Sin cargar'; } }
@@ -38307,6 +38418,7 @@ window._plnModuloEmbarques = async function(){
       var t=e.target;
       if(t.tagName==='SELECT' && t.hasAttribute('data-ci')){ S.cols[+t.getAttribute('data-ci')]=t.value; render(); }
       else if(t.id==='_pm_art' && t.files && t.files[0]){ var f=t.files[0]; t.value=''; leerArticulos(f); setTimeout(function(){ var n=document.getElementById('_pm_artn'); if(n&&S.art) n.textContent='✅ '+S.artNombre+' · '+Object.keys(S.art.byOC).length+' OC'; },1200); }
+      else if(t.id==='_pm_pdf' && t.files && t.files[0]){ var fp=t.files[0]; t.value=''; leerPDFFiscal(fp); }
       else if(t.id==='_pm_hom'){ S.usarHomolSiVacio=t.checked; totales(); }
       else if(t.id==='_pm_si'){ S.si=t.checked; actualizarTabla(true); }
     });
