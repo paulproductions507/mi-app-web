@@ -389,16 +389,34 @@ td .bar,.tile .bar{height:16px!important;margin-top:4px!important}
 .dcard .dchips span{background:#ffffff1c;border-radius:999px;padding:2px 8px;font-size:11px;font-weight:700}
 .dcard .dft{display:flex;gap:6px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:8px 10px;border-top:1px solid #ffffff22}
 .dcard .dpub{font-size:11.5px;font-weight:700}.dcard .dpub.w{color:#ffd9a0}
+/* ===== Vista móvil: 4 iconos por página, se desliza de lado, con puntos abajo ===== */
+.hm-pager{display:flex;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none;overscroll-behavior-x:contain;margin:0 -4px}
+.hm-pager::-webkit-scrollbar{display:none}
+.hm-page{flex:0 0 100%;min-width:0;scroll-snap-align:start;scroll-snap-stop:always;padding:0 4px;box-sizing:border-box}
+html[data-view=mobile] .hm-page .hm-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:26px 10px;align-content:start;margin-top:22px}
+.hm-dots{display:flex;justify-content:center;gap:10px;margin:20px 0 4px}
+.hm-dots button{appearance:none;border:0;padding:0;width:9px;height:9px;border-radius:50%;background:var(--bd);cursor:pointer;transition:all .25s ease}
+.hm-dots button.on{width:26px;border-radius:99px;background:var(--ac)}
+.vw-box{width:calc(100% - 32px);max-width:420px;background:var(--bg2);border:1px solid var(--bd);border-radius:20px;padding:20px 16px 16px}
+.vw-box h3{margin:0 0 4px;font:800 19px var(--ff)}.vw-box p{margin:0 0 14px;color:var(--mt);font-size:13px}
+.vw-opt{display:block;width:100%;text-align:left;font:700 15px var(--ff);padding:14px;border-radius:14px;border:1px solid var(--bd);background:var(--sf);color:var(--tx);cursor:pointer;margin-top:8px}
+.vw-opt small{display:block;font-weight:500;color:var(--mt);margin-top:3px;font-size:12px}
+.vw-opt.on{background:var(--ac);color:#02343a;border-color:var(--ac)}.vw-opt.on small{color:#04403f}
+#viewSheet{align-items:center}
 </style>
 <script>try{var _t=localStorage.getItem('conTheme');document.documentElement.dataset.theme=(_t==='light')?'light':'dark'}catch(e){document.documentElement.dataset.theme='dark'}</script>
 <script>/* Modo de entrada automático: detecta móvil / tableta / escritorio y el ancho disponible */
 (function(){var d=document.documentElement,ua=navigator.userAgent||'',tc=(navigator.maxTouchPoints||0)>1;
 var mob=/iPhone|iPod|Android.+Mobile|Windows Phone|Mobile/i.test(ua),tab=!mob&&(/iPad|Tablet|Android/i.test(ua)||(/Macintosh/.test(ua)&&tc));
-d.dataset.device=mob?'mobile':tab?'tablet':'desktop';try{if(localStorage.getItem('conFxSeed')!=='slide-v25'){localStorage.setItem('conFx','slide');localStorage.setItem('conFxSeed','slide-v25')}d.dataset.fx=localStorage.getItem('conFx')||'slide'}catch(e){d.dataset.fx='slide'}try{if(localStorage.getItem('conNoMove')==='1')d.dataset.nomove='1'}catch(e){}
+d.dataset.device=mob?'mobile':tab?'tablet':'desktop';try{var cv=localStorage.getItem('conView');if(cv==='mobile'||cv==='desktop')d.dataset.view=cv}catch(e){}try{if(localStorage.getItem('conFxSeed')!=='slide-v25'){localStorage.setItem('conFx','slide');localStorage.setItem('conFxSeed','slide-v25')}d.dataset.fx=localStorage.getItem('conFx')||'slide'}catch(e){d.dataset.fx='slide'}try{if(localStorage.getItem('conNoMove')==='1')d.dataset.nomove='1'}catch(e){}
 function z(){var w=window.innerWidth;d.dataset.size=w<640?'s':w<1000?'m':'l'}z();window.addEventListener('resize',z)})();</script></head>
 <body>
 <div id="stSheet" class="stsheet hide"><div class="stbox"><div class="sthd"><b>Filtrar por tienda</b><button type="button" id="stSheetX" class="btn sm">✕</button></div><div id="stSheetList"></div></div></div>
+<div id="viewSheet" class="stsheet hide"><div class="vw-box"><h3>¿Cómo vas a usar la app?</h3><p>Así ajustamos el menú a tu pantalla. Lo puedes cambiar luego en Configuración.</p>
+  <button type="button" class="vw-opt" data-view="mobile">📱 Teléfono móvil<small>Menú de 4 iconos por página; desliza el dedo para ver más</small></button>
+  <button type="button" class="vw-opt" data-view="desktop">🖥️ Computadora / escritorio<small>Menú completo con todos los iconos a la vista</small></button></div></div>
 <div id="cfgSheet" class="stsheet hide"><div class="stbox"><div class="sthd"><b>Configuración</b><button type="button" id="cfgX" class="btn sm">✕</button></div>
+  <div class="lbl" style="margin:6px 6px 8px">Vista del menú</div><div id="cfgView" class="cfg-fx" style="margin-bottom:14px"><button type="button" data-view="mobile">📱 Teléfono móvil<small>4 iconos por página, desliza para cambiar</small></button><button type="button" data-view="desktop">🖥️ Escritorio<small>Todos los iconos a la vista</small></button></div>
   <div class="lbl" style="margin:6px 6px 8px">Efecto de entrada del menú</div><div id="cfgFx" class="cfg-fx"></div>
   <label class="cfg-chk"><input type="checkbox" id="cfgNoMove"><span><b>Sin movimiento</b><small>Detiene solo el giro alrededor de los iconos. Las transiciones y efectos siguen normales. Para detener todo, usa «Sin animación».</small></span></label>
   <div class="msg" style="margin:10px 6px 4px">Se guarda en este equipo. Al elegir uno se ve de inmediato en el menú.</div></div></div>
@@ -3560,16 +3578,37 @@ function buildHome(){
   if(r.node){$('hmHi').innerHTML=esc(r.node.n);$('ttl').textContent=r.node.n;$('hmSub').textContent='Elige una opción'}
   else{$('hmHi').innerHTML='Bienvenido'+(first?' <b>'+esc(first)+'</b>':'');$('ttl').textContent='Centro de distribución Westland';$('hmSub').textContent='¿Qué quieres hacer hoy?'}
   const items=r.list.filter(x=>!x.adm||ISADM);
-  $('hmSecs').innerHTML=`<div class="hm-grid" style="margin-top:22px">${items.map((x,i)=>`<button type="button" class="hm-it" style="--i:${i}" data-hm="${x.k}"><span class="hm-ring">${hmOrb}<span class="hm-ic"><svg viewBox="0 0 24 24">${HIC[x.ic]}</svg></span></span><span class="hm-lb">${esc(x.n)}</span>${x.sub&&!r.node?`<small class="hm-sm">${esc(x.sub)}</small>`:''}</button>`).join('')}</div>`;
+  const itHtml=(x,i)=>`<button type="button" class="hm-it" style="--i:${i}" data-hm="${x.k}"><span class="hm-ring">${hmOrb}<span class="hm-ic"><svg viewBox="0 0 24 24">${HIC[x.ic]}</svg></span></span><span class="hm-lb">${esc(x.n)}</span>${x.sub&&!r.node?`<small class="hm-sm">${esc(x.sub)}</small>`:''}</button>`;
+  const VIEW=document.documentElement.dataset.view;
+  if(VIEW==='mobile'){
+    const pages=[];for(let p=0;p<items.length;p+=4)pages.push(items.slice(p,p+4));
+    $('hmSecs').innerHTML=`<div class="hm-pager" id="hmPager">${pages.map(pg=>`<div class="hm-page"><div class="hm-grid">${pg.map((x,i)=>itHtml(x,i)).join('')}</div></div>`).join('')}</div>`+(pages.length>1?`<div class="hm-dots" id="hmDots">${pages.map((_,i)=>`<button type="button" class="${i?'':'on'}" data-pg="${i}" aria-label="Página ${i+1}"></button>`).join('')}</div>`:'');
+    const pg=$('hmPager'),dots=$('hmDots');
+    if(dots){let raf=0;pg.addEventListener('scroll',()=>{cancelAnimationFrame(raf);raf=requestAnimationFrame(()=>{const k=Math.round(pg.scrollLeft/Math.max(1,pg.clientWidth));[...dots.children].forEach((d,n)=>d.classList.toggle('on',n===k))})},{passive:true});
+      dots.addEventListener('click',e=>{const b=e.target.closest('[data-pg]');if(b)pg.scrollTo({left:+b.dataset.pg*pg.clientWidth,behavior:'smooth'})})}
+  }else{
+    $('hmSecs').innerHTML=`<div class="hm-grid" style="margin-top:22px">${items.map(itHtml).join('')}</div>`;
+  }
   if(HMPATH.length)delete document.body.dataset.home;else document.body.dataset.home='1'}
+
+// ---------- vista móvil / escritorio ----------
+function setView(v){const d=document.documentElement;d.dataset.view=v;try{localStorage.setItem('conView',v)}catch(e){}
+  $('viewSheet').classList.add('hide');viewPaint();if(!$('v-home').classList.contains('hide'))buildHome()}
+function viewPaint(){const cur=document.documentElement.dataset.view;document.querySelectorAll('#cfgView [data-view]').forEach(b=>b.classList.toggle('on',b.dataset.view===cur))}
+function askView(){if(document.documentElement.dataset.view)return;
+  const rec=document.documentElement.dataset.device==='mobile'?'mobile':'desktop';
+  document.querySelectorAll('#viewSheet [data-view]').forEach(b=>b.classList.toggle('on',b.dataset.view===rec));
+  $('viewSheet').classList.remove('hide')}
+$('viewSheet').addEventListener('click',e=>{const b=e.target.closest('[data-view]');if(b)setView(b.dataset.view)});
+$('cfgView').addEventListener('click',e=>{const b=e.target.closest('[data-view]');if(b)setView(b.dataset.view)});
 function showHome(path){
   HOMEBACK=false;HMPATH=Array.isArray(path)?path.slice():[];
   ['v-rec','v-recibo','v-stat','v-auto','v-pro','v-pdn','v-pal','v-pkl'].forEach(id=>{const e=$(id);if(e)e.classList.add('hide')});
   ['btnHome','btnPal','btnPkl','btnRecBack','bar'].forEach(id=>{const e=$(id);if(e)e.classList.add('hide')});
-  buildHome();$('v-home').classList.remove('hide');window.scrollTo(0,0)}
+  buildHome();$('v-home').classList.remove('hide');window.scrollTo(0,0);askView()}
 const FXS=[['arc','Media luna','Los cuatro salen juntos, suben en arco y caen en su lugar'],['slide','Deslizar','Uno por uno desde la izquierda'],['roll','Rodar','Uno por uno, rodando como rueda'],['drop','Caída con rebote','Caen desde arriba y rebotan al llegar'],['zoom','Zoom','Crecen desde el centro, en cascada'],['flip','Giro 3D','Giran como una puerta y se abren'],['fan','Abanico','Se abren en abanico desde la esquina izquierda'],['fade','Transición suave','Aparece con desvanecimiento, sin movimiento'],['none','Sin animación','Entra directo; ideal para equipos lentos']];
 function cfgPaint(){const cur=document.documentElement.dataset.fx||'slide';$('cfgFx').innerHTML=FXS.map(([k,n,d])=>`<button type="button" data-fx="${k}" class="${cur===k?'on':''}">${n}<small>${d}</small></button>`).join('')}
-$('btnCfg').onclick=()=>{cfgPaint();$('cfgNoMove').checked=document.documentElement.dataset.nomove==='1';$('cfgSheet').classList.remove('hide')};
+$('btnCfg').onclick=()=>{cfgPaint();viewPaint();$('cfgNoMove').checked=document.documentElement.dataset.nomove==='1';$('cfgSheet').classList.remove('hide')};
 $('cfgNoMove').addEventListener('change',e=>{const d=document.documentElement;if(e.target.checked)d.dataset.nomove='1';else delete d.dataset.nomove;try{localStorage.setItem('conNoMove',e.target.checked?'1':'0')}catch(x){}if(!$('v-home').classList.contains('hide'))buildHome()});
 $('cfgSheet').addEventListener('click',e=>{if(e.target.id==='cfgSheet'||e.target.id==='cfgX'){$('cfgSheet').classList.add('hide');return}
   const b=e.target.closest('#cfgFx [data-fx]');if(!b)return;document.documentElement.dataset.fx=b.dataset.fx;try{localStorage.setItem('conFx',b.dataset.fx)}catch(x){}cfgPaint();
