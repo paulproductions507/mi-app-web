@@ -15045,7 +15045,9 @@ function _corregirRubroUI(idx){
         +'<input type="number" step="0.01" data-monto-idx="'+realIdx+'" class="_fix_monto_merc" value="'+Number(l.costo||0).toFixed(2)+'" style="width:110px;text-align:right;background:var(--s2);border:1px solid rgba(88,166,255,.4);border-radius:6px;padding:5px 7px;color:var(--blue-l);font-family:monospace;font-size:12px;font-weight:800">'
         +'<button type="button" class="_fix_del_linea" data-del-idx="'+realIdx+'" title="Eliminar esta factura" style="background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.35);color:#f85149;border-radius:6px;padding:5px 8px;font-size:12px;cursor:pointer;flex-shrink:0">🗑️</button>'
       +'</div>'
-      +'<div style="font-size:10px;color:var(--muted);margin-bottom:6px">Factura: '+(l.numFact||l.nfac||'—')+'</div>'
+      +'<div style="font-size:10px;color:var(--muted);margin-bottom:6px">Factura: '+(l.numFact||l.nfac||'—')+' · el monto de arriba es el <b>ORIGINAL</b></div>'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px"><span style="font-size:10px;color:var(--orange-l);font-weight:700">🏷️ MONTO HOMOLOGADO (inventario)</span>'
+        +'<input type="number" step="0.01" data-homol-idx="'+realIdx+'" class="_fix_homol_merc" value="'+((l.montoHomologado||0)>0?Number(l.montoHomologado).toFixed(2):'')+'" placeholder="0.00" style="width:110px;text-align:right;background:var(--s2);border:1px solid rgba(240,136,62,.45);border-radius:6px;padding:5px 7px;color:var(--orange-l);font-family:monospace;font-size:12px;font-weight:800"></div>'
       +'<select data-idx="'+realIdx+'" class="_fix_tipo_merc_sel" style="width:100%;background:var(--s2);border:1px solid '+(esRara?'rgba(248,81,73,.4)':'rgba(88,166,255,.3)')+';border-radius:7px;padding:7px 9px;color:var(--text);font-size:12px;margin-bottom:6px">'+selMerc+'</select>'
       +'<div style="font-size:9px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px">Departamento (encabezado del embarque)</div>'
       +'<input type="text" data-idx="'+realIdx+'" class="_fix_dept_merc" value="'+deptVal+'" placeholder="Ej: Hogar, Caballeros, Damas..." style="width:100%;background:var(--s2);border:1px solid rgba(63,185,80,.3);border-radius:7px;padding:7px 9px;color:var(--green-l);font-size:12px;font-weight:600">'
@@ -15082,6 +15084,7 @@ function _corregirRubroUI(idx){
         +'<button type="button" id="_fix_dept_upload_btn" style="width:100%;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.35);color:var(--green-l);border-radius:7px;padding:8px;font-size:11px;font-weight:700;cursor:pointer">📄 Elegir Excel de Departamentos</button>'
         +'<div id="_fix_dept_upload_status" style="font-size:10px;color:var(--muted);margin-top:6px"></div>'
       +'</div>'
+      +'<div id="_fix_homol_resumen" style="background:rgba(240,136,62,.07);border:1px solid rgba(240,136,62,.3);border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:11px"></div>'
       +filasMercHtml
     +'</div>'
     +'<div style="display:flex;gap:10px;margin-top:8px">'
@@ -15308,6 +15311,28 @@ function _corregirRubroUI(idx){
     [_mI,_nI,_iI,_hI].forEach(function(inp){ if(inp) inp.addEventListener('input',_upd); });
   })();
 
+  // ── Resumen Σ homologado de las líneas vs Valor Homologado ──
+  (function(){
+    var res=ov.querySelector('#_fix_homol_resumen'); if(!res) return;
+    function f(n){ return '$'+n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+    function pintar(){
+      var h=0,o=0,n=0,tot=0;
+      ov.querySelectorAll('._fix_homol_merc').forEach(function(i){ tot++; var v=parseFloat(i.value)||0; if(v>0){h+=v;n++;} });
+      ov.querySelectorAll('._fix_monto_merc').forEach(function(i){ o+=parseFloat(i.value)||0; });
+      var hf=document.getElementById('_fix_fin_homol'), obj=hf?(parseFloat(hf.value)||0):0;
+      var dif=Math.round((h-obj)*100)/100, ok=obj>0&&Math.abs(dif)<0.005;
+      res.innerHTML='<div style="display:flex;justify-content:space-between"><span>Σ Original líneas</span><b>'+f(o)+'</b></div>'
+        +'<div style="display:flex;justify-content:space-between"><span>Σ Homologado líneas ('+n+'/'+tot+')</span><b style="color:var(--orange-l)">'+f(h)+'</b></div>'
+        +'<div style="display:flex;justify-content:space-between"><span>Valor Homologado (valores financieros)</span><b>'+f(obj)+'</b></div>'
+        +(n>0?'<div style="margin-top:4px;color:'+(ok?'#3fb950':'#f0883e')+'">'+(ok?'✅ Cuadra':'⚠️ Diferencia '+f(dif))+'</div>'
+        +(ok?'':'<button type="button" id="_fix_homol_usar" style="margin-top:6px;width:100%;background:rgba(240,136,62,.12);border:1px solid rgba(240,136,62,.4);color:var(--orange-l);border-radius:7px;padding:6px;font-size:11px;font-weight:700;cursor:pointer">Usar Σ homologado como Valor Homologado</button>'):'');
+      var b=res.querySelector('#_fix_homol_usar');
+      if(b) b.onclick=function(){ if(hf){ hf.value=h.toFixed(2); hf.dispatchEvent(new Event('input',{bubbles:true})); } pintar(); };
+    }
+    ov.addEventListener('input',function(e){ if(e.target.classList && (e.target.classList.contains('_fix_homol_merc')||e.target.classList.contains('_fix_monto_merc')||e.target.id==='_fix_fin_homol')) pintar(); });
+    pintar();
+  })();
+
   // ── Recalcular Mercancía/Costo No Mercancía sumando los montos editados ──
   // Suma montos del selector dado. excluirNoMerc=true → salta 'seguro' (solo para CIF)
   // e 'itbms' (desembolso fiscal, va en su propio campo, NO en Costo No Mercancía).
@@ -15342,6 +15367,7 @@ function _corregirRubroUI(idx){
     });
     var nuevoNM = _sumarMontos('._fix_monto_gasto', true) + extraNM;
     if(nuevoMerc>0) document.getElementById('_fix_fin_merc').value = nuevoMerc.toFixed(2);
+    (function(){ var h=0,n=0,t=0; ov.querySelectorAll('._fix_homol_merc').forEach(function(i){ t++; var v=parseFloat(i.value)||0; if(v>0){h+=v;n++;} }); var hf=document.getElementById('_fix_fin_homol'); if(hf && n>0 && n===t){ hf.value=h.toFixed(2); hf.dispatchEvent(new Event('input',{bubbles:true})); } })();
     document.getElementById('_fix_fin_nm').value = nuevoNM.toFixed(2);
     // ITBMS: actualizar si se encontraron líneas etiquetadas; si no, mantener el campo actual
     if(nuevoITBMS>0) document.getElementById('_fix_fin_itbms').value = nuevoITBMS.toFixed(2);
@@ -15422,6 +15448,19 @@ function _corregirRubroUI(idx){
     //    top 3 + "+N más". Si el embarque no traía Departamento en la
     //    plantilla original, esto reemplaza el fallback genérico (Término ·
     //    Tipo · Equipo · Origen) por el desglose real. ──
+    var _homolCambio=false, _sumH=0, _nH=0, _nIn=0;
+    ov.querySelectorAll('._fix_homol_merc').forEach(function(inp){
+      _nIn++;
+      var i=parseInt(inp.dataset.homolIdx,10), v=Math.round((parseFloat(inp.value)||0)*100)/100, ln=d.invLines[i];
+      if(!ln) return;
+      if((ln.montoHomologado||0)!==v){ ln.montoHomologado=v; _homolCambio=true; cambios++; }
+      if(v>0){ _sumH+=v; _nH++; }
+    });
+    if(_homolCambio && _nH>0 && _nH===_nIn){
+      _sumH=Math.round(_sumH*100)/100;
+      if(d.snap && d.snap.sc3) d.snap.sc3.mercHomol=_sumH;
+      if(d._overrideFin && d._overrideFin.mercHomol>0) d._overrideFin.mercHomol=_sumH;
+    }
     var _deptCambio = false;
     ov.querySelectorAll('._fix_dept_merc').forEach(function(inp){
       var i = parseInt(inp.dataset.idx,10);
@@ -26857,7 +26896,7 @@ function _renderGroupSections(data){
     var snap    = d.snap || {};
     var sc3     = snap.sc3 || {};
     var isSab   = (d.esc||'').toLowerCase().includes('sababa');
-    var fobHomol= isSab ? (sc3.mercHomol||0) : 0;
+    var fobHomol = isSab ? ((d._overrideFin&&d._overrideFin.mercHomol>0)?d._overrideFin.mercHomol:(sc3.mercHomol||0)) : 0;
     var lines   = (d.invLines && d.invLines.length ? d.invLines : (snap.invLines||[]));
     var mercL   = lines.filter(function(l){ return (l.tipoFac||'mercancia')==='mercancia'; });
     var gastoL  = lines.filter(function(l){ return l.tipoFac && l.tipoFac!=='mercancia'; });
@@ -26951,7 +26990,7 @@ function _renderGroupSections(data){
     var snap    = d.snap || {};
     var sc3     = snap.sc3 || {};
     var isSab   = (d.esc||'').toLowerCase().includes('sababa');
-    var fobHomol= isSab ? (sc3.mercHomol||0) : 0;
+    var fobHomol = isSab ? ((d._overrideFin&&d._overrideFin.mercHomol>0)?d._overrideFin.mercHomol:(sc3.mercHomol||0)) : 0;
     var lines   = (d.invLines && d.invLines.length ? d.invLines : (snap.invLines||[]));
     var mercL   = lines.filter(function(l){ return (l.tipoFac||'mercancia')==='mercancia'; });
     var gastoL  = lines.filter(function(l){ return l.tipoFac && l.tipoFac!=='mercancia'; });
@@ -27116,7 +27155,7 @@ window.abrirFacturasEmbarque = function(idx){
                     : isSab   ? (sc3.landedG||sc3.landed1||0)
                               : (sc2.landedG||sc2.landed1||0);
     var landedCosteable = isUnicoM ? (sc1u.landed||0) : (totalMerc + totalNoMerc);
-    var fobHomol   = isSab ? (sc3.mercHomol||0) : 0; // Solo Sababa tiene FOB homologado
+    var fobHomol = isSab ? ((d._overrideFin&&d._overrideFin.mercHomol>0)?d._overrideFin.mercHomol:(sc3.mercHomol||0)) : 0; // Solo Sababa tiene FOB homologado
     // fmt2l and fmtKl both respect the modal format toggle
     var _facFull = (window._facDetailFmtCompact === false); // true = show full amounts
     var fmt2l = function(n){
@@ -27132,12 +27171,14 @@ window.abrirFacturasEmbarque = function(idx){
     // Costeable por línea deben usar el valor HOMOLOGADO (mercHomol), no el original CIF.
     // Esto refleja correctamente el valor que entra al inventario.
     var baseParaProrrateo = (isSab && fobHomol > 0) ? fobHomol : totalMerc;
+    var _sumHL = mercLines.reduce(function(a,l){ return a+(l.montoHomologado||0); },0);
+    var _usaHomolLinea = mercLines.length>0 && mercLines.every(function(l){ return (l.montoHomologado||0)>0; }) && Math.abs(_sumHL-fobHomol)<0.02;
 
     // Prorratear costo no mercancía e ITBMS entre facturas de mercancía por peso relativo
     mercLines.forEach(function(l){
       l._pct = totalMerc>0 ? (l.costo||0)/totalMerc : 0;
       // Para Sababa: el valor que entra al inventario de esta línea es su porción del homologado
-      var costoBase = (isSab && fobHomol > 0) ? (fobHomol * l._pct) : (l.costo||0);
+      var costoBase = (isSab && fobHomol > 0) ? (_usaHomolLinea ? l.montoHomologado : (fobHomol * l._pct)) : (l.costo||0);
       l._costoHomolPorcion = (isSab && fobHomol > 0) ? costoBase : 0;
       l._noMercPorcion = totalNoMerc * l._pct;
       l._itbmsPorcion  = totalItbms  * l._pct;
@@ -27163,9 +27204,9 @@ window.abrirFacturasEmbarque = function(idx){
       +'<div style="font-size:9px;color:var(--muted);margin-bottom:3px">CIF/FOB MERC.</div>'
       +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:var(--text)">'+fmtKl(totalMerc)+'</div>'
       +'</div>'
-      +(isSab&&sc3.mercHomol>0?'<div style="background:rgba(240,136,62,.08);border:1px solid rgba(240,136,62,.2);border-radius:7px;padding:8px;text-align:center">'
+      +(isSab&&fobHomol>0?'<div style="background:rgba(240,136,62,.08);border:1px solid rgba(240,136,62,.2);border-radius:7px;padding:8px;text-align:center">'
         +'<div style="font-size:9px;color:var(--orange-l);font-weight:700;margin-bottom:3px">FOB INVENTARIO</div>'
-        +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:var(--orange-l)">'+fmtKl(sc3.mercHomol)+'</div>'
+        +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:var(--orange-l)">'+fmtKl(fobHomol)+'</div>'
         +'</div>':'')
       +'<div style="background:var(--bg);border-radius:7px;padding:8px;text-align:center">'
       +'<div style="font-size:9px;color:var(--muted);margin-bottom:3px">COSTO NO MERC.</div>'
@@ -27635,7 +27676,7 @@ window.abrirFacturasEmbarque = function(idx){
                   : isSab   ? (sc3.landedG||sc3.landed1||0)
                             : (sc2.landedG||sc2.landed1||0);
   var landedCosteable = isUnicoM ? (sc1u.landed||0) : (totalMerc + totalNoMerc); // Único: landed already IS costeable
-  var fobHomol   = isSab ? (sc3.mercHomol||0) : 0; // Solo Sababa tiene FOB homologado
+  var fobHomol = isSab ? ((d._overrideFin&&d._overrideFin.mercHomol>0)?d._overrideFin.mercHomol:(sc3.mercHomol||0)) : 0; // Solo Sababa tiene FOB homologado
   var _facFull2 = (window._facDetailFmtCompact === false);
   var fmt2l = function(n){
     if(_facFull2) return '$'+Number(parseFloat(n)||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -27651,12 +27692,14 @@ window.abrirFacturasEmbarque = function(idx){
   // Costeable por línea deben usar el valor HOMOLOGADO (mercHomol), no el original CIF.
   // Esto refleja correctamente el valor que entra al inventario.
   var baseParaProrrateo = (isSab && fobHomol > 0) ? fobHomol : totalMerc;
+    var _sumHL = mercLines.reduce(function(a,l){ return a+(l.montoHomologado||0); },0);
+    var _usaHomolLinea = mercLines.length>0 && mercLines.every(function(l){ return (l.montoHomologado||0)>0; }) && Math.abs(_sumHL-fobHomol)<0.02;
 
   // Prorratear costo no mercancía e ITBMS entre facturas de mercancía por peso relativo
   mercLines.forEach(function(l){
     l._pct = totalMerc>0 ? (l.costo||0)/totalMerc : 0;
     // Para Sababa: el valor que entra al inventario de esta línea es su porción del homologado
-    var costoBase = (isSab && fobHomol > 0) ? (fobHomol * l._pct) : (l.costo||0);
+    var costoBase = (isSab && fobHomol > 0) ? (_usaHomolLinea ? l.montoHomologado : (fobHomol * l._pct)) : (l.costo||0);
     l._costoHomolPorcion = (isSab && fobHomol > 0) ? costoBase : 0;
     l._noMercPorcion = totalNoMerc * l._pct;
     l._itbmsPorcion  = totalItbms  * l._pct;
@@ -27682,9 +27725,9 @@ window.abrirFacturasEmbarque = function(idx){
     +'<div style="font-size:9px;color:var(--muted);margin-bottom:3px">CIF/FOB MERC.</div>'
     +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:var(--text)">'+fmtKl(totalMerc)+'</div>'
     +'</div>'
-    +(isSab&&sc3.mercHomol>0?'<div style="background:rgba(240,136,62,.08);border:1px solid rgba(240,136,62,.2);border-radius:7px;padding:8px;text-align:center">'
+    +(isSab&&fobHomol>0?'<div style="background:rgba(240,136,62,.08);border:1px solid rgba(240,136,62,.2);border-radius:7px;padding:8px;text-align:center">'
       +'<div style="font-size:9px;color:var(--orange-l);font-weight:700;margin-bottom:3px">FOB INVENTARIO</div>'
-      +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:var(--orange-l)">'+fmtKl(sc3.mercHomol)+'</div>'
+      +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:var(--orange-l)">'+fmtKl(fobHomol)+'</div>'
       +'</div>':'')
     +'<div style="background:var(--bg);border-radius:7px;padding:8px;text-align:center">'
     +'<div style="font-size:9px;color:var(--muted);margin-bottom:3px">COSTO NO MERC.</div>'
@@ -37800,6 +37843,7 @@ window._plnModuloEmbarques = async function(){
   var TIPOS = ['mercancia','flete','gastos_origen','gastos_destino','honorarios','itbms','acarreo','dmce','seguro'];
 
   var S = window._pmState = window._pmState || { cols: COLS_DEF.slice(), rows: [], art: null, artNombre:'', usarHomolSiVacio:false, si:null };
+  S.fiscal = S.fiscal || {sub:0, sin:0, sinManual:false, file:''};
   // si: null = automático (según escenario Sababa), true/false = elegido por el usuario
   if(S.cols.indexOf('FECHA_RECEPCION')<0 && S.cols.indexOf('TIPO')<0 && S.cols.indexOf('OC_HOMOLOGADA')<0){ /* estado viejo de v1 */ S.cols=COLS_DEF.slice(); S.rows=[]; }
 
@@ -37979,7 +38023,7 @@ window._plnModuloEmbarques = async function(){
 
   // Construye filas para el motor/xlsx
   function construirFilas(){
-    var out=[], fechas={}, res={merc:0,monto:0,gastos:0,bultos:0,piezas:0,sinOC:0,problemas:0,filas:0};
+    var out=[], fechas={}, res={homol:0,merc:0,monto:0,gastos:0,bultos:0,piezas:0,sinOC:0,problemas:0,filas:0};
     S.rows.forEach(function(r){
       var o=rowObj(r), c=clasificar(o);
       if(c.k==='skip') return;
@@ -37993,7 +38037,8 @@ window._plnModuloEmbarques = async function(){
       var ai=artInfo(o.OC);
       var piezas=(ai&&ai.piezas>0)?ai.piezas:num(o.PIEZAS);
       var och=(ai&&ai.ocHomol)||o.OC_HOMOLOGADA||'';
-      var mh=(ai&&ai.montoHomol>0)?Math.round(ai.montoHomol*100)/100:(num(o.MONTO_HOMOLOGADO)||'');
+      var mhCell=num(o.MONTO_HOMOLOGADO);
+      var mh=(r._mhManual&&mhCell>0)?Math.round(mhCell*100)/100:((ai&&ai.montoHomol>0)?Math.round(ai.montoHomol*100)/100:(mhCell||''));
       if(!monto && S.usarHomolSiVacio && mh) monto=mh;
       var dr=deptResolve(o.DEPARTAMENTO);
       var bult=o.BULTOS?(parseInt(String(o.BULTOS).replace(/[^0-9]/g,''))||0):'';
@@ -38001,7 +38046,7 @@ window._plnModuloEmbarques = async function(){
       out.push([provOficial(o.PROVEEDOR),'mercancia',dr.name,o.FACTURA||'',monto||'',o.OC||'',bult,
         o.TRASPASO?Math.abs(num(o.TRASPASO)):'',piezas||'',och,mh,fe]);
       if(fe) fechas[(o.FACTURA||'').trim().toUpperCase()+'|'+normOC(o.OC)]=fe;
-      res.merc++; res.monto+=monto; res.bultos+=(bult||0); res.piezas+=piezas;
+      res.merc++; res.homol+=(mh||0); res.monto+=monto; res.bultos+=(bult||0); res.piezas+=piezas;
       var dg=diag(o); if(dg.sev>=1) res.problemas++; if(S.art && dg.sev===3) res.sinOC++;
     });
     res.filas=out.length;
@@ -38062,7 +38107,7 @@ window._plnModuloEmbarques = async function(){
         if(ai){ mapeadas++;
           if(ai.piezas>0) r[iPz]=String(ai.piezas);
           if(ai.ocHomol) r[iOH]=ai.ocHomol;
-          if(ai.montoHomol>0) r[iMH]=String(Math.round(ai.montoHomol*100)/100);
+          if(ai.montoHomol>0 && !r._mhManual) r[iMH]=String(Math.round(ai.montoHomol*100)/100);
         } else sinOC++;
       }
     });
@@ -38226,6 +38271,7 @@ window._plnModuloEmbarques = async function(){
       +' · Bultos <b>'+b.bultos+'</b> · Piezas <b>'+b.piezas+'</b>'
       +(b.problemas?' · <span style="color:#f0883e">'+b.problemas+' fila(s) por revisar</span>':'')
       +(b.sinOC?' · <span style="color:#f85149">'+b.sinOC+' OC sin encontrar en el mapeo</span>':'');
+    actualizarCuadre();
   }
 
   // Guardar plantilla en la nube (biblioteca) — mismo formato que ya lee la app
@@ -38250,6 +38296,9 @@ window._plnModuloEmbarques = async function(){
     var usuario=(document.getElementById('_pm_user').value||'').trim();
     if(!aplicar && !nombre){ toast('⚠️ Escribe un nombre para guardarla','orange',3000); document.getElementById('_pm_nombre').focus(); return; }
     if(b.res.sinOC && !confirm(b.res.sinOC+' fila(s) tienen una OC que NO está en el mapeo (en rojo). ¿Aplicar igual?')) return;
+    if(aplicar && S.fiscal.sin>0 && b.res.homol>0 && Math.abs(b.res.homol-S.fiscal.sin)>=0.005){
+      if(!confirm('El homologado de la plantilla ('+f2(b.res.homol)+') NO cuadra con el Subtotal sin impuestos de la factura fiscal ('+f2(S.fiscal.sin)+'). Diferencia: '+(Math.round((b.res.homol-S.fiscal.sin)*100)/100).toFixed(2)+'.\n\nAceptar = aplicar igual · Cancelar = volver a cuadrar (⚖️).')) return;
+    }
     if(typeof XLSX==='undefined' && nombre){ toast('Librería Excel cargando, reintenta','orange',3000); return; }
     var btns=document.querySelectorAll('#_pm_box .pmgo'); btns.forEach(function(x){ x.disabled=true; });
     try{
@@ -38285,16 +38334,75 @@ window._plnModuloEmbarques = async function(){
       document.head.appendChild(s);
     });
   }
+  function f2(n){ return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  function aplicarSubtotalFiscal(sub){
+    document.querySelectorAll('[id="s2_pago"]').forEach(function(el){ el.value=sub.toFixed(2); el.dataset.autoSet='false'; });
+    if(typeof sab2Tipo!=='undefined' && sab2Tipo){
+      if(typeof _recalcDifDesdePagoManual==='function') _recalcDifDesdePagoManual(sub);
+      if(typeof calcSab2==='function') calcSab2();
+    }
+  }
+  function pintarFiscal(){
+    var a=document.getElementById('_pm_fsub'), b=document.getElementById('_pm_fsin');
+    if(a && document.activeElement!==a) a.value=S.fiscal.sub?S.fiscal.sub.toFixed(2):'';
+    if(b && document.activeElement!==b) b.value=S.fiscal.sin?S.fiscal.sin.toFixed(2):'';
+    actualizarCuadre();
+  }
+  function actualizarCuadre(){
+    var el=document.getElementById('_pm_cuadre'); if(!el) return;
+    var meta=S.fiscal.sin||0, h=Math.round(construirFilas().res.homol*100)/100;
+    if(!(meta>0)){ el.innerHTML='<span style="color:var(--muted,#8b949e)">Sin meta: sube el PDF o escribe el Subtotal arriba.</span>'; return; }
+    var dif=Math.round((h-meta)*100)/100;
+    el.innerHTML=Math.abs(dif)<0.005
+      ? '<span style="color:#3fb950">✅ Homologado de la plantilla '+f2(h)+' = Subtotal sin impuestos '+f2(meta)+'</span>'
+      : '<span style="color:#f0883e">⚠️ Homologado de la plantilla '+f2(h)+' vs Subtotal sin impuestos '+f2(meta)+' · diferencia <b>'+(dif>0?'+':'')+f2(dif).replace('$-','-$')+'</b> — corrige una fila o usa ⚖️ Cuadrar</span>';
+  }
+  function cuadrarHomologado(){
+    var meta=S.fiscal.sin||0;
+    if(!(meta>0)){ toast('Primero sube el PDF o escribe el Subtotal','orange',3500); return; }
+    var sumaH=construirFilas().res.homol, best=-1, bv=0;
+    S.rows.forEach(function(r,ri){
+      var o=rowObj(r), c=clasificar(o); if(c.k!=='merc') return;
+      var ai=artInfo(o.OC), cell=num(o.MONTO_HOMOLOGADO);
+      var mh=(r._mhManual&&cell>0)?cell:((ai&&ai.montoHomol>0)?ai.montoHomol:cell);
+      if(mh>bv){ bv=mh; best=ri; }
+    });
+    if(best<0){ toast('No hay montos homologados en la plantilla (sube el Excel de mapeo)','orange',4000); return; }
+    var dif=Math.round((meta-sumaH)*100)/100;
+    if(Math.abs(dif)<0.005){ toast('✅ Ya cuadra','green',2000); return; }
+    var o2=rowObj(S.rows[best]);
+    if(!confirm('Se ajustará la fila con mayor homologado (Factura '+(o2.FACTURA||'—')+' · OC '+(o2.OC||'—')+') de '+f2(bv)+' a '+f2(bv+dif)+' ('+(dif>0?'+':'')+dif.toFixed(2)+') para cuadrar con '+f2(meta)+'. ¿Continuar?')) return;
+    var ci=ensureCol('MONTO_HOMOLOGADO');
+    S.rows[best][ci]=(Math.round((bv+dif)*100)/100).toFixed(2); S.rows[best]._mhManual=true;
+    normalize(); render(); toast('⚖️ Homologado cuadrado','green',2500);
+  }
+  // Totales del PDF: por POSICIÓN (de arriba hacia abajo: 1 sin impuestos, 2 impuestos, 3 subtotal), con respaldo por etiqueta
+  function totalesPosicional(items){
+    var isAmt=/^\(?\$?-?[\d,]+\.\d{2}\)?$/, tot=null;
+    items.forEach(function(i){ if(/^\s*totales\b/i.test(i.s)) tot=i; });
+    if(!tot) return null;
+    var c=items.filter(function(i){ return isAmt.test(i.s.trim()) && i.p===tot.p && i.y<=tot.y+3 && i.xr>=tot.xr-8; });
+    if(c.length<3) return null;
+    var mx=Math.max.apply(null,c.map(function(i){ return i.xr; }));
+    var col=c.filter(function(i){ return Math.abs(i.xr-mx)<=8; }).sort(function(a,b){ return b.y-a.y; })
+      .map(function(i){ return parseFloat(i.s.replace(/[^0-9.\-]/g,'')); });
+    for(var k=0;k+2<col.length;k++){
+      if(Math.abs(col[k]+col[k+1]-col[k+2])<=0.03) return {sin:col[k],itbms:col[k+1],sub:col[k+2],metodo:'posición (3.er monto de Totales)'};
+    }
+    return null;
+  }
   async function leerPDFFiscal(file){
     var lab=document.getElementById('_pm_pdfn');
     try{
       if(lab) lab.textContent='Leyendo '+file.name+'…';
-      var lib=await cargarPdfJs(), pdf=await lib.getDocument({data:await file.arrayBuffer()}).promise, lines=[];
+      var lib=await cargarPdfJs(), pdf=await lib.getDocument({data:await file.arrayBuffer()}).promise, lines=[], items=[];
       for(var p=1;p<=pdf.numPages;p++){
         var tc=await (await pdf.getPage(p)).getTextContent(), rows=[];
         tc.items.forEach(function(it){
           if(!it.str || !it.str.trim()) return;
-          var y=it.transform[5], x=it.transform[4], r=rows.find(function(r){ return Math.abs(r.y-y)<=3; });
+          var y=it.transform[5], x=it.transform[4];
+          items.push({s:it.str,x:x,xr:x+(it.width||0),y:y,p:p});
+          var r=rows.find(function(r){ return Math.abs(r.y-y)<=3; });
           if(!r){ r={y:y,it:[]}; rows.push(r); } r.it.push({x:x,s:it.str});
         });
         rows.sort(function(a,b){ return b.y-a.y; }).forEach(function(r){
@@ -38302,20 +38410,27 @@ window._plnModuloEmbarques = async function(){
           lines.push(r.it.map(function(i){ return i.s; }).join(' ').replace(/\s+/g,' ').trim());
         });
       }
-      var num=function(s){ return parseFloat(String(s).replace(/,/g,'')); }, sub=null, totPago=null, m;
-      lines.forEach(function(l){
-        if(sub===null && (m=/(?:^|\s)Subtotal\s+(?!sin\b)([\d,]+\.\d{2})/i.exec(l))) sub=num(m[1]);
-        if(totPago===null && (m=/Total de pago\s+([\d,]+\.\d{2})/i.exec(l))) totPago=num(m[1]);
-      });
-      if(sub===null || !(sub>0)){ if(lab) lab.textContent='⚠️ No encontré el Subtotal en '+file.name; toast('⚠️ No encontré el Subtotal en el PDF','orange',4000); return; }
-      document.querySelectorAll('[id="s2_pago"]').forEach(function(el){ el.value=sub.toFixed(2); el.dataset.autoSet='false'; });
-      if(typeof sab2Tipo!=='undefined' && sab2Tipo){
-        if(typeof _recalcDifDesdePagoManual==='function') _recalcDifDesdePagoManual(sub);
-        if(typeof calcSab2==='function') calcSab2();
+      var num2=function(s){ return parseFloat(String(s).replace(/,/g,'')); }, m;
+      var res=totalesPosicional(items);
+      if(!res){
+        var sub=null, sin=null, im=null;
+        lines.forEach(function(l){
+          if(sin===null && (m=/Subtotal\s+sin\s+impuestos?\s+([\d,]+\.\d{2})/i.exec(l))) sin=num2(m[1]);
+          if(im===null && (m=/(?:^|\s)Impuestos?\s+([\d,]+\.\d{2})/i.exec(l))) im=num2(m[1]);
+          if(sub===null && (m=/(?:^|\s)(?:Subtotal|Total\s+pago|Total\s+de\s+pago)\s+(?!sin\b)([\d,]+\.\d{2})/i.exec(l))) sub=num2(m[1]);
+        });
+        if(sub>0) res={sin:sin,itbms:im,sub:sub,metodo:'etiqueta (respaldo)'};
       }
-      var f2=function(n){ return '$'+n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
-      if(lab) lab.innerHTML='✅ '+esc(file.name)+' · Subtotal '+f2(sub)+' → Total Pago Realizado'+((totPago!==null && Math.abs(totPago-sub)>=0.005)?' <span style="color:#f0883e">(el PDF dice Total de pago '+f2(totPago)+')</span>':'');
-      toast('✅ Total Pago Realizado = '+f2(sub),'green',3500);
+      if(!res || !(res.sub>0)){
+        if(lab) lab.textContent='⚠️ No pude leer los Totales de '+file.name+' — escribe el Subtotal a mano abajo';
+        toast('⚠️ No pude leer los totales, escríbelo a mano','orange',4500);
+        var fs=document.getElementById('_pm_fsub'); if(fs) fs.focus(); return;
+      }
+      S.fiscal.sub=res.sub; S.fiscal.sin=(res.sin>0)?res.sin:Math.round(res.sub/1.07*100)/100; S.fiscal.sinManual=false; S.fiscal.file=file.name;
+      aplicarSubtotalFiscal(res.sub); pintarFiscal();
+      var chk=Math.abs(S.fiscal.sin-res.sub/1.07)>0.02;
+      if(lab) lab.innerHTML='✅ '+esc(file.name)+' · '+res.metodo+' · Subtotal '+f2(res.sub)+' → Total Pago Realizado'+(chk?' <span style="color:#f0883e">(ojo: sin impuestos ≠ subtotal ÷ 1.07, revísalos)</span>':'');
+      toast('✅ Total Pago Realizado = '+f2(res.sub),'green',3500);
     }catch(err){
       if(lab) lab.textContent='⚠️ '+(err&&err.message||err);
       toast('⚠️ No se pudo leer el PDF','orange',4000);
@@ -38358,7 +38473,13 @@ window._plnModuloEmbarques = async function(){
       +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:8px;border:1px solid var(--border,#30363d);border-radius:10px;margin-bottom:8px">'
         +'<button class="pmb o" data-act="pdffiscal">🧾 PDF factura fiscal Sababa</button>'
         +'<input type="file" id="_pm_pdf" accept=".pdf,application/pdf" style="display:none">'
-        +'<span id="_pm_pdfn" style="font-size:11px;color:var(--muted,#8b949e)">Sube el PDF fiscal: lee el Subtotal y lo pone en Total Pago Realizado de Sababa</span>'
+        +'<span id="_pm_pdfn" style="font-size:11px;color:var(--muted,#8b949e)">Toma el 3.er monto de Totales (de arriba hacia abajo): el Subtotal con ITBMS → Total Pago Realizado. Editable abajo.</span>'
+        +'<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;width:100%;margin-top:4px">'
+          +'<label style="font-size:11px;display:flex;flex-direction:column;gap:3px">Subtotal (Total Pago Realizado)<input id="_pm_fsub" type="number" step="0.01" style="width:150px;background:var(--s2,#21262d);border:1px solid var(--border,#30363d);border-radius:6px;padding:6px;color:inherit;font-family:monospace"></label>'
+          +'<label style="font-size:11px;display:flex;flex-direction:column;gap:3px">Subtotal sin impuestos (meta homologado)<input id="_pm_fsin" type="number" step="0.01" style="width:170px;background:var(--s2,#21262d);border:1px solid var(--border,#30363d);border-radius:6px;padding:6px;color:inherit;font-family:monospace"></label>'
+          +'<button class="pmb" data-act="cuadrar">⚖️ Cuadrar homologado</button>'
+        +'</div>'
+        +'<div id="_pm_cuadre" style="font-size:12px;width:100%"></div>'
       +'</div>'
       +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
         +'<input id="_pm_nombre" placeholder="Nombre para guardarla en la nube (opcional al aplicar)" style="flex:2;min-width:220px;background:var(--s2,#21262d);border:1px solid var(--border,#30363d);border-radius:8px;padding:8px 10px;color:inherit;font-size:12px">'
@@ -38377,6 +38498,7 @@ window._plnModuloEmbarques = async function(){
       else if(a==='actualizar'){ (window._provCustomPull?window._provCustomPull():Promise.resolve()).then(function(){ refrescarDatalist(); actualizarTabla(false); }); }
       else if(a==='art') document.getElementById('_pm_art').click();
       else if(a==='pdffiscal') document.getElementById('_pm_pdf').click();
+      else if(a==='cuadrar') cuadrarHomologado();
       else if(a==='addrow'){ for(var i=0;i<10;i++) S.rows.push(new Array(S.cols.length).fill('')); render(); }
       else if(a==='addcol'){ S.cols.push('IGNORAR'); normalize(); render(); }
       else if(a==='limpiar'){ if(confirm('¿Borrar todo lo pegado?')){ S.rows=[]; S.art=null; S.artNombre=''; normalize(); render(); var n=document.getElementById('_pm_artn'); if(n) n.textContent='Sin cargar'; } }
@@ -38410,7 +38532,7 @@ window._plnModuloEmbarques = async function(){
       var t=e.target;
       if(t.classList.contains('pmi')){
         var ri=+t.getAttribute('data-ri'), ci=+t.getAttribute('data-ci');
-        S.rows[ri][ci]=t.value;
+        S.rows[ri][ci]=t.value; if(S.cols[ci]==='MONTO_HOMOLOGADO') S.rows[ri]._mhManual=true;
         clearTimeout(t._pmT); t._pmT=setTimeout(function(){ refreshRow(ri); },200);
       }
     });
@@ -38430,6 +38552,18 @@ window._plnModuloEmbarques = async function(){
       aplicarPegado(parseClip(txt),+t.getAttribute('data-ri'),+t.getAttribute('data-ci'),false);
       render();
     });
+    box.addEventListener('input',function(e){
+      var t=e.target;
+      if(t.id==='_pm_fsub'){
+        var v=parseFloat(t.value)||0; S.fiscal.sub=v;
+        if(!S.fiscal.sinManual){ S.fiscal.sin=v>0?Math.round(v/1.07*100)/100:0; var b=document.getElementById('_pm_fsin'); if(b) b.value=S.fiscal.sin?S.fiscal.sin.toFixed(2):''; }
+        clearTimeout(t._pmT); t._pmT=setTimeout(function(){ if(v>0) aplicarSubtotalFiscal(v); },300);
+        actualizarCuadre();
+      } else if(t.id==='_pm_fsin'){
+        S.fiscal.sin=parseFloat(t.value)||0; S.fiscal.sinManual=true; actualizarCuadre();
+      }
+    });
+    pintarFiscal();
     var dragFrom=-1;
     box.addEventListener('dragstart',function(e){
       var h=e.target.closest ? e.target.closest('.pmh') : null; if(!h) return;
