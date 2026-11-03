@@ -3013,7 +3013,10 @@ async function cmpRemove(eid){const e=EMB[eid];if(!e||!e.cmp)return;
 function cmpPend(e){if(!e||!e.desp)return false;if(!e.cmp)return true;const s=cmpSt(e,true);return s!==undefined&&e.cmp.st!==s}
 // Al despachar se publica SOLO ese packing list (un único envío, sin republicar los demás)
 async function cmpAuto(id){for(let i=0;i<24&&!(EMB[id]&&EMB[id].desp);i++)await new Promise(r=>setTimeout(r,250));
-  const ok=await cmpPublish(id,true);toast(ok?'🛒 Publicado en el portal del comprador':'⚠ No se pudo publicar en el portal; avisa al administrador')}
+  const ok=await cmpPublish(id,true);toast(ok?'🛒 Publicado en el portal del comprador':'⚠ No se pudo publicar en el portal; avisa al administrador');
+  // Abre solo el mensaje para el comprador (listo para copiar y pegar); espera a que llegue el estado publicado para incluir el link
+  for(let i=0;i<12&&!(EMB[id]&&EMB[id].cmp);i++)await new Promise(r=>setTimeout(r,250));
+  try{await cmpMsg(id)}catch(x){}}
 // Publicar por estatus: solo los pendientes de la pestaña (d = despachados, r = recibidos)
 async function cmpGroup(tab){const nm=tab==='r'?'recibidos':'despachados';
   const D=Object.entries(EMB).filter(([id,e])=>e&&e.desp&&((cmpRc(e)?'r':'d')===tab)&&cmpPend(e));
