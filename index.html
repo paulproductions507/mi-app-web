@@ -38681,6 +38681,7 @@ window._plnModuloEmbarques = async function(){
       if(aplicar){
         if(typeof _motoresMapeado!=='function') throw new Error('Motor de plantillas no disponible');
         _motoresMapeado([HDR_XLSX].concat(b.rows));
+        if(S.rep && S.rep.tesoro){ [200,450,1300].forEach(function(ms){ setTimeout(function(){ aplicarTesoro(true); },ms); }); }
         if(S.fiscal.sub>0){ var _sub=S.fiscal.sub; [450,1300].forEach(function(ms){ setTimeout(function(){ aplicarSubtotalFiscal(_sub); },ms); }); }
         // fecha de recepción (el motor no la lee): se asigna por factura|OC
         var L=window.invLines||[];
@@ -38788,6 +38789,106 @@ window._plnModuloEmbarques = async function(){
     }
     return null;
   }
+
+  // ── (nov-2026) REPORTE DE EMBARQUE (PDF «Detalle de Facturas por Embarque») ──
+  // Llena la plantilla manual: mercancías (suplidor · N° factura · valor), flete, gastos de origen
+  // y comisiones (González → gastos de origen). Tesoro Nacional NO se lee: el sistema lo calcula solo
+  // al elegir SIF/Sababa; únicamente se toma el N° de factura (la primera línea de Tesoro).
+  // CIF Express, Master Value y demás líneas se omiten. El departamento lo elige el usuario.
+  function aplicarTesoro(quiet){
+    var v=String((S.rep&&S.rep.tesoro)||'').trim(); if(!v) return;
+    var inp=document.getElementById('s1_nfact_tesoro'); if(inp) inp.value=v;
+    if(typeof _setGrupoFactura==='function'){ try{ _setGrupoFactura('TESORO',v,true); }catch(e){} }
+  }
+  function parseReporteEmbarque(lines){
+    var AMT='(-?[\\d,]+\\.\\d{2})';
+    var KEY='(Mercanc[ií]a|Fletes?(?:\\s+Gravado)?|Gastos\\s+de\\s+Origen(?:\\s*\\/\\s*Destino)?|Gastos\\s+de\\s+Destino|Comisiones?\\s+a\\s+Agentes)';
+    var reHead=/^(\d{2}-\d{2}-\d{4})\s+(\d{5,7})\s+(\d{1,3})\s+(.*)$/;
+    var reMain=new RegExp('^(.*?)\\s*'+KEY+'\\s+'+AMT+'\\s+'+AMT+'\\s*(.*)$','i');
+    var out={merc:[],flete:[],gastos:[],comis:[],tesoro:'',omitidos:{}};
+    lines.forEach(function(l){
+      var h=reHead.exec(l); if(!h) return;
+      var rest=h[4];
+      if(/TESORO\s+NACIONAL/i.test(rest)){
+        if(!out.tesoro){
+          var t=/TESORO\s+NACIONAL\s+([A-Za-z0-9\-\/]*\d[A-Za-z0-9\-\/]*)/i.exec(rest);
+          if(t) out.tesoro=t[1];
+        }
+        return;
+      }
+      var m=reMain.exec(rest);
+      if(!m){
+        var om=/CIF\s+EXPRESS/i.test(rest)?'CIF Express':(/MASTER\s+VALUE/i.test(rest)?'Master Value':'otras líneas');
+        out.omitidos[om]=(out.omitidos[om]||0)+1; return;
+      }
+      var pre=m[1].trim(), key=m[2], monto=num(m[3]), tail=m[5].replace(/\s*pre-fac\.?\s*#\s*\d+\s*$/i,'').trim(), fact='', prov='';
+      if(/^Mercanc/i.test(key)){
+        fact=pre; prov=tail;
+        out.merc.push({prov:prov,fact:fact,monto:monto});
+        return;
+      }
+      if(pre){ fact=pre; prov=tail; }
+      else{
+        var tk=tail.split(/\s+/);
+        if(tk.length>=2 && /^[A-Za-z0-9\-\/]*\d[A-Za-z0-9\-\/]*$/.test(tk[tk.length-1])){ fact=tk.pop(); }
+        prov=tk.join(' ');
+      }
+      if(/^Flete/i.test(key)) out.flete.push({prov:prov,fact:fact,monto:monto});
+      else if(/^Comisi/i.test(key)) out.comis.push({prov:prov,fact:fact,monto:monto});
+      else out.gastos.push({prov:prov,fact:fact,monto:monto});
+    });
+    return out;
+  }
+  async function leerReporteEmbarque(file){
+    var lab=document.getElementById('_pm_repn');
+    try{
+      if(lab) lab.textContent='Leyendo '+file.name+'…';
+      var lib=await cargarPdfJs(), pdf=await lib.getDocument({data:await file.arrayBuffer()}).promise, lines=[];
+      for(var p=1;p<=pdf.numPages;p++){
+        var tc=await (await pdf.getPage(p)).getTextContent(), rows=[];
+        tc.items.forEach(function(it){
+          if(!it.str || !it.str.trim()) return;
+          var y=it.transform[5], x=it.transform[4];
+          var r=rows.find(function(r){ return Math.abs(r.y-y)<=3; });
+          if(!r){ r={y:y,it:[]}; rows.push(r); } r.it.push({x:x,s:it.str});
+        });
+        rows.sort(function(a,b){ return b.y-a.y; }).forEach(function(r){
+          r.it.sort(function(a,b){ return a.x-b.x; });
+          lines.push(r.it.map(function(i){ return i.s; }).join(' ').replace(/\s+/g,' ').trim());
+        });
+      }
+      var R=parseReporteEmbarque(lines);
+      var nTot=R.merc.length+R.flete.length+R.gastos.length+R.comis.length;
+      if(!nTot){
+        if(lab) lab.textContent='⚠️ No reconocí facturas en '+file.name+' — ¿es el «Detalle de Facturas por Embarque»?';
+        toast('⚠️ No pude leer el reporte de embarque','orange',4500); return;
+      }
+      var hayDatos=S.rows.some(function(r){ return r.some(function(v){ return String(v||'').trim(); }); });
+      if(hayDatos && !confirm('La plantilla ya tiene datos. ¿Reemplazarlos con el reporte de embarque ('+nTot+' líneas)?')) { if(lab) lab.textContent='Carga cancelada'; return; }
+      var iT=ensureCol('TIPO'), iP=ensureCol('PROVEEDOR'), iF=ensureCol('FACTURA'), iM=ensureCol('MONTO'); ensureCol('DEPARTAMENTO');
+      var n=S.cols.length, nuevas=[];
+      function fila(tipo,x){ var r=new Array(n).fill(''); r[iT]=tipo; r[iP]=x.prov; r[iF]=x.fact; r[iM]=x.monto.toFixed(2); nuevas.push(r); }
+      R.merc.forEach(function(x){ fila('mercancia',x); });
+      R.flete.forEach(function(x){ fila('flete',x); });
+      R.gastos.forEach(function(x){ fila('gastos_origen',x); });
+      R.comis.forEach(function(x){ fila('gastos_origen',x); });
+      S.rows=nuevas; normalize();
+      var sumM=R.merc.reduce(function(a,x){ return a+x.monto; },0);
+      S.rep={file:file.name, tesoro:R.tesoro||'', resumen:R.merc.length+' mercancías ('+f2(sumM)+') · '+R.flete.length+' flete · '+R.gastos.length+' gastos origen · '+R.comis.length+' comisiones'};
+      var tin=document.getElementById('_pm_tesoro'); if(tin) tin.value=S.rep.tesoro;
+      aplicarTesoro(true);
+      actualizarTabla(true);   // nombres oficiales de suplidor (render incluido)
+      var om=Object.keys(R.omitidos).map(function(k){ return k+' ('+R.omitidos[k]+')'; }).join(', ');
+      lab=document.getElementById('_pm_repn');
+      if(lab) lab.innerHTML='✅ '+esc(file.name)+' · '+esc(S.rep.resumen)+(R.tesoro?' · Tesoro N° <b>'+esc(R.tesoro)+'</b>':' · <span style="color:#f0883e">no encontré el N° de Tesoro, escríbelo</span>')+(om?' · <span style="color:var(--muted,#8b949e)">omitido: '+esc(om)+'</span>':'')+' · <b>Falta elegir los departamentos</b>';
+      toast('✅ Reporte cargado: '+nTot+' líneas — elige los departamentos','green',4500);
+    }catch(err){
+      console.warn(err);
+      if(lab) lab.textContent='⚠️ '+(err&&err.message||err);
+      toast('⚠️ No se pudo leer el reporte','orange',4000);
+    }
+  }
+
   async function leerPDFFiscal(file){
     var lab=document.getElementById('_pm_pdfn');
     try{
@@ -38868,6 +38969,12 @@ window._plnModuloEmbarques = async function(){
         +'<label style="font-size:11px;display:flex;gap:4px;align-items:center;width:100%"><input type="checkbox" id="_pm_hom"'+(S.usarHomolSiVacio?' checked':'')+'> Si la fila no trae valor original, usar el monto homologado de la OC</label>'
       +'</div>'
       +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:8px;border:1px solid var(--border,#30363d);border-radius:10px;margin-bottom:8px">'
+        +'<button class="pmb g" data-act="repemb">📦 Reporte de embarque (opcional)</button>'
+        +'<input type="file" id="_pm_rep" accept=".pdf,application/pdf" style="display:none">'
+        +'<span id="_pm_repn" style="font-size:11px;color:var(--muted,#8b949e);flex:1;min-width:200px">'+(S.rep&&S.rep.file?('✅ '+esc(S.rep.file)+' · '+esc(S.rep.resumen||'')):'Sube el PDF «Detalle de Facturas por Embarque»: llena mercancías (suplidor, factura, valor), flete, gastos de origen y comisiones. Tesoro Nacional solo toma el N° de factura. El departamento lo eliges tú.')+'</span>'
+        +'<label style="font-size:11px;display:flex;gap:6px;align-items:center;width:100%">N° Factura Tesoro Nacional <input id="_pm_tesoro" type="text" value="'+esc((S.rep&&S.rep.tesoro)||'')+'" placeholder="se llena con el reporte" style="width:170px;background:var(--s2,#21262d);border:1px solid var(--border,#30363d);border-radius:6px;padding:6px;color:inherit;font-family:monospace"></label>'
+      +'</div>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:8px;border:1px solid var(--border,#30363d);border-radius:10px;margin-bottom:8px">'
         +'<button class="pmb o" data-act="pdffiscal">🧾 PDF factura fiscal Sababa</button>'
         +'<input type="file" id="_pm_pdf" accept=".pdf,application/pdf" style="display:none">'
         +'<span id="_pm_pdfn" style="font-size:11px;color:var(--muted,#8b949e)">Toma el 3.er monto de Totales (de arriba hacia abajo): el Subtotal con ITBMS → Total Pago Realizado. Editable abajo.</span>'
@@ -38895,6 +39002,7 @@ window._plnModuloEmbarques = async function(){
       else if(a==='actualizar'){ (window._provCustomPull?window._provCustomPull():Promise.resolve()).then(function(){ refrescarDatalist(); actualizarTabla(false); }); }
       else if(a==='art') document.getElementById('_pm_art').click();
       else if(a==='pdffiscal') document.getElementById('_pm_pdf').click();
+      else if(a==='repemb') document.getElementById('_pm_rep').click();
       else if(a==='cuadrar') cuadrarHomologado();
       else if(a==='addrow'){ for(var i=0;i<10;i++) S.rows.push(new Array(S.cols.length).fill('')); render(); }
       else if(a==='addcol'){ S.cols.push('IGNORAR'); normalize(); render(); }
@@ -38938,6 +39046,7 @@ window._plnModuloEmbarques = async function(){
       if(t.tagName==='SELECT' && t.hasAttribute('data-ci')){ S.cols[+t.getAttribute('data-ci')]=t.value; render(); }
       else if(t.id==='_pm_art' && t.files && t.files[0]){ var f=t.files[0]; t.value=''; leerArticulos(f); setTimeout(function(){ var n=document.getElementById('_pm_artn'); if(n&&S.art) n.textContent='✅ '+S.artNombre+' · '+Object.keys(S.art.byOC).length+' OC'; },1200); }
       else if(t.id==='_pm_pdf' && t.files && t.files[0]){ var fp=t.files[0]; t.value=''; leerPDFFiscal(fp); }
+      else if(t.id==='_pm_rep' && t.files && t.files[0]){ var fr0=t.files[0]; t.value=''; leerReporteEmbarque(fr0); }
       else if(t.id==='_pm_hom'){ S.usarHomolSiVacio=t.checked; totales(); }
       else if(t.id==='_pm_si'){ S.si=t.checked; actualizarTabla(true); }
     });
@@ -38951,6 +39060,7 @@ window._plnModuloEmbarques = async function(){
     });
     box.addEventListener('input',function(e){
       var t=e.target;
+      if(t.id==='_pm_tesoro'){ S.rep=S.rep||{}; S.rep.tesoro=t.value.trim(); aplicarTesoro(true); return; }
       if(t.id==='_pm_fsub'){
         var v=num(t.value); S.fiscal.sub=v;
         if(!S.fiscal.sinManual){ S.fiscal.sin=v>0?Math.round(v/1.07*100)/100:0; var b=document.getElementById('_pm_fsin'); if(b) b.value=S.fiscal.sin?S.fiscal.sin.toFixed(2):''; }
