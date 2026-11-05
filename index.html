@@ -38800,42 +38800,46 @@ window._plnModuloEmbarques = async function(){
     var inp=document.getElementById('s1_nfact_tesoro'); if(inp) inp.value=v;
     if(typeof _setGrupoFactura==='function'){ try{ _setGrupoFactura('TESORO',v,true); }catch(e){} }
   }
-  function parseReporteEmbarque(lines){
-    var AMT='(-?[\\d,]+\\.\\d{2})';
-    var KEY='(Mercanc[ií]a|Fletes?(?:\\s+Gravado)?|Gastos\\s+de\\s+Origen(?:\\s*\\/\\s*Destino)?|Gastos\\s+de\\s+Destino|Comisiones?\\s+a\\s+Agentes)';
-    var reHead=/^(\d{2}-\d{2}-\d{4})\s+(\d{5,7})\s+(\d{1,3})\s+(.*)$/;
-    var reMain=new RegExp('^(.*?)\\s*'+KEY+'\\s+'+AMT+'\\s+'+AMT+'\\s*(.*)$','i');
-    var out={merc:[],flete:[],gastos:[],comis:[],tesoro:'',omitidos:{}};
-    lines.forEach(function(l){
-      var h=reHead.exec(l); if(!h) return;
-      var rest=h[4];
-      if(/TESORO\s+NACIONAL/i.test(rest)){
-        if(!out.tesoro){
-          var t=/TESORO\s+NACIONAL\s+([A-Za-z0-9\-\/]*\d[A-Za-z0-9\-\/]*)/i.exec(rest);
-          if(t) out.tesoro=t[1];
-        }
-        return;
-      }
-      var m=reMain.exec(rest);
-      if(!m){
-        var om=/CIF\s+EXPRESS/i.test(rest)?'CIF Express':(/MASTER\s+VALUE/i.test(rest)?'Master Value':'otras líneas');
+  // Divide una fila del PDF en CELDAS (por separación horizontal); cada monto es su propia celda
+  function celdasFila(items){
+    items=items.slice().sort(function(a,b){ return a.x-b.x; });
+    var cells=[], cur=null, prevEnd=-1e9;
+    items.forEach(function(it){
+      var t=String(it.s).trim(); if(!t) return;
+      var isAmt=/^-?[\d,]+\.\d{2}$/.test(t), gap=it.x-prevEnd;
+      if(!cur || gap>8 || isAmt || cur.amt){ cur={s:t,x:it.x,amt:isAmt}; cells.push(cur); }
+      else cur.s+=' '+t;
+      prevEnd=it.x+(it.w||0);
+    });
+    return cells;
+  }
+  // Detecta cada columna por su contenido y reparte: suplidor→PROVEEDOR, factura→FACTURA, monto→MONTO, tipo→TIPO
+  function parseReporteEmbarque(rows){
+    var KEYS=[['merc',/Mercanc[ií]a/i],['flete',/^Fletes?\b/i],['gastos',/Gastos\s+de\s+(Origen|Destino)/i],['comis',/Comisiones?\s+a\s+Agentes/i]];
+    var out={merc:[],flete:[],gastos:[],comis:[],tesoro:'',omitidos:{},encabezados:[]};
+    rows.forEach(function(items){
+      var cells=celdasFila(items); if(!cells.length) return;
+      var txt=cells.map(function(c){ return c.s; });
+      if(!out.encabezados.length && txt.some(function(t){ return /\bFecha\b/i.test(t); }) && txt.some(function(t){ return /\bMonto\b/i.test(t); })){ out.encabezados=txt.slice(); return; }
+      var d=-1; cells.forEach(function(c,i){ if(d<0 && /^\d{2}-\d{2}-\d{4}$/.test(c.s)) d=i; });
+      if(d<0) return;
+      var amts=[]; cells.forEach(function(c,i){ if(c.amt) amts.push(i); });
+      if(!amts.length) return;
+      var a1=amts[0], aL=amts[amts.length-1];
+      var tipoTxt=(cells[a1-1]?cells[a1-1].s:'').replace(/^\d{1,3}\s+/,'');
+      var ids=cells.slice(d+1,a1-1).map(function(c){ return c.s; });
+      if(ids.length>=3 && /^\d{1,3}$/.test(ids[ids.length-1])) ids.pop();   // código de movimiento suelto
+      var fact=ids.length?ids[ids.length-1]:'';
+      var post=cells.slice(aL+1).filter(function(c){ return !/^pre-fac/i.test(c.s); });
+      var prov=post.length?post[0].s:'';
+      var monto=num(cells[a1].s);
+      if(/TESORO\s+NACIONAL/i.test(prov)){ if(!out.tesoro) out.tesoro=fact; return; }
+      var k=null; KEYS.forEach(function(p){ if(!k && p[1].test(tipoTxt)) k=p[0]; });
+      if(!k){
+        var om=/CIF\s+EXPRESS/i.test(prov)?'CIF Express':(/MASTER\s+VALUE/i.test(prov)?'Master Value':'otras líneas');
         out.omitidos[om]=(out.omitidos[om]||0)+1; return;
       }
-      var pre=m[1].trim(), key=m[2], monto=num(m[3]), tail=m[5].replace(/\s*pre-fac\.?\s*#\s*\d+\s*$/i,'').trim(), fact='', prov='';
-      if(/^Mercanc/i.test(key)){
-        fact=pre; prov=tail;
-        out.merc.push({prov:prov,fact:fact,monto:monto});
-        return;
-      }
-      if(pre){ fact=pre; prov=tail; }
-      else{
-        var tk=tail.split(/\s+/);
-        if(tk.length>=2 && /^[A-Za-z0-9\-\/]*\d[A-Za-z0-9\-\/]*$/.test(tk[tk.length-1])){ fact=tk.pop(); }
-        prov=tk.join(' ');
-      }
-      if(/^Flete/i.test(key)) out.flete.push({prov:prov,fact:fact,monto:monto});
-      else if(/^Comisi/i.test(key)) out.comis.push({prov:prov,fact:fact,monto:monto});
-      else out.gastos.push({prov:prov,fact:fact,monto:monto});
+      out[k].push({prov:prov,fact:fact,monto:monto});
     });
     return out;
   }
@@ -38843,21 +38847,18 @@ window._plnModuloEmbarques = async function(){
     var lab=document.getElementById('_pm_repn');
     try{
       if(lab) lab.textContent='Leyendo '+file.name+'…';
-      var lib=await cargarPdfJs(), pdf=await lib.getDocument({data:await file.arrayBuffer()}).promise, lines=[];
+      var lib=await cargarPdfJs(), pdf=await lib.getDocument({data:await file.arrayBuffer()}).promise, filas=[];
       for(var p=1;p<=pdf.numPages;p++){
         var tc=await (await pdf.getPage(p)).getTextContent(), rows=[];
         tc.items.forEach(function(it){
           if(!it.str || !it.str.trim()) return;
           var y=it.transform[5], x=it.transform[4];
           var r=rows.find(function(r){ return Math.abs(r.y-y)<=3; });
-          if(!r){ r={y:y,it:[]}; rows.push(r); } r.it.push({x:x,s:it.str});
+          if(!r){ r={y:y,it:[]}; rows.push(r); } r.it.push({x:x,w:(it.width||0),s:it.str});
         });
-        rows.sort(function(a,b){ return b.y-a.y; }).forEach(function(r){
-          r.it.sort(function(a,b){ return a.x-b.x; });
-          lines.push(r.it.map(function(i){ return i.s; }).join(' ').replace(/\s+/g,' ').trim());
-        });
+        rows.sort(function(a,b){ return b.y-a.y; }).forEach(function(r){ filas.push(r.it); });
       }
-      var R=parseReporteEmbarque(lines);
+      var R=parseReporteEmbarque(filas);
       var nTot=R.merc.length+R.flete.length+R.gastos.length+R.comis.length;
       if(!nTot){
         if(lab) lab.textContent='⚠️ No reconocí facturas en '+file.name+' — ¿es el «Detalle de Facturas por Embarque»?';
@@ -38880,7 +38881,7 @@ window._plnModuloEmbarques = async function(){
       actualizarTabla(true);   // nombres oficiales de suplidor (render incluido)
       var om=Object.keys(R.omitidos).map(function(k){ return k+' ('+R.omitidos[k]+')'; }).join(', ');
       lab=document.getElementById('_pm_repn');
-      if(lab) lab.innerHTML='✅ '+esc(file.name)+' · '+esc(S.rep.resumen)+(R.tesoro?' · Tesoro N° <b>'+esc(R.tesoro)+'</b>':' · <span style="color:#f0883e">no encontré el N° de Tesoro, escríbelo</span>')+(om?' · <span style="color:var(--muted,#8b949e)">omitido: '+esc(om)+'</span>':'')+' · <b>Falta elegir los departamentos</b>';
+      if(lab) lab.innerHTML='✅ '+esc(file.name)+' · '+esc(S.rep.resumen)+(R.tesoro?' · Tesoro N° <b>'+esc(R.tesoro)+'</b>':' · <span style="color:#f0883e">no encontré el N° de Tesoro, escríbelo</span>')+(om?' · <span style="color:var(--muted,#8b949e)">omitido: '+esc(om)+'</span>':'')+'<br><span style="color:var(--muted,#8b949e)">Columnas detectadas → Suplidor ➜ Proveedor · Factura ➜ N° Factura · Tipo de movimiento ➜ Tipo · Monto ➜ Valor original'+(R.encabezados.length?' (encabezados leídos: '+esc(R.encabezados.join(' | '))+')':'')+'</span>'+' · <b>Falta elegir los departamentos</b>';
       toast('✅ Reporte cargado: '+nTot+' líneas — elige los departamentos','green',4500);
     }catch(err){
       console.warn(err);
