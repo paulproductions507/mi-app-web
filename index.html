@@ -1470,6 +1470,34 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
   width:auto !important; max-width:none !important; min-width:240px;
   white-space:nowrap !important; margin-top:26px !important;
 }
+
+/* ── 12 · INGRESO SIEMPRE VERDE + BARRA Panel/Facturas CON TEMA (nov-2026) ──
+      (a) La pantalla de ingreso (y la de carga) no debe tomar nunca el tema elegido. La
+          "mancha blanca" de arriba era el fondo claro del documento (html/body) tiñendo la
+          barra de estado del iPhone. Mientras el ingreso está visible, html/body se fuerzan
+          al verde oscuro (clase login-dark, la maneja el script al final). En el menú
+          principal y dentro de la app la clase se quita y el tema se aplica normal.
+      (b) La barra inferior (Panel · Facturas · Aplicar · Procesar) era siempre negra; con
+          tema claro ahora es blanca, con líneas marcadas y letras negras. */
+html.login-dark, html.login-dark body{ background:#050f0d !important; }
+
+body.theme-light #sim-action-bar{
+  background:#ffffff !important;
+  border:1px solid #8c959f !important;
+  box-shadow:0 -4px 12px rgba(31,35,40,.10) !important;
+}
+body.theme-light #sim-action-bar > button:not(#btn-aplicar-cambios):not(#btn-procesar-sim):not(#btn-calcular-sim){
+  background:#ffffff !important;
+  border:1px solid #6e7781 !important;
+  color:#111827 !important;
+}
+body.theme-light #sim-action-bar > button:not(#btn-aplicar-cambios):not(#btn-procesar-sim):not(#btn-calcular-sim):hover{
+  background:#eef2f5 !important; border-color:#1f2328 !important;
+}
+body.theme-light #btn-procesar-sim{
+  background:#ffffff !important; border:1px solid #1a7f37 !important; color:#116329 !important;
+}
+body.theme-light #btn-procesar-sim:hover{ background:rgba(26,127,55,.10) !important; }
 </style>
 </head>
 <body class="zlh-nav-open">
@@ -38927,5 +38955,39 @@ window._plnModuloEmbarques = async function(){
 })();
 </script>
 
+<script>
+/* Ingreso siempre verde (nov-2026): mientras se ve el ingreso o la pantalla de carga,
+   html/body y theme-color van en verde oscuro sin importar el tema; al pasar al menú
+   principal se suelta y se aplica el tema elegido. */
+(function(){
+  var DARK='#050f0d';
+  function sync(){
+    try{
+      var sp=document.getElementById('splash');
+      var ld=document.getElementById('splash-loading');
+      var splashShown = sp && sp.style.display!=='none' && !sp.classList.contains('app-mode');
+      var loading = ld && ld.classList.contains('active');
+      var on = !!(splashShown || loading);
+      document.documentElement.classList.toggle('login-dark', on);
+      var m=document.querySelector('meta[name="theme-color"]');
+      if(m){
+        var c = on ? DARK : (getComputedStyle(document.body).backgroundColor || '#0d1117');
+        if(m.getAttribute('content')!==c) m.setAttribute('content', c);
+      }
+    }catch(e){}
+  }
+  function start(){
+    sync();
+    var mo=new MutationObserver(sync);
+    ['splash','splash-loading'].forEach(function(id){
+      var el=document.getElementById(id);
+      if(el) mo.observe(el,{attributes:true,attributeFilter:['class','style']});
+    });
+    // el tema se aplica con body.theme-light / style: re-sincronizar al cambiar
+    new MutationObserver(sync).observe(document.body,{attributes:true,attributeFilter:['class','style']});
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',start); else start();
+})();
+</script>
 </body>
 </html>
