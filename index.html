@@ -84,11 +84,11 @@
       await _cargarJS('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',function(){ return !!window.html2canvas; });
       await _cargarJS('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',function(){ return !!(window.jspdf&&window.jspdf.jsPDF); });
       var d=fr.contentDocument, el=d.documentElement;
-      var w=Math.max(el.scrollWidth,d.body.scrollWidth,360), h=Math.max(el.scrollHeight,d.body.scrollHeight);
+      var w=820, h=Math.max(el.scrollHeight,d.body.scrollHeight);
       var scale=Math.min(2,Math.sqrt(14000000/(w*h))); if(scale<0.5) scale=0.5;
       var bg=''; try{ bg=fr.contentWindow.getComputedStyle(d.body).backgroundColor; }catch(e){}
       if(!bg || bg==='rgba(0, 0, 0, 0)' || bg==='transparent') bg='#ffffff';
-      var cv=await window.html2canvas(d.body,{scale:scale,backgroundColor:bg,useCORS:true,windowWidth:w,windowHeight:h,logging:false});
+      var cv=await window.html2canvas(d.body,{scale:scale,backgroundColor:bg,useCORS:true,windowWidth:w,width:w,windowHeight:h,logging:false,ignoreElements:function(n){ return n.tagName==='BUTTON' || (n.children&&n.children.length===0&&/^\s*[✕×✖]\s*$/.test(n.textContent||'')) || (n.classList && (n.classList.contains('no-print')||n.classList.contains('docbar'))); }});
       var jsPDF=window.jspdf.jsPDF, pdf=new jsPDF({unit:'mm',format:'a4',orientation:'portrait'});
       var pw=210, ph=297, pagePx=Math.floor(cv.width*ph/pw), y=0, first=true;
       while(y<cv.height){
@@ -96,6 +96,7 @@
         tmp.width=cv.width; tmp.height=sh;
         var cx=tmp.getContext('2d'); cx.fillStyle=bg; cx.fillRect(0,0,tmp.width,tmp.height); cx.drawImage(cv,0,y,cv.width,sh,0,0,cv.width,sh);
         if(!first) pdf.addPage();
+        try{ var rgb=(bg.match(/[\d.]+/g)||[255,255,255]).map(Number); pdf.setFillColor(rgb[0],rgb[1],rgb[2]); pdf.rect(0,0,pw,ph,'F'); }catch(e){}
         pdf.addImage(tmp.toDataURL('image/jpeg',0.92),'JPEG',0,0,pw,sh*pw/cv.width);
         first=false; y+=sh;
       }
@@ -116,6 +117,27 @@
       alert('No se pudo generar el PDF: '+(err&&err.message||err));
     }
   }
+
+  // Los documentos con fondo oscuro fijo (#0d1117) se ven distintos a la pantalla cuando la app está en tema claro:
+  // se copian las variables de color y el fondo del tema actual para que el PDF salga como se ve.
+  function _temaCSS(html){
+    try{
+      if(html.indexOf('#0d1117')<0) return '';
+      var cs=getComputedStyle(document.body), bg=cs.backgroundColor;
+      if(!bg || bg==='rgba(0, 0, 0, 0)' || bg==='transparent') bg=getComputedStyle(document.documentElement).backgroundColor;
+      var m=(bg.match(/[\d.]+/g)||[255,255,255]).map(Number);
+      if(!bg || bg==='rgba(0, 0, 0, 0)' || (0.299*m[0]+0.587*m[1]+0.114*m[2])<140) return '';
+      var names={};
+      Array.prototype.forEach.call(document.styleSheets,function(sh){
+        var rules; try{ rules=sh.cssRules; }catch(e){ return; }
+        Array.prototype.forEach.call(rules||[],function(r){ var t=r.cssText||''; (t.match(/--[\w-]+(?=\s*:)/g)||[]).forEach(function(n){ names[n]=1; }); });
+      });
+      var out=':root{';
+      Object.keys(names).forEach(function(n){ var v=cs.getPropertyValue(n); if(v&&v.trim()) out+=n+':'+v.trim()+';'; });
+      out+='}body{background:'+bg+' !important;color:'+cs.color+' !important}';
+      return out;
+    }catch(e){ return ''; }
+  }
   window._abrirVentana = function(target, features){
     if(!usarCapa()){ return window.open('', target, features); }
     var buf=[], ov=null, fr=null, titulo='Documento', listo=false, timer=null;
@@ -128,6 +150,8 @@
     function armar(){
       if(listo) return; listo=true;
       var html=buf.join('')+'<script>window.print=function(){try{parent._docPDF()}catch(e){}}<\/script>';
+      var tcss=_temaCSS(html);
+      if(tcss){ html=/<\/head>/i.test(html)?html.replace(/<\/head>/i,function(){ return '<style>'+tcss+'</style></head>'; }):('<style>'+tcss+'</style>'+html); }
       var m=html.match(/<title>([^<]*)<\/title>/i); if(m) titulo=m[1];
       ov=document.createElement('div');
       ov.id='_docOverlay';
