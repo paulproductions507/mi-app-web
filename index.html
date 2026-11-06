@@ -1469,6 +1469,7 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
 .splash-btn{
   width:auto !important; max-width:none !important; min-width:240px;
   white-space:nowrap !important; margin-top:26px !important;
+  padding-top:22px !important; padding-bottom:22px !important; min-height:62px !important;
 }
 
 /* ── 12 · INGRESO SIEMPRE VERDE + BARRA Panel/Facturas CON TEMA (nov-2026) ──
@@ -38659,6 +38660,7 @@ window._plnModuloEmbarques = async function(){
   }
 
   async function ejecutar(aplicar){
+    if((S.recibos||[]).length) aplicarRecibos();
     var b=construirFilas();
     if(!b.res.merc){ toast('⚠️ No hay filas de mercancía','orange',3000); return; }
     var nombre=(document.getElementById('_pm_nombre').value||'').trim();
@@ -38839,7 +38841,7 @@ window._plnModuloEmbarques = async function(){
         var om=/CIF\s+EXPRESS/i.test(prov)?'CIF Express':(/MASTER\s+VALUE/i.test(prov)?'Master Value':'otras líneas');
         out.omitidos[om]=(out.omitidos[om]||0)+1; return;
       }
-      out[k].push({prov:prov,fact:fact,monto:monto});
+      out[k].push({prov:prov,fact:fact,monto:monto,interna:(ids.length>=2?ids[0]:'')});
     });
     return out;
   }
@@ -38868,7 +38870,7 @@ window._plnModuloEmbarques = async function(){
       if(hayDatos && !confirm('La plantilla ya tiene datos. ¿Reemplazarlos con el reporte de embarque ('+nTot+' líneas)?')) { if(lab) lab.textContent='Carga cancelada'; return; }
       var iT=ensureCol('TIPO'), iP=ensureCol('PROVEEDOR'), iF=ensureCol('FACTURA'), iM=ensureCol('MONTO'); ensureCol('DEPARTAMENTO');
       var n=S.cols.length, nuevas=[];
-      function fila(tipo,x){ var r=new Array(n).fill(''); r[iT]=tipo; r[iP]=x.prov; r[iF]=x.fact; r[iM]=x.monto.toFixed(2); nuevas.push(r); }
+      function fila(tipo,x){ var r=new Array(n).fill(''); r[iT]=tipo; r[iP]=x.prov; r[iF]=x.fact; r[iM]=x.monto.toFixed(2); r._interna=x.interna||''; nuevas.push(r); }
       R.merc.forEach(function(x){ fila('mercancia',x); });
       R.flete.forEach(function(x){ fila('flete',x); });
       R.gastos.forEach(function(x){ fila('gastos_origen',x); });
@@ -38878,6 +38880,7 @@ window._plnModuloEmbarques = async function(){
       S.rep={file:file.name, tesoro:R.tesoro||'', resumen:R.merc.length+' mercancías ('+f2(sumM)+') · '+R.flete.length+' flete · '+R.gastos.length+' gastos origen · '+R.comis.length+' comisiones'};
       var tin=document.getElementById('_pm_tesoro'); if(tin) tin.value=S.rep.tesoro;
       aplicarTesoro(true);
+      if((S.recibos||[]).length) aplicarRecibos();
       actualizarTabla(true);   // nombres oficiales de suplidor (render incluido)
       var om=Object.keys(R.omitidos).map(function(k){ return k+' ('+R.omitidos[k]+')'; }).join(', ');
       lab=document.getElementById('_pm_repn');
@@ -38887,6 +38890,97 @@ window._plnModuloEmbarques = async function(){
       console.warn(err);
       if(lab) lab.textContent='⚠️ '+(err&&err.message||err);
       toast('⚠️ No se pudo leer el reporte','orange',4000);
+    }
+  }
+
+
+  // ── (nov-2026) RECIBOS (PDF de recibo de bodega): saca las PIEZAS (Gran Total) y las pone en la fila de su factura ──
+  async function pdfLineas(file){
+    var lib=await cargarPdfJs(), pdf=await lib.getDocument({data:await file.arrayBuffer()}).promise, lines=[];
+    for(var p=1;p<=pdf.numPages;p++){
+      var tc=await (await pdf.getPage(p)).getTextContent(), rows=[];
+      tc.items.forEach(function(it){
+        if(!it.str || !it.str.trim()) return;
+        var y=it.transform[5], x=it.transform[4];
+        var r=rows.find(function(r){ return Math.abs(r.y-y)<=3; });
+        if(!r){ r={y:y,it:[]}; rows.push(r); } r.it.push({x:x,s:it.str});
+      });
+      rows.sort(function(a,b){ return b.y-a.y; }).forEach(function(r){
+        r.it.sort(function(a,b){ return a.x-b.x; });
+        lines.push(r.it.map(function(i){ return i.s; }).join(' ').replace(/\s+/g,' ').trim());
+      });
+    }
+    return lines;
+  }
+  function parseRecibo(lines){
+    var header=[], suma=0, nlin=0, rePl=/^\S+\s+\d{6,8}\s+/, reCant=/(\d[\d,]*)\s+[A-Za-z]{2,4}\(\d+\)\s*$/, enProd=false;
+    lines.forEach(function(l){
+      if(rePl.test(l) && reCant.test(l)){ enProd=true; suma+=parseInt(reCant.exec(l)[1].replace(/,/g,''),10)||0; nlin++; }
+      else if(!enProd) header.push(l);
+    });
+    var H=header.join(' '), tx=lines.join(' ');
+    var gt=/Gran\s+Total:?\s+([\d,]+)\s+([\d,]+)\s+([\d,]+)/i.exec(tx);
+    var piezas=gt?(parseInt(gt[2].replace(/,/g,''),10)||0):0;
+    var metodo=(piezas>0&&suma>0&&piezas!==suma)?'Gran Total ('+piezas+') ≠ suma de líneas ('+suma+')':'';
+    if(!piezas) piezas=suma;
+    var mf=/Factura\s+No\.?:?\s+(\d{5,7})\s+(\S+)/i.exec(H), mr=/Recibo\s+No\.?\s*(\d+)/i.exec(H), mo=/Orden\s+de\s+Compra\s+No\.?\s*(\S+)/i.exec(H);
+    var tokens={}; H.toUpperCase().split(/[\s:]+/).forEach(function(t){ if(t.length>=3) tokens[t]=1; });
+    return {piezas:piezas, sumaLineas:suma, aviso:metodo, factura:mf?mf[2]:'', interna:mf?mf[1]:'', recibo:mr?mr[1]:'', oc:mo?mo[1]:'', header:H.toUpperCase(), tokens:tokens};
+  }
+  // pone las piezas de cada recibo en la fila cuya factura coincide (el mapeo Excel manda si ya trae piezas)
+  function aplicarRecibos(){
+    var list=S.recibos||[]; if(!list.length) return {ok:[],sin:[]};
+    var iPz=ensureCol('PIEZAS'), iOC=ensureCol('OC'), acum={}, ok=[], sin=[];
+    list.forEach(function(rc){
+      var ocR=normOC(rc.oc), fR=String(rc.factura||'').toUpperCase(), cand=[];
+      var filas=[]; S.rows.forEach(function(r,ri){ var o=rowObj(r); if(clasificar(o).k==='merc') filas.push({ri:ri,o:o}); });
+      // 1.º) por N° de factura de edición (sistema, p. ej. 255188): viene oculto del reporte de embarque
+      if(rc.interna) cand=filas.filter(function(x){ return S.rows[x.ri]._interna && S.rows[x.ri]._interna===rc.interna; });
+      // 2.º) por Orden de Compra del encabezado del recibo
+      if(!cand.length && ocR) cand=filas.filter(function(x){ return x.o.OC && normOC(x.o.OC)===ocR; });
+      // 3.º) por N° de factura del suplidor (manual, más propenso a errores)
+      if(!cand.length) cand=filas.filter(function(x){
+        var f=String(x.o.FACTURA||'').trim().toUpperCase(); return f && (f===fR || (f.length>=4 && rc.tokens[f]));
+      });
+      if(!cand.length){ sin.push(rc); return; }
+      if(cand.length>1){   // varias filas: desempata por factura y luego por el suplidor que aparece en el recibo
+        var porF=cand.filter(function(x){ return String(x.o.FACTURA||'').trim().toUpperCase()===fR; });
+        if(porF.length) cand=porF;
+        if(cand.length>1){
+          var porP=cand.filter(function(x){ var pv=String(x.o.PROVEEDOR||'').toUpperCase().split(/[\s,.]+/)[0]; return pv.length>=4 && rc.header.indexOf(pv)>=0; });
+          if(porP.length) cand=porP;
+        }
+      }
+      var ri0=cand[0].ri; acum[ri0]=(acum[ri0]||0)+rc.piezas; ok.push({rc:rc,ri:ri0});
+    });
+    Object.keys(acum).forEach(function(k){
+      var r=S.rows[+k], o=rowObj(r);
+      if(!o.OC){ var rcOk=ok.filter(function(x){ return x.ri===+k && x.rc.oc; })[0]; if(rcOk) r[iOC]=rcOk.rc.oc; }   // OC madre vacía → la del recibo
+      var ai=artInfo(rowObj(r).OC);
+      if(ai && ai.piezas>0) return;   // ya viene del mapeo
+      r[iPz]=String(acum[k]);
+    });
+    return {ok:ok,sin:sin};
+  }
+  async function leerRecibos(files){
+    var lab=document.getElementById('_pm_recn');
+    try{
+      if(lab) lab.textContent='Leyendo '+files.length+' recibo(s)…';
+      S.recibos=S.recibos||[];
+      for(var i=0;i<files.length;i++){
+        var rc=parseRecibo(await pdfLineas(files[i])); rc.file=files[i].name;
+        if(!(rc.piezas>0)){ toast('⚠️ No encontré piezas en '+files[i].name,'orange',4000); continue; }
+        S.recibos=S.recibos.filter(function(x){ return !(rc.recibo && x.recibo===rc.recibo); });   // mismo recibo = reemplaza
+        S.recibos.push(rc);
+      }
+      normalize(); var R=aplicarRecibos(); render();
+      var txt=R.ok.map(function(x){ return 'OC '+esc(x.rc.oc||'?')+' · Fact. '+esc(x.rc.factura)+' → <b>'+x.rc.piezas.toLocaleString('en-US')+'</b> pzas'+(x.rc.aviso?' <span style="color:#f0883e">('+esc(x.rc.aviso)+')</span>':''); }).join(' · ');
+      var sin=R.sin.map(function(x){ return 'OC '+esc(x.oc||'?')+' · Fact. '+esc(x.factura||'?')+' ('+esc(x.file)+')'; }).join(', ');
+      S.recibosRes='✅ '+S.recibos.length+' recibo(s) · '+txt+(sin?' · <span style="color:#f85149">sin fila en la tabla: '+sin+' — la OC o la factura del recibo no está en la tabla</span>':'');
+      lab=document.getElementById('_pm_recn'); if(lab) lab.innerHTML=S.recibosRes;
+      toast(R.ok.length?'✅ Piezas cargadas desde '+R.ok.length+' recibo(s)':'⚠️ Ningún recibo coincide con una factura de la tabla',R.ok.length?'green':'orange',4000);
+    }catch(err){
+      console.warn(err); if(lab) lab.textContent='⚠️ '+(err&&err.message||err); toast('⚠️ No se pudo leer el recibo','orange',4000);
     }
   }
 
@@ -38976,6 +39070,11 @@ window._plnModuloEmbarques = async function(){
         +'<label style="font-size:11px;display:flex;gap:6px;align-items:center;width:100%">N° Factura Tesoro Nacional <input id="_pm_tesoro" type="text" value="'+esc((S.rep&&S.rep.tesoro)||'')+'" placeholder="se llena con el reporte" style="width:170px;background:var(--s2,#21262d);border:1px solid var(--border,#30363d);border-radius:6px;padding:6px;color:inherit;font-family:monospace"></label>'
       +'</div>'
       +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:8px;border:1px solid var(--border,#30363d);border-radius:10px;margin-bottom:8px">'
+        +'<button class="pmb b" data-act="recibos">🧾 Recibos (piezas) — opcional</button>'
+        +'<input type="file" id="_pm_rec" accept=".pdf,application/pdf" multiple style="display:none">'
+        +'<span id="_pm_recn" style="font-size:11px;color:var(--muted,#8b949e);flex:1;min-width:200px">'+(S.recibosRes||'Para suplidores sin mapeo: selecciona <b>todos los recibos juntos</b> (PDF). Cada uno se cruza primero por el <b>N° de factura de edición</b> (el del reporte de embarque), luego por la <b>Orden de Compra</b> y al final por la factura del suplidor; llena las <b>piezas</b> con el Gran Total.')+'</span>'
+      +'</div>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:8px;border:1px solid var(--border,#30363d);border-radius:10px;margin-bottom:8px">'
         +'<button class="pmb o" data-act="pdffiscal">🧾 PDF factura fiscal Sababa</button>'
         +'<input type="file" id="_pm_pdf" accept=".pdf,application/pdf" style="display:none">'
         +'<span id="_pm_pdfn" style="font-size:11px;color:var(--muted,#8b949e)">Toma el 3.er monto de Totales (de arriba hacia abajo): el Subtotal con ITBMS → Total Pago Realizado. Editable abajo.</span>'
@@ -39004,6 +39103,7 @@ window._plnModuloEmbarques = async function(){
       else if(a==='art') document.getElementById('_pm_art').click();
       else if(a==='pdffiscal') document.getElementById('_pm_pdf').click();
       else if(a==='repemb') document.getElementById('_pm_rep').click();
+      else if(a==='recibos') document.getElementById('_pm_rec').click();
       else if(a==='cuadrar') cuadrarHomologado();
       else if(a==='addrow'){ for(var i=0;i<10;i++) S.rows.push(new Array(S.cols.length).fill('')); render(); }
       else if(a==='addcol'){ S.cols.push('IGNORAR'); normalize(); render(); }
@@ -39048,6 +39148,7 @@ window._plnModuloEmbarques = async function(){
       else if(t.id==='_pm_art' && t.files && t.files[0]){ var f=t.files[0]; t.value=''; leerArticulos(f); setTimeout(function(){ var n=document.getElementById('_pm_artn'); if(n&&S.art) n.textContent='✅ '+S.artNombre+' · '+Object.keys(S.art.byOC).length+' OC'; },1200); }
       else if(t.id==='_pm_pdf' && t.files && t.files[0]){ var fp=t.files[0]; t.value=''; leerPDFFiscal(fp); }
       else if(t.id==='_pm_rep' && t.files && t.files[0]){ var fr0=t.files[0]; t.value=''; leerReporteEmbarque(fr0); }
+      else if(t.id==='_pm_rec' && t.files && t.files.length){ var fr1=Array.prototype.slice.call(t.files); t.value=''; leerRecibos(fr1); }
       else if(t.id==='_pm_hom'){ S.usarHomolSiVacio=t.checked; totales(); }
       else if(t.id==='_pm_si'){ S.si=t.checked; actualizarTabla(true); }
     });
