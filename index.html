@@ -57,6 +57,65 @@
       setTimeout(limpiar,60000);
     },150);
   }
+
+  // PDF real (iPhone): se dibuja el documento, se arma un .pdf y se abre «Compartir → Guardar en Archivos».
+  function _cargarJS(src,chk){
+    return new Promise(function(res,rej){
+      if(chk()) return res();
+      var sc=document.createElement('script'); sc.src=src; sc.onload=res;
+      sc.onerror=function(){ rej(new Error('No se pudo cargar el generador de PDF (revisa tu conexión)')); };
+      document.head.appendChild(sc);
+    });
+  }
+  function _compartirPDF(file,titulo){
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      return navigator.share({files:[file],title:titulo||file.name});
+    }
+    var url=URL.createObjectURL(file), a=document.createElement('a');
+    a.href=url; a.download=file.name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(url); },60000);
+    return Promise.resolve();
+  }
+  async function generarPDF(ov,fr,titulo){
+    var btn=ov.querySelector('#_docP'); if(!btn || btn._busy) return;
+    var txt0='🖨 PDF'; btn._busy=true; btn.textContent='⏳ Generando…';
+    var file=null;
+    try{
+      await _cargarJS('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',function(){ return !!window.html2canvas; });
+      await _cargarJS('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',function(){ return !!(window.jspdf&&window.jspdf.jsPDF); });
+      var d=fr.contentDocument, el=d.documentElement;
+      var w=Math.max(el.scrollWidth,d.body.scrollWidth,360), h=Math.max(el.scrollHeight,d.body.scrollHeight);
+      var scale=Math.min(2,Math.sqrt(14000000/(w*h))); if(scale<0.5) scale=0.5;
+      var bg=''; try{ bg=fr.contentWindow.getComputedStyle(d.body).backgroundColor; }catch(e){}
+      if(!bg || bg==='rgba(0, 0, 0, 0)' || bg==='transparent') bg='#ffffff';
+      var cv=await window.html2canvas(d.body,{scale:scale,backgroundColor:bg,useCORS:true,windowWidth:w,windowHeight:h,logging:false});
+      var jsPDF=window.jspdf.jsPDF, pdf=new jsPDF({unit:'mm',format:'a4',orientation:'portrait'});
+      var pw=210, ph=297, pagePx=Math.floor(cv.width*ph/pw), y=0, first=true;
+      while(y<cv.height){
+        var sh=Math.min(pagePx,cv.height-y), tmp=document.createElement('canvas');
+        tmp.width=cv.width; tmp.height=sh;
+        var cx=tmp.getContext('2d'); cx.fillStyle=bg; cx.fillRect(0,0,tmp.width,tmp.height); cx.drawImage(cv,0,y,cv.width,sh,0,0,cv.width,sh);
+        if(!first) pdf.addPage();
+        pdf.addImage(tmp.toDataURL('image/jpeg',0.92),'JPEG',0,0,pw,sh*pw/cv.width);
+        first=false; y+=sh;
+      }
+      var nombre=String(titulo||'Documento').replace(/[^\w\-áéíóúñÁÉÍÓÚÑ ]+/g,'').trim().replace(/\s+/g,'_')||'Documento';
+      file=new File([pdf.output('blob')],nombre+'.pdf',{type:'application/pdf'});
+      await _compartirPDF(file,titulo);
+      btn.textContent=txt0; btn._busy=false;
+    }catch(err){
+      btn._busy=false;
+      if(file && err && err.name!=='AbortError'){
+        // iOS exige un toque nuevo para compartir: dejamos el PDF listo
+        btn.textContent='📤 Guardar PDF';
+        btn.onclick=function(){ _compartirPDF(file,titulo).then(function(){ btn.textContent=txt0; btn.onclick=function(){ generarPDF(ov,fr,titulo); }; }).catch(function(){}); };
+        return;
+      }
+      btn.textContent=txt0;
+      if(err && err.name==='AbortError') return;
+      alert('No se pudo generar el PDF: '+(err&&err.message||err));
+    }
+  }
   window._abrirVentana = function(target, features){
     if(!usarCapa()){ return window.open('', target, features); }
     var buf=[], ov=null, fr=null, titulo='Documento', listo=false, timer=null;
@@ -68,7 +127,7 @@
     }
     function armar(){
       if(listo) return; listo=true;
-      var html=buf.join('');
+      var html=buf.join('')+'<script>window.print=function(){try{parent._docPDF()}catch(e){}}<\/script>';
       var m=html.match(/<title>([^<]*)<\/title>/i); if(m) titulo=m[1];
       ov=document.createElement('div');
       ov.id='_docOverlay';
@@ -88,6 +147,7 @@
       fr.srcdoc=html;
       ov.querySelector('#_docX').onclick=cerrar;
       ov.querySelector('#_docP').onclick=function(){ shim.print(); };
+      window._docPDF=function(){ shim.print(); };
     }
     var shim={
       closed:false,
@@ -101,7 +161,7 @@
       blur:function(){},
       print:function(){
         if(!fr){ armar(); setTimeout(function(){ shim.print(); },500); return; }
-        imprimirCapa(ov,fr);
+        generarPDF(ov,fr,titulo);
       },
       close:function(){ cerrar(); }
     };
