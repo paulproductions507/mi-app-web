@@ -38398,7 +38398,7 @@ window._plnModuloEmbarques = async function(){
       if(c.k==='pago'){ pagoUser=monto; return; }
       if(c.k==='serv'){
         if(c.legacy){ out.push([o.PROVEEDOR,'','',o.FACTURA||'',monto,'','','','','','','']); }
-        else out.push([o.PROVEEDOR,'servicio',c.t,o.FACTURA||'',monto,'','','','','','','']);
+        else out.push([provOficial(o.PROVEEDOR),'servicio',c.t,o.FACTURA||'',monto,'','','','','','','']);
         res.gastos+=monto; return;
       }
       var ai=artInfo(o.OC);
@@ -38469,8 +38469,9 @@ window._plnModuloEmbarques = async function(){
     var iPz, iOH, iMH;
     if(S.art){ iPz=ensureCol('PIEZAS'); iOH=ensureCol('OC_HOMOLOGADA'); iMH=ensureCol('MONTO_HOMOLOGADO'); }
     S.rows.forEach(function(r){
-      var o=rowObj(r), c=clasificar(o); if(c.k!=='merc') return;
+      var o=rowObj(r), c=clasificar(o); if(c.k!=='merc' && !(c.k==='serv' && !c.legacy)) return;
       if(iP>=0 && o.PROVEEDOR){ var of=provOficial(o.PROVEEDOR); var st=provStatus(o.PROVEEDOR); if((st.k==='ok'||st.k==='auto') && of!==r[iP]){ r[iP]=of; cambios++; } }
+      if(c.k!=='merc') return;
       if(iD>=0 && o.DEPARTAMENTO){ var dr=deptResolve(o.DEPARTAMENTO); if(dr.ok && dr.name!==r[iD]){ r[iD]=dr.name; cambios++; } }
       if(S.art){
         var ai=artInfo(o.OC);
@@ -38594,7 +38595,14 @@ window._plnModuloEmbarques = async function(){
   window._pmCerrar = cerrar;
 
   function noteHTML(o,c){
-    if(c.k==='serv') return '<span style="color:#58a6ff;font-size:11px">🧾 Gasto · '+esc(c.t)+'</span>';
+    if(c.k==='serv'){
+      var base='<span style="color:#58a6ff;font-size:11px">🧾 Gasto · '+esc(c.t)+'</span>';
+      var st2=provStatus(o.PROVEEDOR);
+      if(st2.k==='empty'||st2.k==='ok'||st2.k==='auto'||c.legacy) return base;
+      var b2='<span style="font-size:11px;color:#f0883e"> · ⚠ suplidor '+(st2.k==='new'?'nuevo':'dudoso')+'</span>';
+      if(st2.k==='sug') b2+='<button class="mini" data-act="usar" data-name="'+esc(st2.m.name)+'">Usar «'+esc(st2.m.name)+'»</button>';
+      return base+b2+'<button class="mini" data-act="crear">➕ Crear suplidor</button>';
+    }
     var dg=diag(o), h='';
     if(dg.st.k==='sug') h+='<button class="mini" data-act="usar" data-name="'+esc(dg.st.m.name)+'">Usar «'+esc(dg.st.m.name)+'»</button>';
     if(dg.st.k==='sug'||dg.st.k==='new') h+='<button class="mini" data-act="crear">➕ Crear suplidor</button>';
@@ -38661,6 +38669,10 @@ window._plnModuloEmbarques = async function(){
 
   async function ejecutar(aplicar){
     if((S.recibos||[]).length) aplicarRecibos();
+    if(aplicar){
+      var nuevosP=proveedoresNuevos();
+      if(nuevosP.length && confirm('Suplidores que no están en la lista de la app ('+nuevosP.length+'):\n\n'+nuevosP.join('\n')+'\n\nAceptar = crearlos tal cual están en la plantilla y aplicar\nCancelar = aplicar sin crearlos')) crearNuevos();
+    }
     var b=construirFilas();
     if(!b.res.merc){ toast('⚠️ No hay filas de mercancía','orange',3000); return; }
     var nombre=(document.getElementById('_pm_nombre').value||'').trim();
@@ -38797,6 +38809,25 @@ window._plnModuloEmbarques = async function(){
   // y comisiones (González → gastos de origen). Tesoro Nacional NO se lee: el sistema lo calcula solo
   // al elegir SIF/Sababa; únicamente se toma el N° de factura (la primera línea de Tesoro).
   // CIF Express, Master Value y demás líneas se omiten. El departamento lo elige el usuario.
+
+  // Suplidores de la tabla que NO existen en la lista de la app (mercancías y gastos)
+  function proveedoresNuevos(){
+    var seen={}, out=[];
+    S.rows.forEach(function(r){
+      var o=rowObj(r), c=clasificar(o);
+      if(!(c.k==='merc' || (c.k==='serv' && !c.legacy))) return;
+      var n=String(o.PROVEEDOR||'').trim(); if(!n || provStatus(n).k!=='new') return;
+      var u=n.toUpperCase(); if(!seen[u]){ seen[u]=1; out.push(n); }
+    });
+    return out;
+  }
+  function crearNuevos(){
+    var L=proveedoresNuevos(), iP=S.cols.indexOf('PROVEEDOR');
+    L.forEach(function(n){ crearProv(n); });
+    if(L.length){ actualizarTabla(true); toast('✅ '+L.length+' suplidor(es) creado(s): '+L.join(', '),'green',4500); }
+    else toast('No hay suplidores nuevos','blue',2500);
+    return L.length;
+  }
   function aplicarTesoro(quiet){
     var v=String((S.rep&&S.rep.tesoro)||'').trim(); if(!v) return;
     var inp=document.getElementById('s1_nfact_tesoro'); if(inp) inp.value=v;
@@ -38804,7 +38835,16 @@ window._plnModuloEmbarques = async function(){
   }
   // Divide una fila del PDF en CELDAS (por separación horizontal); cada monto es su propia celda
   function celdasFila(items){
-    items=items.slice().sort(function(a,b){ return a.x-b.x; });
+    var partes=[];
+    items.forEach(function(it){
+      var t=String(it.s).trim(), m=/^(-?[\d,]+\.\d{2})\s+(\S.*)$/.exec(t) || null, m2=null;
+      if(!m) m2=/^(\S.*\S)\s+(-?[\d,]+\.\d{2})$/.exec(t);
+      var w=it.w||0;
+      if(m){ var w1=w*m[1].length/t.length; partes.push({x:it.x,w:w1,s:m[1]}); partes.push({x:it.x+w1+1,w:w-w1,s:m[2]}); }
+      else if(m2){ var w2=w*m2[2].length/t.length; partes.push({x:it.x,w:w-w2-1,s:m2[1]}); partes.push({x:it.x+w-w2,w:w2,s:m2[2]}); }
+      else partes.push(it);
+    });
+    items=partes.sort(function(a,b){ return a.x-b.x; });
     var cells=[], cur=null, prevEnd=-1e9;
     items.forEach(function(it){
       var t=String(it.s).trim(); if(!t) return;
@@ -38833,7 +38873,7 @@ window._plnModuloEmbarques = async function(){
       if(ids.length>=3 && /^\d{1,3}$/.test(ids[ids.length-1])) ids.pop();   // código de movimiento suelto
       var fact=ids.length?ids[ids.length-1]:'';
       var post=cells.slice(aL+1).filter(function(c){ return !/^pre-fac/i.test(c.s); });
-      var prov=post.length?post[0].s:'';
+      var prov=(post.length?post[0].s:'').replace(/^(?:-?[\d,]+\.\d{2}\s+)+/,'').replace(/\s*pre-fac\.?\s*#\s*\d+\s*$/i,'').trim();
       var monto=num(cells[a1].s);
       if(/TESORO\s+NACIONAL/i.test(prov)){ if(!out.tesoro) out.tesoro=fact; return; }
       var k=null; KEYS.forEach(function(p){ if(!k && p[1].test(tipoTxt)) k=p[0]; });
@@ -39065,6 +39105,7 @@ window._plnModuloEmbarques = async function(){
       +'</div>'
       +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:8px;border:1px solid var(--border,#30363d);border-radius:10px;margin-bottom:8px">'
         +'<button class="pmb g" data-act="repemb">📦 Reporte de embarque (opcional)</button>'
+        +'<button class="pmb o" data-act="crearnuevos" title="Crea en la lista de la app todos los suplidores de la tabla que no existen">➕ Crear suplidores nuevos</button>'
         +'<input type="file" id="_pm_rep" accept=".pdf,application/pdf" style="display:none">'
         +'<span id="_pm_repn" style="font-size:11px;color:var(--muted,#8b949e);flex:1;min-width:200px">'+(S.rep&&S.rep.file?('✅ '+esc(S.rep.file)+' · '+esc(S.rep.resumen||'')):'Sube el PDF «Detalle de Facturas por Embarque»: llena mercancías (suplidor, factura, valor), flete, gastos de origen y comisiones. Tesoro Nacional solo toma el N° de factura. El departamento lo eliges tú.')+'</span>'
         +'<label style="font-size:11px;display:flex;gap:6px;align-items:center;width:100%">N° Factura Tesoro Nacional <input id="_pm_tesoro" type="text" value="'+esc((S.rep&&S.rep.tesoro)||'')+'" placeholder="se llena con el reporte" style="width:170px;background:var(--s2,#21262d);border:1px solid var(--border,#30363d);border-radius:6px;padding:6px;color:inherit;font-family:monospace"></label>'
@@ -39104,6 +39145,7 @@ window._plnModuloEmbarques = async function(){
       else if(a==='pdffiscal') document.getElementById('_pm_pdf').click();
       else if(a==='repemb') document.getElementById('_pm_rep').click();
       else if(a==='recibos') document.getElementById('_pm_rec').click();
+      else if(a==='crearnuevos') crearNuevos();
       else if(a==='cuadrar') cuadrarHomologado();
       else if(a==='addrow'){ for(var i=0;i<10;i++) S.rows.push(new Array(S.cols.length).fill('')); render(); }
       else if(a==='addcol'){ S.cols.push('IGNORAR'); normalize(); render(); }
@@ -39120,7 +39162,7 @@ window._plnModuloEmbarques = async function(){
       else if(a==='crear'){
         var ri=+t.closest('tr').getAttribute('data-ri'), o=rowObj(S.rows[ri]);
         var ci2=S.cols.indexOf('PROVEEDOR'); var nom=String(o.PROVEEDOR||'').trim().toUpperCase();
-        if(crearProv(nom)){ if(ci2>=0) S.rows[ri][ci2]=nom; toast('✅ Suplidor creado: '+nom,'green',2500); render(); }
+        if(crearProv(nom)){ if(ci2>=0) S.rows[ri][ci2]=nom; toast('✅ Suplidor creado: '+nom,'green',2500); actualizarTabla(true); }
       }
       else if(a==='usar'){
         var ri2=+t.closest('tr').getAttribute('data-ri'), ci3=S.cols.indexOf('PROVEEDOR');
