@@ -4362,6 +4362,14 @@ body.theme-light #btn-procesar-sim:hover{ background:rgba(26,127,55,.10) !import
       </div>
 
       <div>
+        <label style="font-size:10px;color:var(--muted);font-weight:600;display:block;margin-bottom:3px">FILTRAR FECHAS POR</label>
+        <select id="tf_fechapor" onchange="_applyTendFilters()" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:7px;padding:6px 8px;color:var(--text);font-size:12px;box-sizing:border-box">
+          <option value="">📅 Fecha del embarque (procesado)</option>
+          <option value="contenedor">🚢 Llegada de contenedores</option>
+        </select>
+      </div>
+
+      <div>
         <label style="font-size:10px;color:var(--muted);font-weight:600;display:block;margin-bottom:3px">TIPO DE EMBARQUE</label>
         <select id="tf_tipo" onchange="_applyTendFilters()" style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:7px;padding:6px 8px;color:var(--text);font-size:12px;box-sizing:border-box">
           <option value="">Todos</option>
@@ -17427,6 +17435,7 @@ function _getFilteredTendData(){
   const prov   = _tfVal('tf_proveedor');
   const buscar = _tfVal('tf_buscar').toLowerCase().trim();
   const origen = _tfVal('tf_origen').trim();
+  const fechaPor = _tfVal('tf_fechapor'); // '' = fecha del embarque procesado · 'contenedor' = llegada de contenedores
 
   // Deduplicar tendData por nro antes de filtrar — evita conteos inflados
   const _dedupMap=new Map();
@@ -17465,6 +17474,14 @@ function _getFilteredTendData(){
       // Prioridad: fechaDoc > fecha (si es ISO string) > snap.fechaEmb
       // Evitar usar timestamps de procesamiento (números grandes = milisegundos)
       const getFechaReal = (d) => {
+        // (nov-2026) FIX: usar SIEMPRE la misma fecha que muestra y agrupa el Historial
+        //   (_fechaEmbarqueReal: fecha > fechaDoc > snap > ts). Antes el filtro daba prioridad a
+        //   fechaDoc y el Historial a fecha, y un embarque podía filtrarse en octubre pero
+        //   mostrarse/agruparse en noviembre o septiembre.
+        if(typeof _fechaEmbarqueReal==='function'){
+          const _fr0=_fechaEmbarqueReal(d);
+          if(_fr0) return _fr0;
+        }
         // fechaDoc = fecha del documento del embarque (no de procesamiento)
         if(d.fechaDoc) return normFecha(d.fechaDoc);
         // Si d.fecha es string ISO (YYYY-MM-DD), usarla
@@ -17497,18 +17514,19 @@ function _getFilteredTendData(){
       };
 
       const fEmb = getFechaReal(d);
-      if(fEmb){
-        if((!desde||fEmb>=desde) && (!hasta||fEmb<=hasta)) fechaMatch=true;
-      }
+      const _enRango = f => !!f && (!desde||f>=desde) && (!hasta||f<=hasta);
+      const _fechasCont = (d.contenedores||[]).map(c=>normFecha(c.fecha)).filter(Boolean);
 
-      // Si no tiene fecha principal, verificar contenedores parciales
-      if(!fechaMatch && d.contenedores && d.contenedores.length>0){
-        for(const c of d.contenedores){
-          const fC = normFecha(c.fecha);
-          if(fC && (!desde||fC>=desde) && (!hasta||fC<=hasta)){
-            fechaMatch=true; break;
-          }
-        }
+      if(fechaPor==='contenedor'){
+        // (nov-2026) Por LLEGADA DE CONTENEDORES: entra si al menos un contenedor llegó dentro del rango.
+        //   Si el embarque no tiene contenedores con fecha, se usa la fecha del embarque como respaldo.
+        if(_fechasCont.length) fechaMatch=_fechasCont.some(_enRango);
+        else fechaMatch=_enRango(fEmb);
+      } else {
+        // (nov-2026) Por FECHA DEL EMBARQUE (procesado): solo cuenta la fecha del embarque; las fechas de los
+        //   contenedores se usan únicamente si el embarque no tiene fecha propia.
+        if(fEmb) fechaMatch=_enRango(fEmb);
+        else fechaMatch=_fechasCont.some(_enRango);
       }
 
       if(!fechaMatch) return false;
@@ -17766,6 +17784,38 @@ function _tfBuscarStep(delta){
   inp.value = String(cur + delta);
   _applyTendFilters();
 }
+
+// ── Cambiar la fecha de un embarque ya procesado (nov-2026) ──
+// La fecha del embarque (procesado) es independiente de la llegada de los contenedores:
+// aquí solo se cambia la del embarque; las fechas de los contenedores no se tocan.
+window._cambiarFechaEmbarque = function(idx){
+  var d = tendData[idx]; if(!d) return;
+  var actual = (typeof _fechaEmbarqueReal==='function' ? _fechaEmbarqueReal(d) : '') || '';
+  var old = document.getElementById('_fechaEmbModal'); if(old) old.remove();
+  var m = document.createElement('div'); m.id='_fechaEmbModal';
+  m.style.cssText='position:fixed;inset:0;z-index:100020;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;padding:20px';
+  m.innerHTML='<div style="background:var(--s1,#161b22);color:var(--text,#e6edf3);border:1px solid var(--border,#30363d);border-radius:14px;max-width:380px;width:100%;padding:18px" onclick="event.stopPropagation()">'
+    +'<div style="font-size:15px;font-weight:800;margin-bottom:6px">📅 Fecha del embarque '+String(d.nro||'')+'</div>'
+    +'<div style="font-size:12px;color:var(--muted,#8b949e);margin-bottom:12px;line-height:1.4">Cambia el mes en que cuenta este embarque en Tendencias y estadísticas. Las fechas de llegada de los contenedores no se modifican.</div>'
+    +'<input type="date" id="_fechaEmbInp" value="'+actual+'" style="width:100%;box-sizing:border-box;background:var(--s2,#21262d);border:1px solid var(--border,#30363d);border-radius:8px;padding:10px;color:var(--text,#e6edf3);font-size:15px">'
+    +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">'
+    +'<button id="_fechaEmbNo" style="background:var(--s2,#21262d);border:1px solid var(--border,#30363d);color:var(--text,#e6edf3);border-radius:8px;padding:9px 14px;font-size:13px;font-weight:700">Cancelar</button>'
+    +'<button id="_fechaEmbOk" style="background:#238636;border:1px solid #2ea043;color:#fff;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:700">Guardar fecha</button></div></div>';
+  m.onclick=function(){ m.remove(); };
+  document.body.appendChild(m);
+  document.getElementById('_fechaEmbNo').onclick=function(){ m.remove(); };
+  document.getElementById('_fechaEmbOk').onclick=function(){
+    var v=(document.getElementById('_fechaEmbInp').value||'').trim();
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(v)){ alert('Elige una fecha válida'); return; }
+    d.fecha=v; if(d.fechaDoc) d.fechaDoc=v; if(d.snap && typeof d.snap==='object') d.snap.fecha=v;
+    d._fechaManual=true;
+    try{ saveTendData(); if(typeof _flushSaveTendData==='function') _flushSaveTendData(); }catch(e){}
+    m.remove();
+    var fm=document.getElementById('_facDetailModal'); if(fm){ fm.remove(); window._factDrawerOpen=false; window._lastFacturaIdx=-1; }
+    try{ _applyTendFilters(); }catch(e){}
+    if(typeof toast==='function') toast('📅 Embarque '+String(d.nro||'')+' ahora cuenta en '+v,'green',3500);
+  };
+};
 function _applyTendFilters(){
   renderTend();
   if(typeof renderDashboardKPIs==='function') renderDashboardKPIs();
@@ -17784,7 +17834,7 @@ function _updateTendSubtitle(){
   const n=_getFilteredTendData().length, tot=tendData.length;
   const desde=_tfVal('tf_desde'), hasta=_tfVal('tf_hasta');
   let rango='';
-  if(desde&&hasta) rango=' · '+desde+' → '+hasta;
+  if(desde&&hasta) rango=' · '+desde+' → '+hasta+(_tfVal('tf_fechapor')==='contenedor'?' (por llegada de contenedores)':'');
   else if(desde) rango=' · desde '+desde;
   else if(hasta) rango=' · hasta '+hasta;
   const txt='☁️ '+(n!==tot?n+' de '+tot:tot)+' embarque'+(tot!==1?'s':'')+rango;
@@ -17808,7 +17858,7 @@ function _setPeriodoRapido(p, btn){
   _applyTendFilters();
 }
 function _limpiarFiltrosTend(){
-  ['tf_desde','tf_hasta','tf_tipo','tf_proveedor','tf_buscar','tf_origen'].forEach(id=>_tfSet(id,''));
+  ['tf_desde','tf_hasta','tf_tipo','tf_proveedor','tf_buscar','tf_origen','tf_fechapor'].forEach(id=>_tfSet(id,''));
   document.querySelectorAll('[id="tf_origen_pais"]').forEach(sel => { sel.value = ''; });
   const container = document.getElementById('tab-modal-body') || document;
   container.querySelectorAll('._prBtn').forEach(b=>{ b.style.background='var(--s2)'; b.style.borderColor='var(--border)'; b.style.color='var(--muted)'; b.style.fontWeight='600'; });
@@ -17834,7 +17884,7 @@ function _saveFiltrosTend(){
   var filtros = {
     desde:  _tfVal('tf_desde'),  hasta:  _tfVal('tf_hasta'),
     tipo:   _tfVal('tf_tipo'),   prov:   _tfVal('tf_proveedor'),
-    buscar: _tfVal('tf_buscar'), origen: _tfVal('tf_origen'),
+    buscar: _tfVal('tf_buscar'), origen: _tfVal('tf_origen'), fechapor: _tfVal('tf_fechapor'),
     ts:     new Date().toISOString()
   };
   var hayFiltro = !!(filtros.desde||filtros.hasta||filtros.tipo||filtros.prov||filtros.buscar||filtros.origen);
@@ -17857,6 +17907,7 @@ function _loadFiltrosTend(){
   if(filtros.prov)   _tfSet('tf_proveedor', filtros.prov);
   if(filtros.buscar) _tfSet('tf_buscar', filtros.buscar);
   if(filtros.origen) _tfSet('tf_origen', filtros.origen);
+  if(filtros.fechapor) _tfSet('tf_fechapor', filtros.fechapor);
   var hayFiltro = !!(filtros.desde||filtros.hasta||filtros.tipo||filtros.prov||filtros.buscar||filtros.origen);
   _actualizarIndicadorFiltro(hayFiltro);
   // Sin esto, los campos quedaban con el valor correcto pero la vista
@@ -27894,7 +27945,8 @@ window.abrirFacturasEmbarque = function(idx){
       +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'
       +'<div style="font-size:13px;font-weight:800;color:var(--text)">🧾 Detalle Facturas del Embarque</div>'
       +'<div style="display:flex;align-items:center;gap:8px">'
-      +'<button id="_facFmtToggle" onclick="_facModalToggleFmt('+idx+')" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:700" title="Cambiar valores abreviados/completos">$k</button>'
+      +'<button onclick="_cambiarFechaEmbarque('+idx+')" style="background:rgba(163,113,247,.12);border:1px solid rgba(163,113,247,.35);color:#a371f7;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:700" title="Cambiar la fecha del embarque">📅</button>'
+    +'<button id="_facFmtToggle" onclick="_facModalToggleFmt('+idx+')" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:700" title="Cambiar valores abreviados/completos">$k</button>'
       +'<button onclick="(function(){var c=document.getElementById(\'_facDetailInner\');var w=_abrirVentana(\'_blank\',\'width=600,height=800\');w.document.write(\'<!DOCTYPE html><html><head><meta charset=UTF-8><title>Detalle Embarque</title><style>body{font-family:Arial,sans-serif;background:#0d1117;color:#e6edf3;padding:20px}*{box-sizing:border-box}</style></head><body>\'+c.innerHTML+\'</body></html>\');w.document.close();setTimeout(function(){w.print();},400);})()" style="background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:600">🖨 Imprimir</button>'
       +'<button onclick="_exportDetalleExcel(tendData['+idx+'])" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:600" title="Descargar Excel .xlsx — números con punto decimal">📗 Excel (.xlsx)</button>'
       +'<button onclick="_exportDetalleXLSX(tendData['+idx+'], \',\''+')" style="background:rgba(240,136,62,.1);border:1px solid rgba(240,136,62,.3);color:var(--orange-l);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:600" title="Descargar CSV — números con coma (20733,00) — para pegar en Excel europeo">📊 CSV (,)</button>'
@@ -28427,6 +28479,7 @@ window.abrirFacturasEmbarque = function(idx){
     +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'
     +'<div style="font-size:13px;font-weight:800;color:var(--text)">🧾 Detalle Facturas del Embarque</div>'
     +'<div style="display:flex;align-items:center;gap:8px">'
+    +'<button onclick="_cambiarFechaEmbarque('+idx+')" style="background:rgba(163,113,247,.12);border:1px solid rgba(163,113,247,.35);color:#a371f7;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:700" title="Cambiar la fecha del embarque">📅</button>'
     +'<button id="_facFmtToggle" onclick="_facModalToggleFmt('+idx+')" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:700" title="Cambiar entre valores abreviados y completos">$k</button>'
     +'<button onclick="(function(){var c=document.getElementById(\'_facDetailInner\');var w=_abrirVentana(\'_blank\',\'width=600,height=800\');w.document.write(\'<!DOCTYPE html><html><head><meta charset=UTF-8><title>Detalle Embarque</title><style>body{font-family:Arial,sans-serif;background:#0d1117;color:#e6edf3;padding:20px}*{box-sizing:border-box}</style></head><body>\'+c.innerHTML+\'</body></html>\');w.document.close();setTimeout(function(){w.print();},400);})()" style="background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.3);color:var(--green-l);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:600">🖨 Imprimir</button>'
     +'<button onclick="_exportDetalleExcel(tendData['+idx+'])" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:600" title="Descargar Excel .xlsx — números con punto decimal">📗 Excel (.xlsx)</button>'
