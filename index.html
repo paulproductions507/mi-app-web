@@ -38751,7 +38751,7 @@ window._plnModuloEmbarques = async function(){
    +'#_pm_t .ro{color:var(--muted,#8b949e);font-size:11px;padding:0 6px;white-space:nowrap}'
    +'#_pm_t button.mini{background:none;border:1px solid var(--border,#30363d);border-radius:5px;color:inherit;font-size:10px;padding:2px 6px;cursor:pointer;margin-left:4px}';
 
-  function cerrar(){ var o=document.getElementById('_pm_ov'); if(o) o.remove(); SEL=null; if(window._pmDocOff) window._pmDocOff(); }
+  function cerrar(){ var o=document.getElementById('_pm_ov'); if(o) o.remove(); SEL=null; if(window._pmDocOff) window._pmDocOff(); guardarBorrador(true); }
   window._pmCerrar = cerrar;
 
   function noteHTML(o,c){
@@ -38872,6 +38872,7 @@ window._plnModuloEmbarques = async function(){
     document.getElementById('_pm_tw').innerHTML=h;
     pintarSel();
     totales();
+    guardarBorrador();
   }
   function refreshRow(ri){
     var tr=document.querySelector('#_pm_t tr[data-ri="'+ri+'"]'); if(!tr) return;
@@ -38879,6 +38880,7 @@ window._plnModuloEmbarques = async function(){
     tr.className=c.k==='skip'?'':rowClass(o,c);
     var td=tr.querySelector('td[data-st]'); if(td) td.innerHTML=c.k==='skip'?'':noteHTML(o,c);
     totales();
+    guardarBorrador();
   }
   function totales(){
     var b=construirFilas().res, el=document.getElementById('_pm_tot'); if(!el) return;
@@ -39561,6 +39563,69 @@ window._plnModuloEmbarques = async function(){
     render();
     window._provCustomPull && window._provCustomPull();
   };
+
+  // ── Borrador automático: si iOS cierra la app en segundo plano, la plantilla se recupera sola ──
+  var _bdT=null, _LSK='_pm_borrador_v1', _restaurado=false;
+  function _idb(){ return new Promise(function(ok,no){ try{ var q=indexedDB.open('pm_borrador',1); q.onupgradeneeded=function(){ q.result.createObjectStore('k'); }; q.onsuccess=function(){ ok(q.result); }; q.onerror=function(){ no(q.error); }; }catch(e){ no(e); } }); }
+  function _idbPut(v){
+    return _idb().then(function(db){ return new Promise(function(ok,no){ var tx=db.transaction('k','readwrite'); tx.objectStore('k').put(v,'draft'); tx.oncomplete=ok; tx.onerror=function(){ no(tx.error); }; }); })
+      .catch(function(){ var v2=Object.assign({},v); delete v2.art; delete v2.recibos; delete v2.rep; return _idb().then(function(db){ db.transaction('k','readwrite').objectStore('k').put(v2,'draft'); }).catch(function(){}); });
+  }
+  function _idbGet(){ return _idb().then(function(db){ return new Promise(function(ok,no){ var q=db.transaction('k','readonly').objectStore('k').get('draft'); q.onsuccess=function(){ ok(q.result||null); }; q.onerror=function(){ no(q.error); }; }); }); }
+  function _idbDel(){ return _idb().then(function(db){ db.transaction('k','readwrite').objectStore('k').delete('draft'); }).catch(function(){}); }
+  function _hayDatos(){ return S.rows.some(function(r){ return r.some(function(v){ return String(v==null?'':v).trim(); }); }); }
+  function _snap(full){
+    var o={ cols:S.cols.slice(), rows:S.rows.map(function(r){ return {v:r.slice(), mh:!!r._mhManual}; }),
+      usarHomolSiVacio:S.usarHomolSiVacio, si:S.si, decSep:S.decSep, fiscal:S.fiscal, artNombre:S.artNombre||'', recibosRes:S.recibosRes||'',
+      abierta:!!document.getElementById('_pm_ov'), t:Date.now() };
+    if(full){ o.art=S.art; o.rep=S.rep; o.recibos=S.recibos; }
+    return o;
+  }
+  function guardarBorrador(inmediato){
+    if(!_restaurado) return;
+    clearTimeout(_bdT);
+    var go=function(){
+      if(!_hayDatos() && !document.getElementById('_pm_ov')){ try{ localStorage.removeItem(_LSK); }catch(e){} _idbDel(); return; }
+      try{ localStorage.setItem(_LSK, JSON.stringify(_snap(false))); }catch(e){}
+      try{ _idbPut(_snap(true)); }catch(e){}
+    };
+    if(inmediato) go(); else _bdT=setTimeout(go,500);
+  }
+  function _aplicarSnap(o){
+    if(!o || !o.cols || !o.rows) return false;
+    S.cols=o.cols;
+    S.rows=o.rows.map(function(x){ var r=x.v.slice(); if(x.mh) r._mhManual=true; return r; });
+    S.usarHomolSiVacio=!!o.usarHomolSiVacio; S.si=(o.si==null?null:o.si); if(o.decSep) S.decSep=o.decSep;
+    if(o.fiscal) S.fiscal=o.fiscal;
+    S.artNombre=o.artNombre||''; if(o.art) S.art=o.art; if(o.rep) S.rep=o.rep; if(o.recibos) S.recibos=o.recibos; if(o.recibosRes) S.recibosRes=o.recibosRes;
+    return true;
+  }
+  function _esperarYAbrir(){
+    var n=0, iv=setInterval(function(){
+      n++; if(n>400){ clearInterval(iv); return; }
+      var sp=document.getElementById('splash'), ld=document.getElementById('splash-loading');
+      var splash=sp && sp.style.display!=='none' && !sp.classList.contains('app-mode');
+      var load=ld && ld.classList.contains('active');
+      if(splash||load) return;
+      clearInterval(iv);
+      if(!document.getElementById('_pm_ov') && window._pmAbrir){ window._pmAbrir(); toast('✍️ Retomé tu plantilla manual donde estabas','green',4000); }
+    },700);
+  }
+  function _restaurar(){
+    if(_hayDatos()){ _restaurado=true; return; }
+    _idbGet().catch(function(){ return null; }).then(function(o){
+      if(!o){ try{ o=JSON.parse(localStorage.getItem(_LSK)||'null'); }catch(e){ o=null; } }
+      _restaurado=true;
+      if(!o || (Date.now()-(o.t||0))>7*864e5) return;
+      if(!_aplicarSnap(o) || !_hayDatos()) return;
+      normalize();
+      if(o.abierta) _esperarYAbrir(); else toast('✍️ Plantilla manual recuperada','green',3500);
+    });
+  }
+  document.addEventListener('visibilitychange',function(){ if(document.hidden) guardarBorrador(true); });
+  window.addEventListener('pagehide',function(){ guardarBorrador(true); });
+  setInterval(function(){ if(_restaurado && document.getElementById('_pm_ov')) guardarBorrador(false); },6000);
+  _restaurar();
 })();
 </script>
 
@@ -39596,6 +39661,84 @@ window._plnModuloEmbarques = async function(){
     new MutationObserver(sync).observe(document.body,{attributes:true,attributeFilter:['class','style']});
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',start); else start();
+})();
+</script>
+
+<script>
+/* ── Recuperar la sesión de trabajo (nov-2026) ──
+   iOS cierra la app cuando pasa un rato en segundo plano. Aquí se guarda solo (en el teléfono)
+   lo que estás trabajando: campos del simulador / CIF Express / Sababa, líneas de facturas y la
+   sección abierta; al volver a abrir se restaura todo después de entrar al sistema. */
+(function(){
+  var KEY='sesion', MAX=24*3600*1000, listo=false, T=null, ultimo='';
+  function idb(){ return new Promise(function(ok,no){ try{ var q=indexedDB.open('pm_borrador',1); q.onupgradeneeded=function(){ q.result.createObjectStore('k'); }; q.onsuccess=function(){ ok(q.result); }; q.onerror=function(){ no(q.error); }; }catch(e){ no(e); } }); }
+  function put(v){ return idb().then(function(db){ db.transaction('k','readwrite').objectStore('k').put(v,KEY); }).catch(function(){}); }
+  function get(){ return idb().then(function(db){ return new Promise(function(ok,no){ var q=db.transaction('k','readonly').objectStore('k').get(KEY); q.onsuccess=function(){ ok(q.result||null); }; q.onerror=function(){ no(q.error); }; }); }); }
+  function excluido(el){
+    var id=el.id||''; if(!id || id.indexOf('_pm_')===0) return true;
+    if(el.closest && el.closest('#_pm_ov,#_docOverlay,#_pm_info')) return true;
+    var t=(el.type||'').toLowerCase(); return t==='file'||t==='password'||t==='button'||t==='submit'||t==='reset'||t==='image';
+  }
+  function snap(){
+    var campos={};
+    document.querySelectorAll('input[id],select[id],textarea[id]').forEach(function(el){
+      if(excluido(el)) return;
+      var t=(el.type||'').toLowerCase();
+      campos[el.id]=(t==='checkbox'||t==='radio')?{c:!!el.checked}:{v:el.value};
+    });
+    var inv=[]; try{ inv=JSON.parse(JSON.stringify(window.invLines||[])); }catch(e){}
+    var pane=document.querySelector('.tab-pane.on'); 
+    return { t:Date.now(), campos:campos, inv:inv, hash:(location.hash||'').replace('#',''), pane:pane?pane.id:'' };
+  }
+  function guardar(inmediato){
+    if(!listo) return;
+    clearTimeout(T);
+    var go=function(){
+      try{ var o=snap(), k=JSON.stringify([o.campos,o.inv,o.hash]); if(k===ultimo) return; ultimo=k; put(o); }catch(e){}
+    };
+    if(inmediato) go(); else T=setTimeout(go,900);
+  }
+  function appLista(){
+    var sp=document.getElementById('splash'), ld=document.getElementById('splash-loading');
+    var splash=sp && sp.style.display!=='none' && !sp.classList.contains('app-mode');
+    var load=ld && ld.classList.contains('active');
+    return !(splash||load);
+  }
+  function aplicar(o){
+    var n=0;
+    Object.keys(o.campos||{}).forEach(function(id){
+      var el=document.getElementById(id); if(!el||excluido(el)) return;
+      var d=o.campos[id];
+      if('c' in d){ if(el.checked!==d.c){ el.checked=d.c; n++; } }
+      else if(el.value!==d.v){ el.value=d.v; n++; }
+    });
+    if(o.inv && o.inv.length && (!window.invLines || !window.invLines.length)){ window.invLines=o.inv; try{ invLines=o.inv; }catch(e){} n++; }
+    ['updateCifExpDisplays','calc','calcSab2','calcInvTotals'].forEach(function(f){ try{ if(typeof window[f]==='function') window[f](); }catch(e){} });
+    try{ if(typeof renderInvLines==='function' && o.inv && o.inv.length) renderInvLines(); }catch(e){}
+    return n;
+  }
+  function restaurar(){
+    get().catch(function(){ return null; }).then(function(o){
+      if(!o || (Date.now()-(o.t||0))>MAX){ listo=true; return; }
+      var intentos=0, iv=setInterval(function(){
+        intentos++;
+        if(intentos>500){ clearInterval(iv); listo=true; return; }
+        if(!appLista()) return;
+        clearInterval(iv);
+        setTimeout(function(){
+          var n=0; try{ n=aplicar(o); }catch(e){}
+          listo=true; ultimo='';
+          if(n>0 && typeof _showToast==='function') _showToast('♻️ Recuperé lo que tenías en pantalla','green',4000);
+          guardar(true);
+        },1500);
+      },700);
+    });
+  }
+  ['input','change'].forEach(function(ev){ document.addEventListener(ev,function(){ guardar(false); },true); });
+  document.addEventListener('visibilitychange',function(){ if(document.hidden) guardar(true); });
+  window.addEventListener('pagehide',function(){ guardar(true); });
+  setInterval(function(){ guardar(false); },8000);
+  if(document.readyState==='complete') restaurar(); else window.addEventListener('load',restaurar);
 })();
 </script>
 </body>
