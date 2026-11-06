@@ -24,6 +24,39 @@
   function esTactil(){ return ('ontouchstart' in window) || (navigator.maxTouchPoints>0); }
   function esApp(){ try{ return window.navigator.standalone===true || window.matchMedia('(display-mode: standalone)').matches; }catch(e){ return false; } }
   function usarCapa(){ return esTactil() && (esApp() || window.innerWidth<1000 || /iPhone|iPad|iPod/.test(navigator.userAgent)); }
+
+  // Imprime desde la página principal (en iOS el print() de un iframe no responde):
+  // se oculta todo salvo la capa y el iframe se estira a la altura completa del documento.
+  function imprimirCapa(ov,fr){
+    if(!document.getElementById('_docPrintCss')){
+      var st=document.createElement('style'); st.id='_docPrintCss';
+      st.textContent='@media print{'
+        +'html.pm-printing,html.pm-printing body{overflow:visible!important;height:auto!important;background:#fff!important}'
+        +'html.pm-printing body>*:not(#_docOverlay){display:none!important}'
+        +'html.pm-printing #_docOverlay{position:static!important;display:block!important;background:#fff!important;height:auto!important}'
+        +'html.pm-printing #_docOverlay .docbar{display:none!important}'
+        +'html.pm-printing #_docOverlay iframe{display:block!important;width:100%!important;border:0!important}}';
+      document.head.appendChild(st);
+    }
+    var prevH=fr.style.height, prevFlex=fr.style.flex;
+    var listo=false;
+    function limpiar(){
+      if(listo) return; listo=true;
+      document.documentElement.classList.remove('pm-printing');
+      fr.style.height=prevH; fr.style.flex=prevFlex;
+      window.removeEventListener('afterprint',limpiar);
+    }
+    try{
+      var d=fr.contentDocument, h=Math.max(d.documentElement.scrollHeight,d.body?d.body.scrollHeight:0)+40;
+      fr.style.flex='none'; fr.style.height=h+'px';
+    }catch(e){}
+    document.documentElement.classList.add('pm-printing');
+    window.addEventListener('afterprint',limpiar);
+    setTimeout(function(){
+      try{ window.print(); }catch(e){ try{ fr.contentWindow.print(); }catch(x){} }
+      setTimeout(limpiar,60000);
+    },150);
+  }
   window._abrirVentana = function(target, features){
     if(!usarCapa()){ return window.open('', target, features); }
     var buf=[], ov=null, fr=null, titulo='Documento', listo=false, timer=null;
@@ -41,7 +74,7 @@
       ov.id='_docOverlay';
       ov.style.cssText='position:fixed;inset:0;z-index:2147483000;background:#0d1117;display:flex;flex-direction:column;';
       ov.innerHTML=
-        '<div style="display:flex;align-items:center;gap:8px;padding:calc(env(safe-area-inset-top,0px) + 8px) 12px 8px;background:#161b22;border-bottom:1px solid #30363d;color:#e6edf3;font-family:-apple-system,Arial,sans-serif">'
+        '<div class="docbar" style="display:flex;align-items:center;gap:8px;padding:calc(env(safe-area-inset-top,0px) + 8px) 12px 8px;background:#161b22;border-bottom:1px solid #30363d;color:#e6edf3;font-family:-apple-system,Arial,sans-serif">'
         +'<button id="_docX" style="background:#21262d;border:1px solid #30363d;color:#e6edf3;border-radius:10px;padding:10px 16px;font-size:15px;font-weight:700">✕ Cerrar</button>'
         +'<div id="_docT" style="flex:1;font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center"></div>'
         +'<button id="_docP" style="background:#238636;border:1px solid #2ea043;color:#fff;border-radius:10px;padding:10px 16px;font-size:15px;font-weight:700">🖨 PDF</button>'
@@ -68,7 +101,7 @@
       blur:function(){},
       print:function(){
         if(!fr){ armar(); setTimeout(function(){ shim.print(); },500); return; }
-        try{ fr.contentWindow.focus(); fr.contentWindow.print(); }catch(e){ window.print(); }
+        imprimirCapa(ov,fr);
       },
       close:function(){ cerrar(); }
     };
@@ -1542,6 +1575,8 @@ body.theme-light .zlh-map-img{filter:brightness(0) saturate(100%) invert(52%) se
       (b) La barra inferior (Panel · Facturas · Aplicar · Procesar) era siempre negra; con
           tema claro ahora es blanca, con líneas marcadas y letras negras. */
 html.login-dark, html.login-dark body{ background:#050f0d !important; }
+/* Pantalla de ingreso en celular: subir el bloque (título + botón) */
+@media (max-width:700px){ #splash-hero{ padding-bottom:30vh !important; } }
 
 body.theme-light #sim-action-bar{
   background:#ffffff !important;
