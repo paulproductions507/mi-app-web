@@ -1763,6 +1763,7 @@ body.theme-light #btn-procesar-sim:hover{ background:rgba(26,127,55,.10) !import
 if(q==='mask'||q==='classic')ui=q;
 if(!(ui==='classic'&&(q==='classic'||L.getItem('_mxSeed')==='v2')))b.classList.add('mx-on');
 if(th==='light'||th==='corporate'){b.classList.add('theme-light');b.style.colorScheme='light';}
+var dv=L.getItem('_mxDevice');if(dv!=='phone'&&dv!=='tablet'&&dv!=='desktop')dv=innerWidth>=1000?'desktop':(innerWidth>=700?'tablet':'phone');b.setAttribute('data-mxdev',dv);if(L.getItem('_mxSideOff')==='1')b.classList.add('mx-side-off');
 }catch(e){}})();</script>
 <div id="_progress-bar"></div>
 
@@ -40208,6 +40209,23 @@ body.mx-on.theme-light #tab-sim .card,body.mx-on.theme-light #tab-cifexp .card,b
 #mxName .opt{text-align:left;margin-top:10px}
 #mxName .opt small{display:block;font-weight:600;font-size:12px;color:#8fc3c6;margin-top:2px}
 body.mx-on.theme-light #mxName .opt small{color:#4a6870}
+
+/* ═══ AJUSTES 5 (nov-2026) · fila superior en 2 filas (móvil), panel fijo (escritorio), modales más abajo ═══ */
+body.mx-on #main-hdr>div:nth-of-type(2)>div{flex-wrap:wrap!important;overflow:visible;gap:2px 4px}
+body.mx-on:not([data-mxdev="desktop"]) #main-hdr>div:nth-of-type(2)>div{justify-content:center!important}
+/* Escritorio: botón Panel + panel lateral fijo (se puede ocultar) */
+body.mx-on[data-mxdev="desktop"].costeo-mode #main-hdr>div:nth-of-type(2) button[title="Panel"]{display:flex!important}
+body.mx-on[data-mxdev="desktop"].costeo-mode:not(.mx-side-off) #sidebar{display:flex!important;transform:none!important}
+body.mx-on[data-mxdev="desktop"].costeo-mode:not(.mx-side-off) #sidebar-overlay{display:none!important}
+body.mx-on[data-mxdev="desktop"].costeo-mode:not(.mx-side-off) #app-wrapper{margin-left:310px!important;width:calc(100% - 310px)!important}
+body.mx-on[data-mxdev="desktop"].costeo-mode:not(.mx-side-off) #sidebar .pin-btn,body.mx-on[data-mxdev="desktop"].costeo-mode:not(.mx-side-off) #sidebar .sidebar-close{display:none!important}
+/* Teléfono: las ventanas (Tendencias, Dashboard, etc.) bajan para dejar libre la zona del iPhone y poder tocar Cerrar */
+@media(max-width:700px){
+  #tab-modal-overlay,#tab-modal-overlay2{align-items:flex-start;padding-top:calc(env(safe-area-inset-top,0px) + 36px)}
+  #tab-modal-drawer,#tab-modal-drawer2{max-height:calc(100vh - env(safe-area-inset-top,0px) - 60px);max-height:calc(100dvh - env(safe-area-inset-top,0px) - 60px)}
+  #tab-modal-header{padding-top:14px;padding-bottom:14px}
+  #tab-modal-close{padding:9px 16px;font-size:13px}
+}
 </style>
 
 <script id="mx-js">
@@ -40575,7 +40593,16 @@ function mxSetStyle(st){
 }
 function mxSetName(v){ lsSet(LS_NAME,(v||'').trim()); if(built) mxRender(); }
 function mxSetWidgets(on){ lsSet(LS_WG,on?'1':'0'); if(built) mxRender(); }
-function mxSetDevice(v){ if(v!=='phone'&&v!=='tablet'&&v!=='desktop') return; lsSet(LS_DEV,v); if(built) mxRender(); }
+function mxSyncDev(){ var b=document.body; b.setAttribute('data-mxdev',dev()); b.classList.toggle('mx-side-off',lsGet('_mxSideOff','0')==='1'); }
+function mxToggleSide(){ var off=!document.body.classList.contains('mx-side-off'); document.body.classList.toggle('mx-side-off',off); lsSet('_mxSideOff',off?'1':'0'); }
+function initPanelBtn(){
+  var pb=document.querySelector('#main-hdr button[title="Panel"]'); if(!pb||pb._mx) return; pb._mx=1;
+  pb.removeAttribute('onclick'); pb.onclick=null; pb.addEventListener('click',mxToggleSide);
+  var sp=pb.querySelectorAll('span');
+  if(sp[0]) sp[0].innerHTML='<span class="mx-e">'+svg('layout')+'</span>';
+  if(sp[1]) sp[1].textContent='Panel';
+}
+function mxSetDevice(v){ if(v!=='phone'&&v!=='tablet'&&v!=='desktop') return; lsSet(LS_DEV,v); mxSyncDev(); if(built) mxRender(); }
 
 /* ═══ ICONOS INTERNOS: emoji → icono de línea (toda la app, solo con la Máscara) ═══ */
 var P2={
@@ -40797,7 +40824,7 @@ function hookIngresar(){
   g._mxN=1; window.showSplashNav=g;
 }
 function init(){
-  hookIngresar();
+  hookIngresar(); mxSyncDev(); initPanelBtn();
   try{ if(lsGet('_mxSeed','')!=='v2'){ lsSet(LS_STYLE,'mask'); lsSet('_mxFx','slide'); lsSet('_mxSeed','v2'); } }catch(e){}
   applyFx();
   try{ var q=new URLSearchParams(location.search).get('ui'); if(q==='mask'||q==='classic') lsSet(LS_STYLE,q); }catch(e){}
