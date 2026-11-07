@@ -2070,6 +2070,7 @@ body.theme-light #btn-procesar-sim:hover{ background:rgba(26,127,55,.10) !import
           <div class="zlh-nav-section-lbl">Sistema</div>
           <button class="zlh-nav-item" onclick="iniciarApp('config')"><span class="zlh-nav-ico">⚙️</span><span><b>Configuración</b><small>Aranceles · Temas · Datos</small></span></button>
           <button class="zlh-nav-item" onclick="_zlhFlyoutClose();_forzarSincronizacionCompleta(this)"><span class="zlh-nav-ico">🔄</span><span><b>Forzar Sincronización</b><small>Comparar y unir con la nube</small></span></button>
+          <button class="zlh-nav-item" data-mx-skip="1" onclick="_zlhFlyoutClose();mxSetStyle('mask')"><span class="zlh-nav-ico">🎭</span><span><b>Interfaz Máscara</b><small>Iconos circulares · verde Consultas</small></span></button>
         </div>
       </aside>
 
@@ -4694,6 +4695,23 @@ body.theme-light #btn-procesar-sim:hover{ background:rgba(26,127,55,.10) !import
     <div style="font-size:10px;color:var(--muted2);margin-top:6px">Normaliza nombres de proveedores (S.I., homologados, etc.) en todos los embarques del historial.</div>
     <button onclick="var n=_fixImportacionTipo();if(n>0){_showToast('✅ '+n+' embarque(s) corregidos a IMP','green',3500);}else{var nros=(tendData||[]).map(function(d){return d.nro||'?';}).join(', ');alert('Sin coincidencias.\n\nNROs en memoria ('+tendData.length+'):\n'+nros);}" style="display:none">🚢 Fix: Embarques Importación (22032/33/34/38/39)</button>
     <div style="display:none;font-size:10px;color:var(--muted2);margin-top:4px">Corrige snap.tipo ZL→IMP para embarques Sababa procesados incorrectamente como Zona Libre.</div>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:14px" id="mx-cfg-card">
+  <div class="card-hd" style="cursor:pointer;user-select:none" onclick="_toggleSection('mxcfg-body','mxcfg-icon',this)">
+    <div class="dot" style="background:#2de2c9"></div><h3>🎭 Estilo de interfaz</h3>
+    <span id="mxcfg-icon" style="margin-left:auto;font-size:12px;color:var(--muted)">▶</span>
+  </div>
+  <div id="mxcfg-body" class="card-bd" style="display:none">
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Cambia cómo se ve el panel de inicio. Los módulos y datos son los mismos en ambos estilos.</div>
+    <button type="button" class="mxcfg-opt" data-mxopt="classic" onclick="mxSetStyle('classic')"><b>🖥️ Clásica</b><small>Panel actual: menú desplegable, KPIs, meses y mapa en una sola página.</small></button>
+    <button type="button" class="mxcfg-opt" data-mxopt="mask" onclick="mxSetStyle('mask')"><b>🎭 Máscara App</b><small>Iconos circulares de 4 en 4 (desliza para ver más), mismo verde que Consultas. KPIs y mapa dentro del icono "KPIs y mapa".</small></button>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap">
+      <label style="font-size:12px;color:var(--muted)">Nombre en la bienvenida</label>
+      <input id="mxcfg-name" type="text" maxlength="24" placeholder="Ian" onchange="mxSetName(this.value)" style="flex:1;min-width:120px;background:var(--s2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:7px 10px;font-size:12px">
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12px;color:var(--muted);cursor:pointer"><input type="checkbox" id="mxcfg-wg" onchange="mxSetWidgets(this.checked)"> Mostrar tarjetas de resumen (mes, semana, tareas) en la Máscara</label>
   </div>
 </div>
 
@@ -39818,5 +39836,513 @@ window._plnModuloEmbarques = async function(){
   if(document.readyState==='complete') restaurar(); else window.addEventListener('load',restaurar);
 })();
 </script>
+<!-- ═══════════════════════════════════════════════════════════════════════
+     INTERFAZ "MÁSCARA APP" (nov-2026)
+     Estilo alternativo del panel de inicio: iconos circulares en cuadrícula
+     2×2 (4 por página, se desliza para ver los siguientes), con la misma
+     paleta verde azulado de consultas.html. Es OPCIONAL: el diseño clásico
+     sigue intacto y se cambia en Configuración → "Estilo de interfaz".
+     Todo vive en este bloque (CSS + JS); para quitarlo basta borrarlo.
+     ═══════════════════════════════════════════════════════════════════════ -->
+<style id="mx-css">
+/* ── Paleta (idéntica a consultas.html) ── */
+#mx{display:none;
+  --bg:#041f26;--bg2:#06303a;--sf:#0a3d49;--sf2:#0e4c5a;--bd:#17697a;--ac:#2de2c9;--ac2:#0fb5a8;--tx:#e9fbf8;--mt:#8fc3c6;--ok:#34e08a;--wn:#ffc857;--dn:#ff6b6b;
+  /* variables que usan las tarjetas del panel clásico (KPIs, meses, mapa) → heredan la paleta nueva */
+  --zbg:var(--bg);--zsurf:var(--bg2);--zsurf2:var(--sf);--zborder:var(--bd);--ztext:var(--tx);--zmuted:var(--mt);--zdim:#6aa6ab;--zt:var(--ac2);--zt2:#0b8f86;--zg:var(--wn);
+  --mxff:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  font-family:var(--mxff);color:var(--tx);width:100%;max-width:1040px;margin:0 auto;box-sizing:border-box;min-height:100%;
+  padding:calc(env(safe-area-inset-top,0px) + 10px) 16px calc(env(safe-area-inset-bottom,0px) + 28px);
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+body.theme-light #mx{--bg:#eef4f6;--bg2:#ffffff;--sf:#f3f8fa;--sf2:#e2edf1;--bd:#b4cbd3;--ac:#0b7f78;--ac2:#14a99d;--tx:#0d2a30;--mt:#4a6870;--ok:#13894f;--wn:#a86f00;--dn:#d23a3a;--zdim:#6a8790}
+body.mx-on #mx{display:block}
+body.mx-on #splash-nav .zlh-header-full,body.mx-on #splash-nav .zlh-shell{display:none!important}
+body.mx-on #splash-nav.zlh-panel{background:radial-gradient(1200px 600px at 80% -10%,#0b5b69 0,transparent 60%),#041f26!important}
+body.mx-on.theme-light #splash-nav.zlh-panel{background:radial-gradient(1200px 600px at 80% -10%,#cfe7ea 0,transparent 60%),#eef4f6!important}
+#mx *{box-sizing:border-box}
+#mxStore{display:none!important}
+
+/* ── Encabezado ── */
+.mx-top{display:flex;align-items:center;gap:10px;padding:6px 0 14px;border-bottom:1px solid var(--bd)}
+.mx-logo{flex:0 0 auto;width:46px;height:46px;border-radius:13px;display:grid;place-items:center;background:linear-gradient(145deg,var(--sf2),var(--bg2));border:1px solid var(--bd);color:var(--ac)}
+.mx-logo svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.mx-brand{flex:1;min-width:0}
+.mx-brand b{display:block;font:700 16px/1.25 var(--mxff);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mx-brand small{display:block;color:var(--mt);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mx-ib{flex:0 0 auto;height:42px;min-width:42px;padding:0 12px;border-radius:13px;border:1px solid var(--bd);background:var(--sf);color:var(--tx);font:700 13px var(--mxff);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.mx-ib:active{transform:scale(.96)}
+.mx-ib svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.mx-ib.mx-back{display:none}
+#mx[data-depth="1"] .mx-back,#mx[data-depth="2"] .mx-back{display:inline-flex}
+#mx[data-depth="1"] .mx-logo,#mx[data-depth="2"] .mx-logo{display:none}
+
+/* ── Saludo ── */
+.mx-hero{padding:22px 4px 0;animation:mxIn .55s cubic-bezier(.2,.9,.25,1) backwards}
+.mx-hi{font:800 30px/1.1 var(--mxff);letter-spacing:-.02em}
+.mx-hi b{color:var(--ac)}
+.mx-sub{color:var(--mt);margin-top:6px;font-size:14px}
+
+/* ── Widgets de inicio (estilo ERP / Netflix) ── */
+.mx-wg{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x proximity;scroll-padding-left:16px;scrollbar-width:none;-webkit-overflow-scrolling:touch;margin:16px -16px 0;padding:2px 16px 8px}
+.mx-wg::-webkit-scrollbar{display:none}
+.mx-wc{flex:0 0 142px;min-width:0;scroll-snap-align:start;text-align:left;border-radius:16px;padding:12px 13px;border:1px solid var(--bd);background:linear-gradient(160deg,var(--sf),var(--bg2));color:var(--tx);cursor:pointer;font-family:var(--mxff);position:relative;overflow:hidden;animation:mxIn .5s cubic-bezier(.2,.9,.25,1) backwards;animation-delay:calc(var(--i,0)*60ms + 120ms)}
+.mx-wc:active{transform:scale(.97)}
+.mx-wc small{display:block;font:700 10px var(--mxff);letter-spacing:.12em;text-transform:uppercase;color:var(--mt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mx-wc b{display:block;font:800 27px/1.1 var(--mxff);margin-top:7px;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mx-wc em{display:block;font-style:normal;font-size:11px;color:var(--mt);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mx-wc.txt{flex-basis:190px}.mx-wc.txt b{font-size:16px;line-height:1.25;margin-top:9px}
+.mx-wc.warn b{color:var(--wn)}.mx-wc.ok b{color:var(--ok)}.mx-wc.ac b{color:var(--ac)}
+.mx-wc::after{content:'';position:absolute;right:-18px;top:-18px;width:58px;height:58px;border-radius:50%;background:radial-gradient(circle,var(--ac) 0,transparent 70%);opacity:.12}
+
+/* ── Etiqueta de sección + paginador de iconos ── */
+.mx-sec{display:flex;align-items:center;gap:10px;font:700 11px var(--mxff);letter-spacing:.14em;text-transform:uppercase;color:var(--mt);margin:18px 4px 0}
+.mx-sec::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,var(--bd),transparent)}
+.mx-pgwrap{position:relative}
+.mx-pager{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;scroll-behavior:smooth}
+.mx-pager::-webkit-scrollbar{display:none}
+.mx-page{flex:0 0 100%;min-width:0;scroll-snap-align:start;scroll-snap-stop:always;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px 10px;justify-items:center;align-content:start;padding:18px 0 8px}
+@media(min-width:720px){.mx-page{grid-template-columns:repeat(4,minmax(0,1fr));gap:24px 18px}}
+.mx-dots{display:flex;align-items:center;justify-content:center;gap:8px;margin:8px 0 0}
+.mx-dots button{width:8px;height:8px;padding:0;border:0;border-radius:99px;background:var(--bd);cursor:pointer;transition:width .25s,background .25s}
+.mx-dots button.on{width:24px;background:var(--ac)}
+.mx-cnt{text-align:center;color:var(--mt);font-size:11px;margin-top:6px;letter-spacing:.04em}
+.mx-arr{display:none;position:absolute;top:42%;width:40px;height:40px;border-radius:50%;border:1px solid var(--bd);background:var(--sf);color:var(--tx);cursor:pointer;z-index:2;font-size:20px;line-height:1}
+.mx-arr.l{left:-6px}.mx-arr.r{right:-6px}
+@media(hover:hover) and (pointer:fine){.mx-arr{display:grid;place-items:center}.mx-arr[disabled]{opacity:.25;cursor:default}}
+
+/* ── Icono circular con órbita (mismo que consultas.html) ── */
+.mx-it{--d:108px;appearance:none;border:0;background:none;color:inherit;font:inherit;cursor:pointer;padding:0;display:flex;flex-direction:column;align-items:center;width:100%;max-width:210px;position:relative;animation:mxSlide .8s cubic-bezier(.2,.9,.25,1) backwards;animation-delay:calc(var(--i)*90ms + 60ms)}
+@media(min-width:720px){.mx-it{--d:124px}}
+.mx-ring{position:relative;width:var(--d);height:var(--d);border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle at 30% 22%,#10606f 0,#08404c 55%,#052c35 100%);box-shadow:0 12px 28px #00000055,inset 0 0 0 1px #17697a;transition:transform .25s cubic-bezier(.2,.8,.2,1),box-shadow .25s}
+.mx-orb{position:absolute;inset:-5px;width:calc(100% + 10px);height:calc(100% + 10px);animation:mxSpin 22s linear infinite;pointer-events:none}
+.mx-orb .o1{fill:none;stroke:var(--ac);stroke-width:1.6;stroke-dasharray:230 110;stroke-linecap:round;opacity:.9}
+.mx-orb .o2{fill:none;stroke:var(--ac);stroke-width:1;opacity:.28}
+.mx-orb .dt{fill:#06303a;stroke:var(--ac);stroke-width:1.6}
+body.theme-light .mx-orb .dt{fill:#fff}
+.mx-ic{width:42%;height:42%;color:#f1fffc;filter:drop-shadow(0 2px 6px #0006);transition:transform .25s cubic-bezier(.2,.8,.2,1)}
+.mx-ic svg{width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.mx-lb{position:relative;margin-top:calc(var(--d)*-.17);padding:8px 14px;border-radius:99px;background:#f4fffd;color:#06303a;font:800 13px/1.15 var(--mxff);letter-spacing:-.005em;box-shadow:0 6px 16px #0000004d;max-width:100%;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+body.theme-light .mx-lb{background:#fff;border:1px solid #b4cbd3}
+.mx-sm{display:block;margin-top:8px;color:var(--mt);font-size:11.5px;line-height:1.3;text-align:center;max-width:170px}
+.mx-it:hover .mx-ring,.mx-it:focus-visible .mx-ring{transform:translateY(-5px);box-shadow:0 18px 36px #00000066,0 0 0 1px var(--ac),0 0 28px #2de2c933}
+.mx-it:hover .mx-ic{transform:scale(1.08)}
+.mx-it:active .mx-ring{transform:scale(.96)}
+.mx-it:focus-visible{outline:none}
+.mx-it .mx-bd{position:absolute;top:2px;right:calc(50% - var(--d)/2 - 2px);min-width:22px;height:22px;padding:0 6px;border-radius:99px;background:var(--wn);color:#2a1d00;font:800 12px/22px var(--mxff);text-align:center;box-shadow:0 3px 8px #0006;z-index:2}
+
+/* ── Vista de panel (KPIs, mapa) ── */
+.mx-view{display:none;margin-top:16px}
+#mx[data-mode="panel"] .mx-view{display:block}
+#mx[data-mode="panel"] .mx-wg,#mx[data-mode="panel"] .mx-sec,#mx[data-mode="panel"] .mx-pgwrap,#mx[data-mode="panel"] .mx-dots,#mx[data-mode="panel"] .mx-cnt{display:none}
+#mx[data-wg="0"] .mx-wg{display:none}
+#mx[data-depth="1"] .mx-wg,#mx[data-depth="1"] .mx-sec{display:none}
+.mx-view .splash-kpi-strip{display:grid!important;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:8px;padding:0;overflow:visible;margin:0 0 6px}
+.mx-view .splash-kpi-chip{min-width:0;min-height:92px!important;padding:14px 14px!important}
+.mx-view .zlh-section-lbl{margin-top:20px}
+.mx-view .zlh-reminder-row{margin-top:8px}
+.mx-view .zlh-origins-card{margin:0}
+.mx-h{font:700 11px var(--mxff);letter-spacing:.14em;text-transform:uppercase;color:var(--mt);margin:22px 4px 10px;display:flex;align-items:center;gap:10px}
+.mx-h::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,var(--bd),transparent)}
+.mx-act{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:11px 13px;border:1px solid var(--bd);border-radius:14px;background:linear-gradient(160deg,var(--sf),var(--bg2));color:var(--tx);cursor:pointer;font-family:var(--mxff);margin-bottom:8px}
+.mx-act:active{transform:scale(.985)}
+.mx-act .n{flex:0 0 auto;font:800 13px var(--mxff);color:var(--ac);min-width:56px}
+.mx-act .t{flex:1;min-width:0}
+.mx-act .t b{display:block;font:700 13px var(--mxff);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mx-act .t small{display:block;font-size:11px;color:var(--mt);margin-top:2px}
+.mx-st{flex:0 0 auto;font:800 9px var(--mxff);letter-spacing:.08em;text-transform:uppercase;padding:3px 7px;border-radius:99px;border:1px solid var(--bd);color:var(--mt)}
+.mx-st.p{color:var(--wn);border-color:var(--wn)}.mx-st.pa{color:var(--ac);border-color:var(--ac)}.mx-st.ok{color:var(--ok);border-color:var(--ok)}
+.mx-btn{display:block;width:100%;margin-top:14px;padding:13px;border-radius:14px;border:1px solid var(--ac);background:linear-gradient(135deg,var(--ac2),#0a8c86);color:#02262b;font:800 14px var(--mxff);cursor:pointer}
+.mx-empty{color:var(--mt);font-size:13px;padding:10px 4px}
+
+@keyframes mxSpin{to{transform:rotate(360deg)}}
+@keyframes mxSlide{from{opacity:0;transform:translateX(-120px) scale(.92)}to{opacity:1;transform:none}}
+@keyframes mxIn{from{opacity:0;transform:translateX(-60px) scale(.96)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){.mx-it,.mx-hero,.mx-wc{animation:none}.mx-orb{animation:none}.mx-pager{scroll-behavior:auto}}
+
+/* ── Tarjeta de configuración ── */
+.mxcfg-opt{display:block;width:100%;text-align:left;padding:13px 14px;border-radius:12px;border:2px solid var(--border);background:var(--s2);color:var(--text);cursor:pointer;margin-bottom:8px;font-family:inherit}
+.mxcfg-opt b{display:block;font-size:13px}.mxcfg-opt small{display:block;font-size:11px;color:var(--muted);margin-top:3px}
+.mxcfg-opt.on{border-color:#2de2c9;background:linear-gradient(135deg,#06303a,#0a3d49);color:#e9fbf8}
+.mxcfg-opt.on small{color:#8fc3c6}
+</style>
+
+<script id="mx-js">
+(function(){
+'use strict';
+var LS_STYLE='_simUIStyle', LS_NAME='_mxName', LS_WG='_mxWidgets';
+function lsGet(k,d){ try{ var v=localStorage.getItem(k); return v===null?d:v; }catch(e){ return d; } }
+function lsSet(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+/* ── Iconos de línea (mismo trazo que consultas.html) ── */
+var IC={
+ calc:'<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8"/><path d="M8.5 11h1M12 11h1M15.5 11h0M8.5 14.5h1M12 14.5h1M8.5 18h1M12 18h1M15.5 14.5v3.5"/>',
+ lock:'<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/><path d="M12 15v2"/>',
+ folder:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/>',
+ kpi:'<path d="M4 18a8 8 0 1 1 16 0"/><path d="M12 18l4-6"/><circle cx="12" cy="18" r="1.2"/><path d="M6.3 11.3l1 1M12 7.5v1.4M17.7 11.3l-1 1"/>',
+ bars:'<path d="M5 20v-7M12 20V5M19 20v-11"/><path d="M3 20h18"/>',
+ receipt:'<path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3z"/><path d="M9 8h6M9 12h6"/>',
+ box:'<path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/>',
+ store:'<path d="M4 9l1.5-5h13L20 9"/><path d="M4 9a2.5 2.5 0 0 0 5 0 2.5 2.5 0 0 0 5 0 2.5 2.5 0 0 0 5 0"/><path d="M5 12v8h14v-8"/><path d="M10 20v-4h4v4"/>',
+ grid:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/>',
+ truck:'<path d="M1 6h13v10H1z"/><path d="M14 9h4l3 3v4h-7z"/><circle cx="5.5" cy="18" r="2"/><circle cx="17.5" cy="18" r="2"/>',
+ plan:'<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 2.5h6v3H9z"/><path d="M9 11h6M9 15h6"/>',
+ inbox:'<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5h13L22 12v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6L5.5 5z"/>',
+ search:'<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
+ ship:'<path d="M3 17l2 3h14l2-3H3z"/><path d="M5 17v-6l7-3 7 3v6"/><path d="M12 8V3h3"/>',
+ sliders:'<path d="M4 6h8M18 6h2M4 12h2M12 12h8M4 18h10M20 18h0"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/>',
+ cal:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+ gear:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+ sync:'<path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 21v-5h5"/><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/>',
+ layout:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>',
+ globe:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
+ trend:'<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>',
+ clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+ dot:'<circle cx="12" cy="12" r="8"/><path d="M12 8v8M8 12h8"/>',
+ back:'<path d="M15 5l-7 7 7 7"/>',
+ sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+ logo:'<path d="M3 17l2 3h14l2-3H3z"/><rect x="6" y="9" width="5" height="6" rx=".6"/><rect x="12" y="9" width="6" height="6" rx=".6"/><path d="M8 9V6h8v3"/>'
+};
+var ORB='<svg class="mx-orb" viewBox="0 0 120 120" aria-hidden="true"><circle class="o2" cx="60" cy="60" r="50"/><circle class="o1" cx="60" cy="60" r="57"/><circle class="dt" cx="60" cy="3" r="4"/><circle class="dt" cx="19.7" cy="100.3" r="3"/></svg>';
+function svg(k){ return '<svg viewBox="0 0 24 24" aria-hidden="true">'+(IC[k]||IC.dot)+'</svg>'; }
+
+/* ── Estructura: 4 iconos por página. Cada ítem apunta al botón del menú
+      "Módulos" (flyout) con ese mismo nombre, así siempre hace lo mismo que el menú. ── */
+var PAGE_TITLES=['Calcular costo','Reportes y proveedores','Otras aplicaciones','Más herramientas','Sistema'];
+var ROOT=[
+ {n:'Calcular Costo',ic:'calc'},
+ {n:'Escenario Único',ic:'lock'},
+ {n:'Plantillas',ic:'folder'},
+ {k:'kpi',n:'KPIs y mapa',ic:'kpi',sub:'Resumen, orígenes y tendencias',ch:[
+    {k:'res',n:'Resumen',ic:'kpi',sub:'KPIs, meses y actividad',panel:'res'},
+    {k:'map',n:'Mapa de orígenes',ic:'globe',sub:'Mercancía recibida',panel:'map'},
+    {n:'Tendencias',ic:'trend',sub:'Dashboard completo',lbl:'Dashboard'},
+    {k:'pend',n:'En proceso',ic:'clock',sub:'Embarques por terminar',fn:function(){ mxPend(); },badge:function(){ return mxStats().tareas; }}
+ ]},
+ {n:'Dashboard',ic:'bars'},
+ {n:'Historial Embarques',ic:'receipt'},
+ {n:'Hist. Prov. Mercancía',ic:'box'},
+ {n:'Proveedores',ic:'store'},
+ {n:'Cuadro Importación',ic:'grid'},
+ {n:'Compras Zona Libre',ic:'truck'},
+ {n:'Planeación de Carga',ic:'plan'},
+ {n:'Facturas Disponibles',ic:'inbox'},
+ {n:'Aranceles Ítem',ic:'search'},
+ {n:'Mercancía en Tránsito',ic:'ship'},
+ {n:'Ajuste de Prorrateo',ic:'sliders'},
+ {n:'Corregir Fecha',ic:'cal'},
+ {n:'Configuración',ic:'gear'},
+ {n:'Forzar Sincronización',ic:'sync'}
+];
+var CLASSIC_ITEM={k:'classic',n:'Vista clásica',ic:'layout',sub:'Volver al diseño anterior',fn:function(){ mxSetStyle('classic'); }};
+
+var path=[], built=false, store=null, moved=[];
+
+/* ── Botones del menú Módulos (fuente de verdad de las acciones) ── */
+function flyBtns(){ var f=$('zlhFlyout'); return f?Array.prototype.slice.call(f.querySelectorAll('.zlh-nav-item')):[]; }
+function btnLabel(b){ var x=b.querySelector('b'); return x?x.textContent.trim():''; }
+function findBtn(label){ var a=flyBtns(); for(var i=0;i<a.length;i++){ if(btnLabel(a[i])===label) return a[i]; } return null; }
+function btnSub(b){ var x=b&&b.querySelector('small'); return x?x.textContent.trim():''; }
+
+function rootList(){
+  var used={}, list=[];
+  ROOT.forEach(function(it){
+    var o=Object.assign({},it);
+    if(!o.ch&&!o.fn&&!o.panel){
+      var b=findBtn(o.lbl||o.n); if(!b) return;    // el menú ya no tiene ese ítem → no se muestra
+      o._b=b; if(!o.sub) o.sub=btnSub(b); used[o.lbl||o.n]=1;
+    }
+    list.push(o);
+  });
+  /* Cualquier ítem nuevo que se agregue al menú Módulos aparece solo, al final */
+  flyBtns().forEach(function(b){
+    if(b.hasAttribute('data-mx-skip')) return;
+    var l=btnLabel(b); if(!l||used[l]) return;
+    list.push({n:l,ic:'dot',sub:btnSub(b),_b:b});
+  });
+  list.push(CLASSIC_ITEM);
+  return list;
+}
+function nodeAt(p){
+  var cur={ch:rootList()};
+  for(var i=0;i<p.length;i++){ cur=(cur.ch||[]).filter(function(x){ return x.k===p[i]; })[0]; if(!cur) return {ch:rootList()}; }
+  return cur;
+}
+
+/* ── Datos de embarques para los widgets ── */
+function dedup(){
+  var td=window.tendData||[], m=new Map();
+  td.forEach(function(d){ if(!d) return; var k=(d.nro||'').toString().trim().toUpperCase()||('_ts_'+(d.ts||Math.random())); var ex=m.get(k); if(!ex||(d.ts||0)>(ex.ts||0)) m.set(k,d); });
+  return Array.from(m.values());
+}
+function fOk(s){ return typeof s==='string'&&/^\d{4}-\d{2}-\d{2}/.test(s)&&s.slice(0,4)!=='0000'; }
+function fechaDe(d){
+  var f=null;
+  if(fOk(d.fechaProceso)) f=d.fechaProceso.slice(0,10);
+  else if(d.snap&&fOk(d.snap.fechaProceso)) f=d.snap.fechaProceso.slice(0,10);
+  else if(typeof window._fechaEmbarqueReal==='function') f=window._fechaEmbarqueReal(d);
+  return f;
+}
+function iso(dt){ return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0'); }
+function proveedorDe(d){
+  var p=(d.proveedor||d.nombre||'').toString().trim();
+  if(p) return p;
+  var ln=(d.snap&&d.snap.invLines)||d.invLines||[], s=new Set();
+  ln.forEach(function(l){ var x=(l.prov||l.proveedor||'').toString().trim(); if(x) s.add(x); });
+  if(s.size===1) return Array.from(s)[0];
+  if(s.size>1) return s.size+' proveedores';
+  return 'Sin proveedor registrado';
+}
+function mxStats(){
+  var out={mes:'—',mesPrev:null,semana:'—',tareas:0,ult:null,ahorro:'—',rango:''};
+  try{
+    var data=dedup(), now=new Date(), y=now.getFullYear(), m=now.getMonth();
+    var py=m===0?y-1:y, pm=m===0?11:m-1, cMes=0, cPrev=0;
+    data.forEach(function(d){
+      var ym=typeof window._ymProcEmb==='function'?window._ymProcEmb(d):null; if(!ym) return;
+      if(ym.y===y&&ym.m===m) cMes++; else if(ym.y===py&&ym.m===pm) cPrev++;
+    });
+    var dow=(now.getDay()+6)%7, lun=new Date(now.getFullYear(),now.getMonth(),now.getDate()-dow), dom=new Date(lun.getFullYear(),lun.getMonth(),lun.getDate()+6);
+    var a=iso(lun), b=iso(dom), cSem=0;
+    data.forEach(function(d){ var f=fechaDe(d); if(f&&f>=a&&f<=b) cSem++; });
+    var meses=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+    out.mes=cMes; out.mesPrev=cPrev; out.semana=cSem;
+    out.rango=lun.getDate()+' '+meses[lun.getMonth()]+' – '+dom.getDate()+' '+meses[dom.getMonth()];
+    out.tareas=(window.tendData||[]).filter(function(d){ return d&&(d.status==='pendiente'||d.status==='parcial'||d.status==='reabierto'); }).length;
+    var s=(window.tendData||[]).filter(function(d){ return d&&(d.ts||d.fecha||d.date); }).sort(function(p,q){ return (q.ts||0)-(p.ts||0); });
+    if(s.length) out.ult=s[0];
+  }catch(e){}
+  var sk=$('sk-ahorro'); if(sk&&sk.textContent.trim()) out.ahorro=sk.textContent.trim();
+  return out;
+}
+function toast(msg,type){ if(typeof window._showToast==='function') window._showToast(msg,type||'green',3000); }
+function mxPend(){
+  if(!mxStats().tareas){ toast('✅ No hay embarques en proceso','green'); return; }
+  if(typeof window._mostrarSelectorEmbarquesEnProceso==='function') window._mostrarSelectorEmbarquesEnProceso();
+}
+function abrirUlt(d){
+  if(!d) return;
+  if(typeof window._zlhAbrirUltimoEmbarque==='function') window._zlhAbrirUltimoEmbarque((d.nro||'').toString(),d.ts||0);
+}
+
+/* ── Widgets (fila horizontal de tarjetas) ── */
+function renderWidgets(){
+  var box=$('mxWg'); if(!box) return;
+  var s=mxStats(), cards=[];
+  var delta=(s.mesPrev==null||s.mes==='—')?'':(s.mes-s.mesPrev>=0?'+':'')+(s.mes-s.mesPrev)+' vs mes anterior';
+  cards.push({a:'mes',cls:'ac',l:'Mes actual',v:s.mes,e:delta||'mes en curso'});
+  cards.push({a:'sem',cls:'',l:'Esta semana',v:s.semana,e:s.rango});
+  cards.push({a:'tar',cls:s.tareas?'warn':'ok',l:'En proceso',v:s.tareas,e:s.tareas?'tareas pendientes':'todo al día'});
+  if(s.ult){ cards.push({a:'ult',cls:'txt',l:'Último embarque',v:(s.ult.nro?'#'+s.ult.nro+' · ':'')+proveedorDe(s.ult),e:(fechaDe(s.ult)||'')}); }
+  cards.push({a:'aho',cls:'ok',l:'Ahorro total',v:s.ahorro,e:'acumulado'});
+  box.innerHTML=cards.map(function(c,i){
+    return '<button type="button" class="mx-wc '+c.cls+'" style="--i:'+i+'" data-a="'+c.a+'"><small>'+esc(c.l)+'</small><b>'+esc(c.v)+'</b><em>'+esc(c.e)+'</em></button>';
+  }).join('');
+  /* Insignia de pendientes en el ícono "En proceso" si está visible */
+  var bd=document.querySelectorAll('#mx .mx-bd[data-b="pend"]'); bd.forEach(function(x){ x.textContent=s.tareas; x.style.display=s.tareas?'':'none'; });
+}
+function widgetClick(a){
+  var s=mxStats();
+  if(a==='mes'||a==='sem'){ if(typeof window._abrirModalEmbarquesMes==='function') window._abrirModalEmbarquesMes(new Date().getMonth()); }
+  else if(a==='tar') mxPend();
+  else if(a==='ult') abrirUlt(s.ult);
+  else if(a==='aho'){ path=['kpi','res']; mxRender(); }
+}
+
+/* ── Paginador ── */
+function chunk(list){ var out=[]; for(var i=0;i<list.length;i+=4) out.push(list.slice(i,i+4)); return out; }
+function itemHTML(it,idx,keyPath){
+  var bd=it.badge?'<span class="mx-bd" data-b="'+esc(it.k||'')+'" style="display:none">0</span>':'';
+  return '<button type="button" class="mx-it" style="--i:'+(idx%4)+'" data-ix="'+keyPath+'" aria-label="'+esc(it.n)+'"><span class="mx-ring">'+ORB+'<span class="mx-ic">'+svg(it.ic)+'</span></span>'+bd+'<span class="mx-lb">'+esc(it.n)+'</span>'+(it.sub?'<small class="mx-sm">'+esc(it.sub)+'</small>':'')+'</button>';
+}
+var curList=[];
+function renderGrid(node){
+  curList=(node.ch||[]);
+  var pages=chunk(curList), pager=$('mxPager');
+  pager.innerHTML=pages.map(function(pg,pi){
+    return '<div class="mx-page" data-pg="'+pi+'">'+pg.map(function(it,j){ return itemHTML(it,j,pi*4+j); }).join('')+'</div>';
+  }).join('');
+  pager.scrollLeft=0;
+  var dots=$('mxDots');
+  dots.innerHTML=pages.length>1?pages.map(function(_,i){ return '<button type="button" data-d="'+i+'" aria-label="Página '+(i+1)+'"></button>'; }).join(''):'';
+  $('mxArrL').style.visibility=$('mxArrR').style.visibility=pages.length>1?'':'hidden';
+  syncPager();
+}
+function pageNow(){ var p=$('mxPager'); if(!p||!p.clientWidth) return 0; return Math.round(p.scrollLeft/p.clientWidth); }
+function syncPager(){
+  var p=$('mxPager'); if(!p) return;
+  var n=p.children.length, i=Math.max(0,Math.min(n-1,pageNow()));
+  var ds=$('mxDots').children; for(var k=0;k<ds.length;k++) ds[k].classList.toggle('on',k===i);
+  $('mxArrL').disabled=(i<=0); $('mxArrR').disabled=(i>=n-1);
+  var node=nodeAt(path);
+  $('mxSecLbl').textContent=path.length?node.n:(PAGE_TITLES[i]||'Más');
+  $('mxCnt').textContent=n>1?(i+1)+' / '+n+' · desliza para ver más':'';
+}
+function goPage(i){ var p=$('mxPager'); if(!p) return; p.scrollTo({left:i*p.clientWidth,behavior:'smooth'}); }
+
+/* ── Panel (KPIs / mapa): reutiliza los mismos elementos del panel clásico ── */
+function grab(){
+  if(moved.length) return;
+  var mstrip=$('zlh-month-strip'), rrow=document.querySelector('#splash-nav .zlh-reminder-row');
+  var pick={
+    kpi:$('splash-kpi-strip'),
+    mlbl:mstrip&&mstrip.previousElementSibling, mstrip:mstrip,
+    rlbl:rrow&&rrow.previousElementSibling, rrow:rrow,
+    orig:document.querySelector('#splash-nav .zlh-origins-card')
+  };
+  Object.keys(pick).forEach(function(k){
+    var n=pick[k]; if(!n||!n.parentNode) return;
+    var ph=document.createComment('mx-'+k); n.parentNode.insertBefore(ph,n);
+    store.appendChild(n); moved.push({k:k,n:n,ph:ph});
+  });
+}
+function release(){
+  moved.forEach(function(o){ if(o.ph&&o.ph.parentNode){ o.ph.parentNode.insertBefore(o.n,o.ph); o.ph.parentNode.removeChild(o.ph); } });
+  moved=[];
+}
+function el(k){ for(var i=0;i<moved.length;i++) if(moved[i].k===k) return moved[i].n; return null; }
+function stBadge(s){
+  if(s==='pendiente') return '<span class="mx-st p">Pendiente</span>';
+  if(s==='parcial') return '<span class="mx-st pa">Parcial</span>';
+  if(s==='reabierto') return '<span class="mx-st">Reabierto</span>';
+  return '<span class="mx-st ok">Listo</span>';
+}
+function recentHTML(){
+  var s=(window.tendData||[]).filter(function(d){ return d&&(d.ts||d.fecha||d.date); }).sort(function(p,q){ return (q.ts||0)-(p.ts||0); }).slice(0,6);
+  if(!s.length) return '<div class="mx-empty">Sin actividad reciente todavía.</div>';
+  return s.map(function(d,i){
+    return '<button type="button" class="mx-act" data-rc="'+i+'"><span class="n">'+(d.nro?'#'+esc(d.nro):'—')+'</span><span class="t"><b>'+esc(proveedorDe(d))+'</b><small>'+esc(fechaDe(d)||'')+'</small></span>'+stBadge(d.status)+'</button>';
+  }).join('');
+}
+function showPanel(id){
+  var v=$('mxView'); v.innerHTML=''; grab();
+  if(id==='res'){
+    ['kpi','mlbl','mstrip','rlbl','rrow'].forEach(function(k){ var n=el(k); if(n) v.appendChild(n); });
+    var h=document.createElement('div'); h.className='mx-h'; h.textContent='Actividad reciente'; v.appendChild(h);
+    var c=document.createElement('div'); c.id='mxRecent'; c.innerHTML=recentHTML(); v.appendChild(c);
+    var b=document.createElement('button'); b.type='button'; b.className='mx-btn'; b.textContent='Abrir Dashboard completo →'; b.setAttribute('data-go','dash'); v.appendChild(b);
+  }else if(id==='map'){
+    var o=el('orig'); if(o) v.appendChild(o);
+  }
+  /* ahora que son visibles, se refrescan (algunos dibujan con el ancho real) */
+  setTimeout(function(){
+    ['_zlhPopulateKPIs','_zlhPopulateMonthly','_zlhPopulateReminder','drawHomeTrend'].forEach(function(f){ try{ if(typeof window[f]==='function') window[f](); }catch(e){} });
+  },30);
+}
+function leavePanel(){ var v=$('mxView'); if(v){ moved.forEach(function(o){ store.appendChild(o.n); }); v.innerHTML=''; } }
+
+/* ── Render principal ── */
+function userName(){ return lsGet(LS_NAME,'Ian').trim(); }
+function mxRender(){
+  if(!built) return;
+  var root=$('mx'), node=nodeAt(path), panel=!!node.panel;
+  root.setAttribute('data-depth',String(path.length));
+  root.setAttribute('data-mode',panel?'panel':'grid');
+  root.setAttribute('data-wg',lsGet(LS_WG,'1')==='0'?'0':'1');
+  var hi=$('mxHi'), sub=$('mxSub'), nm=userName();
+  if(!path.length){ hi.innerHTML='Bienvenido'+(nm?' <b>'+esc(nm)+'</b>':''); sub.textContent='¿Qué quieres hacer hoy?'; $('mxTtl').textContent='Gestión Integral de Compras y Costeo'; }
+  else { hi.textContent=node.n; sub.textContent=panel?(node.sub||''):'Elige una opción'; $('mxTtl').textContent=node.n; }
+  if(panel){ showPanel(node.k); }
+  else { leavePanel(); renderGrid(node); renderWidgets(); }
+  try{ $('splash-nav').scrollTo({top:0}); }catch(e){}
+}
+
+/* ── Acciones al tocar un ícono ── */
+function runItem(it){
+  if(!it) return;
+  if(it.ch){ path.push(it.k); mxRender(); return; }
+  if(it.panel){ path.push(it.k); mxRender(); return; }
+  if(it.fn){ it.fn(); return; }
+  var b=it._b||findBtn(it.lbl||it.n);
+  if(b) b.click(); else toast('Esa opción no está disponible','red');
+}
+
+/* ── Construcción del DOM (una sola vez) ── */
+function build(){
+  if(built) return; var nav=$('splash-nav'); if(!nav) return;
+  store=document.createElement('div'); store.id='mxStore'; document.body.appendChild(store);
+  var root=document.createElement('div'); root.id='mx'; root.setAttribute('data-depth','0'); root.setAttribute('data-mode','grid');
+  root.innerHTML=
+   '<header class="mx-top">'
+  +  '<button type="button" class="mx-ib mx-back" id="mxBack" aria-label="Atrás">'+svg('back')+'</button>'
+  +  '<span class="mx-logo">'+svg('logo')+'</span>'
+  +  '<div class="mx-brand"><b id="mxTtl">Gestión Integral de Compras y Costeo</b><small>Grupo Primavera Holding</small></div>'
+  +  '<button type="button" class="mx-ib" id="mxTheme" aria-label="Cambiar tema">'+svg('sun')+'</button>'
+  +'</header>'
+  +'<section class="mx-hero"><div class="mx-hi" id="mxHi">Bienvenido</div><div class="mx-sub" id="mxSub">¿Qué quieres hacer hoy?</div></section>'
+  +'<section class="mx-wg" id="mxWg" aria-label="Resumen"></section>'
+  +'<div class="mx-sec"><span id="mxSecLbl"></span></div>'
+  +'<div class="mx-pgwrap"><button type="button" class="mx-arr l" id="mxArrL" aria-label="Anterior">‹</button><div class="mx-pager" id="mxPager"></div><button type="button" class="mx-arr r" id="mxArrR" aria-label="Siguiente">›</button></div>'
+  +'<div class="mx-dots" id="mxDots"></div><div class="mx-cnt" id="mxCnt"></div>'
+  +'<section class="mx-view" id="mxView"></section>';
+  nav.insertBefore(root,nav.firstChild);
+  built=true;
+
+  root.addEventListener('click',function(e){
+    var t=e.target;
+    var it=t.closest('.mx-it'); if(it){ runItem(curList[+it.getAttribute('data-ix')]); return; }
+    var wc=t.closest('.mx-wc'); if(wc){ widgetClick(wc.getAttribute('data-a')); return; }
+    var dt=t.closest('.mx-dots button'); if(dt){ goPage(+dt.getAttribute('data-d')); return; }
+    var rc=t.closest('[data-rc]'); if(rc){
+      var s=(window.tendData||[]).filter(function(d){ return d&&(d.ts||d.fecha||d.date); }).sort(function(p,q){ return (q.ts||0)-(p.ts||0); }).slice(0,6);
+      abrirUlt(s[+rc.getAttribute('data-rc')]); return; }
+    if(t.closest('[data-go="dash"]')){ var b=findBtn('Dashboard'); if(b) b.click(); return; }
+    if(t.closest('#mxBack')){ path.pop(); mxRender(); return; }
+    if(t.closest('#mxTheme')){ if(typeof window.toggleTheme==='function') window.toggleTheme(); return; }
+    if(t.closest('#mxArrL')){ goPage(pageNow()-1); return; }
+    if(t.closest('#mxArrR')){ goPage(pageNow()+1); return; }
+  });
+  $('mxPager').addEventListener('scroll',function(){ window.requestAnimationFrame(syncPager); },{passive:true});
+  document.addEventListener('keydown',function(e){
+    if(!document.body.classList.contains('mx-on')||!$('splash')||$('splash').style.display==='none') return;
+    if(e.target&&/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+    if(e.key==='ArrowRight') goPage(pageNow()+1); else if(e.key==='ArrowLeft') goPage(pageNow()-1);
+  });
+}
+
+/* ── Aplicar estilo elegido ── */
+function refreshCfg(){
+  var st=lsGet(LS_STYLE,'classic');
+  document.querySelectorAll('[data-mxopt]').forEach(function(b){ b.classList.toggle('on',b.getAttribute('data-mxopt')===st); });
+  var w=$('mxcfg-wg'); if(w) w.checked=lsGet(LS_WG,'1')!=='0';
+  var n=$('mxcfg-name'); if(n&&document.activeElement!==n) n.value=lsGet(LS_NAME,'Ian');
+}
+function mxApply(){
+  var st=lsGet(LS_STYLE,'classic');
+  if(st==='mask'){
+    build(); document.body.classList.add('mx-on'); path=[]; mxRender();
+  }else{
+    document.body.classList.remove('mx-on');
+    if(built){ leavePanel(); release(); }
+  }
+  refreshCfg();
+}
+function mxSetStyle(st){
+  lsSet(LS_STYLE,st==='mask'?'mask':'classic');
+  mxApply();
+  toast(st==='mask'?'🎭 Interfaz Máscara activada':'🖥️ Interfaz clásica activada','green');
+}
+function mxSetName(v){ lsSet(LS_NAME,(v||'').trim()); if(built) mxRender(); }
+function mxSetWidgets(on){ lsSet(LS_WG,on?'1':'0'); if(built) mxRender(); }
+
+window.mxSetStyle=mxSetStyle; window.mxSetName=mxSetName; window.mxSetWidgets=mxSetWidgets; window.mxRefresh=function(){ if(built&&document.body.classList.contains('mx-on')){ try{ if(!path.length||nodeAt(path).ch) renderWidgets(); if(nodeAt(path).panel&&path.join()==='kpi,res'){ var c=$('mxRecent'); if(c) c.innerHTML=recentHTML(); } }catch(e){} } };
+
+/* Cada vez que los datos se actualizan o se vuelve al inicio, se refrescan los widgets */
+function hook(name){
+  var f=window[name]; if(typeof f!=='function'||f._mx) return;
+  var g=function(){ var r=f.apply(this,arguments); try{ setTimeout(window.mxRefresh,60); }catch(e){} return r; };
+  g._mx=1; window[name]=g;
+}
+function init(){
+  try{ var q=new URLSearchParams(location.search).get('ui'); if(q==='mask'||q==='classic') lsSet(LS_STYLE,q); }catch(e){}
+  hook('_zlhPopulateKPIs'); hook('volverInicio');
+  /* Si la app deja el panel clásico tal cual (diseño anterior), esto no hace nada */
+  mxApply();
+}
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();
+})();
+</script>
+
 </body>
 </html>
