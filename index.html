@@ -2802,6 +2802,9 @@ var dv=L.getItem('_mxDevice');if(dv!=='phone'&&dv!=='tablet'&&dv!=='desktop')dv=
     <button onclick="clearAll()" style="background:none;border:none;color:var(--muted);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 8px;border-radius:8px;transition:background .15s" onmouseenter="this.style.background='rgba(255,255,255,.06)'" onmouseleave="this.style.background='none'" title="Limpiar">
       <span style="font-size:16px">🗑️</span><span style="font-size:9px;color:var(--muted2)">Limpiar</span>
     </button>
+    <button onclick="_nuevoEmbarqueDesdeCero()" style="background:none;border:none;color:var(--green-l,#3fb950);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 8px;border-radius:8px;transition:background .15s" onmouseenter="this.style.background='rgba(255,255,255,.06)'" onmouseleave="this.style.background='none'" title="Nuevo embarque desde cero (sin nada cargado)">
+      <span style="font-size:16px">🆕</span><span style="font-size:9px;color:var(--muted2)">Nuevo</span>
+    </button>
     <input type="file" id="sesion-file-input" accept=".json" style="display:none" onchange="cargarSesion(this)">
     </div><!-- /inner constrained row -->
   </div>
@@ -4759,6 +4762,11 @@ var dv=L.getItem('_mxDevice');if(dv!=='phone'&&dv!=='tablet'&&dv!=='desktop')dv=
     <div style="display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap">
       <label style="font-size:12px;color:var(--muted)">Nombre en la bienvenida</label>
       <input id="mxcfg-name" type="text" maxlength="24" placeholder="Tu nombre" onchange="mxSetName(this.value)" style="flex:1;min-width:120px;background:var(--s2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:7px 10px;font-size:12px">
+      <input id="mxcfg-last" type="text" maxlength="30" placeholder="Apellido" onchange="mxSetLast(this.value)" style="flex:1;min-width:120px;background:var(--s2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:7px 10px;font-size:12px">
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap">
+      <label style="font-size:12px;color:var(--muted)">Usuario fijo</label>
+      <input id="mxcfg-user" type="text" readonly placeholder="primera letra del nombre + apellido" style="flex:1;min-width:120px;background:var(--s2);border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:7px 10px;font-size:12px">
     </div>
     <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12px;color:var(--muted);cursor:pointer"><input type="checkbox" id="mxcfg-wg" onchange="mxSetWidgets(this.checked)"> Mostrar tarjetas de resumen (mes, semana, tareas) en la Máscara</label>
   </div>
@@ -10906,6 +10914,7 @@ function iniciarApp(tab){
       // Lista los embarques pendiente/parcial/reabierto para que el usuario elija
       // continuar uno existente o empezar uno nuevo, en vez de tener que ir a buscarlo
       // manualmente en Tendencias.
+      try{ if(sessionStorage.getItem('_embNuevoCero')){ sessionStorage.removeItem('_embNuevoCero'); window._embPickerMostrado = true; } }catch(e){}
       if(!window._embPickerMostrado && typeof _mostrarSelectorEmbarquesEnProceso==='function'){
         window._embPickerMostrado = true;
         setTimeout(_mostrarSelectorEmbarquesEnProceso, 300);
@@ -18533,6 +18542,10 @@ async function procesarEmbarque(){
     cif:    window._lastCIF||0,
     esc:    compar==='cifexp'?'CIF Express':'Sababa',
     ts:     Date.now(),
+    // ── Quién procesó el embarque (usuario fijo: 1ª letra del nombre + apellido) ──
+    procesadoPor:       (typeof window.mxUsuario==='function' ? window.mxUsuario() : '') || '',
+    procesadoPorNombre: (function(){ try{ return ((localStorage.getItem('_mxName')||'')+' '+(localStorage.getItem('_mxLast')||'')).trim(); }catch(e){ return ''; } })(),
+    procesadoTs:        Date.now(),
     snap:   window._lastSnap||null,
     invLines: snapInvLines,
     status: modoProcess||'completo',
@@ -18619,7 +18632,7 @@ async function procesarEmbarque(){
   const _updIdx = window._pendienteUpdateIdx;
   if(typeof _updIdx === 'number' && _updIdx >= 0){
     tendData[_updIdx] = snap;
-    _showToast(`✅ Embarque #${nro} confirmado y actualizado.`, 'green', 3000);
+    _showToast(`✅ Embarque #${nro} confirmado y actualizado${snap.procesadoPor?' · procesado por '+snap.procesadoPor:''}.`, 'green', 3000);
   } else {
     // Eliminar cualquier entrada duplicada por NRO antes de insertar (limpieza defensiva)
     if(nro){
@@ -18914,6 +18927,14 @@ function _marcarPendienteYCerrar(){
 }
 
 // ── REABRIR: carga un embarque pendiente al formulario para edición ──
+// Etiqueta "👤 usuario" con el usuario que procesó el embarque (vacía si es un registro anterior a este cambio)
+function _procPorBadge(d){
+  var u=d&&d.procesadoPor; if(!u) return '';
+  var tt=(d.procesadoPorNombre?d.procesadoPorNombre+' · ':'')+'Procesó este embarque'+(d.procesadoTs?' el '+new Date(d.procesadoTs).toLocaleString('es-PA'):'');
+  var e=String(u).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});
+  var t=String(tt).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});
+  return '<span title="'+t+'" style="background:rgba(45,226,201,.10);border:1px solid rgba(45,226,201,.3);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:#2de2c9;white-space:nowrap">👤 '+e+'</span>';
+}
 function _updateEstatusBadge(estado){
   const dot = document.getElementById('s1_estatus_dot');
   const txt = document.getElementById('s1_estatus_txt');
@@ -20304,7 +20325,7 @@ function renderTend(_scopeEl){
       const _mesEditable = !(window._mesesBloqueados||new Set()).has(_rowYm);
       return `<div style="display:grid;grid-template-columns:auto 1fr auto auto auto;gap:8px;align-items:center;padding:9px 14px;border-bottom:1px solid rgba(48,54,61,.4);cursor:pointer;transition:background .15s${(isPend||isParcial)?';border-left:3px solid '+(isPend?'var(--orange-l)':'var(--blue-l)'):''}" onclick="if(event.target.classList.contains('del-btn')||event.target.classList.contains('btn-reabrir')){return;}abrirModuloComparativo_idx(${idx})" onmouseenter="this.style.background='rgba(255,255,255,.03)'" onmouseleave="this.style.background=''">
         <div style="font-size:10px;font-weight:700;color:${nroColor};white-space:nowrap">${d.nro||'—'} ${unicoBadge} ${difBadge}</div>
-        <div><div style="font-size:12px;font-weight:500;color:var(--text);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.35">${d.desc}${isPend?'&nbsp;<span class="badge-pendiente">🟡 PENDIENTE</span>':''}${d.status==='parcial'?'&nbsp;<span style="background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:3px;padding:1px 5px;font-size:9px;font-weight:700">🚢 PARCIAL</span>':''}</div><div style="font-size:10px;color:var(--muted);display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-top:2px">${d.fecha} · ${d.esc||''}&nbsp;<span style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:var(--blue-l)">${viaIco} ${viaLabel}</span>${d.tramiteTipo?`<span style="background:${tramiteBg};border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:${tramiteColor}">${d.tramiteTipo}</span>`:''}${d.lugarRecep?`<span style="background:rgba(45,212,191,.1);border:1px solid rgba(45,212,191,.25);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:#2dd4bf">🏭 ${d.lugarRecep}</span>`:''}
+        <div><div style="font-size:12px;font-weight:500;color:var(--text);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.35">${d.desc}${isPend?'&nbsp;<span class="badge-pendiente">🟡 PENDIENTE</span>':''}${d.status==='parcial'?'&nbsp;<span style="background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.3);color:var(--blue-l);border-radius:3px;padding:1px 5px;font-size:9px;font-weight:700">🚢 PARCIAL</span>':''}</div><div style="font-size:10px;color:var(--muted);display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-top:2px">${d.fecha} · ${d.esc||''} ${_procPorBadge(d)}&nbsp;<span style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:var(--blue-l)">${viaIco} ${viaLabel}</span>${d.tramiteTipo?`<span style="background:${tramiteBg};border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:${tramiteColor}">${d.tramiteTipo}</span>`:''}${d.lugarRecep?`<span style="background:rgba(45,212,191,.1);border:1px solid rgba(45,212,191,.25);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:#2dd4bf">🏭 ${d.lugarRecep}</span>`:''}
 </div></div>
         <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:${d._requiereReproceso?'var(--orange-l)':'var(--text)'};font-weight:700;white-space:nowrap">${d._requiereReproceso?'⚠ Reprocesar':window._fmtMoney(_ahorroDisplay)}</div>
         <div style="font-size:11px;color:var(--orange-l);white-space:nowrap">${d._requiereReproceso?'':pct}</div>
@@ -20506,7 +20527,7 @@ function renderTend(_scopeEl){
           <div style="font-size:10px;font-weight:700;color:var(--orange-l);white-space:nowrap">${d.nro||'—'} ${difBadge2}</div>
           <div>
             <div style="font-size:12px;font-weight:500;color:var(--text);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.35">${d.desc}${isPend?'&nbsp;<span class="badge-pendiente">🟡 PENDIENTE</span>':''}</div>
-            <div style="font-size:10px;color:var(--muted);display:flex;gap:5px;align-items:center;margin-top:2px">${d.fecha} · ${d.esc||''} <span style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:var(--blue-l)">${viaIco} ${d.viaTransporte||'SEA'}</span></div>
+            <div style="font-size:10px;color:var(--muted);display:flex;gap:5px;align-items:center;margin-top:2px">${d.fecha} · ${d.esc||''} ${_procPorBadge(d)} <span style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);border-radius:3px;padding:0 4px;font-size:9px;font-weight:700;color:var(--blue-l)">${viaIco} ${d.viaTransporte||'SEA'}</span></div>
           </div>
           <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--text);font-weight:700;white-space:nowrap">${window._fmtMoney(d.ahorro)}</div>
           <div style="font-size:11px;color:var(--orange-l);white-space:nowrap">${pct}</div>
@@ -38231,6 +38252,27 @@ window._plnModuloEmbarques = async function(){
     if(c>0) return c;
     return (p.invLines||[]).filter(function(l){ return (l.tipoFac||'mercancia')==='mercancia'; }).reduce(function(s,l){ return s+(parseFloat(l.costo)||0); },0);
   }
+  // Un embarque PROCESADO ya no es borrador: se reconoce por su N° en Tendencias (estatus procesado y
+  // sin estar pendiente/parcial/reabierto). Si se reabre para editar (reabierto) vuelve a contar como en proceso.
+  function nroProcesado(nro){
+    nro=String(nro||'').trim().toUpperCase(); if(!nro) return false;
+    var td=(typeof tendData!=='undefined' && tendData)?tendData:[];
+    for(var i=0;i<td.length;i++){
+      var d=td[i]; if(!d || String(d.nro||'').trim().toUpperCase()!==nro) continue;
+      var st=d.status;
+      if(st==='pendiente'||st==='parcial'||st==='reabierto') return false;
+      if(d.estatus==='procesado' || st==='procesado') return true;
+    }
+    return false;
+  }
+  // Limpia del almacenamiento los borradores cuyo embarque ya fue procesado (incluye los que quedaron de antes)
+  function purgarProcesados(){
+    try{
+      var B=leer(KEY_B), cambio=false;
+      Object.keys(B).forEach(function(k){ if(nroProcesado(B[k].nro)){ delete B[k]; cambio=true; if(window._borradorId===k) window._borradorId=null; } });
+      if(cambio) escribir(KEY_B,B);
+    }catch(e){}
+  }
   function tieneContenido(p){
     return !!((p.campos.s1_nro_emb||'').trim() || (parseFloat(p.campos.s1_cif)||0)>0 || (parseFloat(p.campos.s1_fob)||0)>0 || (p.invLines||[]).length);
   }
@@ -38244,6 +38286,7 @@ window._plnModuloEmbarques = async function(){
     if(window._borrSuspendido) return;
     var p; try{ p=capturar(); }catch(e){ return; }
     if(!tieneContenido(p)) return;
+    if(nroProcesado(p.campos.s1_nro_emb)) return; // ya procesado: no es borrador
     var firma=JSON.stringify(p); if(firma===window._borrUltFirma) return;
     window._borrUltFirma=firma;
     if(!window._borradorId) window._borradorId='b'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
@@ -38343,6 +38386,19 @@ window._plnModuloEmbarques = async function(){
     }
   };
   window._borrNuevo=function(){ cerrarSel(); };
+  // Fuerza un embarque nuevo y vacío: descarta el borrador activo, limpia plantillas en sesión y recarga la app
+  window._nuevoEmbarqueDesdeCero=function(){
+    if(!confirm('¿Crear un NUEVO embarque desde cero?\n\nSe borra todo lo que está cargado ahora en el formulario y no se guarda como borrador. Los embarques ya guardados o procesados no se tocan.')) return;
+    try{ window._borrSuspendido=true; if(window._borradorId){ var B=leer(KEY_B); delete B[window._borradorId]; escribir(KEY_B,B); } window._borradorId=null; }catch(e){}
+    try{ if(typeof _plntSesionSet==='function') _plntSesionSet([]); }catch(e){}
+    try{ localStorage.removeItem('_pm_borrador_v1'); }catch(e){}
+    try{ sessionStorage.setItem('_embNuevoCero','1'); }catch(e){}
+    var ir=function(){ window.location.reload(); }, hecho=false, fin=function(){ if(!hecho){ hecho=true; ir(); } };
+    try{ var q=indexedDB.open('pm_borrador',1); q.onupgradeneeded=function(){ q.result.createObjectStore('k'); };
+      q.onsuccess=function(){ try{ var tx=q.result.transaction('k','readwrite'); tx.objectStore('k').delete('draft'); tx.oncomplete=fin; tx.onerror=fin; }catch(e){ fin(); } };
+      q.onerror=fin; }catch(e){ fin(); }
+    setTimeout(fin,700);
+  };
   window._borrDescartarActual=function(){
     try{ var B=leer(KEY_B); if(window._borradorId) delete B[window._borradorId]; escribir(KEY_B,B); window._borradorId=null; window._borrSuspendido=true; }catch(e){}
   };
@@ -38369,7 +38425,7 @@ window._plnModuloEmbarques = async function(){
 
   // ───────────── SELECTOR (modal) ─────────────
   function abrirSelector(forzar){
-    cerrarSel();
+    cerrarSel(); purgarProcesados();
     var B=leer(KEY_B), R=leer(KEY_R);
     var drafts=Object.keys(B).map(function(k){ return B[k]; })
       .filter(function(d){ return d.id!==window._borradorId || forzar; })
@@ -38425,7 +38481,7 @@ window._plnModuloEmbarques = async function(){
       });
       h+='</div></details>';
     }
-    h+='<button onclick="_borrNuevo()" style="margin-top:14px;width:100%;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.35);color:var(--green-l);border-radius:10px;padding:10px;font-size:12px;font-weight:700;cursor:pointer">➕ Empezar un embarque nuevo</button></div>';
+    h+='<button onclick="_nuevoEmbarqueDesdeCero()" style="margin-top:14px;width:100%;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.35);color:var(--green-l);border-radius:10px;padding:10px;font-size:12px;font-weight:700;cursor:pointer">➕ Empezar un embarque nuevo desde cero</button></div>';
     var ov=document.createElement('div'); ov.id='_embPickerOverlay';
     ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:99998;display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto';
     ov.innerHTML=h; document.body.appendChild(ov);
@@ -38436,6 +38492,7 @@ window._plnModuloEmbarques = async function(){
 
   // ───────────── Chip para reabrir el selector ─────────────
   function actualizarChip(){
+    purgarProcesados();
     var n=Object.keys(leer(KEY_B)).filter(function(k){ return k!==window._borradorId; }).length;
     var c=document.getElementById('_borrChip');
     if(!c){
@@ -40231,7 +40288,7 @@ body.mx-on[data-mxdev="desktop"].costeo-mode:not(.mx-side-off) #sidebar .pin-btn
 <script id="mx-js">
 (function(){
 'use strict';
-var LS_STYLE='_simUIStyle', LS_NAME='_mxName', LS_WG='_mxWidgets', LS_DEV='_mxDevice';
+var LS_STYLE='_simUIStyle', LS_NAME='_mxName', LS_LAST='_mxLast', LS_USER='_mxUser', LS_WG='_mxWidgets', LS_DEV='_mxDevice';
 function lsGet(k,d){ try{ var v=localStorage.getItem(k); return v===null?d:v; }catch(e){ return d; } }
 function lsSet(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
 function $(id){ return document.getElementById(id); }
@@ -40575,6 +40632,8 @@ function refreshCfg(){
   try{ paintCfg(); }catch(e){}
   var w=$('mxcfg-wg'); if(w) w.checked=lsGet(LS_WG,'1')!=='0';
   var n=$('mxcfg-name'); if(n&&document.activeElement!==n) n.value=lsGet(LS_NAME,'');
+  var l=$('mxcfg-last'); if(l&&document.activeElement!==l) l.value=lsGet(LS_LAST,'');
+  var u=$('mxcfg-user'); if(u) u.value=lsGet(LS_USER,'');
 }
 function mxApply(){
   var st=lsGet(LS_STYLE,'mask');
@@ -40591,7 +40650,24 @@ function mxSetStyle(st){
   mxApply();
   toast(st==='mask'?'🎭 Interfaz Máscara activada':'🖥️ Interfaz clásica activada','green');
 }
-function mxSetName(v){ lsSet(LS_NAME,(v||'').trim()); if(built) mxRender(); }
+/* Usuario fijo = 1ª letra del nombre + apellido, en minúsculas, sin tildes ni espacios (Paul Rovira → provira) */
+function mxMakeUser(n,a){
+  function limpia(t){ return String(t||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,''); }
+  var nn=limpia(n), aa=limpia(a);
+  return nn&&aa ? nn.charAt(0)+aa : '';
+}
+function mxSyncUser(){
+  var u=mxMakeUser(lsGet(LS_NAME,''),lsGet(LS_LAST,''));
+  lsSet(LS_USER,u);
+  if(u) lsSet('_plnt_ultimo_usuario',u); /* las plantillas toman este usuario */
+  var el=$('mxcfg-user'); if(el) el.value=u;
+  return u;
+}
+function mxSetName(v){ lsSet(LS_NAME,(v||'').trim()); mxSyncUser(); if(built) mxRender(); }
+function mxSetLast(v){ lsSet(LS_LAST,(v||'').trim()); mxSyncUser(); }
+function mxSetFullName(n,a){ lsSet(LS_NAME,(n||'').trim()); lsSet(LS_LAST,(a||'').trim()); var u=mxSyncUser(); if(built) mxRender(); return u; }
+window.mxUsuario=function(){ return lsGet(LS_USER,''); };
+window.mxSetLast=mxSetLast;
 function mxSetWidgets(on){ lsSet(LS_WG,on?'1':'0'); if(built) mxRender(); }
 function mxSyncDev(){ var b=document.body; b.setAttribute('data-mxdev',dev()); b.classList.toggle('mx-side-off',lsGet('_mxSideOff','0')==='1'); }
 function mxToggleSide(){ var off=!document.body.classList.contains('mx-side-off'); document.body.classList.toggle('mx-side-off',off); lsSet('_mxSideOff',off?'1':'0'); }
@@ -40785,25 +40861,28 @@ function hook(name){
 }
 
 /* ── Primer ingreso: pregunta el nombre y el dispositivo (una sola vez; queda guardado en este dispositivo) ── */
-function needName(){ try{ return localStorage.getItem(LS_NAME)===null; }catch(e){ return false; } }
+function needName(){ try{ return localStorage.getItem(LS_NAME)===null || localStorage.getItem(LS_LAST)===null; }catch(e){ return false; } }
 function needDev(){ try{ return localStorage.getItem(LS_DEV)===null; }catch(e){ return false; } }
 function askSetup(done){
   var m=$('mxName');
   if(!m){
     m=document.createElement('div'); m.id='mxName';
     m.innerHTML='<div class="nb" role="dialog" aria-modal="true">'
-     +'<div class="st" id="mxStep1"><h3>¿Cómo te llamas?</h3><p>Así te saludaré cada vez que entres. Puedes cambiarlo después en Configuración.</p><input type="text" id="mxNameIn" maxlength="24" autocomplete="given-name" autocapitalize="words" placeholder="Tu nombre"><button type="button" id="mxNameGo">Continuar</button></div>'
+     +'<div class="st" id="mxStep1"><h3>¿Cuál es tu nombre y apellido?</h3><p>Te saludaré por tu nombre y con ambos armo tu usuario fijo (ej: Paul Rovira → <b>provira</b>).</p><input type="text" id="mxNameIn" maxlength="24" autocomplete="given-name" autocapitalize="words" placeholder="Nombre"><input type="text" id="mxLastIn" maxlength="30" autocomplete="family-name" autocapitalize="words" placeholder="Apellido" style="margin-top:10px"><div id="mxUserPrev" style="margin-top:10px;font-size:13px;color:#8fc3c6;min-height:18px"></div><button type="button" id="mxNameGo">Continuar</button></div>'
      +'<div class="st" id="mxStep2"><h3>¿Qué dispositivo usas?</h3><p>Así acomodo los iconos del menú. Se guarda en este dispositivo y lo puedes cambiar en Ajustes.</p>'
      +'<button type="button" class="opt" data-dev="phone">Teléfono<small>4 iconos por página</small></button>'
      +'<button type="button" class="opt" data-dev="tablet">Tablet<small>6 iconos por página</small></button>'
      +'<button type="button" class="opt" data-dev="desktop">Computadora<small>10 iconos por página</small></button></div></div>';
     document.body.appendChild(m);
-    var inp=m.querySelector('#mxNameIn');
+    var inp=m.querySelector('#mxNameIn'), inp2=m.querySelector('#mxLastIn'), prev=m.querySelector('#mxUserPrev');
+    var pintaPrev=function(){ var u=mxMakeUser(inp.value,inp2.value); prev.innerHTML=u?('Tu usuario será: <b>'+esc(u)+'</b>'):''; };
+    m._prev=pintaPrev;
     var finish=function(){ m.classList.remove('on'); var cb=m._cb; m._cb=null; if(cb) cb(); };
     var save=function(){
-      var v=inp.value.trim();
+      var v=inp.value.trim(), v2=inp2.value.trim();
       if(!v){ inp.style.borderColor='#ff6b6b'; inp.focus(); return; }
-      mxSetName(v);
+      if(!mxMakeUser(v,v2)){ inp2.style.borderColor='#ff6b6b'; inp2.focus(); return; }
+      mxSetFullName(v,v2);
       if(needDev()) m._show(2); else finish();
     };
     m._show=function(n){
@@ -40812,11 +40891,15 @@ function askSetup(done){
       if(n===1) setTimeout(function(){ try{ inp.focus(); }catch(e){} },80);
     };
     m.querySelector('#mxNameGo').addEventListener('click',save);
-    inp.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); save(); } });
-    inp.addEventListener('input',function(){ inp.style.borderColor=''; });
+    inp.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); inp2.focus(); } });
+    inp2.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); save(); } });
+    inp.addEventListener('input',function(){ inp.style.borderColor=''; pintaPrev(); });
+    inp2.addEventListener('input',function(){ inp2.style.borderColor=''; pintaPrev(); });
     m.addEventListener('click',function(e){ var o=e.target.closest&&e.target.closest('.opt'); if(!o) return; mxSetDevice(o.getAttribute('data-dev')); finish(); });
   }
-  m._cb=done; m.classList.add('on'); m._show(needName()?1:2);
+  m._cb=done;
+  if(needName()){ var a1=m.querySelector('#mxNameIn'), a2=m.querySelector('#mxLastIn'); a1.value=lsGet(LS_NAME,''); a2.value=lsGet(LS_LAST,''); m._prev&&m._prev(); }
+  m.classList.add('on'); m._show(needName()?1:2);
 }
 function hookIngresar(){
   var f=window.showSplashNav; if(typeof f!=='function'||f._mxN) return;
@@ -40824,7 +40907,7 @@ function hookIngresar(){
   g._mxN=1; window.showSplashNav=g;
 }
 function init(){
-  hookIngresar(); mxSyncDev(); initPanelBtn();
+  hookIngresar(); mxSyncDev(); initPanelBtn(); try{ if(lsGet(LS_NAME,'')&&lsGet(LS_LAST,'')) mxSyncUser(); }catch(e){}
   try{ if(lsGet('_mxSeed','')!=='v2'){ lsSet(LS_STYLE,'mask'); lsSet('_mxFx','slide'); lsSet('_mxSeed','v2'); } }catch(e){}
   applyFx();
   try{ var q=new URLSearchParams(location.search).get('ui'); if(q==='mask'||q==='classic') lsSet(LS_STYLE,q); }catch(e){}
