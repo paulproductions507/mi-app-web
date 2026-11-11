@@ -14371,6 +14371,9 @@ function loadAgrupFromStorage(){
 function clearAll(){
   if(!confirm('¿Limpiar todos los datos e iniciar un nuevo embarque?')) return;
   try{ if(typeof _borrDescartarActual==='function') _borrDescartarActual(); }catch(e){}
+  // (nov-2026) Reinicio TOTAL: además del borrador, borra la sesión recuperable, la plantilla manual y
+  // las plantillas en sesión; si no, al recargar la app restauraba todo de nuevo.
+  if(typeof _nuevoEmbarqueDesdeCero==='function'){ _nuevoEmbarqueDesdeCero(true,true); return; }
   window.location.reload();
 }
 
@@ -38408,19 +38411,20 @@ window._plnModuloEmbarques = async function(){
   };
   window._borrNuevo=function(){ cerrarSel(); };
   // Fuerza un embarque nuevo y vacío: descarta el borrador activo, limpia plantillas en sesión y recarga la app
-  window._nuevoEmbarqueDesdeCero=function(){
-    if(!confirm('¿Crear un NUEVO embarque desde cero?\n\nSe borra todo lo que está cargado ahora en el formulario y no se guarda como borrador. Los embarques ya guardados o procesados no se tocan.')) return;
+  window._nuevoEmbarqueDesdeCero=function(sinConfirmar,mostrarSelector){
+    if(!sinConfirmar && !confirm('¿Crear un NUEVO embarque desde cero?\n\nSe borra todo lo que está cargado ahora en el formulario y no se guarda como borrador. Los embarques ya guardados o procesados no se tocan.')) return;
     try{ window._borrSuspendido=true; if(window._borradorId){ var B=leer(KEY_B); delete B[window._borradorId]; escribir(KEY_B,B); } window._borradorId=null; }catch(e){}
     try{ if(typeof _plntSesionSet==='function') _plntSesionSet([]); }catch(e){}
     try{ localStorage.removeItem(KEY_R); }catch(e){}
     var _pmP=null; try{ if(window._pmResetTotal) _pmP=window._pmResetTotal(); }catch(e){}
     try{ localStorage.removeItem('_pm_borrador_v1'); }catch(e){}
-    try{ sessionStorage.setItem('_embNuevoCero','1'); }catch(e){}
-    var ir=function(){ window.location.reload(); }, hecho=false, fin=function(){ if(!hecho){ hecho=true; ir(); } };
+    try{ if(!mostrarSelector) sessionStorage.setItem('_embNuevoCero','1'); else sessionStorage.removeItem('_embNuevoCero'); }catch(e){}
+    var ir=function(){ window.location.reload(); }, hecho=false, fin0=function(){ if(!hecho){ hecho=true; ir(); } }, _w=2, fin=function(){ if(--_w<=0) fin0(); };
+    try{ if(window._sesionBorrar) window._sesionBorrar().then(fin,fin); else fin(); }catch(e){ fin(); }
     try{ var q=indexedDB.open('pm_borrador',1); q.onupgradeneeded=function(){ q.result.createObjectStore('k'); };
       q.onsuccess=function(){ try{ var tx=q.result.transaction('k','readwrite'); tx.objectStore('k').delete('draft'); tx.oncomplete=fin; tx.onerror=fin; }catch(e){ fin(); } };
       q.onerror=fin; }catch(e){ fin(); }
-    setTimeout(fin,700);
+    setTimeout(fin0,900);
   };
   window._borrDescartarActual=function(){
     try{ var B=leer(KEY_B); if(window._borradorId) delete B[window._borradorId]; escribir(KEY_B,B); window._borradorId=null; window._borrSuspendido=true; }catch(e){}
@@ -38446,6 +38450,7 @@ window._plnModuloEmbarques = async function(){
       window._borrSuspendido=true;
       try{ if(window._pmResetTotal) window._pmResetTotal(); }catch(e){}
     }catch(e){ console.warn('Borradores: respaldo',e); }
+    try{ if(window._sesionBorrar) window._sesionBorrar(true); }catch(e){}
     window._borradorId=null; window._borrSuspendido=true;
   };
 
@@ -38513,6 +38518,7 @@ window._plnModuloEmbarques = async function(){
     ov.innerHTML=h; document.body.appendChild(ov);
   }
   window._borrAbrirSelector=abrirSelector;
+  window._borrNroProcesado=nroProcesado; window._borrPurgarProcesados=purgarProcesados;
   // Reemplaza el selector anterior (que solo miraba Tendencias): ahora incluye borradores locales
   window._mostrarSelectorEmbarquesEnProceso=function(){ abrirSelector(false); };
 
@@ -39910,6 +39916,13 @@ window._plnModuloEmbarques = async function(){
   var KEY='sesion', MAX=24*3600*1000, listo=false, T=null, ultimo='';
   function idb(){ return new Promise(function(ok,no){ try{ var q=indexedDB.open('pm_borrador',1); q.onupgradeneeded=function(){ q.result.createObjectStore('k'); }; q.onsuccess=function(){ ok(q.result); }; q.onerror=function(){ no(q.error); }; }catch(e){ no(e); } }); }
   function put(v){ return idb().then(function(db){ db.transaction('k','readwrite').objectStore('k').put(v,KEY); }).catch(function(){}); }
+  function del(){ return idb().then(function(db){ return new Promise(function(ok){ var tx=db.transaction('k','readwrite'); tx.objectStore('k').delete(KEY); tx.oncomplete=ok; tx.onerror=ok; tx.onabort=ok; }); }).catch(function(){}); }
+  // Reinicio total: borra la sesión y bloquea el guardado (el pagehide previo al reload la volvía a escribir)
+  window._sesionBorrar=function(reanudar){ clearTimeout(T); ultimo=''; listo=false; return del().then(function(){ if(reanudar) listo=true; }); };
+  // Un embarque PROCESADO (ya en Supabase / dashboard) no es borrador: no se guarda ni se restaura
+  function procesado(o){
+    try{ var c=o&&o.campos&&o.campos.s1_nro_emb; var nro=c&&c.v; return !!(nro && typeof window._borrNroProcesado==='function' && window._borrNroProcesado(nro)); }catch(e){ return false; }
+  }
   function get(){ return idb().then(function(db){ return new Promise(function(ok,no){ var q=db.transaction('k','readonly').objectStore('k').get(KEY); q.onsuccess=function(){ ok(q.result||null); }; q.onerror=function(){ no(q.error); }; }); }); }
   function excluido(el){
     var id=el.id||''; if(!id || id.indexOf('_pm_')===0) return true;
@@ -39931,7 +39944,7 @@ window._plnModuloEmbarques = async function(){
     if(!listo) return;
     clearTimeout(T);
     var go=function(){
-      try{ var o=snap(), k=JSON.stringify([o.campos,o.inv,o.hash]); if(k===ultimo) return; ultimo=k; put(o); }catch(e){}
+      try{ var o=snap(); if(procesado(o)){ del(); return; } var k=JSON.stringify([o.campos,o.inv,o.hash]); if(k===ultimo) return; ultimo=k; put(o); }catch(e){}
     };
     if(inmediato) go(); else T=setTimeout(go,900);
   }
@@ -39961,8 +39974,15 @@ window._plnModuloEmbarques = async function(){
         intentos++;
         if(intentos>500){ clearInterval(iv); listo=true; return; }
         if(!appLista()) return;
+        // esperar a que Tendencias (nube) cargue para saber si el embarque ya fue procesado (máx. ~40 s)
+        if(!(window.tendData && window.tendData.length) && intentos<60) return;
         clearInterval(iv);
         setTimeout(function(){
+          if(procesado(o)){
+            del(); try{ if(window._pmResetTotal) window._pmResetTotal(); }catch(e){}
+            try{ if(window._borrPurgarProcesados) window._borrPurgarProcesados(); }catch(e){}
+            listo=true; ultimo=''; return;
+          }
           var n=0; try{ n=aplicar(o); }catch(e){}
           listo=true; ultimo='';
           if(n>0 && typeof _showToast==='function') _showToast('♻️ Recuperé lo que tenías en pantalla','green',4000);
