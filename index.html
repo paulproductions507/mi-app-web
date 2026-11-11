@@ -182,7 +182,28 @@ body.mx-on.theme-light #mxName input{background:#f3f8fa;border-color:#b4cbd3;col
     }catch(e){ return ''; }
   }
   window._abrirVentana = function(target, features){
-    if(!usarCapa()){ return window.open('', target, features); }
+    if(!usarCapa()){
+      var w0=window.open('', target, features);
+      try{
+        if(w0 && w0.document){
+          var d0=w0.document, ow0=d0.write.bind(d0), inj0=false;
+          var CSS0='<style id="_rpt_ico">:root{--text:#111;--muted:#555;--muted2:#666;--border:#ccc;--s1:#fff;--s2:#f6f8fa;--green-l:#0b7a6f;--blue-l:#1f5fbf;--orange-l:#b45309;--red-l:#c0392b}'
+            +'.mx-e{display:inline-block;width:1.18em;height:1.18em;vertical-align:-.22em;color:#0b7a6f;position:relative;line-height:1;font-style:normal}'
+            +'.mx-e mx-t{position:absolute;width:0;height:0;overflow:hidden;opacity:0;font-size:0}'
+            +'.mx-e svg{width:100%;height:100%;display:block;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;overflow:visible}'
+            +'.mx-e.w{color:#b45309}.mx-e.r{color:#c0392b}.mx-e.n{color:#1f5fbf}</style>';
+          d0.write=function(){
+            var a=Array.prototype.slice.call(arguments);
+            if(!inj0 && typeof a[0]==='string'){
+              var t0=a[0];
+              if(/<\/head>/i.test(t0)){ a[0]=t0.replace(/<\/head>/i,function(){ return CSS0+'</head>'; }); inj0=true; }
+            }
+            return ow0.apply(null,a);
+          };
+        }
+      }catch(e){}
+      return w0;
+    }
     var buf=[], ov=null, fr=null, titulo='Documento', listo=false, timer=null;
     function cerrar(){
       clearTimeout(timer);
@@ -38391,6 +38412,8 @@ window._plnModuloEmbarques = async function(){
     if(!confirm('¿Crear un NUEVO embarque desde cero?\n\nSe borra todo lo que está cargado ahora en el formulario y no se guarda como borrador. Los embarques ya guardados o procesados no se tocan.')) return;
     try{ window._borrSuspendido=true; if(window._borradorId){ var B=leer(KEY_B); delete B[window._borradorId]; escribir(KEY_B,B); } window._borradorId=null; }catch(e){}
     try{ if(typeof _plntSesionSet==='function') _plntSesionSet([]); }catch(e){}
+    try{ localStorage.removeItem(KEY_R); }catch(e){}
+    var _pmP=null; try{ if(window._pmResetTotal) _pmP=window._pmResetTotal(); }catch(e){}
     try{ localStorage.removeItem('_pm_borrador_v1'); }catch(e){}
     try{ sessionStorage.setItem('_embNuevoCero','1'); }catch(e){}
     var ir=function(){ window.location.reload(); }, hecho=false, fin=function(){ if(!hecho){ hecho=true; ir(); } };
@@ -38407,7 +38430,7 @@ window._plnModuloEmbarques = async function(){
   window._borrAlProcesar=function(snap){
     try{
       var p=capturar(), nro=((p.campos.s1_nro_emb||'')||(snap&&snap.nro)||'').trim();
-      if(nro){
+      if(false){ /* (nov-2026) ya no se guarda respaldo: un embarque procesado no deja huella en borradores */
         var R=leer(KEY_R); var e=R[nro]||{nro:nro,versiones:[]};
         e.versiones.unshift({ts:Date.now(), desc:(p.campos.s1_desc_emb||'').trim(), total:totalDe(p), payload:p});
         if(e.versiones.length>MAX_VERS){ var orig=e.versiones[e.versiones.length-1]; e.versiones=e.versiones.slice(0,MAX_VERS-1); e.versiones.push(orig); } // conserva el ORIGINAL
@@ -38419,6 +38442,9 @@ window._plnModuloEmbarques = async function(){
       var B=leer(KEY_B);
       Object.keys(B).forEach(function(k){ if(k===window._borradorId || (nro && (B[k].nro||'').toUpperCase()===nro.toUpperCase())) delete B[k]; });
       escribir(KEY_B,B);
+      try{ localStorage.removeItem(KEY_R); }catch(e){}
+      window._borrSuspendido=true;
+      try{ if(window._pmResetTotal) window._pmResetTotal(); }catch(e){}
     }catch(e){ console.warn('Borradores: respaldo',e); }
     window._borradorId=null; window._borrSuspendido=true;
   };
@@ -38433,7 +38459,7 @@ window._plnModuloEmbarques = async function(){
     var nrosB={}; drafts.forEach(function(d){ if(d.nro) nrosB[d.nro.toUpperCase()]=1; });
     var enProceso=(typeof tendData!=='undefined'?tendData:[]).map(function(d,i){ return {d:d,idx:i}; })
       .filter(function(o){ return o.d && (o.d.status==='pendiente'||o.d.status==='parcial'||o.d.status==='reabierto') && !nrosB[String(o.d.nro||'').toUpperCase()]; });
-    var resp=Object.keys(R).map(function(k){ return R[k]; }).sort(function(a,b){ return b.versiones[0].ts-a.versiones[0].ts; });
+    var resp=[]; try{ localStorage.removeItem(KEY_R); }catch(e){} /* respaldos de procesados eliminados: sin huella */
     if(!forzar && !drafts.length && !enProceso.length) return;
 
     var btnS='border:none;border-radius:8px;padding:7px 11px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap';
@@ -39826,6 +39852,16 @@ window._plnModuloEmbarques = async function(){
   document.addEventListener('visibilitychange',function(){ if(document.hidden) guardarBorrador(true); });
   window.addEventListener('pagehide',function(){ guardarBorrador(true); });
   setInterval(function(){ if(_restaurado && document.getElementById('_pm_ov')) guardarBorrador(false); },6000);
+  // Borra TODO rastro de la plantilla manual (memoria + autoguardado). Se llama al procesar un embarque y en "Nuevo".
+  window._pmResetTotal=function(){
+    try{ clearTimeout(_bdT); }catch(e){}
+    S.cols=COLS_DEF.slice(); S.rows=[]; S.art=null; S.artNombre=''; S.usarHomolSiVacio=false; S.si=null;
+    S.rep=null; S.recibos=[]; S.recibosRes=''; S.fiscal={sub:0,sin:0,sinManual:false,file:''};
+    try{ normalize(); }catch(e){}
+    _restaurado=true;
+    try{ localStorage.removeItem(_LSK); }catch(e){}
+    return _idbDel();
+  };
   _restaurar();
 })();
 </script>
