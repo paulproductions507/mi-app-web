@@ -1190,6 +1190,32 @@ function _fdElegirFactura(i){
   var m=document.getElementById('_fdModal'); if(m) m.remove();
 }
 
+
+// ── Recuperación única: embarques "Único" que quedaron solo en el documento viejo _TEND_MASTER
+//    (por el guardado anterior) se pasan a la tabla `embarques` que lee el dashboard. ──
+async function _recuperarUnicosAlDashboard(){
+  try{
+    if(!_sb){ initSB(); } if(!_sb) return;
+    if(localStorage.getItem('_unico_recup_v2')==='1') return;
+    var rm=await _sb.from('simulador_sesiones').select('datos').eq('nombre',_SB_MASTER).maybeSingle();
+    if(!rm.data||!rm.data.datos) return;
+    var td=(JSON.parse(rm.data.datos).tendData)||[];
+    var cand=td.filter(function(t){return t&&t.nro&&(t.modoUnico||t.tipoEsc==='unico')&&(Date.now()-(t.ts||0))<30*864e5;});
+    if(!cand.length){ localStorage.setItem('_unico_recup_v2','1'); return; }
+    var ri=await _sb.from('embarques').select('nro, ts').in('nro',cand.map(function(t){return String(t.nro).trim().toUpperCase();}));
+    var have={}; (ri.data||[]).forEach(function(x){have[x.nro]=Number(x.ts)||0;});
+    var faltan=cand.filter(function(t){var k=String(t.nro).trim().toUpperCase(); return !(k in have);});
+    if(faltan.length){
+      var ru=await _sb.from('embarques').upsert(faltan.map(function(t){
+        return {nro:String(t.nro).trim().toUpperCase(), ts:Math.floor(Number(t.ts)||Date.now()), registro:t, updated_at:new Date().toISOString()};
+      }),{onConflict:'nro'});
+      if(ru.error){ console.warn('Recuperación falló:',ru.error); return; }
+      toast('♻️ Recuperados al dashboard: '+faltan.map(function(t){return t.nro;}).join(', '),'green');
+    }
+    localStorage.setItem('_unico_recup_v2','1');
+  }catch(e){ console.warn('Recuperación únicos:',e); }
+}
+
 async function _pushToCloud(data){
   // 1. Push to parent window if available
   var sentLocal = false;
@@ -1219,43 +1245,44 @@ async function _pushToCloud(data){
   var cloudOk=false, _badge=document.getElementById('cloud-badge');
   if(_sb){
     if(!data.ts) data.ts = Date.now();
-    var _nroU=(data.nro||'').trim().toUpperCase();
+    var _nroU=String(data.nro||'').trim().toUpperCase();
+    var _tsI=Math.floor(Number(data.ts)||0);
 
-    // Verifica que el embarque realmente quedó dentro del maestro que lee el dashboard
-    var _verificar=async function(){
-      try{
-        var rv=await _sb.from('simulador_sesiones').select('datos').eq('nombre',_SB_MASTER).maybeSingle();
-        if(!rv.data) return false;
-        var pv=JSON.parse(rv.data.datos);
-        return (pv.tendData||[]).some(function(t){return t.nro&&t.nro.trim().toUpperCase()===_nroU;});
-      }catch(e){ return false; }
-    };
-
-    // 2a. Intento principal: RPC
+    // 2a. DESTINO REAL DEL DASHBOARD: tabla `embarques` (una fila por embarque: nro, ts, registro).
+    //     index.html lee SOLO de aquí (ya no del documento _TEND_MASTER).
     try{
-      var r=await _sb.rpc('upsert_embarque_master', { p_nro: data.nro, p_registro: data });
-      if(r.error){ console.warn('RPC upsert_embarque_master error:',r.error); }
-      else { cloudOk = await _verificar(); if(!cloudOk) console.warn('RPC respondió OK pero el embarque no aparece en _TEND_MASTER'); }
-    }catch(e){ console.warn('RPC excepción:',e); }
-
-    // 2b. Respaldo: leer maestro, fusionar SOLO este embarque, volver a subir (conserva el resto de campos)
-    if(!cloudOk){
-      try{
-        var rm=await _sb.from('simulador_sesiones').select('datos').eq('nombre',_SB_MASTER).maybeSingle();
-        if(rm.error) throw rm.error;
-        var pm={tendData:[]};
-        if(rm.data && rm.data.datos){ try{ pm=JSON.parse(rm.data.datos)||{tendData:[]}; }catch(e){ throw new Error('maestro corrupto — no se sobrescribe'); } }
-        var tdm=pm.tendData||[];
-        var ix=tdm.findIndex(function(t){return t.nro&&t.nro.trim().toUpperCase()===_nroU;});
-        if(ix!==-1) tdm[ix]=data; else tdm.push(data);
-        pm.tendData=tdm; pm.updated_at=new Date().toISOString();
-        var wm=await _sb.from('simulador_sesiones').upsert({nombre:_SB_MASTER,datos:JSON.stringify(pm),updated_at:new Date().toISOString()},{onConflict:'nombre'});
-        if(wm.error) throw wm.error;
-        cloudOk = await _verificar();
-      }catch(e2){ console.warn('Respaldo maestro falló:',e2); window._ultimoErrorNube=(e2&&e2.message)||String(e2); }
+      var rE=await _sb.from('embarques').upsert(
+        {nro:_nroU, ts:_tsI, registro:data, updated_at:new Date().toISOString()},
+        {onConflict:'nro'}
+      );
+      if(rE.error){ throw rE.error; }
+      // Verificar que quedó grabado con el mismo ts
+      var rv=await _sb.from('embarques').select('nro, ts').eq('nro',_nroU).maybeSingle();
+      cloudOk = !!(rv.data && Number(rv.data.ts)===_tsI);
+      if(!cloudOk) window._ultimoErrorNube='la fila no quedó verificada en la tabla embarques';
+    }catch(eE){
+      console.warn('Upsert tabla embarques falló:',eE);
+      window._ultimoErrorNube=(eE&&(eE.message||eE.code))||String(eE);
     }
 
-    // 2c. Fila individual (Planeación de Carga) — independiente del maestro
+    // 2b. Quitar el N° de la lista negra de eliminados (si no, el dashboard lo oculta aunque esté en la nube)
+    if(cloudOk){
+      try{
+        var rd=await _sb.from('simulador_sesiones').select('datos').eq('nombre','_DELETED_LIST').maybeSingle();
+        if(rd.data && rd.data.datos){
+          var pd=JSON.parse(rd.data.datos||'{}'); var arr=Array.isArray(pd.deleted)?pd.deleted:[];
+          var arr2=arr.filter(function(k){ var ks=String(k).trim().toUpperCase(); return ks!==_nroU && ks!==String(data.ts); });
+          if(arr2.length!==arr.length){
+            await _sb.from('simulador_sesiones').upsert(
+              {nombre:'_DELETED_LIST',datos:JSON.stringify({deleted:arr2}),updated_at:new Date().toISOString()},
+              {onConflict:'nombre'}
+            );
+          }
+        }
+      }catch(eD){ console.warn('No se pudo limpiar _DELETED_LIST:',eD); }
+    }
+
+    // 2c. Fila individual (Planeación de Carga) — independiente
     try{
       var datosInd={
         version:'3.5.7.4', fecha:new Date().toISOString(),
@@ -2166,6 +2193,7 @@ document.addEventListener('change', function(e){
   loadState();
   // Init Supabase
   setTimeout(initSB, 500);
+setTimeout(_recuperarUnicosAlDashboard, 2500);
 })();
 </script>
 </body>
