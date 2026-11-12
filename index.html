@@ -181,19 +181,23 @@ body.mx-on.theme-light #mxName input{background:#f3f8fa;border-color:#b4cbd3;col
       return out;
     }catch(e){ return ''; }
   }
+  // Los reportes llevan los emojis originales (como el diseño de referencia), no los iconos SVG de la pantalla
+  function _rptEmoji(h){ return (typeof h==='string') ? h.replace(/<span class="mx-e[^"]*" data-e="([^"]*)"[^>]*>[\s\S]*?<\/svg><\/span>/g,'$1') : h; }
+  var CSS_ICO='<style id="_rpt_ico">:root{--text:#111;--muted:#555;--muted2:#666;--border:#ccc;--s1:#fff;--s2:#f6f8fa;--green-l:#0b7a6f;--blue-l:#1f5fbf;--orange-l:#b45309;--red-l:#c0392b}'
+            +'.mx-e{display:inline-block;width:1.18em;height:1.18em;vertical-align:-.22em;color:#0b7a6f;position:relative;line-height:1;font-style:normal}'
+            +'.mx-e mx-t{position:absolute;width:0;height:0;overflow:hidden;opacity:0;font-size:0}'
+            +'.mx-e svg{width:100%;height:100%;display:block;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;overflow:visible}'
+            +'.mx-e.w{color:#b45309}.mx-e.r{color:#c0392b}.mx-e.n{color:#1f5fbf}</style>';
   window._abrirVentana = function(target, features){
     if(!usarCapa()){
       var w0=window.open('', target, features);
       try{
         if(w0 && w0.document){
           var d0=w0.document, ow0=d0.write.bind(d0), inj0=false;
-          var CSS0='<style id="_rpt_ico">:root{--text:#111;--muted:#555;--muted2:#666;--border:#ccc;--s1:#fff;--s2:#f6f8fa;--green-l:#0b7a6f;--blue-l:#1f5fbf;--orange-l:#b45309;--red-l:#c0392b}'
-            +'.mx-e{display:inline-block;width:1.18em;height:1.18em;vertical-align:-.22em;color:#0b7a6f;position:relative;line-height:1;font-style:normal}'
-            +'.mx-e mx-t{position:absolute;width:0;height:0;overflow:hidden;opacity:0;font-size:0}'
-            +'.mx-e svg{width:100%;height:100%;display:block;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;overflow:visible}'
-            +'.mx-e.w{color:#b45309}.mx-e.r{color:#c0392b}.mx-e.n{color:#1f5fbf}</style>';
+          var CSS0=CSS_ICO;
           d0.write=function(){
             var a=Array.prototype.slice.call(arguments);
+            if(typeof a[0]==='string') a[0]=_rptEmoji(a[0]);
             if(!inj0 && typeof a[0]==='string'){
               var t0=a[0];
               if(/<\/head>/i.test(t0)){ a[0]=t0.replace(/<\/head>/i,function(){ return CSS0+'</head>'; }); inj0=true; }
@@ -214,6 +218,7 @@ body.mx-on.theme-light #mxName input{background:#f3f8fa;border-color:#b4cbd3;col
     function armar(){
       if(listo) return; listo=true;
       var html=buf.join('')+'<script>window.print=function(){try{parent._docPDF()}catch(e){}}<\/script>';
+      if(html.indexOf('id="_rpt_ico"')<0){ html=/<\/head>/i.test(html)?html.replace(/<\/head>/i,function(){ return CSS_ICO+'</head>'; }):(CSS_ICO+html); }
       var tcss=_temaCSS(html);
       if(tcss){ html=/<\/head>/i.test(html)?html.replace(/<\/head>/i,function(){ return '<style>'+tcss+'</style></head>'; }):('<style>'+tcss+'</style>'+html); }
       var m=html.match(/<title>([^<]*)<\/title>/i); if(m) titulo=m[1];
@@ -223,7 +228,7 @@ body.mx-on.theme-light #mxName input{background:#f3f8fa;border-color:#b4cbd3;col
       ov.innerHTML=
         '<div class="docbar" style="display:flex;align-items:center;gap:8px;padding:calc(env(safe-area-inset-top,0px) + 8px) 12px 8px;background:#161b22;border-bottom:1px solid #30363d;color:#e6edf3;font-family:-apple-system,Arial,sans-serif">'
         +'<button id="_docX" style="background:#21262d;border:1px solid #30363d;color:#e6edf3;border-radius:10px;padding:10px 16px;font-size:15px;font-weight:700">✕ Cerrar</button>'
-        +'<div id="_docT" style="flex:1;font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center"></div>'
+        +'<div id="_docT" style="flex:1;font-size:13px;color:#e6edf3 !important;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center"></div>'
         +'<button id="_docP" style="background:#238636;border:1px solid #2ea043;color:#fff;border-radius:10px;padding:10px 16px;font-size:15px;font-weight:700">🖨 PDF</button>'
         +'</div>'
         +'<iframe id="_docF" style="flex:1;width:100%;border:0;background:#fff"></iframe>'
@@ -241,8 +246,8 @@ body.mx-on.theme-light #mxName input{background:#f3f8fa;border-color:#b4cbd3;col
       closed:false,
       document:{
         open:function(){ return shim.document; },
-        write:function(h){ buf.push(h); clearTimeout(timer); timer=setTimeout(armar,400); },
-        writeln:function(h){ buf.push(h+'\n'); },
+        write:function(h){ buf.push(_rptEmoji(h)); clearTimeout(timer); timer=setTimeout(armar,400); },
+        writeln:function(h){ buf.push(_rptEmoji(h)+'\n'); },
         close:function(){ armar(); }
       },
       focus:function(){},
@@ -38450,7 +38455,7 @@ window._plnModuloEmbarques = async function(){
       window._borrSuspendido=true;
       try{ if(window._pmResetTotal) window._pmResetTotal(); }catch(e){}
     }catch(e){ console.warn('Borradores: respaldo',e); }
-    try{ if(window._sesionBorrar) window._sesionBorrar(true); }catch(e){}
+    try{ if(window._sesionBorrar) window._sesionBorrar(); }catch(e){}
     window._borradorId=null; window._borrSuspendido=true;
   };
 
@@ -39844,15 +39849,44 @@ window._plnModuloEmbarques = async function(){
       if(!document.getElementById('_pm_ov') && window._pmAbrir){ window._pmAbrir(); toast('✍️ Retomé tu plantilla manual donde estabas','green',4000); }
     },700);
   }
+  // (nov-2026) ¿Las facturas de este borrador ya están en un embarque PROCESADO? Entonces es un resto: se descarta.
+  function _esDeProcesado(o){
+    try{
+      var ci=o.cols.indexOf('FACTURA'); if(ci<0) return false;
+      var f=[]; o.rows.forEach(function(r){ var v=String(((r.v||[])[ci])||'').trim().toUpperCase(); if(v) f.push(v); });
+      if(!f.length) return false;
+      var set={}, td=window.tendData||[];
+      td.forEach(function(d){
+        if(!d || !(window._borrNroProcesado && window._borrNroProcesado(d.nro))) return;
+        (d.invLines||[]).forEach(function(l){ [l.numFact,l.nfac,l.factura].forEach(function(x){ if(x) set[String(x).trim().toUpperCase()]=1; }); });
+      });
+      return f.every(function(x){ return set[x]; });
+    }catch(e){ return false; }
+  }
+  function _cuandoListo(cb){
+    var n=0, iv=setInterval(function(){
+      n++;
+      var sp=document.getElementById('splash'), ld=document.getElementById('splash-loading');
+      var splash=sp && sp.style.display!=='none' && !sp.classList.contains('app-mode');
+      var load=ld && ld.classList.contains('active');
+      if(splash||load){ if(n<600) return; }
+      else if(!(window.tendData && window.tendData.length) && n<60) return; // esperar Tendencias (máx. ~40 s)
+      clearInterval(iv); cb();
+    },700);
+  }
   function _restaurar(){
     if(_hayDatos()){ _restaurado=true; return; }
     _idbGet().catch(function(){ return null; }).then(function(o){
       if(!o){ try{ o=JSON.parse(localStorage.getItem(_LSK)||'null'); }catch(e){ o=null; } }
-      _restaurado=true;
-      if(!o || (Date.now()-(o.t||0))>7*864e5) return;
-      if(!_aplicarSnap(o) || !_hayDatos()) return;
-      normalize();
-      if(o.abierta) _esperarYAbrir(); else toast('✍️ Plantilla manual recuperada','green',3500);
+      if(!o || !o.cols || !o.rows || (Date.now()-(o.t||0))>7*864e5){ _restaurado=true; return; }
+      _cuandoListo(function(){
+        if(_hayDatos()){ _restaurado=true; return; }
+        if(_esDeProcesado(o)){ window._pmResetTotal(); return; } // embarque ya procesado: no es borrador
+        _restaurado=true;
+        if(!_aplicarSnap(o) || !_hayDatos()) return;
+        normalize();
+        if(o.abierta) _esperarYAbrir(); else toast('✍️ Plantilla manual recuperada','green',3500);
+      });
     });
   }
   document.addEventListener('visibilitychange',function(){ if(document.hidden) guardarBorrador(true); });
