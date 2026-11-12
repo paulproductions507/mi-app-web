@@ -9720,6 +9720,8 @@ function setCompar(val,el){
     'Escenario #3 — Facturación fiscal homologada Sababa Imports.';
   // Switch providers: SI if sababa, parent if cifexp
   _syncProvSI(val==='sababa');
+  // Plantilla manual: el check «Suplidores S.I» se alinea solo con el escenario (Sababa = activo)
+  try{ if(typeof window._pmSincronizarSI==='function') window._pmSincronizarSI(); }catch(e){ console.warn(e); }
   // Si se selecciona Sababa, ofrecer (re)configurar el modo SN/SV:
   // - si se viene de otro escenario y no hay modo guardado, _preguntarModoSababa pregunta una vez
   // - si ya se estaba en Sababa y se presiona el botón de nuevo, se reabre el modal para corregir
@@ -38655,6 +38657,92 @@ window._plnModuloEmbarques = async function(){
     if(S.si!==null && S.si!==undefined) return !!S.si;
     return (typeof compar!=='undefined' && compar==='sababa');
   }
+  // ── (nov-2026) Proveedores S.I: el check decide qué versión del suplidor se usa ──
+  //   ✔ activo  → suplidores hijos "S.I - …" (si el suplidor regular tiene hijo, se cambia al hijo)
+  //   ✘ apagado → solo suplidores regulares (si viene un "S.I - …" se devuelve a su suplidor regular)
+  var _siRev=null, _siRevN=-1;
+  function esHijoSI(n){ return /^\s*S\.?\s?I\.?\s*-\s*/i.test(String(n||'')); }
+  function padreDeSI(hijo){
+    if(!_siRev || _siRevN!==_PROV_NAMES.length){
+      var byUp={}; _PROV_NAMES.forEach(function(n){ byUp[String(n).toUpperCase()]=n; });
+      _siRev={}; _siRevN=_PROV_NAMES.length;
+      Object.keys(_PROV_SI).forEach(function(k){ _siRev[String(_PROV_SI[k]).toUpperCase()]=byUp[k]||k; });
+    }
+    return _siRev[String(hijo||'').toUpperCase()]||null;
+  }
+  function resolverSI(m,on){
+    var n=m.name;
+    if(esHijoSI(n)){ if(on) return n; return padreDeSI(n)||n; }
+    return (on && m.si)?m.si:n;
+  }
+  function filaEsSI(o){
+    var st=provStatus(o.PROVEEDOR); if(st.k!=='ok' && st.k!=='auto') return false;
+    return esHijoSI(resolverSI(st.m,true));
+  }
+  // Montos que vienen del reporte de embarque: con S.I activo son valores HOMOLOGADOS → van a «Monto homologado»
+  // y «Monto» (original) queda vacío para pegarlo desde Excel. Al apagar el check se devuelven a «Monto».
+  function sincronizarMontosSI(){
+    var iM=S.cols.indexOf('MONTO'); if(iM<0) return 0;
+    var iH=S.cols.indexOf('MONTO_HOMOLOGADO'), n=0;
+    var hayRep=S.rows.some(function(r){ return r._rep; }), delPDF=!hayRep && S.rep && S.rep.file;   // borradores viejos: todo viene del reporte
+    if(siActivo()){
+      S.rows.forEach(function(r){
+        if(!r._rep && !delPDF) return;
+        if(!String(r[iM]==null?'':r[iM]).trim()) return;
+        var o=rowObj(r); if(clasificar(o).k!=='merc' || !filaEsSI(o)) return;
+        if(iH<0) iH=ensureCol('MONTO_HOMOLOGADO');
+        if(String(r[iH]==null?'':r[iH]).trim()) return;
+        r[iH]=r[iM]; r[iM]=''; r._mhManual=true; r._siMov=true; n++;
+      });
+    } else if(iH>=0){
+      S.rows.forEach(function(r){
+        if(!r._siMov) return;
+        r._siMov=false;
+        if(String(r[iM]==null?'':r[iM]).trim()) return;     // ya pegaron el original: no tocar
+        r[iM]=r[iH]; r[iH]=''; r._mhManual=false; n++;
+      });
+    }
+    return n;
+  }
+  // Resumen de la columna Suplidor (solo mercancía) según el modo del check
+  function siResumen(){
+    var on=siActivo(), tot=0, ok=0, sin=0;
+    S.rows.forEach(function(r){
+      var o=rowObj(r); if(!String(o.PROVEEDOR||'').trim() || clasificar(o).k!=='merc') return;
+      tot++; if(esHijoSI(o.PROVEEDOR)===on) ok++; else sin++;
+    });
+    return {on:on,tot:tot,ok:ok,sin:sin};
+  }
+  function siEstadoHTML(){
+    var R=siResumen(); if(!R.tot) return '';
+    var c=(S._ultCambios||0), cam=' · <b>'+c+' cambio'+(c===1?'':'s')+'</b>';
+    if(R.on) return R.sin===0
+      ? '<span style="color:#3fb950">✅ Proveedores S.I confirmados: '+R.ok+' de '+R.tot+cam+'</span>'
+      : '<span style="color:#f0883e">⚠ '+R.sin+' de '+R.tot+' proveedores NO son S.I — toca 🔄 Actualizar y corregir'+cam+'</span>';
+    return R.sin===0
+      ? '<span style="color:#58a6ff">🔵 Proveedores regulares (sin S.I): '+R.ok+' de '+R.tot+cam+'</span>'
+      : '<span style="color:#f0883e">⚠ '+R.sin+' de '+R.tot+' proveedores son S.I con el check apagado — toca 🔄 Actualizar y corregir'+cam+'</span>';
+  }
+  // Lista de suplidores del lápiz de la plantilla: solo los que aplican al modo del check
+  function refrescarDatalistPM(){
+    var dl=document.getElementById('_pm_dl_prov'); if(!dl) return;
+    var on=siActivo(), key=(on?'1':'0')+_PROV_NAMES.length; if(dl.dataset.k===key) return;
+    var out=[];
+    _PROV_NAMES.forEach(function(n){
+      var hijo=esHijoSI(n);
+      if(on){ if(hijo || !_PROV_SI[String(n).toUpperCase()]) out.push(n); }   // hijos S.I + regulares sin versión S.I (fletes, gastos…)
+      else if(!hijo) out.push(n);
+    });
+    dl.dataset.k=key;
+    dl.innerHTML=out.map(function(n){ return '<option value="'+esc(n)+'">'; }).join('');
+  }
+  // Lo llama setCompar(): al pulsar Sababa / CIF Express el check se alinea solo (modo automático)
+  window._pmSincronizarSI=function(){
+    S.si=null;
+    var cb=document.getElementById('_pm_si'); if(cb) cb.checked=siActivo();
+    refrescarDatalistPM();
+    if(S.rows.some(function(r){ return r.some(function(v){ return String(v==null?'':v).trim(); }); })) actualizarTabla(true);
+  };
 
   function normalize(){
     var n=S.cols.length;
@@ -38742,7 +38830,7 @@ window._plnModuloEmbarques = async function(){
   }
   function provOficial(name){
     var st=provStatus(name);
-    if(st.k==='ok'||st.k==='auto'){ return (siActivo() && st.m.si)?st.m.si:st.m.name; }
+    if(st.k==='ok'||st.k==='auto'){ return resolverSI(st.m,siActivo()); }
     return String(name||'').trim();
   }
   function dice(a,b){
@@ -38806,10 +38894,17 @@ window._plnModuloEmbarques = async function(){
     var st=provStatus(o.PROVEEDOR);
     if(st.k==='empty'){ d.push('sin suplidor'); sev=Math.max(sev,2); }
     else if(st.k==='sug'||st.k==='new'){ d.push(st.k==='new'?'suplidor nuevo':'suplidor dudoso'); sev=Math.max(sev,1); }
-    else if(siActivo() && !st.m.si && st.k!=='new'){ d.push('sin versión S.I'); sev=Math.max(sev,1); }
+    else if(siActivo() && !esHijoSI(o.PROVEEDOR)){
+      if(esHijoSI(resolverSI(st.m,true))) d.push('no es S.I · toca 🔄 Actualizar y corregir'); else d.push('sin versión S.I');
+      sev=Math.max(sev,1);
+    }
+    else if(!siActivo() && esHijoSI(o.PROVEEDOR)){ d.push('es S.I (check apagado) · toca 🔄 Actualizar y corregir'); sev=Math.max(sev,1); }
     var dr=deptResolve(o.DEPARTAMENTO);
     if(!dr.ok){ d.push(o.DEPARTAMENTO?'departamento no reconocido':'sin departamento'); sev=Math.max(sev,1); }
-    if(!num(o.MONTO)){ d.push('sin valor'); sev=Math.max(sev,2); }
+    if(!num(o.MONTO)){
+      if(siActivo() && num(o.MONTO_HOMOLOGADO)>0){ d.push('pendiente valor original'); sev=Math.max(sev,1); }
+      else { d.push('sin valor'); sev=Math.max(sev,2); }
+    }
     if(S.art){
       if(!o.OC){ d.push('sin OC'); sev=3; }
       else if(!artInfo(o.OC)){ d.push('OC no encontrada en el mapeo'); sev=3; }
@@ -38893,14 +38988,15 @@ window._plnModuloEmbarques = async function(){
 
   // 🔄 Actualizar y corregir: nombres oficiales, departamentos, y datos del mapeo por OC
   function actualizarTabla(silencioso){
-    var cambios=0, mapeadas=0, sinOC=0;
+    var cambios=0, mapeadas=0, sinOC=0, conv=[];
+    var movidos=sincronizarMontosSI();
     var iP=S.cols.indexOf('PROVEEDOR'), iD=S.cols.indexOf('DEPARTAMENTO');
     var iPz, iOH, iMH;
     if(iP>=0) S.rows.forEach(function(r){ var l=limpiarProv(r[iP]); if(l!==String(r[iP]==null?'':r[iP]).trim()){ r[iP]=l; cambios++; } });
     if(S.art){ iPz=ensureCol('PIEZAS'); iOH=ensureCol('OC_HOMOLOGADA'); iMH=ensureCol('MONTO_HOMOLOGADO'); }
     S.rows.forEach(function(r){
       var o=rowObj(r), c=clasificar(o); if(c.k!=='merc' && !(c.k==='serv' && !c.legacy)) return;
-      if(iP>=0 && o.PROVEEDOR){ var of=provOficial(o.PROVEEDOR); var st=provStatus(o.PROVEEDOR); if((st.k==='ok'||st.k==='auto') && of!==r[iP]){ r[iP]=of; cambios++; } }
+      if(iP>=0 && o.PROVEEDOR){ var of=provOficial(o.PROVEEDOR); var st=provStatus(o.PROVEEDOR); if((st.k==='ok'||st.k==='auto') && of!==r[iP]){ if(esHijoSI(of)!==esHijoSI(r[iP])) conv.push(r[iP]+' → '+of); r[iP]=of; cambios++; } }
       if(c.k!=='merc') return;
       if(iD>=0 && o.DEPARTAMENTO){ var dr=deptResolve(o.DEPARTAMENTO); if(dr.ok && dr.name!==r[iD]){ r[iD]=dr.name; cambios++; } }
       if(S.art){
@@ -38913,7 +39009,14 @@ window._plnModuloEmbarques = async function(){
       }
     });
     normalize(); render();
-    if(!silencioso || S.art) toast('🔄 Tabla actualizada'+(S.art?' · '+mapeadas+' OC mapeadas'+(sinOC?' · '+sinOC+' SIN encontrar (en rojo)':''):'')+(cambios?' · '+cambios+' corregidos':''), sinOC?'orange':'green', 4000);
+    refrescarDatalistPM();
+    S._ultCambios=conv.length; totales();
+    var RS=siResumen();
+    if(conv.length) toast((siActivo()?'🔁 Proveedores cambiados a S.I':'🔁 Proveedores cambiados a regular')+' ('+conv.length+'):\n'+conv.slice(0,8).join('\n')+(conv.length>8?'\n… y '+(conv.length-8)+' más':'')+(movidos?'\n↪ '+movidos+' monto(s) pasaron a Homologado':''),'green',7000);
+    else if(movidos) toast('↪ '+movidos+' monto(s) del reporte pasaron a Monto homologado (valor original queda vacío) · 0 cambios de proveedor','green',6000);
+    else if(RS.tot && RS.sin===0) toast(RS.on?'✅ Proveedores S.I confirmados ('+RS.ok+') · 0 cambios':'🔵 Proveedores regulares confirmados ('+RS.ok+') · 0 cambios','green',4000);
+    else if(RS.tot && RS.sin>0) toast('⚠ '+RS.sin+' proveedor(es) de la tabla '+(RS.on?'NO son S.I':'son S.I con el check apagado')+' · revisa las filas en naranja','orange',5000);
+    if(!conv.length && !movidos && !RS.tot && (!silencioso || S.art)) toast('🔄 Tabla actualizada'+(S.art?' · '+mapeadas+' OC mapeadas'+(sinOC?' · '+sinOC+' SIN encontrar (en rojo)':''):'')+(cambios?' · '+cambios+' corregidos':''), sinOC?'orange':'green', 4000);
   }
 
   // ── Proveedores: lista en pantalla + nube ──
@@ -39135,7 +39238,7 @@ window._plnModuloEmbarques = async function(){
       var o=rowObj(r), c=clasificar(o);
       h+='<tr data-ri="'+ri+'" class="'+(c.k==='skip'?'':rowClass(o,c))+'"><td class="ro" data-act="selrow" data-ri="'+ri+'" style="cursor:pointer" title="Seleccionar fila">'+(ri+1)+'</td>';
       S.cols.forEach(function(f,ci){
-        var lst=f==='PROVEEDOR'?' list="prov-datalist"':(f==='DEPARTAMENTO'?' list="_pm_dl_dep"':(f==='TIPO'?' list="_pm_dl_tipo"':''));
+        var lst=f==='PROVEEDOR'?' list="_pm_dl_prov"':(f==='DEPARTAMENTO'?' list="_pm_dl_dep"':(f==='TIPO'?' list="_pm_dl_tipo"':''));
         h+='<td><input class="pmi" data-ri="'+ri+'" data-ci="'+ci+'"'+lst+' value="'+esc(r[ci])+'"></td>';
       });
       h+='<td data-st="'+ri+'" style="white-space:nowrap">'+(c.k==='skip'?'':noteHTML(o,c))+'</td>'
@@ -39161,7 +39264,8 @@ window._plnModuloEmbarques = async function(){
       +(b.gastos?' · Gastos <b style="color:#58a6ff">$'+fmtN(b.gastos)+'</b>':'')
       +' · Bultos <b>'+b.bultos+'</b> · Piezas <b>'+b.piezas+'</b>'
       +(b.problemas?' · <span style="color:#f0883e">'+b.problemas+' fila(s) por revisar</span>':'')
-      +(b.sinOC?' · <span style="color:#f85149">'+b.sinOC+' OC sin encontrar en el mapeo</span>':'');
+      +(b.sinOC?' · <span style="color:#f85149">'+b.sinOC+' OC sin encontrar en el mapeo</span>':'')
+      +(function(){ var h=siEstadoHTML(); return h?'<div style="margin-top:4px;font-size:12px">'+h+'</div>':''; })();
     actualizarCuadre();
   }
 
@@ -39429,7 +39533,7 @@ window._plnModuloEmbarques = async function(){
       if(hayDatos && !confirm('La plantilla ya tiene datos. ¿Reemplazarlos con el reporte de embarque ('+nTot+' líneas)?')) { if(lab) lab.textContent='Carga cancelada'; return; }
       var iT=ensureCol('TIPO'), iP=ensureCol('PROVEEDOR'), iF=ensureCol('FACTURA'), iM=ensureCol('MONTO'); ensureCol('DEPARTAMENTO');
       var n=S.cols.length, nuevas=[];
-      function fila(tipo,x){ var r=new Array(n).fill(''); r[iT]=tipo; r[iP]=limpiarProv(x.prov); r[iF]=x.fact; r[iM]=x.monto.toFixed(2); r._interna=x.interna||''; nuevas.push(r); }
+      function fila(tipo,x){ var r=new Array(n).fill(''); r[iT]=tipo; r[iP]=limpiarProv(x.prov); r[iF]=x.fact; r[iM]=x.monto.toFixed(2); r._interna=x.interna||''; r._rep=true; nuevas.push(r); }
       R.merc.forEach(function(x){ fila('mercancia',x); });
       R.flete.forEach(function(x){ fila('flete',x); });
       R.gastos.forEach(function(x){ fila('gastos_origen',x); });
@@ -39614,10 +39718,10 @@ window._plnModuloEmbarques = async function(){
     var st=document.getElementById('_pm_css'); if(!st){ st=document.createElement('style'); st.id='_pm_css'; st.textContent=CSS; document.head.appendChild(st); }
     var u=''; try{ u=localStorage.getItem('_plnt_ultimo_usuario')||''; }catch(e){}
     var depOpts=((typeof getDeptList==='function')?getDeptList():[]).map(function(d){ return '<option value="'+esc(d)+'">'; }).join('');
-    ov.innerHTML='<datalist id="_pm_dl_dep">'+depOpts+'</datalist><datalist id="_pm_dl_tipo">'+TIPOS.map(function(t){ return '<option value="'+t+'">'; }).join('')+'</datalist>'
+    ov.innerHTML='<datalist id="_pm_dl_prov"></datalist><datalist id="_pm_dl_dep">'+depOpts+'</datalist><datalist id="_pm_dl_tipo">'+TIPOS.map(function(t){ return '<option value="'+t+'">'; }).join('')+'</datalist>'
       +'<div id="_pm_box">'
       +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">'
-        +'<div><div style="font-size:18px;font-weight:800">✍️ Plantilla manual <span style="font-size:10px;font-weight:600;opacity:.55">· rev. 6-nov</span></div>'
+        +'<div><div style="font-size:18px;font-weight:800">✍️ Plantilla manual <span style="font-size:10px;font-weight:600;opacity:.55">· rev. 12-nov</span></div>'
         +'<div style="font-size:11px;color:var(--muted,#8b949e)">Pega la tabla desde Excel <button class="pmb pmi-i" data-act="info" data-k="cab" title="Cómo usar">ⓘ</button></div></div>'
         +'<button class="pmb" onclick="_pmCerrar()">✕ Cerrar</button></div>'
       +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;align-items:center">'
@@ -39673,6 +39777,7 @@ window._plnModuloEmbarques = async function(){
         +'<button class="pmb g pmgo" data-act="aplicar">⚡ Aplicar a facturas</button>'
       +'</div></div>';
     document.body.appendChild(ov);
+    refrescarDatalistPM();
     var box=document.getElementById('_pm_box');
 
     box.addEventListener('click',function(e){
@@ -39741,7 +39846,7 @@ window._plnModuloEmbarques = async function(){
       else if(t.id==='_pm_rep' && t.files && t.files[0]){ var fr0=t.files[0]; t.value=''; leerReporteEmbarque(fr0); }
       else if(t.id==='_pm_rec' && t.files && t.files.length){ var fr1=Array.prototype.slice.call(t.files); t.value=''; leerRecibos(fr1); }
       else if(t.id==='_pm_hom'){ S.usarHomolSiVacio=t.checked; totales(); }
-      else if(t.id==='_pm_si'){ S.si=t.checked; actualizarTabla(true); }
+      else if(t.id==='_pm_si'){ S.si=t.checked; refrescarDatalistPM(); actualizarTabla(true); }
     });
     box.addEventListener('paste',function(e){
       var t=e.target; if(!t.classList || !t.classList.contains('pmi')) return;
@@ -39848,7 +39953,7 @@ window._plnModuloEmbarques = async function(){
   function _idbDel(){ return _idb().then(function(db){ db.transaction('k','readwrite').objectStore('k').delete('draft'); }).catch(function(){}); }
   function _hayDatos(){ return S.rows.some(function(r){ return r.some(function(v){ return String(v==null?'':v).trim(); }); }); }
   function _snap(full){
-    var o={ cols:S.cols.slice(), rows:S.rows.map(function(r){ return {v:r.slice(), mh:!!r._mhManual}; }),
+    var o={ cols:S.cols.slice(), rows:S.rows.map(function(r){ return {v:r.slice(), mh:!!r._mhManual, rp:!!r._rep, sm:!!r._siMov}; }),
       usarHomolSiVacio:S.usarHomolSiVacio, si:S.si, decSep:S.decSep, fiscal:S.fiscal, artNombre:S.artNombre||'', recibosRes:S.recibosRes||'',
       abierta:!!document.getElementById('_pm_ov'), t:Date.now() };
     if(full){ o.art=S.art; o.rep=S.rep; o.recibos=S.recibos; }
@@ -39867,7 +39972,7 @@ window._plnModuloEmbarques = async function(){
   function _aplicarSnap(o){
     if(!o || !o.cols || !o.rows) return false;
     S.cols=o.cols;
-    S.rows=o.rows.map(function(x){ var r=x.v.slice(); if(x.mh) r._mhManual=true; return r; });
+    S.rows=o.rows.map(function(x){ var r=x.v.slice(); if(x.mh) r._mhManual=true; if(x.rp) r._rep=true; if(x.sm) r._siMov=true; return r; });
     S.usarHomolSiVacio=!!o.usarHomolSiVacio; S.si=(o.si==null?null:o.si); if(o.decSep) S.decSep=o.decSep;
     if(o.fiscal) S.fiscal=o.fiscal;
     S.artNombre=o.artNombre||''; if(o.art) S.art=o.art; if(o.rep) S.rep=o.rep; if(o.recibos) S.recibos=o.recibos; if(o.recibosRes) S.recibosRes=o.recibosRes;
