@@ -34283,7 +34283,7 @@ function _motoresMapeado(rows) {
       if (nfacKey) {
         // REGLA DE ORO: mismo N° de factura + mismo monto = duplicado, sin importar
         // si piezas, bultos, OC u otros campos vienen incompletos en una de las filas.
-        key = nfacKey + '|' + costoKey;
+        key = nfacKey + '|' + costoKey + '|' + (l.tipoFac||'');
       } else {
         // Sin número de factura no podemos usar esa regla con seguridad — usamos
         // criterio amplio (todos los campos) solo como respaldo en este caso.
@@ -38611,7 +38611,7 @@ window._plnModuloEmbarques = async function(){
     imp: ['PROVEEDOR','FACTURA','MONTO','BULTOS','OC','FECHA_RECEPCION']
   };
   var HDR_XLSX = ['PROVEEDOR','TIPO','RUBRO / DEPARTAMENTO','No.FACTURA','MONTO_CIF_FOB','ORDEN_COMPRA','BULTOS','TRASPASO','PIEZAS','OC_HOMOLOGADA','MONTO_HOMOLOGADO','FECHA_RECEPCION'];
-  var TIPOS = ['mercancia','flete','gastos_origen','gastos_destino','honorarios','itbms','acarreo','dmce','seguro'];
+  var TIPOS = ['mercancia','flete','gastos_origen','gastos_destino','otros_costos_no_gravados','informativo','honorarios','itbms','acarreo','dmce','seguro'];
 
   var S = window._pmState = window._pmState || { cols: COLS_DEF.slice(), rows: [], art: null, artNombre:'', usarHomolSiVacio:false, si:null };
   S.fiscal = S.fiscal || {sub:0, sin:0, sinManual:false, file:''};
@@ -38684,10 +38684,10 @@ window._plnModuloEmbarques = async function(){
   function sincronizarMontosSI(){
     var iM=S.cols.indexOf('MONTO'); if(iM<0) return 0;
     var iH=S.cols.indexOf('MONTO_HOMOLOGADO'), n=0;
-    var hayRep=S.rows.some(function(r){ return r._rep; }), delPDF=!hayRep && S.rep && S.rep.file;   // borradores viejos: todo viene del reporte
+    var hayRep=S.rows.some(function(r){ return r._rep||r._tm; }), delPDF=!hayRep && S.rep && S.rep.file;   // borradores viejos: todo viene del reporte
     if(siActivo()){
       S.rows.forEach(function(r){
-        if(!r._rep && !delPDF) return;
+        if(r._tm || (!r._rep && !delPDF)) return;   // las filas del reporte nuevo se rigen por su Tipo de movimiento
         if(!String(r[iM]==null?'':r[iM]).trim()) return;
         var o=rowObj(r); if(clasificar(o).k!=='merc' || !filaEsSI(o)) return;
         if(iH<0) iH=ensureCol('MONTO_HOMOLOGADO');
@@ -38722,6 +38722,60 @@ window._plnModuloEmbarques = async function(){
     return R.sin===0
       ? '<span style="color:#58a6ff">🔵 Proveedores regulares (sin S.I): '+R.ok+' de '+R.tot+cam+'</span>'
       : '<span style="color:#f0883e">⚠ '+R.sin+' de '+R.tot+' proveedores son S.I con el check apagado — toca 🔄 Actualizar y corregir'+cam+'</span>';
+  }
+  // ── (nov-2026) Desglose de facturas de servicio (ej. Eternity en Sababa: una factura = flete + gastos de origen) ──
+  //   ✂ en la fila → crea debajo una réplica (mismo suplidor y N° de factura) con el monto vacío y tipo gastos_origen.
+  //   Lo que se escribe en la réplica se RESTA de la fila de arriba, que pasa a ser «flete» con el resto.
+  function sumaHijos(gid){
+    var iM=S.cols.indexOf('MONTO'), t=0; if(iM<0) return 0;
+    S.rows.forEach(function(r){ if(r._gpar===gid) t+=num(r[iM]); });
+    return t;
+  }
+  function recalcDesgloses(){
+    var iM=S.cols.indexOf('MONTO'), iT=S.cols.indexOf('TIPO'); if(iM<0||iT<0) return;
+    var pad={}, hijos={};
+    S.rows.forEach(function(r){ if(r._gid) pad[r._gid]=r; });
+    S.rows.forEach(function(r){ if(r._gpar){ if(pad[r._gpar]) (hijos[r._gpar]=hijos[r._gpar]||[]).push(r); else delete r._gpar; } });
+    Object.keys(pad).forEach(function(g){
+      var p=pad[g], hs=hijos[g]||[];
+      if(!hs.length){                       // ya no hay desglose: la factura vuelve a como venía
+        if(p._gtot) p[iM]=(Math.round(p._gtot*100)/100).toFixed(2);
+        if(p._gtipo) p[iT]=p._gtipo;
+        delete p._gid; delete p._gtot; delete p._gtipo; delete p._gneg; return;
+      }
+      var resto=Math.round((p._gtot-sumaHijos(g))*100)/100;
+      p[iM]=resto.toFixed(2); p[iT]='flete'; p._gneg=resto<-0.004;
+    });
+  }
+  function desglosar(ri){
+    var r=S.rows[ri]; if(!r) return;
+    var o=rowObj(r), c=clasificar(o);
+    if(c.k!=='serv' || c.legacy || r._gpar){ toast('El desglose aplica a facturas de servicio (fletes, otros costos…)','orange',3500); return; }
+    var iT=ensureCol('TIPO'), iM=ensureCol('MONTO');
+    if(!r._gid){
+      r._gid='g'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+      r._gtot=num(r[iM]); r._gtipo=String(r[iT]||'').trim()||'otros_costos_no_gravados';
+    }
+    var hijo=new Array(S.cols.length).fill('');
+    S.cols.forEach(function(f,i){ if(f==='PROVEEDOR'||f==='FACTURA') hijo[i]=r[i]; });
+    hijo[iT]='gastos_origen'; hijo._gpar=r._gid;
+    var pos=ri+1; while(S.rows[pos] && S.rows[pos]._gpar===r._gid) pos++;
+    S.rows.splice(pos,0,hijo);
+    render();
+    var inp=document.querySelector('#_pm_t input.pmi[data-ri="'+pos+'"][data-ci="'+iM+'"]'); if(inp){ inp.focus(); inp.select(); }
+    toast('✂ Desglose creado — escribe en la fila nueva el monto de gastos de origen; la factura de arriba queda como flete con el resto','green',6500);
+  }
+  function montoDesgloseEditado(ri){
+    var r=S.rows[ri]; if(!r) return;
+    var iM=S.cols.indexOf('MONTO'), iT=S.cols.indexOf('TIPO');
+    if(r._gid) r._gtot=Math.round((num(r[iM])+sumaHijos(r._gid))*100)/100;   // editaron el total de arriba
+    recalcDesgloses();
+    var act=document.activeElement;
+    S.rows.forEach(function(x,i){
+      if(!x._gid && !x._gpar) return;
+      [iM,iT].forEach(function(ci){ var inp=document.querySelector('#_pm_t input.pmi[data-ri="'+i+'"][data-ci="'+ci+'"]'); if(inp && inp!==act) inp.value=x[ci]; });
+      if(i!==ri) refreshRow(i);
+    });
   }
   // Lista de suplidores del lápiz de la plantilla: solo los que aplican al modo del check
   function refrescarDatalistPM(){
@@ -38871,6 +38925,7 @@ window._plnModuloEmbarques = async function(){
       var v=String(r[i]==null?'':r[i]).trim();
       if(v!=='' && (o[f]===undefined || o[f]==='')) o[f]=v; else if(o[f]===undefined) o[f]='';
     });
+    Object.defineProperty(o,'_r',{value:r,enumerable:false});
     return o;
   }
   function artInfo(oc){
@@ -38885,6 +38940,7 @@ window._plnModuloEmbarques = async function(){
     var tr=tipoResolve(o.TIPO,p);
     if(tr.t==='pago') return {k:'pago'};
     if(!p && !num(o.MONTO)) return {k:'skip'};
+    if(tr.t==='informativo') return {k:'info'};
     return {k:(tr.t==='mercancia'?'merc':'serv'), t:tr.t, legacy:tr.legacy};
   }
 
@@ -38920,7 +38976,9 @@ window._plnModuloEmbarques = async function(){
       if(c.k==='skip') return;
       var monto=num(o.MONTO);
       if(c.k==='pago'){ pagoUser=monto; return; }
+      if(c.k==='info') return;   // Master Value / Sababa / CIF Express: solo se pega su N° de factura, no suman
       if(c.k==='serv'){
+        if(!c.legacy && (r._gid||r._gpar) && !monto) return;   // desglose en cero: no genera línea
         if(c.legacy){ out.push([o.PROVEEDOR,'','',o.FACTURA||'',monto,'','','','','','','']); }
         else out.push([provOficial(limpiarProv(o.PROVEEDOR)),'servicio',c.t,o.FACTURA||'',monto,'','','','','','','']);
         res.gastos+=monto; return;
@@ -39130,9 +39188,17 @@ window._plnModuloEmbarques = async function(){
   function cerrar(){ var o=document.getElementById('_pm_ov'); if(o) o.remove(); SEL=null; if(window._pmDocOff) window._pmDocOff(); guardarBorrador(true); }
   window._pmCerrar = cerrar;
 
+  function grupoInfo(p){ p=String(p||''); return /MASTER\s*VALUE/i.test(p)?'MASTERVALUE':(/CIF\s*EXPRESS/i.test(p)?'CIFEXP':(/SABABA/i.test(p)?'SABABA':'')); }
   function noteHTML(o,c){
+    if(c.k==='info'){
+      var gi=grupoInfo(o.PROVEEDOR), nom={MASTERVALUE:'Master Value',CIFEXP:'CIF Express',SABABA:'Sababa'}[gi];
+      return '<span style="color:#58a6ff;font-size:11px">ℹ️ Informativa · '+(nom?'solo pega el N° de factura en '+nom:'sin grupo reconocido: no se aplica')+' · no suma al cálculo</span>';
+    }
     if(c.k==='serv'){
-      var base='<span style="color:#58a6ff;font-size:11px">🧾 Gasto · '+esc(c.t)+'</span>';
+      var rr=o._r||{}, dnote='';
+      if(rr._gid) dnote=' · <b>✂ desglosada</b> (total '+fmtN(rr._gtot||0)+')'+(rr._gneg?' <span style="color:#f85149">· ⚠ el desglose supera el total</span>':'');
+      else if(rr._gpar) dnote=' · ↳ <b>desglose</b> (se resta de la fila de arriba)';
+      var base='<span style="color:#58a6ff;font-size:11px">🧾 Gasto · '+esc(c.t)+dnote+'</span>';
       var st2=provStatus(o.PROVEEDOR);
       if(st2.k==='empty'||st2.k==='ok'||st2.k==='auto'||c.legacy) return base;
       var b2='<span style="font-size:11px;color:#f0883e"> · ⚠ suplidor '+(st2.k==='new'?'nuevo':'dudoso')+'</span>';
@@ -39225,7 +39291,7 @@ window._plnModuloEmbarques = async function(){
     toast('↪ '+movibles.length+' monto(s) pasaron a Homologado. Copia el Monto original en Excel y toca «Pegar aquí» (columna Monto ya seleccionada)','green',7000);
   }
   function render(){
-    normalize();
+    normalize(); recalcDesgloses();
     var ov=document.getElementById('_pm_ov'); if(!ov) return;
     var h='<table id="_pm_t"><thead><tr><th>#</th>';
     S.cols.forEach(function(f,ci){
@@ -39236,7 +39302,8 @@ window._plnModuloEmbarques = async function(){
     h+='<th>Revisión</th><th></th></tr></thead><tbody>';
     S.rows.forEach(function(r,ri){
       var o=rowObj(r), c=clasificar(o);
-      h+='<tr data-ri="'+ri+'" class="'+(c.k==='skip'?'':rowClass(o,c))+'"><td class="ro" data-act="selrow" data-ri="'+ri+'" style="cursor:pointer" title="Seleccionar fila">'+(ri+1)+'</td>';
+      h+='<tr data-ri="'+ri+'" class="'+(c.k==='skip'?'':rowClass(o,c))+'"><td class="ro" data-act="selrow" data-ri="'+ri+'" style="cursor:pointer" title="Seleccionar fila">'+(ri+1)
+        +(c.k==='serv'&&!c.legacy?(r._gpar?' <span title="Parte del desglose de la factura de arriba">↳</span>':' <button class="mini" data-act="desglosar" data-ri="'+ri+'" title="Desglosar esta factura de servicio: crea una fila debajo para el monto de gastos de origen; lo que escribas se resta de esta">✂</button>'):'')+'</td>';
       S.cols.forEach(function(f,ci){
         var lst=f==='PROVEEDOR'?' list="_pm_dl_prov"':(f==='DEPARTAMENTO'?' list="_pm_dl_dep"':(f==='TIPO'?' list="_pm_dl_tipo"':''));
         h+='<td><input class="pmi" data-ri="'+ri+'" data-ci="'+ci+'"'+lst+' value="'+esc(r[ci])+'"></td>';
@@ -39313,6 +39380,13 @@ window._plnModuloEmbarques = async function(){
         if(typeof _motoresMapeado!=='function') throw new Error('Motor de plantillas no disponible');
         _motoresMapeado([HDR_XLSX].concat(b.rows));
         if(S.rep && S.rep.tesoro){ [200,450,1300].forEach(function(ms){ setTimeout(function(){ aplicarTesoro(true); },ms); }); }
+        // Master Value / Sababa / CIF Express (filas informativas): no suman; solo se pega su N° de factura, igual que Tesoro
+        S.rows.forEach(function(r){
+          var o=rowObj(r); if(clasificar(o).k!=='info' || !o.FACTURA) return;
+          var g=grupoInfo(o.PROVEEDOR); if(!g) return;
+          var inp=document.getElementById({MASTERVALUE:'s2_nfact_mv',SABABA:'s2_nfact_sababa',CIFEXP:'s2_nfact_cif'}[g]); if(inp) inp.value=o.FACTURA;
+          [200,450,1300].forEach(function(ms){ setTimeout(function(){ try{ if(typeof _setGrupoFactura==='function') _setGrupoFactura(g,o.FACTURA,true); }catch(e){} },ms); });
+        });
         if(S.fiscal.sub>0){ var _sub=S.fiscal.sub; [450,1300].forEach(function(ms){ setTimeout(function(){ aplicarSubtotalFiscal(_sub); },ms); }); }
         // fecha de recepción (el motor no la lee): se asigna por factura|OC
         var L=window.invLines||[];
@@ -39480,8 +39554,8 @@ window._plnModuloEmbarques = async function(){
   }
   // Detecta cada columna por su contenido y reparte: suplidor→PROVEEDOR, factura→FACTURA, monto→MONTO, tipo→TIPO
   function parseReporteEmbarque(rows){
-    var KEYS=[['merc',/Mercanc[ií]a/i],['flete',/^Fletes?\b/i],['gastos',/Gastos\s+de\s+(Origen|Destino)/i],['comis',/Comisiones?\s+a\s+Agentes/i]];
-    var out={merc:[],flete:[],gastos:[],comis:[],tesoro:'',omitidos:{},encabezados:[]};
+    var KEYS=[['merc',/Mercanc[ií]a/i],['flete',/^Fletes?\b/i],['gastos',/Gastos\s+de\s+(Origen|Destino)/i],['comis',/Comisiones?\s+a\s+Agentes/i],['otros',/Otros\s+Costos\s+No\s+Gravados/i]];
+    var out={merc:[],flete:[],gastos:[],comis:[],otros:[],info:[],tesoro:'',omitidos:{},encabezados:[]};
     rows.forEach(function(items){
       var cells=celdasFila(items); if(!cells.length) return;
       var txt=cells.map(function(c){ return c.s; });
@@ -39504,7 +39578,9 @@ window._plnModuloEmbarques = async function(){
         var om=/CIF\s+EXPRESS/i.test(prov)?'CIF Express':(/MASTER\s+VALUE/i.test(prov)?'Master Value':'otras líneas');
         out.omitidos[om]=(out.omitidos[om]||0)+1; return;
       }
-      out[k].push({prov:prov,fact:fact,monto:monto,interna:(ids.length>=2?ids[0]:'')});
+      // Master Value / Sababa / CIF Express: ya están en el cálculo → solo se trae su N° de factura (informativa)
+      if(k==='otros' && grupoInfo(prov)){ out.info.push({prov:prov,fact:fact,monto:monto,interna:(ids.length>=2?ids[0]:'')}); return; }
+      out[k].push({prov:prov,fact:fact,monto:monto,interna:(ids.length>=2?ids[0]:''),puente:(k==='merc' && /Puente/i.test(tipoTxt))});
     });
     return out;
   }
@@ -39524,7 +39600,7 @@ window._plnModuloEmbarques = async function(){
         rows.sort(function(a,b){ return b.y-a.y; }).forEach(function(r){ filas.push(r.it); });
       }
       var R=parseReporteEmbarque(filas);
-      var nTot=R.merc.length+R.flete.length+R.gastos.length+R.comis.length;
+      var nTot=R.merc.length+R.flete.length+R.gastos.length+R.comis.length+R.otros.length+R.info.length;
       if(!nTot){
         if(lab) lab.textContent='⚠️ No reconocí facturas en '+file.name+' — ¿es el «Detalle de Facturas por Embarque»?';
         toast('⚠️ No pude leer el reporte de embarque','orange',4500); return;
@@ -39532,15 +39608,26 @@ window._plnModuloEmbarques = async function(){
       var hayDatos=S.rows.some(function(r){ return r.some(function(v){ return String(v||'').trim(); }); });
       if(hayDatos && !confirm('La plantilla ya tiene datos. ¿Reemplazarlos con el reporte de embarque ('+nTot+' líneas)?')) { if(lab) lab.textContent='Carga cancelada'; return; }
       var iT=ensureCol('TIPO'), iP=ensureCol('PROVEEDOR'), iF=ensureCol('FACTURA'), iM=ensureCol('MONTO'); ensureCol('DEPARTAMENTO');
+      // Tipo de movimiento: «Mercancia Puente» = montos HOMOLOGADOS (solo proveedores S.I / Sababa) · «Mercancia» = valor ORIGINAL
+      var nPuente=R.merc.filter(function(x){ return x.puente; }).length;
+      var iH=nPuente?ensureCol('MONTO_HOMOLOGADO'):S.cols.indexOf('MONTO_HOMOLOGADO');
       var n=S.cols.length, nuevas=[];
-      function fila(tipo,x){ var r=new Array(n).fill(''); r[iT]=tipo; r[iP]=limpiarProv(x.prov); r[iF]=x.fact; r[iM]=x.monto.toFixed(2); r._interna=x.interna||''; r._rep=true; nuevas.push(r); }
+      function fila(tipo,x){
+        var r=new Array(n).fill(''); r[iT]=tipo; r[iP]=limpiarProv(x.prov); r[iF]=x.fact; r[iM]=x.monto.toFixed(2); r._interna=x.interna||'';
+        r._tm=(tipo==='mercancia')?(x.puente?'puente':'merc'):'otro';
+        if(x.puente && iH>=0){ r[iH]=r[iM]; r[iM]=''; r._mhManual=true; }
+        nuevas.push(r);
+      }
       R.merc.forEach(function(x){ fila('mercancia',x); });
       R.flete.forEach(function(x){ fila('flete',x); });
       R.gastos.forEach(function(x){ fila('gastos_origen',x); });
       R.comis.forEach(function(x){ fila('gastos_origen',x); });
+      R.otros.forEach(function(x){ fila('otros_costos_no_gravados',x); });
+      R.info.forEach(function(x){ fila('informativo',x); });
       S.rows=nuevas; normalize();
+      if(nPuente && !siActivo()){ S.si=true; var cbp=document.getElementById('_pm_si'); if(cbp) cbp.checked=true; refrescarDatalistPM(); }   // la mercancía puente es solo de Sababa
       var sumM=R.merc.reduce(function(a,x){ return a+x.monto; },0);
-      S.rep={file:file.name, tesoro:R.tesoro||'', resumen:R.merc.length+' mercancías ('+f2(sumM)+') · '+R.flete.length+' flete · '+R.gastos.length+' gastos origen · '+R.comis.length+' comisiones'};
+      S.rep={file:file.name, tesoro:R.tesoro||'', resumen:R.merc.length+' mercancías ('+f2(sumM)+')'+(nPuente?' ('+nPuente+' puente → homologado)':'')+' · '+R.flete.length+' flete · '+R.gastos.length+' gastos origen · '+R.comis.length+' comisiones'+(R.otros.length?' · '+R.otros.length+' otros costos no gravados':'')+(R.info.length?' · '+R.info.length+' informativas (MV/Sababa)':'')};
       var tin=document.getElementById('_pm_tesoro'); if(tin) tin.value=S.rep.tesoro;
       aplicarTesoro(true);
       if((S.recibos||[]).length) aplicarRecibos();
@@ -39792,6 +39879,7 @@ window._plnModuloEmbarques = async function(){
       if(a==='selclear'){ selVaciar(); render(); return; }
       if(a==='seloff'){ selOff(); return; }
       if(a==='movhom'){ moverMontoAHomologado(); return; }
+      if(a==='desglosar'){ e.stopPropagation(); desglosar(+t.getAttribute('data-ri')); return; }
       if(a==='guardar') ejecutar(false);
       else if(a==='aplicar') ejecutar(true);
       else if(a==='actualizar'){ (window._provCustomPull?window._provCustomPull():Promise.resolve()).then(function(){ refrescarDatalist(); actualizarTabla(false); }); }
@@ -39835,6 +39923,7 @@ window._plnModuloEmbarques = async function(){
       if(t.classList.contains('pmi')){
         var ri=+t.getAttribute('data-ri'), ci=+t.getAttribute('data-ci');
         S.rows[ri][ci]=t.value; if(S.cols[ci]==='MONTO_HOMOLOGADO') S.rows[ri]._mhManual=true;
+        if(S.cols[ci]==='MONTO' && (S.rows[ri]._gid||S.rows[ri]._gpar)) montoDesgloseEditado(ri);
         clearTimeout(t._pmT); t._pmT=setTimeout(function(){ refreshRow(ri); },200);
       }
     });
@@ -39953,7 +40042,7 @@ window._plnModuloEmbarques = async function(){
   function _idbDel(){ return _idb().then(function(db){ db.transaction('k','readwrite').objectStore('k').delete('draft'); }).catch(function(){}); }
   function _hayDatos(){ return S.rows.some(function(r){ return r.some(function(v){ return String(v==null?'':v).trim(); }); }); }
   function _snap(full){
-    var o={ cols:S.cols.slice(), rows:S.rows.map(function(r){ return {v:r.slice(), mh:!!r._mhManual, rp:!!r._rep, sm:!!r._siMov}; }),
+    var o={ cols:S.cols.slice(), rows:S.rows.map(function(r){ return {v:r.slice(), mh:!!r._mhManual, rp:!!r._rep, sm:!!r._siMov, tm:r._tm||'', g:r._gid||'', gt:r._gtot||0, gp:r._gpar||'', go:r._gtipo||''}; }),
       usarHomolSiVacio:S.usarHomolSiVacio, si:S.si, decSep:S.decSep, fiscal:S.fiscal, artNombre:S.artNombre||'', recibosRes:S.recibosRes||'',
       abierta:!!document.getElementById('_pm_ov'), t:Date.now() };
     if(full){ o.art=S.art; o.rep=S.rep; o.recibos=S.recibos; }
@@ -39972,7 +40061,7 @@ window._plnModuloEmbarques = async function(){
   function _aplicarSnap(o){
     if(!o || !o.cols || !o.rows) return false;
     S.cols=o.cols;
-    S.rows=o.rows.map(function(x){ var r=x.v.slice(); if(x.mh) r._mhManual=true; if(x.rp) r._rep=true; if(x.sm) r._siMov=true; return r; });
+    S.rows=o.rows.map(function(x){ var r=x.v.slice(); if(x.mh) r._mhManual=true; if(x.rp) r._rep=true; if(x.sm) r._siMov=true; if(x.tm) r._tm=x.tm; if(x.g){ r._gid=x.g; r._gtot=x.gt; r._gtipo=x.go; } if(x.gp) r._gpar=x.gp; return r; });
     S.usarHomolSiVacio=!!o.usarHomolSiVacio; S.si=(o.si==null?null:o.si); if(o.decSep) S.decSep=o.decSep;
     if(o.fiscal) S.fiscal=o.fiscal;
     S.artNombre=o.artNombre||''; if(o.art) S.art=o.art; if(o.rep) S.rep=o.rep; if(o.recibos) S.recibos=o.recibos; if(o.recibosRes) S.recibosRes=o.recibosRes;
