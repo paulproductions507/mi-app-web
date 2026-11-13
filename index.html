@@ -39195,6 +39195,24 @@ window._plnModuloEmbarques = async function(){
     if(typeof calcInvTotals==='function') calcInvTotals();
     if(!silencioso) toast('🔄 Lista actualizada · '+ok+' con proveedor'+(sin?' · '+sin+' por revisar':'')+(cambios?' · '+cambios+' corregidos':''), sin?'orange':'green', 3500);
   };
+  // (nov-2026) 🔄 Actualizar parpadea: cierra y reabre el modal de Proveedores rápido para repintar todo con lo actualizado
+  (function(){
+    var orig=window._provActualizarLineas; if(typeof orig!=='function' || orig._blink) return;
+    var w=async function(silencioso){
+      var r=await orig.apply(this,arguments);
+      if(!silencioso){
+        var ov=document.getElementById('tab-modal-overlay');
+        if(ov && ov.classList.contains('open') && ov.getAttribute('data-tab')==='facturas'){
+          setTimeout(function(){
+            try{ closeTabModal(); }catch(e){}
+            setTimeout(function(){ try{ openTabModal('facturas','🧾 Proveedores'); }catch(e){} },90);
+          },150);
+        }
+      }
+      return r;
+    };
+    w._blink=true; window._provActualizarLineas=w;
+  })();
   // Al crear un proveedor con "+ Proveedor": sube a la nube y refresca solo (sin abrir el lápiz)
   (function(){
     var orig=window.saveNewProv; if(typeof orig!=='function' || orig._pm) return;
@@ -39235,10 +39253,49 @@ window._plnModuloEmbarques = async function(){
   window._pmCerrar = cerrar;
 
   function grupoInfo(p){ p=String(p||''); return /MASTER\s*VALUE/i.test(p)?'MASTERVALUE':(/CIF\s*EXPRESS/i.test(p)?'CIFEXP':(/SABABA/i.test(p)?'SABABA':'')); }
+  function grupoInfoO(o){ return grupoInfo(o.PROVEEDOR); }
+  // (nov-2026) Varias facturas de SABABA en el reporte: solo se consideran filas del suplidor Sababa (ningún otro).
+  //   Se elige la que sea el 10% de (mercancía original + flete); sin flete registrado (o factura de flete sin dividir
+  //   como flete) la base es el total de la factura fiscal. Tolerancia de la base: hasta $5.00.
+  function detectarSababa10(silent){
+    var iM=S.cols.indexOf('MONTO'); if(iM<0) return null;
+    S.rows.forEach(function(r){ delete r._sabSel; delete r._sab10; });
+    var merc=0, flete=0, cands=[];
+    S.rows.forEach(function(r){
+      var o=rowObj(r), c=clasificar(o);
+      if(c.k==='merc'){ merc+=num(o.MONTO); return; }
+      if(c.k==='info'){ if(grupoInfo(o.PROVEEDOR)==='SABABA' && o.FACTURA) cands.push({r:r,m:num(o.MONTO),f:o.FACTURA}); return; }
+      if(c.k==='serv' && String(o.TIPO||'').toLowerCase().replace(/[\s_]+/g,'')==='flete') flete+=num(o.MONTO);
+    });
+    if(cands.length<2) return null;              // una sola factura de Sababa: es esa
+    var fis=(S.fiscal && S.fiscal.sub>0)?S.fiscal.sub:0;
+    var base=(flete>0.004 && merc>0.004)?(merc+flete):fis;
+    if(!(base>0)) return null;
+    var best=null;
+    cands.forEach(function(x){ var d=Math.abs(x.m/0.10-base); if(d<=5.0 && (!best || d<best.d)) best={r:x.r,m:x.m,f:x.f,d:d}; });
+    if(!best) return null;
+    best.r._sabSel=true; best.base=base;
+    if(!silent) toast('🔎 Sababa: factura elegida por el 10% → '+(best.f||'—')+' ('+fmtN(best.m)+') · base '+fmtN(base),'green',5000);
+    return best;
+  }
+  function sabNoElegida(o){
+    return grupoInfo(o.PROVEEDOR)==='SABABA' && S.rows.some(function(r){ return r._sabSel; }) && !(o._r && o._r._sabSel);
+  }
+  // Pone el N° de factura de Master Value / Sababa / CIF Express (filas informativas del reporte) en sus campos del cálculo
+  function mapearInfoCampos(){
+    var out=[], ids={MASTERVALUE:'s2_nfact_mv',SABABA:'s2_nfact_sababa',CIFEXP:'s2_nfact_cif'}, nom={MASTERVALUE:'Master Value',SABABA:'Sababa',CIFEXP:'CIF Express'};
+    S.rows.forEach(function(r){
+      var o=rowObj(r); if(clasificar(o).k!=='info' || !o.FACTURA) return;
+      var g=grupoInfoO(o); if(!g || !ids[g] || sabNoElegida(o)) return;
+      var inp=document.getElementById(ids[g]); if(inp) inp.value=o.FACTURA;
+      out.push(nom[g]+' '+o.FACTURA);
+    });
+    return out;
+  }
   function noteHTML(o,c){
     if(c.k==='info'){
-      var gi=grupoInfo(o.PROVEEDOR), nom={MASTERVALUE:'Master Value',CIFEXP:'CIF Express',SABABA:'Sababa'}[gi];
-      return '<span style="color:#58a6ff;font-size:11px">ℹ️ Informativa · '+(nom?'solo pega el N° de factura en '+nom:'sin grupo reconocido: no se aplica')+' · no suma al cálculo</span>';
+      var gi=grupoInfoO(o), nom={MASTERVALUE:'Master Value',CIFEXP:'CIF Express',SABABA:'Sababa'}[gi];
+      return '<span style="color:#58a6ff;font-size:11px">ℹ️ Informativa · '+(nom?(o._r&&o._r._sabSel?'elegida por el 10% · ':'')+'se mapea el N° de factura en '+nom:'sin grupo reconocido: no se aplica')+' · no suma al cálculo</span>';
     }
     if(c.k==='serv'){
       var rr=o._r||{}, dnote='';
@@ -39402,6 +39459,7 @@ window._plnModuloEmbarques = async function(){
   async function ejecutar(aplicar){
     var _dp=desgloseProblemas();
     if(_dp.length){ alert('⛔ El desglose no cuadra al centavo:\n\n'+_dp.join('\n')+'\n\nCorrige el monto del flete y vuelve a intentar.'); toast('⛔ Desglose sin cuadrar','orange',4500); return; }
+    try{ detectarSababa10(false); }catch(e){ console.warn(e); }
     if((S.recibos||[]).length) aplicarRecibos();
     if(aplicar){
       var nuevosP=proveedoresNuevos();
@@ -39433,7 +39491,7 @@ window._plnModuloEmbarques = async function(){
         // Master Value / Sababa / CIF Express (filas informativas): no suman; solo se pega su N° de factura, igual que Tesoro
         S.rows.forEach(function(r){
           var o=rowObj(r); if(clasificar(o).k!=='info' || !o.FACTURA) return;
-          var g=grupoInfo(o.PROVEEDOR); if(!g) return;
+          var g=grupoInfoO(o); if(!g || sabNoElegida(o)) return;
           var inp=document.getElementById({MASTERVALUE:'s2_nfact_mv',SABABA:'s2_nfact_sababa',CIFEXP:'s2_nfact_cif'}[g]); if(inp) inp.value=o.FACTURA;
           [200,450,1300].forEach(function(ms){ setTimeout(function(){ try{ if(typeof _setGrupoFactura==='function') _setGrupoFactura(g,o.FACTURA,true); }catch(e){} },ms); });
         });
@@ -39682,6 +39740,7 @@ window._plnModuloEmbarques = async function(){
       aplicarTesoro(true);
       if((S.recibos||[]).length) aplicarRecibos();
       actualizarTabla(true);   // nombres oficiales de suplidor (render incluido)
+      try{ detectarSababa10(true); var _mp=mapearInfoCampos(); if(_mp.length){ actualizarTabla(true); toast('🔗 Mapeado en el cálculo: '+_mp.join(' · '),'green',5000); } }catch(e){ console.warn(e); }
       var om=Object.keys(R.omitidos).map(function(k){ return k+' ('+R.omitidos[k]+')'; }).join(', ');
       lab=document.getElementById('_pm_repn');
       if(lab) lab.innerHTML='✅ '+esc(file.name)+' · '+esc(S.rep.resumen)+(R.tesoro?' · Tesoro N° <b>'+esc(R.tesoro)+'</b>':' · <span style="color:#f0883e">no encontré el N° de Tesoro, escríbelo</span>')+(om?' · <span style="color:var(--muted,#8b949e)">omitido: '+esc(om)+'</span>':'')+'<br><span style="color:var(--muted,#8b949e)">Columnas detectadas → Suplidor ➜ Proveedor · Factura ➜ N° Factura · Tipo de movimiento ➜ Tipo · Monto ➜ Valor original'+(R.encabezados.length?' (encabezados leídos: '+esc(R.encabezados.join(' | '))+')':'')+'</span>'+' · <b>Falta elegir los departamentos</b>';
