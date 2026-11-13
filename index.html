@@ -38731,6 +38731,12 @@ window._plnModuloEmbarques = async function(){
     S.rows.forEach(function(r){ if(r._gpar===gid) t+=num(r[iM]); });
     return t;
   }
+  // (nov-2026, v2) INVERTIDO: la fila de ARRIBA (original) es la que se edita → pasa a «flete» con el monto que escribes;
+  //   la fila de ABAJO es automática (solo lectura) = total de la factura − flete, tipo «gastos_origen».
+  //   El tipo original del reporte (ej. Otros Costos No Gravados) queda en _gtipo / en el historial de abajo.
+  //   Si no cuadra al centavo, no deja aplicar ni guardar.
+  var MOV_LBL={otros_costos_no_gravados:'Otros Costos No Gravados',flete:'Flete',gastos_origen:'Gastos de origen',gastos_destino:'Gastos destino',honorarios:'Honorarios',acarreo:'Acarreo',seguro:'Seguro',itbms:'ITBMS',dmce:'DMCE',informativo:'Informativo'};
+  function r2(n){ return Math.round(n*100)/100; }
   function recalcDesgloses(){
     var iM=S.cols.indexOf('MONTO'), iT=S.cols.indexOf('TIPO'); if(iM<0||iT<0) return;
     var pad={}, hijos={};
@@ -38738,37 +38744,48 @@ window._plnModuloEmbarques = async function(){
     S.rows.forEach(function(r){ if(r._gpar){ if(pad[r._gpar]) (hijos[r._gpar]=hijos[r._gpar]||[]).push(r); else delete r._gpar; } });
     Object.keys(pad).forEach(function(g){
       var p=pad[g], hs=hijos[g]||[];
-      if(!hs.length){                       // ya no hay desglose: la factura vuelve a como venía
-        if(p._gtot) p[iM]=(Math.round(p._gtot*100)/100).toFixed(2);
+      if(!hs.length){                       // ya no hay desglose: la factura vuelve a como venía en el reporte
+        if(p._gtot) p[iM]=r2(p._gtot).toFixed(2);
         if(p._gtipo) p[iT]=p._gtipo;
         delete p._gid; delete p._gtot; delete p._gtipo; delete p._gneg; return;
       }
-      var resto=Math.round((p._gtot-sumaHijos(g))*100)/100;
-      p[iM]=resto.toFixed(2); p[iT]='flete'; p._gneg=resto<-0.004;
+      var top=r2(num(p[iM])), resto=r2(p._gtot-top), h=hs[0];
+      p[iT]='flete'; h[iT]='gastos_origen'; h[iM]=resto.toFixed(2);
+      p._gneg=(top<0.005 || resto<0.005);
     });
+  }
+  function desgloseProblemas(){
+    var iM=S.cols.indexOf('MONTO'), out=[], hij={};
+    S.rows.forEach(function(r){ if(r._gpar) hij[r._gpar]=r; });
+    S.rows.forEach(function(r){
+      if(!r._gid) return;
+      var h=hij[r._gid]; if(!h) return;
+      var top=r2(num(r[iM])), rest=r2(num(h[iM])), tot=r2(r._gtot||0), fa=String(r[S.cols.indexOf('FACTURA')]||'—');
+      if(top<0.005) out.push('Factura '+fa+': escribe el monto del FLETE en la fila de arriba.');
+      else if(rest<0.005) out.push('Factura '+fa+': el flete ('+fmtN(top)+') no puede ser igual o mayor al total ('+fmtN(tot)+').');
+      else if(Math.abs(r2(top+rest)-tot)>0.004) out.push('Factura '+fa+': flete + gastos de origen ('+fmtN(top+rest)+') no cuadra con el total ('+fmtN(tot)+').');
+    });
+    return out;
   }
   function desglosar(ri){
     var r=S.rows[ri]; if(!r) return;
     var o=rowObj(r), c=clasificar(o);
     if(c.k!=='serv' || c.legacy || r._gpar){ toast('El desglose aplica a facturas de servicio (fletes, otros costos…)','orange',3500); return; }
+    if(r._gid){ toast('Esta factura ya está desglosada. Para deshacerlo, quita la fila de abajo con ✕','orange',4000); return; }
     var iT=ensureCol('TIPO'), iM=ensureCol('MONTO');
-    if(!r._gid){
-      r._gid='g'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
-      r._gtot=num(r[iM]); r._gtipo=String(r[iT]||'').trim()||'otros_costos_no_gravados';
-    }
+    r._gid='g'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+    r._gtot=r2(num(r[iM])); r._gtipo=String(r[iT]||'').trim()||'otros_costos_no_gravados';
     var hijo=new Array(S.cols.length).fill('');
     S.cols.forEach(function(f,i){ if(f==='PROVEEDOR'||f==='FACTURA') hijo[i]=r[i]; });
     hijo[iT]='gastos_origen'; hijo._gpar=r._gid;
-    var pos=ri+1; while(S.rows[pos] && S.rows[pos]._gpar===r._gid) pos++;
-    S.rows.splice(pos,0,hijo);
+    r[iM]='';                                // arriba queda vacío para escribir el flete; abajo sale el monto global
+    S.rows.splice(ri+1,0,hijo);
     render();
-    var inp=document.querySelector('#_pm_t input.pmi[data-ri="'+pos+'"][data-ci="'+iM+'"]'); if(inp){ inp.focus(); inp.select(); }
-    toast('✂ Desglose creado — escribe en la fila nueva el monto de gastos de origen; la factura de arriba queda como flete con el resto','green',6500);
+    var inp=document.querySelector('#_pm_t input.pmi[data-ri="'+ri+'"][data-ci="'+iM+'"]'); if(inp){ inp.focus(); }
+    toast('✂ Escribe el monto del FLETE en la fila de arriba; la de abajo (gastos de origen) se calcula sola','green',6500);
   }
   function montoDesgloseEditado(ri){
-    var r=S.rows[ri]; if(!r) return;
     var iM=S.cols.indexOf('MONTO'), iT=S.cols.indexOf('TIPO');
-    if(r._gid) r._gtot=Math.round((num(r[iM])+sumaHijos(r._gid))*100)/100;   // editaron el total de arriba
     recalcDesgloses();
     var act=document.activeElement;
     S.rows.forEach(function(x,i){
@@ -38776,6 +38793,34 @@ window._plnModuloEmbarques = async function(){
       [iM,iT].forEach(function(ci){ var inp=document.querySelector('#_pm_t input.pmi[data-ri="'+i+'"][data-ci="'+ci+'"]'); if(inp && inp!==act) inp.value=x[ci]; });
       if(i!==ri) refreshRow(i);
     });
+    histDesglose();
+  }
+  // Mini reporte informativo (abajo): cómo llegó la factura y en qué quedó
+  function histDesglose(){
+    var box=document.getElementById('_pm_dh'); if(!box) return;
+    var iM=S.cols.indexOf('MONTO'), iP=S.cols.indexOf('PROVEEDOR'), iF=S.cols.indexOf('FACTURA'), hij={}, rows=[];
+    S.rows.forEach(function(r){ if(r._gpar) hij[r._gpar]=r; });
+    S.rows.forEach(function(r){ if(r._gid && hij[r._gid]) rows.push({p:r,h:hij[r._gid]}); });
+    if(!rows.length){ box.style.display='none'; return; }
+    if(!box.querySelector('#_pm_dq')){
+      box.innerHTML='<div style="border:1px solid var(--border,#30363d);border-radius:10px;padding:8px 10px;margin-bottom:8px">'
+        +'<div style="font-size:12px;font-weight:800;margin-bottom:6px">📋 Historial de desgloses <span style="font-weight:500;opacity:.6">· informativo</span></div>'
+        +'<input id="_pm_dq" type="text" placeholder="🔍 Buscar por N° de factura o suplidor…" style="width:100%;box-sizing:border-box;background:var(--s2,#21262d);border:1px solid var(--border,#30363d);border-radius:6px;padding:6px 8px;color:inherit;font-size:12px;margin-bottom:6px">'
+        +'<div id="_pm_dl"></div></div>';
+      box.querySelector('#_pm_dq').addEventListener('input',histDesglose);
+    }
+    box.style.display='';
+    var q=(box.querySelector('#_pm_dq').value||'').trim().toLowerCase(), h='';
+    rows.forEach(function(x){
+      var fa=String(x.p[iF]||''), pv=String(x.p[iP]||''), tot=r2(x.p._gtot||0), top=r2(num(x.p[iM])), rest=r2(num(x.h[iM]));
+      if(q && (fa+' '+pv).toLowerCase().indexOf(q)<0) return;
+      var ok=top>0.004 && rest>0.004 && Math.abs(r2(top+rest)-tot)<0.005;
+      h+='<div style="font-size:11px;line-height:1.55;padding:5px 0;border-top:1px dashed rgba(139,148,158,.25)">'
+        +'<div><b>Factura '+esc(fa||'—')+'</b> · '+esc(pv||'—')+'</div>'
+        +'<div style="opacity:.8">Movimiento recibido: <b>'+esc(MOV_LBL[x.p._gtipo]||x.p._gtipo||'—')+'</b> · Monto original: <b>'+fmtN(tot)+'</b></div>'
+        +'<div>Desglose: 🚢 Flete <b>'+fmtN(top)+'</b> + 📦 Gastos de origen <b>'+fmtN(rest)+'</b> = <b>'+fmtN(top+rest)+'</b> '+(ok?'<span style="color:#3fb950">✅ cuadra</span>':'<span style="color:#f85149">⚠ no cuadra con '+fmtN(tot)+'</span>')+'</div></div>';
+    });
+    box.querySelector('#_pm_dl').innerHTML=h||'<div style="font-size:11px;opacity:.6">Sin resultados.</div>';
   }
   // Lista de suplidores del lápiz de la plantilla: solo los que aplican al modo del check
   function refrescarDatalistPM(){
@@ -39177,6 +39222,7 @@ window._plnModuloEmbarques = async function(){
    +'#_pm_t tr.w3 td{background:rgba(248,81,73,.17)}'
    +'#_pm_t input.pmi{width:100%;min-width:80px;background:transparent;border:1px solid transparent;border-radius:5px;padding:5px 6px;color:inherit;font-size:12px;box-sizing:border-box}'
    +'#_pm_t input.pmi:focus{border-color:#58a6ff;background:var(--s2,#21262d);outline:none}'
+   +'#_pm_t input.pmi[readonly]{opacity:.75;cursor:not-allowed;color:#a371f7;font-weight:700}'
    +'#_pm_t td.pmsel{background:rgba(88,166,255,.25)!important;box-shadow:inset 0 0 0 1px #58a6ff}'
    +'#_pm_t.pmdrag{user-select:none;-webkit-user-select:none;cursor:cell}#_pm_t.pmdrag input{pointer-events:none}'
    +'#_pm_selbar{position:sticky;top:0;z-index:6;display:none;gap:6px;flex-wrap:wrap;align-items:center;padding:8px;margin-bottom:8px;border:1px solid #58a6ff;border-radius:10px;background:var(--s1,#161b22)}'
@@ -39196,8 +39242,8 @@ window._plnModuloEmbarques = async function(){
     }
     if(c.k==='serv'){
       var rr=o._r||{}, dnote='';
-      if(rr._gid) dnote=' · <b>✂ desglosada</b> (total '+fmtN(rr._gtot||0)+')'+(rr._gneg?' <span style="color:#f85149">· ⚠ el desglose supera el total</span>':'');
-      else if(rr._gpar) dnote=' · ↳ <b>desglose</b> (se resta de la fila de arriba)';
+      if(rr._gid) dnote=' · <b>✂ FLETE</b> (total de la factura '+fmtN(rr._gtot||0)+')'+(rr._gneg?' <span style="color:#f85149">· ⚠ escribe el flete (debe ser mayor a 0 y menor al total)</span>':'');
+      else if(rr._gpar) dnote=' · ↳ <b>gastos de origen</b> (automático = total − flete)';
       var base='<span style="color:#58a6ff;font-size:11px">🧾 Gasto · '+esc(c.t)+dnote+'</span>';
       var st2=provStatus(o.PROVEEDOR);
       if(st2.k==='empty'||st2.k==='ok'||st2.k==='auto'||c.legacy) return base;
@@ -39303,10 +39349,11 @@ window._plnModuloEmbarques = async function(){
     S.rows.forEach(function(r,ri){
       var o=rowObj(r), c=clasificar(o);
       h+='<tr data-ri="'+ri+'" class="'+(c.k==='skip'?'':rowClass(o,c))+'"><td class="ro" data-act="selrow" data-ri="'+ri+'" style="cursor:pointer" title="Seleccionar fila">'+(ri+1)
-        +(c.k==='serv'&&!c.legacy?(r._gpar?' <span title="Parte del desglose de la factura de arriba">↳</span>':' <button class="mini" data-act="desglosar" data-ri="'+ri+'" title="Desglosar esta factura de servicio: crea una fila debajo para el monto de gastos de origen; lo que escribas se resta de esta">✂</button>'):'')+'</td>';
+        +(c.k==='serv'&&!c.legacy?(r._gpar?' <span title="Parte del desglose de la factura de arriba">↳</span>':' <button class="mini" data-act="desglosar" data-ri="'+ri+'" title="Dividir factura: la de arriba pasa a FLETE (tú escribes el monto) y la de abajo queda como gastos de origen con la diferencia">✂</button>'):'')+'</td>';
       S.cols.forEach(function(f,ci){
         var lst=f==='PROVEEDOR'?' list="_pm_dl_prov"':(f==='DEPARTAMENTO'?' list="_pm_dl_dep"':(f==='TIPO'?' list="_pm_dl_tipo"':''));
-        h+='<td><input class="pmi" data-ri="'+ri+'" data-ci="'+ci+'"'+lst+' value="'+esc(r[ci])+'"></td>';
+        var _ro=((r._gpar&&(f==='MONTO'||f==='TIPO'))||(r._gid&&f==='TIPO'))?' readonly title="Automático (desglose)"':'';
+        h+='<td><input class="pmi" data-ri="'+ri+'" data-ci="'+ci+'"'+lst+_ro+' value="'+esc(r[ci])+'"></td>';
       });
       h+='<td data-st="'+ri+'" style="white-space:nowrap">'+(c.k==='skip'?'':noteHTML(o,c))+'</td>'
         +'<td><button class="mini" data-act="delrow" data-ri="'+ri+'" title="Quitar fila">✕</button></td></tr>';
@@ -39315,6 +39362,7 @@ window._plnModuloEmbarques = async function(){
     document.getElementById('_pm_tw').innerHTML=h;
     pintarSel();
     totales();
+    histDesglose();
     guardarBorrador();
   }
   function refreshRow(ri){
@@ -39352,6 +39400,8 @@ window._plnModuloEmbarques = async function(){
   }
 
   async function ejecutar(aplicar){
+    var _dp=desgloseProblemas();
+    if(_dp.length){ alert('⛔ El desglose no cuadra al centavo:\n\n'+_dp.join('\n')+'\n\nCorrige el monto del flete y vuelve a intentar.'); toast('⛔ Desglose sin cuadrar','orange',4500); return; }
     if((S.recibos||[]).length) aplicarRecibos();
     if(aplicar){
       var nuevosP=proveedoresNuevos();
@@ -39827,6 +39877,7 @@ window._plnModuloEmbarques = async function(){
       +'<div id="_pm_selbar"></div>'
       +'<div id="_pm_tw"></div>'
       +'<div id="_pm_tot" style="margin:8px 2px;font-size:12px"></div>'
+      +'<div id="_pm_dh" style="display:none"></div>'
       +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:8px;border:1px solid var(--border,#30363d);border-radius:10px;margin-bottom:8px">'
         +'<button class="pmb b" data-act="art">📎 Excel de mapeo (compras manager)</button><button class="pmb pmi-i" data-act="info" data-k="art" title="Información">ⓘ</button>'
         +'<input type="file" id="_pm_art" accept=".xlsx,.xls,.csv" style="display:none">'
