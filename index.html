@@ -3293,10 +3293,10 @@ var dv=L.getItem('_mxDevice');if(dv!=='phone'&&dv!=='tablet'&&dv!=='desktop')dv=
   <!-- ═══ MODAL EQUIPO ═══ -->
   <div id="_modal_equipo_overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:99990;overflow-y:auto;padding:16px 8px" onclick="if(event.target===this)_cerrarModalEquipo()">
     <div style="background:var(--s1);border-radius:14px;max-width:520px;margin:0 auto;box-shadow:0 16px 48px rgba(0,0,0,.5);border:1px solid var(--border)">
-      <div style="display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border);background:#0d2f33 !important;border-radius:14px 14px 0 0">
         <span style="font-size:16px">🚛</span>
-        <span style="font-size:14px;font-weight:800;color:var(--text);flex:1">Transporte y Equipo</span>
-        <button onclick="_cerrarModalEquipo()" style="background:rgba(218,54,51,.1);border:1px solid rgba(218,54,51,.25);color:var(--red-l);border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer">✕ Cerrar</button>
+        <span style="font-size:14px;font-weight:800;color:#ffffff !important;flex:1;text-shadow:none">Transporte y Equipo</span>
+        <button onclick="_cerrarModalEquipo()" style="background:rgba(255,255,255,.12) !important;border:1px solid rgba(255,255,255,.55) !important;color:#ffffff !important;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer">✕ Cerrar</button>
       </div>
       <div style="padding:16px 18px">
         <div class="r2" style="margin-bottom:10px">
@@ -4244,6 +4244,26 @@ var dv=L.getItem('_mxDevice');if(dv!=='phone'&&dv!=='tablet'&&dv!=='desktop')dv=
         <div id="mv930_status" style="margin-top:6px;font-size:9px;color:var(--muted)"></div>
       </div>
 
+      <!-- ═══ TOPE DE FACTOR DE IMPORTACIÓN (nov-2026) — la diferencia siempre sale del Master Value ═══ -->
+      <div class="field" id="blk-fi-tope" style="margin-top:6px;padding:10px 12px;background:rgba(240,136,62,.06);border:1px solid rgba(240,136,62,.3);border-radius:8px">
+        <label style="color:var(--orange-l);font-weight:700">🎚️ Ajustar Factor de Importación (se rebaja del Master Value)
+          <span class="info-btn" onclick="document.getElementById('fi-tope-info').classList.toggle('open')" style="font-style:normal">i</span>
+        </label>
+        <div id="fi-tope-info" class="info-box">Factor de Importación = Costo No Mercancía ÷ Valor Mercancía Homologado × 100. Escribe el factor que quieres dejar: la diferencia contra el factor actual se resta SOLO del Master Value (el puente) y, al Aplicar, se suma como Gasto Complementario negativo en Equipo (sobre el que ya tengas), para que el Costo Landed siga exacto. Si el Master Value no alcanza, se lleva a $0.00 (límite).</div>
+        <div id="fi_tope_resumen" style="margin-top:6px;font-size:11px;line-height:1.7;color:var(--muted)"></div>
+        <div class="r2" style="margin-top:8px">
+          <div class="field" style="margin-bottom:0"><label style="font-size:10px">Factor de importación deseado (%)</label>
+            <input type="number" id="fi_tope_input" placeholder="Ej: 35.00" step="0.01" min="0" oninput="_fiTopeVista()" onkeydown="if(event.key==='Enter'){event.preventDefault();_aplicarFiTope(parseFloat(this.value));}" style="border-color:rgba(240,136,62,.35)"></div>
+          <div class="field" style="margin-bottom:0"><label style="font-size:10px">Diferencia (puntos %)</label>
+            <input type="text" id="fi_tope_dif" readonly style="background:var(--bg);color:var(--orange-l);font-weight:700"></div>
+        </div>
+        <div id="fi_tope_status" style="margin-top:8px;font-size:11px;line-height:1.7;color:var(--muted)"></div>
+        <div style="display:flex;gap:6px;margin-top:8px">
+          <button type="button" onclick="_aplicarFiTope(parseFloat((_sabEl('fi_tope_input')||{}).value))" style="flex:1;background:rgba(240,136,62,.14);border:1px solid rgba(240,136,62,.45);color:var(--orange-l);border-radius:6px;padding:7px 12px;font-size:11px;font-weight:700;cursor:pointer">⬇️ Aplicar a Gastos Complementarios (Equipo)</button>
+          <button type="button" onclick="_quitarFiTope()" style="flex-shrink:0;background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:7px 10px;font-size:11px;font-weight:700;cursor:pointer">Quitar</button>
+        </div>
+      </div>
+
       <div class="field" style="margin-top:6px;padding:10px 12px;background:rgba(88,166,255,.06);border:1px solid rgba(88,166,255,.18);border-radius:8px">
         <label style="color:var(--blue-l);font-weight:600">🔵 Valor Exento Sababa (USD) <span style="font-size:9px;font-weight:400;color:var(--muted)">— reduce ITBMS, no afecta valor mercancía</span></label>
         <input type="number" id="s2_exento" value="" placeholder="0.00 (opcional)" step="0.01" oninput="window._sab2Exento=parseFloat(this.value)||0;calcSab2()" style="margin-top:4px;border-color:rgba(88,166,255,.3)">
@@ -4251,7 +4271,7 @@ var dv=L.getItem('_mxDevice');if(dv!=='phone'&&dv!=='tablet'&&dv!=='desktop')dv=
       </div>
 
       <div style="display:flex;gap:8px;margin-top:8px">
-        <button id="btn-aplicar-sab" class="btn" style="flex:1;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.25);color:#f97316;opacity:.45;pointer-events:none;transition:all .25s" onclick="_startProgress();calc();if(typeof syncSC3fromSC1==='function')syncSC3fromSC1();setTimeout(function(){calcSab2();_endProgress();_showToast('✅ Cambios aplicados','green',2200);},200)">Aplicar</button>
+        <button id="btn-aplicar-sab" class="btn" style="flex:1;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.25);color:#f97316;opacity:.45;pointer-events:none;transition:all .25s" onclick="_startProgress();calc();if(typeof syncSC3fromSC1==='function')syncSC3fromSC1();setTimeout(function(){calcSab2();if(typeof _sabPreflight==='function')_sabPreflight();_endProgress();_showToast('✅ Cambios aplicados','green',2200);},200)">Aplicar</button>
         <button class="btn btn-orange" style="flex:2" id="btn-calcular-sab" onclick="if(typeof calcSab2AndShow==='function')calcSab2AndShow();">&#9889; Calcular &#8212; Ver Dashboard &#8594;</button>
       </div>
     </div>
@@ -9935,6 +9955,11 @@ function calcSab2AndShow(){
     calc();
     compar = prev;
     calcSab2();
+    // (nov-2026) Master Value negativo / cuadre al centavo ANTES de mostrar el dashboard
+    if(typeof _sabPreflight==='function' && _sabPreflight(function(){ calcSab2AndShow(); })==='modal'){
+      if(btn){ btn.style.opacity=''; btn.style.transform=''; }
+      return;
+    }
 
     // Get res-sab2 — calcSab2() always writes to the ORIGINAL DOM element,
     // so always read from the original (never from the clone which stays empty)
@@ -11201,7 +11226,7 @@ function calc(){
   const sc1_itbms   = window._itbmsArManual ? sc1_itbms_display : (CIF+sc1_arancel)*itbPct;
   const sc1_base    = termino==='FOB' ? FOB : CIF;
   const _gastoComp  = parseFloat(document.getElementById('s1_gasto_comp')?.value)||0;
-  const sc1_landed1 = sc1_base + sc1_noMerc + _gastoComp; // gastoComp suma al Landed para nivelar MasterValue
+  const sc1_landed1 = Math.round((sc1_base + sc1_noMerc + _gastoComp)*100)/100; // (nov-2026) al centavo — gastoComp suma al Landed para nivelar MasterValue
   const sc1_factor  = sc1_base>0 ? sc1_landed1/sc1_base : 0;
   const _provItbmsMan = _provItbmsManual(); // ITBMS de facturas en Proveedores (aplica a TODOS los escenarios, incl. Sababa)
   const sc1_landedG = sc1_landed1 + sc1_itbms + itbmsTasaFinal + _provItbmsMan;
@@ -11315,15 +11340,15 @@ function calc(){
       // esa porción no paga ITBMS y se vuelve a sumar completa al Homologado final.
       const _sc3Exento    = window._sab2Exento || v('s2_exento') || 0;
       const _sc3BaseGrav  = Math.max(0, sc3_baseAjustada - _sc3Exento);
-      const _sc3Gravado   = _sc3BaseGrav / DIV;
+      const _sc3Gravado   = Math.round(_sc3BaseGrav / DIV * 100) / 100; // (nov-2026) al centavo
       sc3_itbmsHomol   = Math.round((_sc3BaseGrav - _sc3Gravado) * 100) / 100;
-      sc3_mercHomol    = _sc3Gravado + _sc3Exento;
+      sc3_mercHomol    = Math.round((_sc3Gravado + _sc3Exento) * 100) / 100;
       // Criterio de base para la Comisión, elegido por el usuario en el formulario
       // Sababa: 'pago' = Total Pago real (incluye Diferencia) · 'mercancia' = Valor
       // Mercancía puro (montoBase, sin Diferencia). Mismo criterio que calcSab2().
       const _sc3ComCriterio = (document.getElementById('sc_com_criterio')||{}).value || 'pago';
       const _sc3BaseCom = _sc3ComCriterio==='mercancia' ? montoBase : sc3_baseAjustada;
-      const comisionAuto = _sc3BaseCom * sc3_comPct;
+      const comisionAuto = Math.round(_sc3BaseCom * sc3_comPct * 100) / 100;
       const comisionEl = document.getElementById('sc_comision_display');
       if(compar==='sababa'){
         if(!window.sc_comisionEditada && comisionEl) comisionEl.value = comisionAuto.toFixed(2);
@@ -11337,10 +11362,10 @@ function calc(){
       const sc3_nm_sinMV = sc3_flete + sc3_gastos + sc3_comision;
       sc3_base   = sc3_mercHomol;
       const sc3_l1_sinMV = sc3_base + sc3_nm_sinMV;
-      sc3_mv     = sc1_landed1 - sc3_l1_sinMV;
+      sc3_mv     = Math.round((sc1_landed1 - sc3_l1_sinMV) * 100) / 100;
       sc3_mvPct  = sc3_base>0 ? (sc3_mv/sc3_base)*100 : 0;
       sc3_noMerc = sc3_nm_sinMV + sc3_mv;
-      sc3_landed1= sc3_base + sc3_noMerc;
+      sc3_landed1= Math.round((sc3_base + sc3_noMerc) * 100) / 100;
       sc3_factor = sc3_base>0 ? sc3_landed1/sc3_base : 0;
       sc3_landedG= sc3_landed1 + _provItbmsMan;
     }
@@ -13236,9 +13261,11 @@ function calcSab2(){
   // y se vuelve a sumar completo al Valor Mercancía Homologado al final.
   const exentoSab    = window._sab2Exento || v('s2_exento') || 0;  // Reduce ITBMS, no el valor mercancía
   const baseGravada  = Math.max(0, baseAjust - exentoSab);
-  const gravadoHomol = baseGravada / DIV;
+  // (nov-2026) TODO al centavo: homologado, ITBMS, landed y Master Value son cifras de 2 decimales
+  // — así Landed Sababa = Landed Regular exacto, sin fracciones de centavo escondidas.
+  const gravadoHomol = Math.round(baseGravada / DIV * 100) / 100;
   const itbmsHomol   = Math.round((baseGravada - gravadoHomol) * 100) / 100;
-  const mercHomol    = gravadoHomol + exentoSab;
+  const mercHomol    = Math.round((gravadoHomol + exentoSab) * 100) / 100;
   // (oct-2026) CIF/ZL: Total Pago Realizado hereda Base + Diferencia salvo que el usuario lo haya pegado a mano
   if(!isFOB && baseAjust>0){
     const _pe = _visEl('s2_pago');
@@ -13295,11 +13322,11 @@ function calcSab2(){
 
   // No Mercancía sin MV = Flete + Comisión + Gastos Agente
   const noMerc_sinMV = fleteStd + comision + agente;
-  const landed_sinMV = mercHomol + noMerc_sinMV;
+  const landed_sinMV = Math.round((mercHomol + noMerc_sinMV) * 100) / 100;
 
   // MV auto = Landed#1(Esc.1) − Landed#1(Sababa sin MV)
-  const esc1L = window._sc1_landed1 || 0;
-  const mv_auto = esc1L > 0 ? esc1L - landed_sinMV : 0;
+  const esc1L = Math.round((window._sc1_landed1 || 0) * 100) / 100;
+  const mv_auto = esc1L > 0 ? Math.round((esc1L - landed_sinMV) * 100) / 100 : 0;
 
   // ── MASTER VALUE: usar window._mvManualValue si el usuario editó ──
   // Igual que comisión, el valor se guarda en global para sobrevivir re-renders.
@@ -13324,8 +13351,8 @@ function calcSab2(){
 
   const mv      = Math.round(mv_used*100)/100;
   const mvPct   = mercHomol>0 ? (mv/mercHomol)*100 : 0;
-  const noMerc  = noMerc_sinMV + mv;
-  const landed  = mercHomol + noMerc;  // = esc1L cuando MV está completo
+  const noMerc  = Math.round((noMerc_sinMV + mv) * 100) / 100;
+  const landed  = Math.round((mercHomol + noMerc) * 100) / 100;  // = esc1L cuando MV está completo
   const factor  = mercHomol>0 ? landed/mercHomol : 0;
 
   // ── Regla fija Zona Libre: Master Value objetivo = Valor Homologado × 9.30% ──
@@ -13333,7 +13360,15 @@ function calcSab2(){
   window._sc3_mercHomol = mercHomol;
   window._sc3_mv_auto   = mv_auto;
   window._sc3_tipo      = sab2Tipo;
+  window._sc3_noMercSinMV = noMerc_sinMV;
+  window._sc3_landed = landed;
+  window._sc3_esc1L = esc1L;
+  window._sc3_det = {merc:mercHomol, comision:comision, comAuto:comisionAuto, comEdit:!!window.s2_comisionEditada,
+    flete:fleteStd, agente:agente, mvUsed:mv, mvAuto:mv_auto, mvEdit:!!(window._mvUserEdited && window._mvManualValue!==undefined && !isNaN(window._mvManualValue)),
+    noMerc:noMerc, landed:landed, esc1L:esc1L};
+  window._sc3_mv_used   = mv_used;
   if(typeof _calcDifMV930==='function') _calcDifMV930();
+  if(typeof _calcFiTope==='function') _calcFiTope();
 
   // Alert diferencia pago
   const al = document.getElementById('s2_alert');
@@ -19127,7 +19162,7 @@ function reabrirEmbarquePendiente(idx){
   // sesión — resetear el rastreo de idempotencia (ver _aplicarDifMV930 /
   // _aplicarDifMV0Cif) para que, si el usuario lo presiona aquí, descuente
   // desde cero y no desde el ajuste de un embarque distinto.
-  window._mv930YaAplicadoValor = 0;
+  window._mv930YaAplicadoValor = 0; window._fiTopeDelta = 0; window._fiTopeTarget = null; window._fiTopeInfo = null;
   window._mv0CifYaAplicadoValor = 0;
   if(d.usoSistema){ const us=document.getElementById('s1_uso_sistema'); if(us) us.value=d.usoSistema||''; }
   // Restaurar selectores de origen país/ciudad
@@ -36500,9 +36535,21 @@ function _actualizarVistaPreviaComparativo(){
     // usuario agrega/sube manualmente en Sababa (NO el ITBMS interno de la
     // comisión, que ya viene embebido dentro de "Comisión Sababa" arriba y
     // es un gasto costeable aparte — por eso se excluye aquí con !_sabItbms).
-    var itbms3 = (snap.invLines||[]).filter(function(l){
-      return l.tipoFac==='itbms' && !l._sabItbms;
-    }).reduce(function(s,l){ return s + (parseFloat(l.costo)||0); }, 0);
+    // (nov-2026) Se lee EN VIVO desde Proveedores (_provItbmsManual) — el snapshot
+    // (_lastSnap) no siempre trae invLines y por eso salía $0.00. Si no hay líneas
+    // vivas se usa el snapshot como respaldo. Nunca incluye el ITBMS de la comisión.
+    var itbms3 = (typeof _provItbmsManual==='function') ? _provItbmsManual() : 0;
+    if(!(itbms3>0)){
+      // respaldo: cualquier línea ITBMS viva (excepto la de la comisión Sababa y las de Tesoro auto-generadas)
+      var _vivas=(typeof invLines!=='undefined'&&invLines)?invLines:(window.invLines||[]);
+      itbms3=_vivas.filter(function(l){ return l && l.tipoFac==='itbms' && !l._sabItbms && !(l._autoGasto && /TESORO/i.test(l.prov||'')) && !/SABABA/i.test(l.prov||''); })
+        .reduce(function(s,l){ return s+(parseFloat(l.costo)||0); },0);
+    }
+    if(!(itbms3>0)){
+      itbms3 = (snap.invLines||[]).filter(function(l){
+        return l.tipoFac==='itbms' && !l._sabItbms && !l._autoGasto;
+      }).reduce(function(s,l){ return s + (parseFloat(l.costo)||0); }, 0);
+    }
     // Costo Landed COSTEABLE = Valor Mercancía + Costo No Mercancía. Este es
     // el que MANDA para el Factor de Importación/Costeo (Costo No Mercancía
     // ÷ Valor Mercancía Homologado) — NO se le suma el ITBMS.
@@ -36708,6 +36755,299 @@ function _calcDifMV930(){
       ? '✓ El Master Value ya está en el objetivo — no hace falta aplicar nada.'
       : 'Al aplicar, el Master Value de Sababa quedará en $'+objetivo.toFixed(2)+(esZL?' (9.30%).':' (0.00% — Omitir MV).');
   }
+}
+// ═══════════════════════════════════════════════════════════════════════════
+// TOPE DE FACTOR DE IMPORTACIÓN — Escenario Sababa (nov-2026)
+// El usuario elige el factor máximo (ej. 30%). La diferencia contra el factor actual
+// se rebaja SIEMPRE y SOLO del Master Value (el puente) vía Gasto Complementario
+// negativo (Equipo, Esc. Regular) — igual mecanismo que _aplicarDifMV930, así
+// Landed Sababa = Landed Esc.#1 se mantiene. Factor = No Mercancía ÷ Valor Homologado.
+// Es idempotente: window._fiTopeDelta recuerda lo que este bloque ya sumó al G.C.
+// ═══════════════════════════════════════════════════════════════════════════
+window._fiTopeDelta  = 0;     // monto (≤ 0) que este bloque ya sumó a s1_gasto_comp
+window._fiTopeTarget = null;  // último tope aplicado (%)
+window._fiTopeInfo   = null;  // antes/después para el resumen informativo
+var _FI_TOPE_CHIPS = [20,25,28,30,32,35];
+function _fiM(n){ return (n<0?'-':'')+'$'+Math.abs(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function _fiTopeBase(){
+  var merc = window._sc3_mercHomol||0;
+  var nmSin = window._sc3_noMercSinMV||0;          // comisión + flete + gastos (sin MV)
+  var d = window._fiTopeDelta||0;
+  var mvAuto = window._sc3_mv_auto||0;              // ya incluye lo aplicado (d)
+  var mvBase = Math.round((mvAuto - d)*100)/100;    // MV como sería SIN este tope
+  var nmBase = nmSin + mvBase;
+  return {
+    merc:merc, nmSin:nmSin, mvBase:mvBase, nmBase:nmBase, d:d, mvAhora:mvAuto,
+    fBase: merc>0 ? nmBase/merc*100 : 0,            // factor sin tope
+    fMin:  merc>0 ? nmSin/merc*100 : 0,             // factor con MV = 0 (piso)
+    fAhora: merc>0 ? (nmSin+mvAuto)/merc*100 : 0    // factor con el tope aplicado
+  };
+}
+function _fiTopeEvalua(target){
+  var b=_fiTopeBase();
+  var r={b:b, target:target, estado:'ok', reduccion:0, mvNuevo:b.mvBase, fNuevo:b.fBase};
+  if(!(b.merc>0)){ r.estado='sinDatos'; return r; }
+  var needed = Math.ceil((b.nmBase - b.merc*target/100)*100 - 1e-6)/100; // redondea hacia arriba al centavo
+  if(needed<=0){ r.estado='yaCumple'; return r; }
+  if(b.mvBase<=0.004){ r.estado='sinMV'; return r; }
+  if(needed<=b.mvBase+0.004){ r.reduccion=Math.min(needed,b.mvBase); r.estado='ok'; }
+  else { r.reduccion=b.mvBase; r.estado='limite'; }
+  r.mvNuevo = Math.round((b.mvBase-r.reduccion)*100)/100;
+  r.fNuevo  = (b.nmBase - r.reduccion)/b.merc*100;
+  return r;
+}
+function _calcFiTope(){
+  var blk=_sabEl('blk-fi-tope'); if(!blk) return;
+  // En Zona Libre / Importación con "Omitir MV" el Master Value ya es fijo (9.30% / 0%) — se oculta
+  var fijo = (window._sc3_tipo==='ZL') || (window._sc3_tipo==='EXT' && !!window._omitMV_sab);
+  var hayEsc1 = (window._sc1_landed1||0)>0;
+  if(fijo || !hayEsc1 || !(window._sc3_mercHomol>0)){ blk.style.display='none'; return; }
+  blk.style.display='block';
+  var b=_fiTopeBase();
+  var res=_sabEl('fi_tope_resumen');
+  if(res){
+    res.innerHTML = 'Factor de importación actual (Sababa): <strong style="color:var(--orange-l);font-size:13px">'+b.fBase.toFixed(2)+'%</strong>'
+      +'<br>Master Value: <strong style="color:var(--blue-l)">'+_fiM(b.mvBase)+'</strong> ('+(b.merc>0?(b.mvBase/b.merc*100).toFixed(2):'0.00')+'%)'
+      +' · Piso sin Master Value: <strong>'+b.fMin.toFixed(2)+'%</strong>';
+  }
+  var inp=_sabEl('fi_tope_input');
+  if(inp && inp.value==='' && window._fiTopeTarget!=null && Math.abs(window._fiTopeDelta||0)>0.004) inp.value=window._fiTopeTarget;
+  _fiTopeVista();
+}
+// Vista previa en vivo (al escribir el % deseado) — no aplica nada hasta presionar Aplicar
+function _fiTopeVista(){
+  var inp=_sabEl('fi_tope_input'), difEl=_sabEl('fi_tope_dif'), st=_sabEl('fi_tope_status');
+  if(!st) return;
+  var b=_fiTopeBase();
+  var raw=inp?inp.value:'';
+  var target=parseFloat(raw);
+  var aplicado = Math.abs(window._fiTopeDelta||0)>0.004;
+  if(raw===''||isNaN(target)){
+    if(difEl) difEl.value='';
+    st.innerHTML = aplicado
+      ? '✅ Ajuste activo: Gasto Complementario '+_fiM(window._fiTopeDelta)+' (Master Value rebajado).'
+      : (window._mvUserEdited ? 'ℹ️ Hay un Master Value editado a mano: el ajuste se calcula sobre el Master Value automático (puente).' : 'Escribe el factor que quieres dejar y verás la diferencia y cómo queda el Master Value.');
+    return;
+  }
+  var ev=_fiTopeEvalua(target);
+  var dif=Math.round((b.fBase-target)*100)/100;
+  if(difEl) difEl.value = (dif>0?'−':'')+Math.abs(dif).toFixed(2)+' pts';
+  var t='';
+  if(ev.estado==='yaCumple'){
+    t='ℹ️ El factor actual ('+b.fBase.toFixed(2)+'%) ya es menor o igual a '+target.toFixed(2)+'% — no hay nada que rebajar.';
+  } else if(ev.estado==='sinMV'){
+    t='⚠️ El Master Value es $0.00 o negativo — no hay de dónde rebajar (excepción).';
+  } else {
+    var pA=b.merc>0?b.mvBase/b.merc*100:0, pD=b.merc>0?ev.mvNuevo/b.merc*100:0;
+    t='<strong>Master Value antes:</strong> '+_fiM(b.mvBase)+' ('+pA.toFixed(2)+'%)'
+     +'<br><strong>Se le descuenta:</strong> <span style="color:var(--orange-l);font-weight:700">'+_fiM(ev.reduccion)+'</span> ('+(b.merc>0?(ev.reduccion/b.merc*100).toFixed(2):'0.00')+' pts)'
+     +'<br><strong>Master Value después:</strong> <span style="color:var(--green-l);font-weight:700">'+_fiM(ev.mvNuevo)+'</span> ('+pD.toFixed(2)+'%)'
+     +'<br><strong>Factor de importación:</strong> '+b.fBase.toFixed(2)+'% → <span style="color:var(--green-l);font-weight:700">'+ev.fNuevo.toFixed(2)+'%</span>'
+     +(ev.estado==='limite'?'<br><span style="color:var(--orange-l);font-weight:700">⚠ Límite: el Master Value no alcanza; queda en $0.00 y el factor no baja de '+ev.fNuevo.toFixed(2)+'%.</span>':'');
+  }
+  if(aplicado && window._fiTopeTarget!=null && Math.abs(window._fiTopeTarget-target)<0.005) t='✅ <strong>Aplicado</strong> — Gasto Complementario '+_fiM(window._fiTopeDelta)+'<br>'+t;
+  st.innerHTML=t;
+}
+function _aplicarFiTope(target){
+  if(typeof _guardarNFacturasVisibles==='function') _guardarNFacturasVisibles();
+  if(isNaN(target) || target<0){
+    if(typeof _showToast==='function') _showToast('⚠️ Escribe un tope válido (ej. 30)','orange',2500);
+    return;
+  }
+  var ev=_fiTopeEvalua(target);
+  if(ev.estado==='sinDatos'){
+    if(typeof _showToast==='function') _showToast('⚠️ Calcula primero el Escenario Sababa','orange',2800);
+    return;
+  }
+  var b=ev.b;
+  var gcEl=document.getElementById('s1_gasto_comp'); // vive en Equipo, no se clona
+  var actual=parseFloat(gcEl&&gcEl.value||0)||0;
+  var nuevoDelta = (ev.estado==='ok'||ev.estado==='limite') ? -ev.reduccion : 0;
+  // Idempotente: se descuenta lo que este mismo bloque aplicó antes y se suma lo nuevo
+  var nuevo = Math.round((actual - (window._fiTopeDelta||0) + nuevoDelta)*100)/100;
+  if(gcEl) gcEl.value = nuevo.toFixed(2);
+  window._fiTopeDelta  = nuevoDelta;
+  window._fiTopeTarget = target;
+  window._fiTopeInfo = (nuevoDelta<0) ? {
+    estado:ev.estado, mvAntes:b.mvBase, mvDespues:ev.mvNuevo,
+    pAntes: b.merc>0? b.mvBase/b.merc*100:0, pDespues: b.merc>0? ev.mvNuevo/b.merc*100:0,
+    fAntes:b.fBase, fDespues:ev.fNuevo
+  } : null;
+  calc();
+  if(typeof calcSab2==='function') calcSab2();
+  if(typeof _actualizarSummaryEquipo==='function') _actualizarSummaryEquipo();
+  if(typeof _calcDiferenciaInventario==='function') _calcDiferenciaInventario();
+  if(typeof _actualizarVistaPreviaComparativo==='function') _actualizarVistaPreviaComparativo();
+  // Mismo patrón que _aplicarDifMV930: cerrar y reabrir el modal para refrescar el clon
+  var overlay=document.getElementById('tab-modal-overlay');
+  var enModal = overlay && overlay.classList.contains('open') && overlay.getAttribute('data-tab')==='sababa';
+  if(enModal){
+    if(typeof closeTabModal==='function') closeTabModal();
+    setTimeout(function(){ if(typeof openTabModal==='function') openTabModal('sababa','🤝 Sababa Imports'); }, 80);
+  } else { _flashOk('blk-fi-tope'); }
+  _flashOk('btn-equipo-quick');
+  if(typeof _showToast==='function'){
+    if(ev.estado==='yaCumple') _showToast('ℹ️ Sin el tope el factor ya es '+b.fBase.toFixed(2)+'% (≤ '+target+'%) — no se rebaja nada','orange',3500);
+    else if(ev.estado==='sinMV') _showToast('⚠️ El Master Value no tiene monto para rebajar — queda igual (excepción)','orange',3500);
+    else if(ev.estado==='limite') _showToast('⚠️ Límite: Master Value llevado a $0.00 — factor queda en '+ev.fNuevo.toFixed(2)+'% (tope '+target+'% no alcanzable)','orange',4500);
+    else _showToast('✅ Factor llevado a '+ev.fNuevo.toFixed(2)+'% — Master Value rebajado '+_fiM(ev.reduccion)+' (Gasto Complementario)','green',3500);
+  }
+}
+function _quitarFiTope(){
+  var d=window._fiTopeDelta||0;
+  if(Math.abs(d)<0.004){ window._fiTopeTarget=null; window._fiTopeInfo=null; if(typeof calcSab2==='function') calcSab2(); return; }
+  var gcEl=document.getElementById('s1_gasto_comp');
+  var actual=parseFloat(gcEl&&gcEl.value||0)||0;
+  if(gcEl) gcEl.value=(Math.round((actual-d)*100)/100).toFixed(2);
+  window._fiTopeDelta=0; window._fiTopeTarget=null; window._fiTopeInfo=null;
+  calc();
+  if(typeof calcSab2==='function') calcSab2();
+  if(typeof _actualizarSummaryEquipo==='function') _actualizarSummaryEquipo();
+  if(typeof _calcDiferenciaInventario==='function') _calcDiferenciaInventario();
+  var overlay=document.getElementById('tab-modal-overlay');
+  var enModal = overlay && overlay.classList.contains('open') && overlay.getAttribute('data-tab')==='sababa';
+  if(enModal){
+    if(typeof closeTabModal==='function') closeTabModal();
+    setTimeout(function(){ if(typeof openTabModal==='function') openTabModal('sababa','🤝 Sababa Imports'); }, 80);
+  }
+  if(typeof _showToast==='function') _showToast('↩️ Tope quitado — Master Value vuelve a su monto automático','blue',3000);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PREFLIGHT SABABA (nov-2026) — se ejecuta antes de mostrar el Dashboard / al Aplicar
+//  1) Master Value NEGATIVO: no se puede cargar un negativo en un sistema empresarial.
+//     Se avisa con un modal rojo; al aceptar se activa "Omitir MV" (MV = $0.00) y se suma
+//     el monto en POSITIVO al Gasto Complementario (Equipo) para matar el negativo — el
+//     factor de importación del Regular se acomoda al de Sababa y ambos Landed igualan.
+//  2) Cuadre al centavo: si Landed Sababa y Landed Regular difieren por centavos
+//     (≤ $0.10, p. ej. por ediciones manuales de Comisión / Master Value), la diferencia la
+//     absorbe automáticamente el Gasto Complementario. Más de $0.10 NO se toca: es un error real.
+// ═══════════════════════════════════════════════════════════════════════════
+window._mvNegDelta = 0;
+window._sabPreflightCont = null;
+function _fm2(n){ return (n<0?'-':'')+'$'+Math.abs(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function _sabRefrescarModal(){
+  var overlay=document.getElementById('tab-modal-overlay');
+  var enModal = overlay && overlay.classList.contains('open') && overlay.getAttribute('data-tab')==='sababa';
+  if(enModal){
+    if(typeof closeTabModal==='function') closeTabModal();
+    setTimeout(function(){ if(typeof openTabModal==='function') openTabModal('sababa','🤝 Sababa Imports'); }, 80);
+  }
+}
+function _sabPostAccion(msg){
+  calc();
+  if(typeof calcSab2==='function') calcSab2();
+  if(typeof _actualizarSummaryEquipo==='function') _actualizarSummaryEquipo();
+  if(typeof _calcDiferenciaInventario==='function') _calcDiferenciaInventario();
+  if(typeof _showToast==='function' && msg) _showToast(msg,'green',4000);
+  var cont=window._sabPreflightCont; window._sabPreflightCont=null;
+  if(typeof cont==='function') cont(); else _sabRefrescarModal();
+}
+function _sabCerrarModalesPre(){ ['_mvneg_overlay','_cuadre_overlay'].forEach(function(id){ var o=document.getElementById(id); if(o) o.remove(); }); }
+// Sin tope de centavos: cualquier diferencia entre Landed Sababa y Landed Regular se MUESTRA con detalle
+// (dónde está el problema) y se resuelve con Master Value (si tiene capacidad) o forzando Gasto Complementario.
+function _sabPreflight(cont){
+  var esc1L = window._sc1_landed1||0;
+  if(!(esc1L>0) || !(window._sc3_mercHomol>0)) return 'ok';
+  window._sabPreflightCont = (typeof cont==='function') ? cont : null;
+  var mvAuto = window._sc3_mv_auto||0;
+  if(window._sc3_tipo!=='ZL' && mvAuto < -0.005){
+    _mostrarModalMVNegativo(mvAuto);
+    return 'modal';
+  }
+  var landed = window._sc3_landed||0, e1 = window._sc3_esc1L||0;
+  var diff = Math.round((landed - e1)*100)/100;
+  if(Math.abs(diff)>=0.01){
+    _mostrarModalCuadre(diff);
+    return 'modal';
+  }
+  return 'ok';
+}
+function _mostrarModalCuadre(diff){
+  _sabCerrarModalesPre();
+  var d=window._sc3_det||{};
+  var abs=Math.abs(diff);
+  var row=function(l,v,c,extra){ return '<div style="display:flex;justify-content:space-between;gap:10px;padding:3px 0;font-size:12px"><span style="color:#d9c9a8">'+l+'</span><span style="font-family:\'IBM Plex Mono\',monospace;color:'+(c||'#fff')+';font-weight:700">'+v+(extra||'')+'</span></div>'; };
+  var causas='';
+  if(d.mvEdit){
+    var dm=Math.round((d.mvUsed-d.mvAuto)*100)/100;
+    causas+='<li><strong>Master Value está editado a mano</strong> ('+_fm2(d.mvUsed)+') y el automático sería <strong>'+_fm2(d.mvAuto)+'</strong> — ahí están los '+_fm2(Math.abs(dm))+' de diferencia. Un Master Value manual se queda congelado y no sigue los cambios de comisión, flete o gastos.</li>';
+  }
+  if(d.comEdit && Math.abs(d.comision-d.comAuto)>=0.005){
+    causas+='<li>Comisión editada a mano: <strong>'+_fm2(d.comision)+'</strong> vs automática '+_fm2(d.comAuto)+' ('+_fm2(Math.round((d.comision-d.comAuto)*100)/100)+'). Si Master Value está en automático, él absorbe esa diferencia solo.</li>';
+  }
+  if(!causas) causas='<li>No hay ninguna línea editada a mano en este modal. Revisa en <strong>Proveedores</strong> si hay una línea duplicada o vieja (por ejemplo flete repetido o gastos de origen/destino) y en <strong>Equipo</strong> el Gasto Complementario.</li>';
+  var puedeMV = d.mvEdit && (d.mvAuto||0) >= -0.005;
+  _sabCerrarModalesPre();
+  var ov=document.createElement('div');
+  ov.id='_cuadre_overlay';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:100002;display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto';
+  ov.innerHTML='<div style="background:#2b2108;border:2px solid #e0a030;border-radius:14px;max-width:520px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.6);padding:20px 22px;color:#fff;font-family:inherit">'
+   +'<div style="font-size:16px;font-weight:800;color:#ffc457;margin-bottom:4px">⚠️ Los Costos Landed no cuadran</div>'
+   +'<div style="font-size:12px;color:#e8d9b5;margin-bottom:10px">Diferencia: <strong style="color:#ffc457">'+(diff>0?'+':'−')+_fm2(abs).replace('-','')+'</strong> — Sababa ('+_fm2(d.landed)+') '+(diff>0?'es mayor':'es menor')+' que Regular ('+_fm2(d.esc1L)+').</div>'
+   +'<div style="background:rgba(255,255,255,.06);border-radius:8px;padding:8px 12px;margin-bottom:10px">'
+   +row('Sababa · Mercancía homologada',_fm2(d.merc))
+   +row('Sababa · Comisión'+(d.comEdit?' ✏️':' (auto)'),_fm2(d.comision))
+   +row('Sababa · Flete',_fm2(d.flete))
+   +row('Sababa · Gastos origen/destino',_fm2(d.agente))
+   +row('Sababa · Master Value'+(d.mvEdit?' ✏️ manual':' (auto)'),_fm2(d.mvUsed), d.mvEdit?'#ffc457':'#fff')
+   +'<div style="border-top:1px solid rgba(255,255,255,.2);margin-top:4px;padding-top:4px">'+row('Landed Sababa',_fm2(d.landed))+row('Landed Regular (con Gasto Compl.)',_fm2(d.esc1L))+'</div></div>'
+   +'<div style="font-size:12px;font-weight:700;color:#ffc457;margin-bottom:4px">¿Dónde está el problema?</div>'
+   +'<ul style="margin:0 0 12px 18px;padding:0;font-size:12px;line-height:1.6;color:#f3ead2">'+causas+'</ul>'
+   +'<div style="font-size:11px;color:#d9c9a8;margin-bottom:12px">El Landed de Sababa manda (son los montos reales de las facturas). Master Value es el puente y absorbe mientras tenga capacidad; si no, el Gasto Complementario lo fuerza.</div>'
+   +'<div style="display:flex;flex-direction:column;gap:8px">'
+   +(puedeMV?'<button type="button" onclick="_cuadreMVAbsorbe()" style="background:#1f7a4d;border:1px solid #3fb97d;color:#fff;border-radius:8px;padding:10px 14px;font-size:12px;font-weight:800;cursor:pointer;text-align:left">✅ Que Master Value absorba — vuelve a automático ('+_fm2(d.mvAuto)+')</button>':'')
+   +'<button type="button" onclick="_cuadreForzarGC('+diff+')" style="background:#a86a10;border:1px solid #ffc457;color:#fff;border-radius:8px;padding:10px 14px;font-size:12px;font-weight:800;cursor:pointer;text-align:left">🔧 Forzar con Gasto Complementario ('+(diff>0?'+':'−')+_fm2(abs).replace('-','')+' en Equipo)</button>'
+   +'<button type="button" onclick="_sabCerrarModalesPre();window._sabPreflightCont=null" style="background:transparent;border:1px solid rgba(255,255,255,.35);color:#fff;border-radius:8px;padding:9px 14px;font-size:12px;font-weight:700;cursor:pointer">Cancelar — voy a revisar</button>'
+   +'</div></div>';
+  document.body.appendChild(ov);
+}
+function _cuadreMVAbsorbe(){
+  _sabCerrarModalesPre();
+  window._mvUserEdited=false; window._mvManualValue=undefined;
+  document.querySelectorAll('[id="s2_mv_display"]').forEach(function(e){ e.value=''; });
+  _sabPostAccion('✅ Master Value vuelve a automático y absorbe la diferencia');
+}
+function _cuadreForzarGC(diff){
+  _sabCerrarModalesPre();
+  var gcEl=document.getElementById('s1_gasto_comp');
+  var actual=parseFloat(gcEl&&gcEl.value||0)||0;
+  if(gcEl) gcEl.value=(Math.round((actual+diff)*100)/100).toFixed(2);
+  _sabPostAccion('🔧 Gasto Complementario '+(diff>0?'+':'−')+'$'+Math.abs(diff).toFixed(2)+' — Landed Sababa = Landed Regular');
+}
+function _mostrarModalMVNegativo(mvAuto){
+  _sabCerrarModalesPre();
+  var need=Math.round(-mvAuto*100)/100;
+  var merc=window._sc3_mercHomol||0;
+  var nm=(window._sc3_noMercSinMV||0);
+  var fSab = merc>0 ? (nm/merc*100) : 0;
+  var ov=document.createElement('div');
+  ov.id='_mvneg_overlay';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:100002;display:flex;align-items:center;justify-content:center;padding:16px';
+  ov.innerHTML='<div style="background:#2a0d0f;border:2px solid #e5484d;border-radius:14px;max-width:480px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.6);padding:22px 22px 18px;color:#fff;font-family:inherit">'
+    +'<div style="font-size:16px;font-weight:800;color:#ff6b6b;margin-bottom:10px">⛔ No se puede procesar — Master Value sin capacidad</div>'
+    +'<div style="font-size:13px;line-height:1.65;color:#f3d6d7">El puente de Master Value da <strong style="color:#ff8a8a">−$'+need.toFixed(2)+'</strong>: los costos de Sababa (comisión, flete y gastos) ya superan el Costo Landed del Escenario Regular por ese monto. Un negativo no se puede cargar en el sistema empresarial.</div>'
+    +'<div style="font-size:12px;line-height:1.65;color:#f3d6d7;margin-top:10px;padding:10px 12px;background:rgba(255,255,255,.06);border-radius:8px">Al <strong>Aceptar</strong> el sistema:<br>• Activa <strong>Omitir MV</strong> (Master Value = $0.00, no se carga).<br>• Suma <strong>+$'+need.toFixed(2)+'</strong> al Gasto Complementario (Equipo) para anular el negativo.<br>• El factor de importación queda en <strong>'+fSab.toFixed(2)+'%</strong> (sin Master Value) y ambos Landed igualan.</div>'
+    +'<div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end">'
+    +'<button type="button" onclick="_sabCerrarModalesPre();window._sabPreflightCont=null" style="background:transparent;border:1px solid rgba(255,255,255,.35);color:#fff;border-radius:8px;padding:9px 16px;font-size:12px;font-weight:700;cursor:pointer">Cancelar</button>'
+    +'<button type="button" onclick="_aceptarMVNegativo()" style="background:#e5484d;border:1px solid #ff8a8a;color:#fff;border-radius:8px;padding:9px 18px;font-size:12px;font-weight:800;cursor:pointer">Aceptar y ajustar</button>'
+    +'</div></div>';
+  document.body.appendChild(ov);
+}
+function _aceptarMVNegativo(){
+  var mvAuto=window._sc3_mv_auto||0;
+  var need=Math.round(-mvAuto*100)/100;
+  _sabCerrarModalesPre();
+  if(!(need>0)) return;
+  var gcEl=document.getElementById('s1_gasto_comp');
+  var actual=parseFloat(gcEl&&gcEl.value||0)||0;
+  if(gcEl) gcEl.value=(Math.round((actual+need)*100)/100).toFixed(2);
+  window._mvNegDelta=(window._mvNegDelta||0)+need;
+  window._omitMV_sab=true;
+  window._mvUserEdited=false; window._mvManualValue=undefined;
+  document.querySelectorAll('[id="s2_mv_display"]').forEach(function(e){ e.value=''; });
+  document.querySelectorAll('[id="chk_omit_mv_sab"]').forEach(function(c){ c.checked=true; });
+  _sabPostAccion('✅ Master Value omitido — Gasto Complementario +$'+need.toFixed(2)+' (Equipo). Landed Sababa = Landed Regular');
 }
 function _aplicarDifMV930(){
   _guardarNFacturasVisibles();
@@ -38271,7 +38611,7 @@ window._plnModuloEmbarques = async function(){
   var NO_REST=['s1_pais_emb','s1_ciudad_emb','s1_pais_emb_otro','s1_ciudad_emb_otro'];
   // Banderas de la "máquina de cálculo" (ajustes manuales / rastreadores): se descartan al reiniciar
   var FLAGS_CALC=['_mv_override_cif','_mv_manual_cif','_itbms_override_cif','_itbms_manual_cif','_comManualValue',
-    '_mvUserEdited','_mvManualValue','_mv930YaAplicadoValor','_mv0CifYaAplicadoValor','s2_comisionEditada',
+    '_mvUserEdited','_mvManualValue','_mv930YaAplicadoValor','_mv0CifYaAplicadoValor','_fiTopeDelta','_fiTopeTarget','_fiTopeInfo','_mvNegDelta','s2_comisionEditada',
     'sc_comisionEditada','_s1TotalPagoEditado','_sc2_hon_ng_userEdited'];
   var FLAGS_INFO=['_noDmceAcarreo','_noHonorarios','_honManual','_omitMV_sab','_omitMV_cif','_sab2Exento'];
 
@@ -38386,7 +38726,7 @@ window._plnModuloEmbarques = async function(){
     window._borrSuspendido=true;
     try{
       _clearFormSilent();
-      window._mv930YaAplicadoValor=0; window._mv0CifYaAplicadoValor=0;
+      window._mv930YaAplicadoValor=0; window._fiTopeDelta=0; window._fiTopeTarget=null; window._fiTopeInfo=null; window._mv0CifYaAplicadoValor=0; window._mvNegDelta=0;
       function btn(attr,val){ if(!val) return; var b=document.querySelector('['+'onclick*="'+attr+"('"+val+"')"+'"]'); if(b&&b.click) b.click(); }
       btn('setTipo',p.tipo); btn('setTermino',p.termino); btn('setCompar',p.compar);
       if(p.exon!==undefined) exon=p.exon;
