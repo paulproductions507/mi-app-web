@@ -39401,7 +39401,7 @@ window._plnModuloEmbarques = async function(){
         conHeader=true; S.cols=matrix[0].map(hdrToField); matrix=matrix.slice(1);
       }
     }
-    if(reemplazar){ S.rows=[]; r0=0; c0=0; }
+    if(reemplazar){ S.rows=[]; r0=0; c0=0; S.embPuente=false; }
     var maxW=0; matrix.forEach(function(r){ if(r.length>maxW) maxW=r.length; });
     while(S.cols.length < c0+maxW) S.cols.push('IGNORAR');
     S.rows.forEach(function(r){ while(r.length<S.cols.length) r.push(''); });
@@ -39761,7 +39761,7 @@ window._plnModuloEmbarques = async function(){
 
   function cerrar(){ var o=document.getElementById('_pm_ov'); if(o) o.remove(); SEL=null; if(window._pmDocOff) window._pmDocOff(); guardarBorrador(true); }
   window._pmCerrar = cerrar;
-    window._pmCargarFilas=function(matrix){ S.cols=COLS_DEF.slice(); S.decSep=detectarSep(matrix); S.rows=matrix.map(function(r){ var a=r.slice(); while(a.length<S.cols.length) a.push(''); return a; }); normalize(); };
+    window._pmCargarFilas=function(matrix){ S.embPuente=true; S.cols=COLS_DEF.slice(); S.decSep=detectarSep(matrix); S.rows=matrix.map(function(r){ var a=r.slice(); while(a.length<S.cols.length) a.push(''); return a; }); normalize(); };
 
   function grupoInfo(p){ p=String(p||''); return /MASTER\s*VALUE/i.test(p)?'MASTERVALUE':(/CIF\s*EXPRESS/i.test(p)?'CIFEXP':(/SABABA/i.test(p)?'SABABA':'')); }
   function grupoInfoO(o){ return grupoInfo(o.PROVEEDOR); }
@@ -40174,12 +40174,12 @@ window._plnModuloEmbarques = async function(){
   // Detecta cada columna por su contenido y reparte: suplidor→PROVEEDOR, factura→FACTURA, monto→MONTO, tipo→TIPO
   function parseReporteEmbarque(rows){
     var KEYS=[['merc',/Mercanc[ií]a/i],['flete',/^Fletes?\b/i],['gastos',/Gastos\s+de\s+(Origen|Destino)/i],['comis',/Comisiones?\s+a\s+Agentes/i],['otros',/Otros\s+Costos\s+No\s+Gravados/i]];
-    var out={merc:[],flete:[],gastos:[],comis:[],otros:[],info:[],tesoro:'',omitidos:{},encabezados:[],todas:[],embarque:''};
+    var out={merc:[],flete:[],gastos:[],comis:[],otros:[],info:[],tesoro:'',omitidos:{},encabezados:[],todas:[],embarque:'',idFiscal:''};
     rows.forEach(function(items){
       var cells=celdasFila(items); if(!cells.length) return;
       var txt=cells.map(function(c){ return c.s; });
       if(!out.encabezados.length && txt.some(function(t){ return /\bFecha\b/i.test(t); }) && txt.some(function(t){ return /\bMonto\b/i.test(t); })){ out.encabezados=txt.slice(); return; }
-      if(!out.embarque && txt.some(function(t){ return /STATUS/i.test(t); }) && /^\d{4,7}$/.test(txt[0])) out.embarque=txt[0];
+      if(!out.embarque && txt.some(function(t){ return /STATUS/i.test(t); }) && /^\d{4,7}$/.test(txt[0])){ out.embarque=txt[0]; var _idc=txt.filter(function(t,i){ return i>0 && /^\d{8,12}$/.test(t); })[0]; if(_idc) out.idFiscal=_idc; }
       var d=-1; cells.forEach(function(c,i){ if(d<0 && /^\d{2}-\d{2}-\d{4}$/.test(c.s)) d=i; });
       if(d<0) return;
       var amts=[]; cells.forEach(function(c,i){ if(c.amt) amts.push(i); });
@@ -40228,10 +40228,20 @@ window._plnModuloEmbarques = async function(){
         toast('⚠️ No pude leer el reporte de embarque','orange',4500); return;
       }
       var hayDatos=S.rows.some(function(r){ return r.some(function(v){ return String(v||'').trim(); }); });
-      if(hayDatos && !confirm('La plantilla ya tiene datos. ¿Reemplazarlos con el reporte de embarque ('+nTot+' líneas)?')) { if(lab) lab.textContent='Carga cancelada'; return; }
+      var _merge=!!S.embPuente && hayDatos;   // plantilla creada por el Puente de Embarques: el reporte SUMA los servicios, no la reemplaza
+      if(hayDatos && !_merge && !confirm('La plantilla ya tiene datos. ¿Reemplazarlos con el reporte de embarque ('+nTot+' líneas)?')) { if(lab) lab.textContent='Carga cancelada'; return; }
+      if(!_merge) S.embPuente=false;
       var iT=ensureCol('TIPO'), iP=ensureCol('PROVEEDOR'), iF=ensureCol('FACTURA'), iM=ensureCol('MONTO'); ensureCol('DEPARTAMENTO');
       // Tipo de movimiento: «Mercancia Puente» = montos HOMOLOGADOS (solo proveedores S.I / Sababa) · «Mercancia» = valor ORIGINAL
-      var nPuente=R.merc.filter(function(x){ return x.puente; }).length;
+      var _lig=[], _sinM=[];
+      if(_merge){
+        R.merc.forEach(function(x){
+          var f=String(x.fact||'').trim().toUpperCase(), row=null;
+          if(f) S.rows.forEach(function(r){ if(!row && String(r[iF]==null?'':r[iF]).trim().toUpperCase()===f) row=r; });
+          if(row) _lig.push({row:row,x:x}); else _sinM.push(x);
+        });
+      }
+      var nPuente=_merge?_lig.filter(function(l){ return l.x.puente; }).length:R.merc.filter(function(x){ return x.puente; }).length;
       var iH=nPuente?ensureCol('MONTO_HOMOLOGADO'):S.cols.indexOf('MONTO_HOMOLOGADO');
       var n=S.cols.length, nuevas=[];
       function fila(tipo,x){
@@ -40240,22 +40250,45 @@ window._plnModuloEmbarques = async function(){
         if(x.puente && iH>=0){ r[iH]=r[iM]; r[iM]=''; r._mhManual=true; }
         nuevas.push(r);
       }
-      R.merc.forEach(function(x){ fila('mercancia',x); });
+      if(!_merge) R.merc.forEach(function(x){ fila('mercancia',x); });
       R.flete.forEach(function(x){ fila('flete',x); });
       R.gastos.forEach(function(x){ fila('gastos_origen',x); });
       R.comis.forEach(function(x){ fila('gastos_origen',x); });
       R.otros.forEach(function(x){ fila('otros_costos_no_gravados',x); });
       R.info.forEach(function(x){ fila('informativo',x); });
-      S.rows=nuevas; normalize();
+      var _nExc=0, _nSum=0, _nDup=0;
+      if(_merge){
+        var _ex=S.rows.filter(function(r){ return r.some(function(v){ return String(v==null?'':v).trim(); }); });
+        _nExc=_ex.length;
+        _lig.forEach(function(l){
+          var r=l.row, x=l.x; r._interna=x.interna||r._interna||''; r._tm=x.puente?'puente':'merc';
+          if(x.puente && iH>=0){ r[iH]=x.monto.toFixed(2); r._mhManual=true; }
+          else if(!x.puente && !String(r[iM]==null?'':r[iM]).trim()) r[iM]=x.monto.toFixed(2);
+        });
+        var _ya={}; _ex.forEach(function(r){ _ya[String(r[iP]||'').trim().toUpperCase()+'|'+String(r[iF]||'').trim().toUpperCase()]=1; });
+        var _add=nuevas.filter(function(r){ var k=String(r[iP]||'').trim().toUpperCase()+'|'+String(r[iF]||'').trim().toUpperCase(); if(_ya[k]){ _nDup++; return false; } _ya[k]=1; return true; });
+        _nSum=_add.length; S.rows=_ex.concat(_add);
+      } else S.rows=nuevas;
+      normalize();
       // (nov-2026) Referencia del reporte — se conserva aparte; nunca alimenta el cálculo, solo se compara al final
       try{
         var _emb=R.embarque||((/_N_(\d{4,7})/i.exec(file.name)||/N[_\s-]*(\d{4,7})/i.exec(file.name)||[])[1])||'';
-        window._repEmbarque={file:file.name,embarque:_emb,ts:Date.now(),lines:R.todas.slice()};
+        window._repEmbarque={file:file.name,embarque:_emb,idFiscal:R.idFiscal||'',ts:Date.now(),lines:R.todas.slice()};
         sessionStorage.setItem('_repEmbarqueRef',JSON.stringify(window._repEmbarque));
       }catch(e){ console.warn(e); }
-      if(nPuente && !siActivo()){ S.si=true; var cbp=document.getElementById('_pm_si'); if(cbp) cbp.checked=true; refrescarDatalistPM(); }   // la mercancía puente es solo de Sababa
+      try{   // (nov-2026) N° de embarque e ID del reporte → Información del Embarque
+        var _en=R.embarque||'', _idf=R.idFiscal||'';
+        var e1=document.getElementById('s1_nro_emb'), e2=document.getElementById('s1_id_fiscal');
+        if(e1 && _en){ e1.value=_en; e1.dispatchEvent(new Event('input',{bubbles:true})); e1.dispatchEvent(new Event('change',{bubbles:true})); }
+        if(e2 && _idf){ e2.value=_idf; e2.dispatchEvent(new Event('input',{bubbles:true})); e2.dispatchEvent(new Event('change',{bubbles:true})); }
+        if(typeof _actualizarResumenEmbarque==='function') _actualizarResumenEmbarque();
+        if(_en||_idf) toast('📋 Información del embarque: N° '+(_en||'—')+' · ID '+(_idf||'—'),'green',4500);
+      }catch(e){ console.warn(e); }
+      if(nPuente && !siActivo()){ S.si=true; var cbp=document.getElementById('_pm_si'); if(cbp) cbp.checked=true; refrescarDatalistPM(); }
+      if(nPuente && window._embIrSababa) window._embIrSababa();   // la mercancía puente es solo de Sababa
       var sumM=R.merc.reduce(function(a,x){ return a+x.monto; },0);
       S.rep={file:file.name, tesoro:R.tesoro||'', resumen:R.merc.length+' mercancías ('+f2(sumM)+')'+(nPuente?' ('+nPuente+' puente → homologado)':'')+' · '+R.flete.length+' flete · '+R.gastos.length+' gastos origen · '+R.comis.length+' comisiones'+(R.otros.length?' · '+R.otros.length+' otros costos no gravados':'')+(R.info.length?' · '+R.info.length+' informativas (MV/Sababa)':'')};
+      if(_merge) S.rep.resumen=_nExc+' filas del Excel conservadas'+(_lig.length?' · '+_lig.length+' ligadas al reporte'+(nPuente?' ('+nPuente+' puente → homologado)':''):'')+' · '+_nSum+' facturas de servicio agregadas'+(_nDup?' ('+_nDup+' ya estaban)':'')+(_sinM.length?' · '+_sinM.length+' de mercancía del reporte sin coincidencia en el Excel ('+_sinM.map(function(x){ return x.fact; }).join(', ')+')':'');
       var tin=document.getElementById('_pm_tesoro'); if(tin) tin.value=S.rep.tesoro;
       aplicarTesoro(true);
       if((S.recibos||[]).length) aplicarRecibos();
@@ -40264,7 +40297,8 @@ window._plnModuloEmbarques = async function(){
       var om=Object.keys(R.omitidos).map(function(k){ return k+' ('+R.omitidos[k]+')'; }).join(', ');
       lab=document.getElementById('_pm_repn');
       if(lab) lab.innerHTML='✅ '+esc(file.name)+' · '+esc(S.rep.resumen)+(R.tesoro?' · Tesoro N° <b>'+esc(R.tesoro)+'</b>':' · <span style="color:#f0883e">no encontré el N° de Tesoro, escríbelo</span>')+(om?' · <span style="color:var(--muted,#8b949e)">omitido: '+esc(om)+'</span>':'')+'<br><span style="color:var(--muted,#8b949e)">Columnas detectadas → Suplidor ➜ Proveedor · Factura ➜ N° Factura · Tipo de movimiento ➜ Tipo · Monto ➜ Valor original'+(R.encabezados.length?' (encabezados leídos: '+esc(R.encabezados.join(' | '))+')':'')+'</span>'+' · <b>Falta elegir los departamentos</b>';
-      toast('✅ Reporte cargado: '+nTot+' líneas — elige los departamentos','green',4500);
+      if(_merge) toast('✅ Reporte sumado: '+_nSum+' facturas de servicio agregadas, '+_nExc+' filas del Excel conservadas'+(_sinM.length?' · '+_sinM.length+' sin coincidencia':''),_sinM.length?'orange':'green',6000);
+      else toast('✅ Reporte cargado: '+nTot+' líneas — elige los departamentos','green',4500);
     }catch(err){
       console.warn(err);
       if(lab) lab.textContent='⚠️ '+(err&&err.message||err);
@@ -40566,7 +40600,7 @@ window._plnModuloEmbarques = async function(){
       else if(t.id==='_pm_rep' && t.files && t.files[0]){ var fr0=t.files[0]; t.value=''; leerReporteEmbarque(fr0); }
       else if(t.id==='_pm_rec' && t.files && t.files.length){ var fr1=Array.prototype.slice.call(t.files); t.value=''; leerRecibos(fr1); }
       else if(t.id==='_pm_hom'){ S.usarHomolSiVacio=t.checked; totales(); }
-      else if(t.id==='_pm_si'){ S.si=t.checked; refrescarDatalistPM(); actualizarTabla(true); }
+      else if(t.id==='_pm_si'){ S.si=t.checked; if(t.checked && window._embIrSababa) window._embIrSababa(); refrescarDatalistPM(); actualizarTabla(true); }
     });
     box.addEventListener('paste',function(e){
       var t=e.target; if(!t.classList || !t.classList.contains('pmi')) return;
@@ -40674,7 +40708,7 @@ window._plnModuloEmbarques = async function(){
   function _hayDatos(){ return S.rows.some(function(r){ return r.some(function(v){ return String(v==null?'':v).trim(); }); }); }
   function _snap(full){
     var o={ cols:S.cols.slice(), rows:S.rows.map(function(r){ return {v:r.slice(), mh:!!r._mhManual, rp:!!r._rep, sm:!!r._siMov, tm:r._tm||'', g:r._gid||'', gt:r._gtot||0, gp:r._gpar||'', go:r._gtipo||''}; }),
-      usarHomolSiVacio:S.usarHomolSiVacio, si:S.si, decSep:S.decSep, fiscal:S.fiscal, artNombre:S.artNombre||'', recibosRes:S.recibosRes||'',
+      usarHomolSiVacio:S.usarHomolSiVacio, si:S.si, ep:!!S.embPuente, decSep:S.decSep, fiscal:S.fiscal, artNombre:S.artNombre||'', recibosRes:S.recibosRes||'',
       abierta:!!document.getElementById('_pm_ov'), t:Date.now() };
     if(full){ o.art=S.art; o.rep=S.rep; o.recibos=S.recibos; }
     return o;
@@ -40693,7 +40727,7 @@ window._plnModuloEmbarques = async function(){
     if(!o || !o.cols || !o.rows) return false;
     S.cols=o.cols;
     S.rows=o.rows.map(function(x){ var r=x.v.slice(); if(x.mh) r._mhManual=true; if(x.rp) r._rep=true; if(x.sm) r._siMov=true; if(x.tm) r._tm=x.tm; if(x.g){ r._gid=x.g; r._gtot=x.gt; r._gtipo=x.go; } if(x.gp) r._gpar=x.gp; return r; });
-    S.usarHomolSiVacio=!!o.usarHomolSiVacio; S.si=(o.si==null?null:o.si); if(o.decSep) S.decSep=o.decSep;
+    S.embPuente=!!o.ep; S.usarHomolSiVacio=!!o.usarHomolSiVacio; S.si=(o.si==null?null:o.si); if(o.decSep) S.decSep=o.decSep;
     if(o.fiscal) S.fiscal=o.fiscal;
     S.artNombre=o.artNombre||''; if(o.art) S.art=o.art; if(o.rep) S.rep=o.rep; if(o.recibos) S.recibos=o.recibos; if(o.recibosRes) S.recibosRes=o.recibosRes;
     return true;
@@ -42068,6 +42102,26 @@ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded'
     },500);
   }
 
+  window._embIrSababa=function(){
+    try{
+      if(typeof compar!=='undefined' && compar==='sababa') return;
+      var b=document.querySelector('.seg-btn[onclick*="setCompar(\'sababa\'"]');
+      if(b && typeof setCompar==='function'){ setCompar('sababa',b); toast('🔗 Escenario Sababa homologado activado','green',3500); }
+    }catch(e){ console.warn(e); }
+  };
+  /* El contenedor de la app usa transform (animación de entrada): eso hace que los modales "fixed" se midan contra
+     la página completa y no contra la pantalla (botones Guardar/Cancelar quedaban muy abajo). Se pasan al <body>. */
+  function sacarModales(){
+    try{ [].slice.call(document.querySelectorAll('[id^="_modal_"][id$="_overlay"]')).forEach(function(ov){
+      if(ov.parentNode!==document.body) document.body.appendChild(ov);
+    }); }catch(e){ console.warn(e); }
+  }
+  sacarModales();
+  var _ab=window._abrirModalEquipo;
+  if(typeof _ab==='function' && !_ab._emb){
+    window._abrirModalEquipo=function(){ sacarModales(); var r=_ab.apply(this,arguments); var ov=document.getElementById('_modal_equipo_overlay'); if(ov){ ov.style.alignItems='center'; ov.style.justifyContent='center'; ov.style.paddingTop='max(8px,env(safe-area-inset-top))'; } return r; };
+    window._abrirModalEquipo._emb=true;
+  }
   window._embPuenteLeer=leer;
   pintarCodigo();
   if(document.readyState==='complete') arrancar(); else window.addEventListener('load',arrancar);
