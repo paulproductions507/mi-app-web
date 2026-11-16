@@ -8,7 +8,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <!-- PWA -->
 <meta name="theme-color" content="#041f26">
-<script>/* Arranque directo: color de fondo y barra del sistema con la paleta de la Máscara desde el primer instante */
+<script>/* Puente de Embarques: guarda el aviso del marcador y limpia la dirección antes de que arranque la app */
+try{var _h=location.hash||'';if(_h.indexOf('#embarque=')===0){var _b=_h.slice(10).replace(/-/g,'+').replace(/_/g,'/');while(_b.length%4)_b+='=';sessionStorage.setItem('_embPuentePend',decodeURIComponent(escape(atob(_b))));sessionStorage.setItem('_embPuenteFase','nuevo');history.replaceState(null,'',location.pathname+location.search);}}catch(e){}
+/* Arranque directo: color de fondo y barra del sistema con la paleta de la Máscara desde el primer instante */
 (function(){try{var th=localStorage.getItem('_simTheme')||'dark',lt=(th==='light'||th==='corporate');document.documentElement.style.background=lt?'#eef4f6':'#041f26';var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute('content',lt?'#eef4f6':'#041f26');}catch(e){}})();</script>
 <style id="mx-critical">
 body.mx-on{background:radial-gradient(1100px 520px at 85% -8%,#0b5b69 0,transparent 60%) no-repeat,#041f26;background-attachment:fixed;--muted:#8fc3c6}
@@ -4824,6 +4826,26 @@ var dv=L.getItem('_mxDevice');if(dv!=='phone'&&dv!=='tablet'&&dv!=='desktop')dv=
       <input id="mxcfg-user" type="text" readonly placeholder="primera letra del nombre + apellido" style="flex:1;min-width:120px;background:var(--s2);border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:7px 10px;font-size:12px">
     </div>
     <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12px;color:var(--muted);cursor:pointer"><input type="checkbox" id="mxcfg-wg" onchange="mxSetWidgets(this.checked)"> Mostrar tarjetas de resumen (mes, semana, tareas) en la Máscara</label>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:14px" id="emb-puente-card">
+  <div class="card-hd" style="cursor:pointer;user-select:none" onclick="_toggleSection('embp-body','embp-icon',this)">
+    <div class="dot" style="background:#2de2c9"></div><h3>🌉 Puente de Embarques (Excel EXTERIOR)</h3>
+    <span id="embp-icon" style="margin-left:auto;font-size:12px;color:var(--muted)">▶</span>
+  </div>
+  <div id="embp-body" class="card-bd" style="display:none">
+    <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5"><b>Instalación (una sola vez):</b> 1) Toca <i>Copiar código del puente</i>. 2) En Chrome guarda cualquier página como favorito ⭐ con el nombre <b>Embarques</b> y colócalo en la <b>Barra de favoritos</b> (Ctrl+Shift+B la muestra). 3) Edita ese favorito y pega el código en la dirección (URL). También puedes arrastrar el botón verde a la barra de favoritos.</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5"><b>Uso:</b> en el Excel EXTERIOR filtra por N° de contenedor, selecciona las filas completas (desde la columna A) y presiona <b>Ctrl+C</b>. Luego toca <b>Embarques</b> en favoritos: la app crea el embarque (FOB · Importación), llena país, puerto, ETD/ETA, Equipo con los contenedores y te abre la Plantilla manual con las facturas. La primera vez Chrome pide permiso para leer el portapapeles: acéptalo.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+      <button type="button" onclick="_embPuenteCopiar()" style="background:rgba(45,226,201,.12);border:1px solid rgba(45,226,201,.45);color:#2de2c9;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer">📋 Copiar código del puente</button>
+      <a id="embp-drag" href="#" draggable="true" onclick="return false" style="background:#1f9d6b;color:#fff;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;text-decoration:none" title="Arrástrame a la barra de favoritos">🌉 Embarques</a>
+    </div>
+    <textarea id="embp-code" readonly rows="3" onclick="this.select()" style="width:100%;box-sizing:border-box;font-family:monospace;font-size:10px;background:var(--s2);border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:6px"></textarea>
+    <div style="font-size:11px;color:var(--muted);margin:12px 0 6px;font-weight:700">Sin puente (prueba manual): pega aquí las filas copiadas del Excel</div>
+    <textarea id="embp-ta" rows="4" placeholder="Pega aquí (Ctrl+V) las filas filtradas del Excel EXTERIOR, desde la columna A" style="width:100%;box-sizing:border-box;font-size:11px;background:var(--s2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px"></textarea>
+    <button type="button" onclick="_embPuenteManual()" style="margin-top:6px;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.35);color:var(--green-l,#3fb950);border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer">🆕 Crear embarque con lo pegado</button>
+    <div style="font-size:10px;color:var(--muted2);margin-top:6px;line-height:1.5">Columnas que lee: A Departamento · B Suplidor · C N° contenedor · D N° factura · E Valor · L País · M Puerto/Ciudad · O ETD · P ETA · T OC madre · U Bultos. Crear un embarque por el puente reinicia el formulario actual (como el botón Nuevo).</div>
   </div>
 </div>
 
@@ -39739,6 +39761,7 @@ window._plnModuloEmbarques = async function(){
 
   function cerrar(){ var o=document.getElementById('_pm_ov'); if(o) o.remove(); SEL=null; if(window._pmDocOff) window._pmDocOff(); guardarBorrador(true); }
   window._pmCerrar = cerrar;
+    window._pmCargarFilas=function(matrix){ S.cols=COLS_DEF.slice(); S.decSep=detectarSep(matrix); S.rows=matrix.map(function(r){ var a=r.slice(); while(a.length<S.cols.length) a.push(''); return a; }); normalize(); };
 
   function grupoInfo(p){ p=String(p||''); return /MASTER\s*VALUE/i.test(p)?'MASTERVALUE':(/CIF\s*EXPRESS/i.test(p)?'CIFEXP':(/SABABA/i.test(p)?'SABABA':'')); }
   function grupoInfoO(o){ return grupoInfo(o.PROVEEDOR); }
@@ -40839,6 +40862,7 @@ window._plnModuloEmbarques = async function(){
     return n;
   }
   function restaurar(){
+    try{ if(sessionStorage.getItem('_embPuentePend')){ listo=true; return; } }catch(e){}
     get().catch(function(){ return null; }).then(function(o){
       if(!o || (Date.now()-(o.t||0))>MAX){ listo=true; return; }
       var intentos=0, iv=setInterval(function(){
@@ -41846,5 +41870,209 @@ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded'
 })();
 </script>
 
+<script id="puente-embarques">
+/* ═══════════════════════════════════════════════════════════════════════
+   🌉 PUENTE DE EMBARQUES (nov-2026)
+   Lee las filas filtradas del Excel EXTERIOR (copiadas con Ctrl+C) y crea el
+   embarque solo: FOB · Importación, país, puerto, tipo de embarque, ETD/ETA,
+   lugar de recepción, Equipo (contenedores) y Plantilla manual con las facturas.
+   Columnas: A Dpto · B Suplidor · C Contenedor · D Factura · E Valor · L País ·
+             M Puerto · O ETD · P ETA · T OC madre · U Bultos
+   ═══════════════════════════════════════════════════════════════════════ */
+(function(){
+  if(window._embPuenteInst) return; window._embPuenteInst=true;
+  var COLS=[0,1,2,3,4,11,12,14,15,19,20];
+
+  function toast(m,c,d){ try{ if(typeof _showToast==='function') _showToast(m,c||'green',d||4000); else console.log(m); }catch(e){} }
+  function norm(s){ return String(s==null?'':s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim().toUpperCase(); }
+  function titulo(s){ return String(s||'').toLowerCase().replace(/(^|[\s\-\/])(\S)/g,function(m,a,b){ return a+b.toUpperCase(); }); }
+  function numero(v){
+    var t=String(v==null?'':v).replace(/[^0-9.,\-]/g,''); if(!t) return 0;
+    var lc=t.lastIndexOf(','), ld=t.lastIndexOf('.');
+    if(lc>=0&&ld>=0){ if(lc>ld) t=t.replace(/\./g,'').replace(',','.'); else t=t.replace(/,/g,''); }
+    else if(lc>=0){ var p=t.split(','); t=(p.length===2&&p[1].length!==3)?p[0]+'.'+p[1]:t.replace(/,/g,''); }
+    else if(ld>=0){ var q=t.split('.'); if(q.length>2) t=t.replace(/\./g,''); }
+    var n=parseFloat(t); return isNaN(n)?0:n;
+  }
+  var MESES={ene:1,feb:2,mar:3,abr:4,may:5,jun:6,jul:7,ago:8,sep:9,set:9,oct:10,nov:11,dic:12,jan:1,apr:4,aug:8,dec:12};
+  function fecha(raw){
+    var s=String(raw==null?'':raw).trim(); if(!s) return '';
+    if(/^\d{5}$/.test(s)){ var d=new Date(Math.round((parseFloat(s)-25569)*86400000)); if(!isNaN(d)) return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0'); }
+    var m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); if(m) return m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0');
+    m=s.match(/^(\d{1,2})[\/\-\.\s]([A-Za-z]{3})[A-Za-z]*[\/\-\.\s,]*(\d{2,4})/);
+    if(m && MESES[m[2].toLowerCase()]){ var y=m[3].length===2?'20'+m[3]:m[3]; return y+'-'+String(MESES[m[2].toLowerCase()]).padStart(2,'0')+'-'+m[1].padStart(2,'0'); }
+    m=s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})/);
+    if(m){ var p1=+m[1],p2=+m[2],y2=m[3].length===2?'20'+m[3]:m[3],dia,mes; if(p1>12){dia=p1;mes=p2;} else if(p2>12){mes=p1;dia=p2;} else {dia=p1;mes=p2;} return y2+'-'+String(mes).padStart(2,'0')+'-'+String(dia).padStart(2,'0'); }
+    return '';
+  }
+  function moda(arr){
+    var c={},best='',bn=0; arr.forEach(function(x){ if(!x) return; c[x]=(c[x]||0)+1; if(c[x]>bn){ bn=c[x]; best=x; } }); return best;
+  }
+
+  /* ── País del Excel → valor de la lista de la app ── */
+  var PAISES={'CHINA':'China','CN':'China','USA':'USA','US':'USA','EEUU':'USA','EE UU':'USA','EE.UU.':'USA','EE.UU':'USA','ESTADOS UNIDOS':'USA','ESTADOS UNIDOS DE AMERICA':'USA','UNITED STATES':'USA',
+    'CANADA':'Canada','MEXICO':'Mexico','ESPANA':'Espana','SPAIN':'Espana','ITALIA':'Italia','ITALY':'Italia','ALEMANIA':'Alemania','GERMANY':'Alemania','JAPON':'Japan','JAPAN':'Japan',
+    'COREA':'Korea','COREA DEL SUR':'Korea','KOREA':'Korea','SOUTH KOREA':'Korea','TURQUIA':'Turkey','TURKEY':'Turkey','TAIWAN':'Taiwan','HONG KONG':'Hong Kong','HONGKONG':'Hong Kong',
+    'VIETNAM':'Vietnam','VIET NAM':'Vietnam','TAILANDIA':'Tailandia','THAILAND':'Tailandia','INDIA':'India','INDONESIA':'Indonesia','MALASIA':'Malasia','MALAYSIA':'Malasia','PAKISTAN':'Pakistan',
+    'BANGLADESH':'Bangladesh','BRASIL':'Brasil','BRAZIL':'Brasil','COLOMBIA':'Colombia','COSTA RICA':'Costa Rica','GUATEMALA':'Guatemala','HONDURAS':'Honduras','NICARAGUA':'Nicaragua',
+    'EL SALVADOR':'El Salvador','PORTUGAL':'Portugal','PUERTO RICO':'Puerto Rico','PANAMA':'Panamá'};
+  function mapPais(raw){
+    var n=norm(raw); if(!n) return '';
+    if(PAISES[n]) return PAISES[n];
+    var sel=document.getElementById('s1_pais_emb');
+    if(sel){ var o=[].slice.call(sel.options).filter(function(x){ return x.value && x.value!=='__otro__' && (norm(x.value)===n||norm(x.textContent.replace(/^[^A-Za-z]+/,''))===n); })[0]; if(o) return o.value; }
+    return titulo(raw);
+  }
+
+  /* ── Lee el texto copiado (ya compactado a 11 columnas) ── */
+  function compactar(t){
+    return String(t||'').split(/\r?\n/).map(function(l){ var c=l.split('\t'); return COLS.map(function(i){ return (c[i]||'').replace(/\s+/g,' ').trim(); }).join('\t'); })
+      .filter(function(l){ return l.replace(/\t/g,'')!==''; }).join('\n');
+  }
+  function leer(tsv){
+    var rows=[]; String(tsv||'').split(/\r?\n/).forEach(function(l){
+      if(!l.trim()) return; var c=l.split('\t'); while(c.length<11) c.push(''); rows.push(c.map(function(x){ return String(x||'').trim(); }));
+    });
+    /* c: 0 Dpto · 1 Suplidor · 2 Contenedor · 3 Factura · 4 Valor · 5 País · 6 Puerto · 7 ETD · 8 ETA · 9 OC madre · 10 Bultos */
+    var datos=rows.filter(function(r){ return r[3] && /\d/.test(r[4]) && !/^(N[°º]?\s*)?FACTURA/i.test(r[3]); });
+    var conts=[]; datos.forEach(function(r){
+      var c=r[2].replace(/[^A-Za-z0-9]/g,'').toUpperCase(); if(!c) return;
+      if(!/^[A-Z]{4}\d{7}$/.test(c)) c=r[2].trim();
+      if(conts.indexOf(c)<0) conts.push(c);
+    });
+    var tot=0; datos.forEach(function(r){ tot+=numero(r[4]); });
+    return {
+      rows:datos, conts:conts, total:tot,
+      pais:moda(datos.map(function(r){ return r[5]; })),
+      puerto:moda(datos.map(function(r){ return r[6]; })),
+      etd:fecha(moda(datos.map(function(r){ return r[7]; }))),
+      eta:fecha(moda(datos.map(function(r){ return r[8]; })))
+    };
+  }
+
+  /* ── Puente: código del marcador ── */
+  function BMEMB(U){
+    var K=[0,1,2,3,4,11,12,14,15,19,20];
+    function go(t){ var j=btoa(unescape(encodeURIComponent(t))).replace(/\+/g,'-').replace(/\//g,'_'); var u=U+'#embarque='+j; if(!window.open(u,'_blank')) location.href=u; }
+    function ok(t){
+      if(!t||t.indexOf('\t')<0){ alert('Embarques: en el Excel filtra por contenedor, selecciona las filas completas (desde la columna A) y presiona Ctrl+C. Luego toca Embarques.'); return; }
+      var r=t.split(/\r?\n/).map(function(l){ var c=l.split('\t'); return K.map(function(i){ return (c[i]||'').replace(/\s+/g,' ').trim(); }).join('\t'); }).filter(function(l){ return l.replace(/\t/g,'')!==''; });
+      go(r.join('\n'));
+    }
+    try{
+      if(navigator.clipboard&&navigator.clipboard.readText){ navigator.clipboard.readText().then(ok).catch(function(){ alert('Embarques: permite el acceso al portapapeles (Chrome lo pide la primera vez) y toca Embarques otra vez.'); }); }
+      else alert('Embarques: este navegador no deja leer el portapapeles.');
+    }catch(e){ alert('Embarques: '+e.message); }
+  }
+  function bmCode(){
+    var U=location.href.split('#')[0].split('?')[0];
+    return 'javascript:('+BMEMB.toString().replace(/\s*\n\s*/g,' ')+')('+JSON.stringify(U)+')';
+  }
+  function pintarCodigo(){
+    var code=bmCode(), ta=document.getElementById('embp-code'), a=document.getElementById('embp-drag');
+    if(ta) ta.value=code; if(a) a.setAttribute('href',code);
+    return code;
+  }
+  window._embPuenteCopiar=async function(){
+    var code=pintarCodigo(), ok=false;
+    try{ await navigator.clipboard.writeText(code); ok=true; }catch(e){ try{ var ta=document.getElementById('embp-code'); ta.select(); ok=document.execCommand('copy'); }catch(e2){} }
+    toast(ok?'✅ Código del puente copiado. Pégalo como dirección (URL) de un favorito llamado Embarques.':'No pude copiar solo: toca el cuadro del código, selecciona todo y copia.',ok?'green':'orange',5000);
+  };
+  window._embPuenteManual=function(){
+    var ta=document.getElementById('embp-ta'), t=compactar(ta&&ta.value);
+    if(!leer(t).rows.length){ toast('No encontré facturas en lo pegado. Copia las filas desde la columna A del Excel.','orange',5000); return; }
+    try{ sessionStorage.setItem('_embPuentePend',t); sessionStorage.setItem('_embPuenteFase','nuevo'); }catch(e){}
+    arrancar();
+  };
+
+  /* ── Aplicar al formulario ── */
+  function ev(el,t){ try{ el.dispatchEvent(new Event(t,{bubbles:true})); }catch(e){} }
+  function setv(id,v){ var el=document.getElementById(id); if(!el) return null; el.value=v; ev(el,'input'); ev(el,'change'); return el; }
+
+  function llenar(d){
+    var avisos=[];
+    /* Término FOB + Tipo Importación */
+    var bImp=document.querySelector('.seg-btn[onclick*="setTipo(\'EXT\'"]');
+    setTipo('EXT',bImp); setTermino('FOB',document.getElementById('btn-fob-termino'));
+    /* País y ciudad/puerto */
+    var pais=mapPais(d.pais), ciudad='';
+    if(pais){
+      _selSetOrCustom('s1_pais_emb',pais);
+      _actualizarCiudades(document.getElementById('s1_pais_emb').value);
+      if(d.puerto){
+        var sc=document.getElementById('s1_ciudad_emb'), nc=norm(d.puerto);
+        var op=[].slice.call(sc.options).filter(function(o){ return o.value && o.value!=='__otro__' && norm(o.value)===nc; })[0]
+            || [].slice.call(sc.options).filter(function(o){ return o.value && o.value!=='__otro__' && (norm(o.value).indexOf(nc)>=0||nc.indexOf(norm(o.value))>=0); })[0];
+        ciudad=op?op.value:titulo(d.puerto);
+        _selSetOrCustom('s1_ciudad_emb',ciudad);
+      } else avisos.push('el puerto de origen (col. M)');
+      _sincronizarOrigenEmb();
+    } else avisos.push('el país (col. L)');
+    /* Tipo de embarque */
+    var consol=(pais==='USA' && /(NUEVA YORK|NEW YORK|LOS ANGELES)/.test(norm(ciudad)));
+    var te=consol?'Consolidado Marítimo':'Contenedor directo';
+    setv('s1_tipo_emb',te); try{ _toggleContenedorField(te); }catch(e){}
+    /* Fechas y lugar de recepción */
+    if(d.etd) setv('s1_etd',d.etd); else avisos.push('ETD (col. O)');
+    if(d.eta) setv('s1_eta_puerto',d.eta); else avisos.push('ETA (col. P)');
+    setv('s1_lugar_recep','CDF');
+    /* Equipo: contenedor · marítimo · cantidad = contenedores distintos */
+    var eq=document.getElementById('s1_equipo'); if(eq){ eq.value='Contenedor'; setEquipo('Contenedor'); }
+    var via=document.getElementById('s1_via_transporte'); if(via) via.value='SEA';
+    var ne=document.getElementById('s1_equipos'); if(ne) ne.value=Math.max(1,d.conts.length||1);
+    if(!window._contenedores) window._contenedores=[];
+    _renderContenedores();
+    d.conts.forEach(function(c,i){ if(window._contenedores[i]) window._contenedores[i].num=c; });
+    _renderContenedores();
+    if(!d.conts.length) avisos.push('el N° de contenedor (col. C)');
+    try{ updateAcarreoLabel(); }catch(e){}
+    try{ _actualizarSummaryEquipo(); }catch(e){}
+    try{ _actualizarResumenEmbarque(); }catch(e){}
+    try{ calc(); }catch(e){}
+    /* Plantilla manual */
+    var matrix=d.rows.map(function(r){ return ['mercancia',r[1],r[0],r[3],r[4],r[10],r[9],'','','','','']; });
+    window._pmCargarFilas(matrix);
+    window._pmAbrir();
+    toast('🌉 Embarque creado: '+(pais||'—')+(ciudad?' · '+ciudad:'')+' · '+d.conts.length+' contenedor(es) · '+d.rows.length+' factura(s)'+(avisos.length?' — revisa: '+avisos.join(', '):''),avisos.length?'orange':'green',9000);
+  }
+
+  /* ── Flujo: reiniciar el formulario (Nuevo) y aplicar ── */
+  function limpiar(){ try{ sessionStorage.removeItem('_embPuentePend'); sessionStorage.removeItem('_embPuenteFase'); }catch(e){} }
+  function lista(){
+    var ld=document.getElementById('splash-loading');
+    return typeof iniciarApp==='function' && typeof setTipo==='function' && typeof _nuevoEmbarqueDesdeCero==='function'
+      && document.getElementById('s1_pais_emb') && window._pmAbrir && window._pmCargarFilas && !(ld&&ld.classList.contains('active'));
+  }
+  function aplicarTodo(){
+    var tsv=''; try{ tsv=sessionStorage.getItem('_embPuentePend')||''; }catch(e){}
+    limpiar();
+    var d=leer(tsv);
+    if(!d.rows.length){ toast('Puente Embarques: no llegaron facturas. Copia las filas del Excel y vuelve a tocar Embarques.','orange',6000); return; }
+    window._embPickerMostrado=true;
+    var sp=document.getElementById('splash');
+    if(sp && sp.style.display!=='none' && !sp.classList.contains('app-mode')) iniciarApp('sim');
+    setTimeout(function(){ try{ llenar(d); }catch(e){ console.error(e); toast('Puente Embarques: '+e.message,'red',8000); } },1500);
+  }
+  function arrancar(){
+    var pend='',fase=''; try{ pend=sessionStorage.getItem('_embPuentePend')||''; fase=sessionStorage.getItem('_embPuenteFase')||''; }catch(e){}
+    if(!pend) return;
+    var n=0, iv=setInterval(function(){
+      if(++n>240){ clearInterval(iv); limpiar(); return; }
+      if(!lista()) return;
+      clearInterval(iv);
+      if(fase==='nuevo'){
+        try{ sessionStorage.setItem('_embPuenteFase','aplicar'); }catch(e){}
+        toast('🌉 Creando el embarque desde el Excel…','green',3000);
+        setTimeout(function(){ _nuevoEmbarqueDesdeCero(true,false); },800);   /* recarga la página limpia */
+      } else setTimeout(aplicarTodo,2500);
+    },500);
+  }
+
+  window._embPuenteLeer=leer;
+  pintarCodigo();
+  if(document.readyState==='complete') arrancar(); else window.addEventListener('load',arrancar);
+})();
+
+</script>
 </body>
 </html>
