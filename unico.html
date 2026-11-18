@@ -161,6 +161,7 @@ datalist option{background:var(--s2);color:var(--text)}
       <button onclick="downloadTemplate('xlsx')" style="flex:1;min-width:80px;background:rgba(88,166,255,.08);border:1px solid rgba(88,166,255,.2);color:var(--blue);border-radius:7px;padding:7px;font-size:11px;cursor:pointer">📥 Excel</button>
       <button onclick="document.getElementById('file-in').click()" style="flex:2;min-width:100px;background:rgba(163,113,247,.12);border:1px solid rgba(163,113,247,.3);color:var(--purple);border-radius:7px;padding:7px;font-size:11px;font-weight:700;cursor:pointer">📂 Cargar Plantilla</button>
       <input type="file" id="file-in" accept=".csv,.xlsx,.xls" style="display:none" onchange="loadFile(this)">
+      <button onclick="location.hash='#plantilla=ls';_recibirPlantillaIndex()" title="Trae la última plantilla enviada desde Plantilla manual (index)" style="flex:2;min-width:120px;background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.35);color:var(--blue);border-radius:7px;padding:7px;font-size:11px;font-weight:700;cursor:pointer">🔗 Traer de Plantilla manual</button>
     </div>
     <div id="plant-status" style="font-size:10px;color:var(--muted)">Sin plantilla cargada.</div>
     <div id="plant-preview" style="display:block">
@@ -2181,6 +2182,44 @@ document.addEventListener('change', function(e){
   _autoSave();
 });
 
+
+// ═══════════════════════════════════════════════
+// RECIBIR PLANTILLA DESDE index.html (botón 🔒 Único de la Plantilla manual)
+// ═══════════════════════════════════════════════
+function _recibirPlantillaIndex(){
+  var h=location.hash||''; if(h.indexOf('#plantilla=')!==0) return;
+  var raw='';
+  try{
+    var p=h.slice(11);
+    if(p==='ls'){ raw=localStorage.getItem('_unico_inbox')||''; }
+    else{ var b=p.replace(/-/g,'+').replace(/_/g,'/'); while(b.length%4) b+='='; raw=decodeURIComponent(escape(atob(b))); }
+    history.replaceState(null,'',location.pathname+location.search);
+  }catch(e){}
+  if(!raw){ toast('No llegaron datos de la plantilla. Envíalos otra vez desde Plantilla manual → 🔒 Único.','red'); return; }
+  var d; try{ d=JSON.parse(raw); }catch(e){ toast('La plantilla enviada no se pudo leer.','red'); return; }
+  if(!d||!d.lines||!d.lines.length){ toast('La plantilla enviada viene vacía.','red'); return; }
+  invLines=d.lines.map(function(l){
+    var line={prov:l.prov||'',deptCat:l.tipoFac==='mercancia'?deptMatch(l.deptCat||''):'',costo:l.costo||0,tipoFac:l.tipoFac,nfac:l.nfac||'',oc:l.oc||'',bultos:l.bultos||0,piezas:l.piezas||0,_raw:l.prov||'',_deptRaw:l.deptCat||''};
+    if(line.tipoFac==='mercancia' && line.prov){
+      var m=provMatch(line.prov);
+      if(m&&(m.exact||m.score>=0.65)){ line._matched=true; line._corregido=(line.prov.toUpperCase()!==m.name.toUpperCase()); line.prov=m.name; }
+      else line._noMatch=true;
+    }
+    return line;
+  });
+  var mt=d.meta||{};
+  if(mt.nro) sv('nro',mt.nro);
+  if(mt.idFiscal) sv('id-fiscal',mt.idFiscal);
+  if(mt.termino==='CIF'||mt.termino==='FOB') sv('termino-emb',mt.termino);
+  if(mt.tipo==='ZL'||mt.tipo==='IMP') sv('tipo-proveedor',mt.tipo);
+  renderPreview();
+  var pp=document.getElementById('plant-preview'), ps=document.getElementById('plant-status');
+  if(pp) pp.style.display='block';
+  if(ps) ps.innerHTML='<span style="color:var(--green)">✓ Plantilla recibida de index · '+invLines.filter(function(l){return l.tipoFac==="mercancia";}).length+' facturas</span>';
+  applyPlantilla();
+  _autoSave();
+}
+
 // ═══════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════
@@ -2191,6 +2230,7 @@ document.addEventListener('change', function(e){
   onCorredorChange();
   // Load saved state
   loadState();
+  try{ _recibirPlantillaIndex(); }catch(e){ console.warn(e); }
   // Init Supabase
   setTimeout(initSB, 500);
 setTimeout(_recuperarUnicosAlDashboard, 2500);
