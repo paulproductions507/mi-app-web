@@ -39129,7 +39129,7 @@ window._plnModuloEmbarques = async function(){
   var COLS_DEF = ['TIPO','PROVEEDOR','DEPARTAMENTO','FACTURA','MONTO','BULTOS','OC','PIEZAS','OC_HOMOLOGADA','MONTO_HOMOLOGADO','TRASPASO','FECHA_RECEPCION'];
   var PRESETS = {
     std: COLS_DEF,
-    zl:  ['PROVEEDOR','DEPARTAMENTO','FACTURA','MONTO','BULTOS','OC','FECHA_RECEPCION'],
+    zl:  ['PROVEEDOR','DEPARTAMENTO','FACTURA','FECHA_PEDIDO','IGNORAR','IGNORAR','MONTO','TRASPASO','BULTOS','IGNORAR','IGNORAR','FECHA_RECEPCION','IGNORAR','OC'], /* LISTADO: A Prov · B Dpto · C Factura · D F.pedido · E Comprado(x) · F Monto Sababa(x) · G MONTO · H Traspaso · I Cant · J Status(x) · K Destino(x) · L Programar · M CD/WES(x) · N OC */
     imp: ['PROVEEDOR','FACTURA','MONTO','BULTOS','OC','FECHA_RECEPCION']
   };
   var HDR_XLSX = ['PROVEEDOR','TIPO','RUBRO / DEPARTAMENTO','No.FACTURA','MONTO_CIF_FOB','ORDEN_COMPRA','BULTOS','TRASPASO','PIEZAS','OC_HOMOLOGADA','MONTO_HOMOLOGADO','FECHA_RECEPCION'];
@@ -39385,6 +39385,8 @@ window._plnModuloEmbarques = async function(){
     if(/^(DEPARTAMENTO|DEPT|RUBRO)/.test(h)) return 'DEPARTAMENTO';
     if(/HOMOL/.test(h) && /(OC|ORDEN|O\/C)/.test(h)) return 'OC_HOMOLOGADA';
     if(/HOMOL/.test(h)) return 'MONTO_HOMOLOGADO';
+    if(/SABABA/.test(h) || /^(COMPRADO|STATUS|DESTINO|CD\/?WES)/.test(h)) return 'IGNORAR';
+    if(/^PROGRAMAR/.test(h)) return 'FECHA_RECEPCION';
     if(/^(MONTO|VALOR|IMPORTE|AMOUNT|COSTO|CIF|FOB)/.test(h)) return 'MONTO';
     if(/FECH/.test(h) && /PEDIDO/.test(h)) return 'FECHA_PEDIDO';
     if(/FACT|INVOICE|PEDIDO/.test(h)) return 'FACTURA';
@@ -39405,6 +39407,11 @@ window._plnModuloEmbarques = async function(){
     var hits=0; r.forEach(function(c){ if(c && hdrToField(c)!=='IGNORAR') hits++; });
     return hits>=2 && !r.some(function(c){ return /^[\d.,\-\s]+$/.test(c) && c.length>5; });
   }
+  function zlFecha(){
+    var ci=S.cols.indexOf('FECHA_RECEPCION'); if(ci<0) return '';
+    var cnt={},best='',n=0; S.rows.forEach(function(r){ var f=parseFecha(r[ci]); if(f){ cnt[f]=(cnt[f]||0)+1; if(cnt[f]>n){ n=cnt[f]; best=f; } } });
+    return best;
+  }
   function aplicarPegado(matrix, r0, c0, reemplazar){
     if(!matrix.length) return;
     S.decSep=detectarSep(matrix);
@@ -39424,6 +39431,8 @@ window._plnModuloEmbarques = async function(){
       r.forEach(function(v,j){ S.rows[ri][c0+j]=v; });
     });
     normalize();
+    if(conHeader && S.cols.indexOf('FECHA_PEDIDO')>=0) S.zl=true;
+    if(S.zl && window._embFormZL) window._embFormZL(zlFecha());
     if(conHeader) toast('✅ Encabezados detectados — columnas asignadas solas','green',3000);
   }
 
@@ -39874,7 +39883,10 @@ window._plnModuloEmbarques = async function(){
     for(var r=R.r0;r<=R.r1;r++){ var tr=trs[r]; if(!tr) continue; for(var c=R.c0;c<=R.c1;c++){ var td=tr.children[c+1]; if(td) td.classList.add('pmsel'); } }
     var nr=R.r1-R.r0+1, nc=R.c1-R.c0+1;
     bar.style.display='flex';
+    var _sum=0,_n=0,_NUM={MONTO:1,MONTO_HOMOLOGADO:1,TRASPASO:1,BULTOS:1,PIEZAS:1};
+    for(var rr=R.r0;rr<=R.r1;rr++){ if(!S.rows[rr]) continue; for(var cc=R.c0;cc<=R.c1;cc++){ if(_NUM[S.cols[cc]] && String(S.rows[rr][cc]||'').trim()){ _sum+=num(S.rows[rr][cc]); _n++; } } }
     bar.innerHTML='<b style="font-size:12px">'+nr+' fila(s) × '+nc+' col.</b>'
+      +(_n?'<b style="font-size:12px;color:#22c55e">Suma: '+fmtN(_sum)+' <span style="color:var(--muted);font-weight:400">('+_n+' celdas)</span></b>':'')
       +'<button class="pmb" data-act="selcut">✂️ Cortar</button><button class="pmb" data-act="selcopy">📋 Copiar</button>'
       +'<button class="pmb g" data-act="selpaste">📥 Pegar aquí</button><button class="pmb o" data-act="selclear">🗑 Vaciar</button>'
       +'<button class="pmb" data-act="seloff" style="margin-left:auto">✕ Quitar selección</button>';
@@ -39979,6 +39991,7 @@ window._plnModuloEmbarques = async function(){
   function totales(){
     var b=construirFilas().res, el=document.getElementById('_pm_tot'); if(!el) return;
     el.innerHTML='<b>'+b.merc+'</b> facturas · Mercancía <b style="color:#22c55e">$'+fmtN(b.monto)+'</b>'
+      +(function(){ var ci=S.cols.indexOf('MONTO_HOMOLOGADO'),t=0; if(ci>=0) S.rows.forEach(function(r){ t+=num(r[ci]); }); return t?' · Homologado <b style="color:#a78bfa">$'+fmtN(t)+'</b>':''; })()
       +(b.gastos?' · Gastos <b style="color:#58a6ff">$'+fmtN(b.gastos)+'</b>':'')
       +' · Bultos <b>'+b.bultos+'</b> · Piezas <b>'+b.piezas+'</b>'
       +(b.problemas?' · <span style="color:#f0883e">'+b.problemas+' fila(s) por revisar</span>':'')
@@ -40599,7 +40612,7 @@ window._plnModuloEmbarques = async function(){
       else if(a==='addrow'){ for(var i=0;i<10;i++) S.rows.push(new Array(S.cols.length).fill('')); render(); }
       else if(a==='addcol'){ S.cols.push('IGNORAR'); normalize(); render(); }
       else if(a==='limpiar'){ if(confirm('¿Borrar todo lo pegado?')){ S.rows=[]; S.art=null; S.artNombre=''; normalize(); render(); var n=document.getElementById('_pm_artn'); if(n) n.textContent='Sin cargar'; } }
-      else if(a==='preset'){ var np=PRESETS[t.getAttribute('data-p')].slice(); if(S.rows.some(function(r){ return r.some(function(v){ return v; }); }) && !confirm('Cambiar el orden de columnas no mueve lo ya pegado. ¿Continuar?')) return; S.cols=np; S.rows=[]; normalize(); render(); }
+      else if(a==='preset'){ var np=PRESETS[t.getAttribute('data-p')].slice(); if(S.rows.some(function(r){ return r.some(function(v){ return v; }); }) && !confirm('Cambiar el orden de columnas no mueve lo ya pegado. ¿Continuar?')) return; S.cols=np; S.rows=[]; normalize(); render(); var _pp=t.getAttribute('data-p'); S.zl=(_pp==='zl'); if(_pp==='zl'&&window._embFormZL) window._embFormZL(zlFecha()); else if(_pp==='imp'&&window._embFormImp) window._embFormImp(); }
       else if(a==='delcol'){ var ci=+t.getAttribute('data-ci'); S.cols.splice(ci,1); S.rows.forEach(function(r){ r.splice(ci,1); }); if(!S.cols.length) S.cols=['PROVEEDOR']; normalize(); render(); }
       else if(a==='delrow'){ S.rows.splice(+t.getAttribute('data-ri'),1); normalize(); render(); }
       else if(a==='fecha'){
@@ -42153,21 +42166,56 @@ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded'
   }
   function destinoZL(raw){ var n=norm(raw); if(/^CDF/.test(n)) return 'CDF'; if(/WEST|HUELVA|WESLAN/.test(n)) return 'Westland'; return ''; }
   function leerZL(tsv){
-    var rows=[]; String(tsv||'').split(/\r?\n/).forEach(function(l){ if(!l.trim()) return; var c=l.split('\t'); while(c.length<10) c.push(''); rows.push(c.map(function(x){ return String(x||'').trim(); })); });
+    var rows=[]; String(tsv||'').split(/\r?\n/).forEach(function(l){ if(!l.trim()) return; var c=l.split('\t');
+      /* si la copia empezó en Departamento (col. 3 es fecha), faltó el Proveedor: se corre una columna y queda vacío */
+      if(c.length>2 && /^\d{1,2}[-\/ ][A-Za-z]{3}/.test((c[2]||'').trim()) && !/^\d{1,2}[-\/ ][A-Za-z]{3}/.test((c[3]||'').trim())) c.unshift('');
+      while(c.length<10) c.push(''); rows.push(c.map(function(x){ return String(x||'').trim(); })); });
     /* c: 0 Proveedor · 1 Dpto · 2 Factura · 3 F. pedido · 4 Monto · 5 Traspaso · 6 Bultos · 7 Destino · 8 F. llegada · 9 OC */
-    var datos=rows.filter(function(r){ return r[0] && r[2] && /\d/.test(r[4]) && !/^TOTAL/i.test(r[0]); });
+    var datos=rows.filter(function(r){ return r[2] && /\d/.test(r[4]) && !/^TOTAL/i.test(r[0]); });
+    var sinProv=datos.filter(function(r){ return !r[0]; }).length;
     var tot=0; datos.forEach(function(r){ tot+=numero(r[4]); });
-    return { rows:datos, total:tot,
+    return { rows:datos, total:tot, sinProv:sinProv,
       lugar:destinoZL(moda(datos.map(function(r){ return destinoZL(r[7]); }))),
       llegada:fecha(moda(datos.map(function(r){ return r[8]; }))) };
   }
+  /* Fecha de despacho = día hábil anterior a la recibida (lunes → mismo lunes; sáb/dom → viernes) */
+  function despachoZL(iso){
+    var m=String(iso||'').match(/^(\d{4})-(\d{2})-(\d{2})/); if(!m) return '';
+    var d=new Date(+m[1],+m[2]-1,+m[3],12), w=d.getDay();
+    if(w===1) return iso;
+    d.setDate(d.getDate()-(w===0?2:1));
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  }
+  /* Deja TODO el formulario como Zona Libre: tipo ZL · CIF · Camión · Panamá/ZL de Colón · despacho */
+  window._embFormZL=function(llegada,lugar){
+    try{ setTipo('ZL',document.querySelector('.seg-btn[onclick*="setTipo(\'ZL\'"]')); }catch(e){}
+    try{ setTermino('CIF',document.querySelector('.seg-btn[onclick*="setTermino(\'CIF\'"]')); }catch(e){}
+    try{ _autoLlenarOrigenZL(); }catch(e){}
+    var eq=document.getElementById('s1_equipo'); if(eq){ eq.value='Camion'; try{ setEquipo('Camion'); }catch(e){} }
+    var via=document.getElementById('s1_via_transporte'); if(via) via.value='LAND';
+    var ne=document.getElementById('s1_equipos'); if(ne) ne.value=1;
+    setv('s1_tipo_emb','Camión'); try{ _toggleContenedorField('Camión'); }catch(e){}
+    try{ if(window._contenedores) window._contenedores.length=0; _renderContenedores(); }catch(e){}
+    if(lugar) setv('s1_lugar_recep',lugar);
+    if(llegada){ var dp=despachoZL(llegada); if(dp) setv('s1_fecha_despacho',dp); }
+    try{ updateAcarreoLabel(); }catch(e){}
+    try{ _actualizarSummaryEquipo(); }catch(e){}
+    try{ _actualizarResumenEmbarque(); }catch(e){}
+    try{ calc(); }catch(e){}
+  };
+  window._embFormImp=function(){
+    try{ setTipo('EXT',document.querySelector('.seg-btn[onclick*="setTipo(\'EXT\'"]')); }catch(e){}
+    try{ setTermino('FOB',document.getElementById('btn-fob-termino')); }catch(e){}
+    var eq=document.getElementById('s1_equipo'); if(eq){ eq.value='Contenedor'; try{ setEquipo('Contenedor'); }catch(e){} }
+    try{ calc(); }catch(e){}
+  };
   function llenarZL(d){
     var avisos=[];
     var bZL=document.querySelector('.seg-btn[onclick*="setTipo(\'ZL\'"]');
-    setTipo('ZL',bZL);
-    try{ var bC=document.querySelector('.seg-btn[onclick*="setTermino(\'CIF\'"]'); if(bC) setTermino('CIF',bC); }catch(e){}
-    if(d.lugar) setv('s1_lugar_recep',d.lugar); else avisos.push('el destino (col. K: CDF o Westland)');
-    if(d.llegada) setv('s1_fecha_despacho',d.llegada); else avisos.push('la fecha de llegada (col. L)');
+    window._embFormZL(d.llegada,d.lugar);
+    if(d.sinProv) avisos.push('PROVEEDOR vacío en '+d.sinProv+' fila(s): copia desde la columna A');
+    if(!d.lugar) avisos.push('el destino (col. K: CDF o Westland)');
+    if(!d.llegada) avisos.push('la fecha de llegada (col. L)');
     try{ _actualizarResumenEmbarque(); }catch(e){}
     try{ calc(); }catch(e){}
     var matrix=d.rows.map(function(r){ return ['mercancia',r[0],r[1],r[2],r[4],r[6],r[9],'','','',r[5],r[8],r[3]]; });
