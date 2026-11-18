@@ -23496,6 +23496,7 @@ function _kpiMostrarAhorro(){
         '<div style="font-size:10px;color:'+MUT+';margin-top:3px">'+periodoLabel+' · '+nTot+' embarques elegibles</div>'+
       '</div>'+
       '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">'+
+        '<button onclick="_exportAhorroMensualXLSX()" title="Excel mes a mes (3 hojas)" style="background:rgba(63,185,80,.2);border:1px solid rgba(63,185,80,.45);color:'+C_GREEN+';border-radius:6px;padding:5px 9px;font-size:10px;font-weight:800;cursor:pointer">📅 Excel por mes</button>'+
         '<button onclick="_exportAhorroCorredorXLSX()" style="background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:'+C_GREEN+';border-radius:6px;padding:5px 9px;font-size:10px;font-weight:700;cursor:pointer">📊 Excel</button>'+
         '<button onclick="_exportAhorroCorredorCSV()" style="background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.3);color:'+C_BLUE+';border-radius:6px;padding:5px 9px;font-size:10px;font-weight:700;cursor:pointer">📄 CSV</button>'+
         '<button onclick="_printModal(\'_kpiAhorroModal\')" style="background:rgba(240,136,62,.12);border:1px solid rgba(240,136,62,.3);color:'+C_ORANGE+';border-radius:6px;padding:5px 9px;font-size:10px;font-weight:700;cursor:pointer">🖨️ PDF</button>'+
@@ -23643,6 +23644,180 @@ function _exportAhorroCorredorXLSX(){
   s.src = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js';
   s.onload = go;
   s.onerror = function(){ alert('Error cargando ExcelJS. Verifica tu conexión.'); };
+  document.head.appendChild(s);
+}
+
+
+// ── Exportar Ahorro por Corredor MES A MES — Excel (3 hojas) ──
+// Misma lógica de cálculo que _kpiMostrarAhorro (Regular vs lo realmente pagado a CIF Express / Sababa),
+// pero agrupado por mes del embarque (_fechaEmbarqueReal) y respetando los filtros activos de Tendencias.
+function _ahorroCalcEmb(d){
+  var sc1=(d.snap&&d.snap.sc1)||{}, sc2=(d.snap&&d.snap.sc2)||{}, sc3=(d.snap&&d.snap.sc3)||{};
+  var esc=(d.esc||'').toLowerCase();
+  var isCif=esc.includes('cif')||esc.includes('express');
+  var isSab=esc.includes('sababa')||esc.includes('sab');
+  if(!isCif && !isSab) return null;
+  var r={isCif:isCif};
+  // Escenario Regular (lo que se hubiera pagado)
+  r.regLiq=sc1.arancel||0;
+  r.regItbms=(sc1.itbms||0)+(sc1.itbmsTasaFinal||0);
+  r.regTasa=(sc1.tasa||0)+(sc1.form1||0);
+  r.regGastos=(sc1.acarreo||0)+(sc1.dmce||0);
+  r.regHon=sc1.hon||0;
+  // Realmente pagado bajo el corredor elegido
+  r.altItbms=isCif?((sc2.itbms||0)+(sc2.itbmsTasaFinal||0)):(sc3.itbmsHomol||0);
+  var tasa=isCif?(sc2.tasa||0):0;
+  var uso=isCif?((sc2.form2!==undefined&&sc2.form2!==null&&sc2.form2!=='')?parseFloat(sc2.form2):3):0;
+  r.altTasa=tasa+uso;
+  r.altHon=isCif?((sc2.hon||0)+(sc2.itbmsHon||0)):((sc3.comision||0)-(sc3.itbmsHomol||0));
+  // Valor mercancía original (misma fórmula del KPI "Valor Mercancía Original")
+  if(d._overrideFin) r.merc=d._overrideFin.mercOrig||0;
+  else{
+    var lines=(d.snap&&d.snap.invLines)||d.invLines||[];
+    var ms=lines.filter(function(l){return (l.tipoFac||'mercancia')==='mercancia';}).reduce(function(a,l){return a+(l.costo||0);},0);
+    r.merc=ms>0?ms:(sc1.base>0?sc1.base:(d.cif||0));
+  }
+  r.ahorroReg=d.ahorro||0;
+  return r;
+}
+
+function _exportAhorroMensualXLSX(){
+  var all=_getFilteredTendData();
+  var MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  var meses={}, filas=[];
+  all.forEach(function(d){
+    var r=_ahorroCalcEmb(d); if(!r) return;
+    var f=(typeof _fechaEmbarqueReal==='function'?_fechaEmbarqueReal(d):null)||'';
+    var k=f?f.slice(0,7):'Sin fecha';
+    r.nro=d.nro||''; r.fecha=f; r.mes=k;
+    filas.push(r);
+    var m=meses[k]||(meses[k]={n:0,nc:0,ns:0,merc:0,regLiq:0,regItbms:0,regTasa:0,regGastos:0,regHon:0,
+      cItbms:0,cTasa:0,cHon:0,sItbms:0,sHon:0,ahorroReg:0});
+    m.n++; if(r.isCif) m.nc++; else m.ns++;
+    m.merc+=r.merc; m.regLiq+=r.regLiq; m.regItbms+=r.regItbms; m.regTasa+=r.regTasa; m.regGastos+=r.regGastos; m.regHon+=r.regHon;
+    if(r.isCif){ m.cItbms+=r.altItbms; m.cTasa+=r.altTasa; m.cHon+=r.altHon; }
+    else { m.sItbms+=r.altItbms; m.sHon+=r.altHon; }
+    m.ahorroReg+=r.ahorroReg;
+  });
+  var keys=Object.keys(meses).sort();
+  if(!keys.length){ if(typeof _showToast==='function') _showToast('Sin embarques CIF/Sababa para exportar','orange',2500); return; }
+  function lbl(k){ var p=k.split('-'); return p.length===2?(MESES[parseInt(p[1],10)-1]+' '+p[0]):k; }
+  function go(){
+    var wb=new ExcelJS.Workbook(); wb.creator='Gestión Integral de Compras y Costeo'; wb.created=new Date();
+    var MONEY='"$"#,##0.00;[Red]-"$"#,##0.00', PCT='0.0"%"';
+    var thin={style:'thin',color:{argb:'FFCCCCCC'}}, BD={top:thin,bottom:thin,left:thin,right:thin};
+    function fill(c){ return {type:'pattern',pattern:'solid',fgColor:{argb:c}}; }
+    function hdr(ws,row,cols,color){
+      cols.forEach(function(h,i){ var c=ws.getRow(row).getCell(i+1); c.value=h;
+        c.font={name:'Calibri',bold:true,size:10,color:{argb:'FFFFFFFF'}}; c.fill=fill(color||'FF1A7A6E');
+        c.alignment={horizontal:'center',vertical:'middle',wrapText:true}; c.border=BD; });
+      ws.getRow(row).height=34;
+    }
+    function title(ws,txt,lastCol){
+      ws.mergeCells(1,1,1,lastCol); var t=ws.getCell(1,1); t.value=txt;
+      t.font={name:'Calibri',bold:true,size:13,color:{argb:'FFFFFFFF'}}; t.fill=fill('FF1C2B4A');
+      t.alignment={horizontal:'center',vertical:'middle'}; ws.getRow(1).height=26;
+    }
+    var _d=(document.getElementById('tf_desde')||{}).value||'', _h=(document.getElementById('tf_hasta')||{}).value||'';
+    var periodo=(_d||_h)?((_d||'inicio')+' → '+(_h||'hoy')):'Sin filtro (todos los períodos)';
+
+    // ═══ HOJA 1: Resumen mensual ═══
+    var ws=wb.addWorksheet('Resumen Mensual',{views:[{state:'frozen',xSplit:1,ySplit:4}]});
+    title(ws,'AHORRO POR CORREDOR — MES A MES · '+periodo,23);
+    // fila 3: grupos
+    var grupos=[[1,5,'EMBARQUES Y MERCANCÍA','FF1C2B4A'],[6,11,'ESCENARIO REGULAR (lo que se hubiera pagado)','FF475569'],[12,15,'CIF EXPRESS — PAGADO','FF1F6FEB'],[16,18,'SABABA — PAGADO','FFB45309'],[19,21,'RESULTADO','FF116329'],[22,23,'CONCILIACIÓN','FF6B7280']];
+    grupos.forEach(function(g){ ws.mergeCells(3,g[0],3,g[1]); var c=ws.getCell(3,g[0]); c.value=g[2];
+      c.font={name:'Calibri',bold:true,size:10,color:{argb:'FFFFFFFF'}}; c.fill=fill(g[3]); c.alignment={horizontal:'center'}; });
+    hdr(ws,4,['Mes','Embarques','CIF Express','Sababa','Valor Mercancía Original',
+      'Arancel (Liquidación)','ITBMS','Tasa y Uso de Sistema','Acarreo + DMCE','Honorarios','Total Regular',
+      'ITBMS','Tasa y Uso Sistema','Honorarios CIF','Total CIF',
+      'ITBMS','Honorarios Sababa','Total Sababa',
+      'Desembolso Total (CIF+Sababa)','AHORRO','% Ahorro vs Regular',
+      'Ahorro registrado (sistema)','Diferencia vs registrado']);
+    var r0=5;
+    keys.forEach(function(k,i){
+      var m=meses[k], rn=r0+i, row=ws.getRow(rn);
+      var v=[lbl(k),m.n,m.nc,m.ns,m.merc,m.regLiq,m.regItbms,m.regTasa,m.regGastos,m.regHon,
+        {formula:'SUM(F'+rn+':J'+rn+')'},m.cItbms,m.cTasa,m.cHon,{formula:'SUM(L'+rn+':N'+rn+')'},
+        m.sItbms,m.sHon,{formula:'SUM(P'+rn+':Q'+rn+')'},{formula:'O'+rn+'+R'+rn},{formula:'K'+rn+'-S'+rn},
+        {formula:'IF(K'+rn+'>0,T'+rn+'/K'+rn+'*100,0)'},m.ahorroReg,{formula:'T'+rn+'-V'+rn}];
+      v.forEach(function(x,j){ var c=row.getCell(j+1); c.value=x; c.border=BD;
+        c.font={name:'Calibri',size:10,bold:(j===0||j===19)};
+        if(j>=4&&j!==20) c.numFmt=MONEY; if(j===20) c.numFmt=PCT; if(j>=1&&j<=3) c.numFmt='0';
+        c.alignment={horizontal:j===0?'left':'right'}; if(i%2) c.fill=fill('FFEEF4FB'); });
+    });
+    var rl=r0+keys.length-1, rt=rl+1, tr=ws.getRow(rt);
+    tr.getCell(1).value='TOTAL';
+    for(var col=2;col<=23;col++){
+      var L=ws.getColumn(col).letter, c=tr.getCell(col);
+      if(col===21) c.value={formula:'IF(K'+rt+'>0,T'+rt+'/K'+rt+'*100,0)'};
+      else c.value={formula:'SUM('+L+r0+':'+L+rl+')'};
+      c.numFmt=col<=4?'0':(col===21?PCT:MONEY);
+    }
+    for(var cc=1;cc<=23;cc++){ var c=tr.getCell(cc); c.font={name:'Calibri',bold:true,size:10,color:{argb:'FFFFFFFF'}}; c.fill=fill('FF1C2B4A'); c.border=BD; c.alignment={horizontal:cc===1?'left':'right'}; }
+    var notes=[
+      'Notas:',
+      '• Solo embarques de CIF Express y Sababa (Escenario Único no genera ahorro comparativo). Mes = fecha real del embarque (misma que usa el Historial).',
+      '• Ahorro = Total Regular − Desembolso. Desembolso = lo realmente pagado a CIF Express + Sababa (ITBMS, Tasa/Uso y Honorarios; Arancel y Acarreo/DMCE quedan en $0).',
+      '• Honorarios Sababa = comisión − ITBMS homologado. Honorarios CIF = honorarios + ITBMS sobre honorarios.',
+      '• "Ahorro registrado" es el campo guardado por embarque en el sistema; la columna Diferencia permite conciliarlo con el cálculo del desglose.'];
+    notes.forEach(function(t,i){ var c=ws.getCell(rt+2+i,1); c.value=t; c.font={name:'Calibri',size:9,italic:i>0,bold:i===0,color:{argb:'FF555555'}}; });
+    ws.columns=[{width:18},{width:11},{width:11},{width:10},{width:18},{width:16},{width:16},{width:16},{width:15},{width:16},{width:16},{width:15},{width:15},{width:15},{width:16},{width:15},{width:15},{width:16},{width:18},{width:16},{width:12},{width:18},{width:16}];
+
+    // ═══ HOJA 2: Criterios por mes (formato largo, ideal para tabla dinámica) ═══
+    var w2=wb.addWorksheet('Criterios por Mes',{views:[{state:'frozen',ySplit:3}]});
+    title(w2,'DESGLOSE POR CRITERIO — MES A MES · '+periodo,8);
+    hdr(w2,3,['Mes','Criterio','Escenario Regular','CIF Express — Pagado','Sababa — Pagado','Desembolso Total','Ahorro','% Ahorro vs Regular']);
+    var rn2=4;
+    keys.forEach(function(k){
+      var m=meses[k];
+      var crit=[['1a · Liquidación (Arancel)',m.regLiq,0,0],['1b · ITBMS',m.regItbms,m.cItbms,m.sItbms],['1c · Tasa y Uso de Sistema',m.regTasa,m.cTasa,0],
+                ['2 · Gastos Origen / Destino',m.regGastos,0,0],['3 · Honorarios',m.regHon,m.cHon,m.sHon]];
+      var ini=rn2;
+      crit.forEach(function(c){
+        var row=w2.getRow(rn2);
+        var v=[lbl(k),c[0],c[1],c[2],c[3],{formula:'D'+rn2+'+E'+rn2},{formula:'C'+rn2+'-F'+rn2},{formula:'IF(C'+rn2+'>0,G'+rn2+'/C'+rn2+'*100,0)'}];
+        v.forEach(function(x,j){ var cell=row.getCell(j+1); cell.value=x; cell.border=BD; cell.font={name:'Calibri',size:10};
+          if(j>=2&&j<=6) cell.numFmt=MONEY; if(j===7) cell.numFmt=PCT; cell.alignment={horizontal:j<2?'left':'right'}; });
+        rn2++;
+      });
+      var row=w2.getRow(rn2);
+      var v=[lbl(k),'TOTAL '+lbl(k),{formula:'SUM(C'+ini+':C'+(rn2-1)+')'},{formula:'SUM(D'+ini+':D'+(rn2-1)+')'},{formula:'SUM(E'+ini+':E'+(rn2-1)+')'},{formula:'D'+rn2+'+E'+rn2},{formula:'C'+rn2+'-F'+rn2},{formula:'IF(C'+rn2+'>0,G'+rn2+'/C'+rn2+'*100,0)'}];
+      v.forEach(function(x,j){ var cell=row.getCell(j+1); cell.value=x; cell.border=BD; cell.font={name:'Calibri',size:10,bold:true,color:{argb:'FFFFFFFF'}}; cell.fill=fill('FF1A7A6E');
+        if(j>=2&&j<=6) cell.numFmt=MONEY; if(j===7) cell.numFmt=PCT; cell.alignment={horizontal:j<2?'left':'right'}; });
+      rn2++;
+    });
+    w2.columns=[{width:18},{width:32},{width:18},{width:20},{width:18},{width:18},{width:16},{width:16}];
+
+    // ═══ HOJA 3: Detalle por embarque (auditoría) ═══
+    var w3=wb.addWorksheet('Detalle Embarques',{views:[{state:'frozen',xSplit:1,ySplit:3}]});
+    title(w3,'DETALLE POR EMBARQUE · '+periodo,15);
+    hdr(w3,3,['N° Embarque','Fecha','Mes','Corredor','Valor Mercancía Original','Regular: Arancel','Regular: ITBMS','Regular: Tasa y Uso','Regular: Acarreo+DMCE','Regular: Honorarios','Pagado: ITBMS','Pagado: Tasa y Uso','Pagado: Honorarios','Ahorro (calculado)','Ahorro registrado']);
+    filas.sort(function(a,b){ return (a.fecha||'').localeCompare(b.fecha||'') || String(a.nro).localeCompare(String(b.nro),undefined,{numeric:true}); });
+    filas.forEach(function(r,i){
+      var rn=4+i, row=w3.getRow(rn);
+      var v=[r.nro,r.fecha,r.mes==='Sin fecha'?r.mes:lbl(r.mes),r.isCif?'CIF Express':'Sababa',r.merc,r.regLiq,r.regItbms,r.regTasa,r.regGastos,r.regHon,r.altItbms,r.altTasa,r.altHon,{formula:'SUM(F'+rn+':J'+rn+')-SUM(K'+rn+':M'+rn+')'},r.ahorroReg];
+      v.forEach(function(x,j){ var c=row.getCell(j+1); c.value=x; c.border=BD; c.font={name:'Calibri',size:9};
+        if(j>=4) c.numFmt=MONEY; c.alignment={horizontal:j<4?'left':'right'}; if(i%2) c.fill=fill('FFEEF4FB'); });
+    });
+    var lt=4+filas.length, trow=w3.getRow(lt); trow.getCell(1).value='TOTAL';
+    for(var q=5;q<=15;q++){ var Lq=w3.getColumn(q).letter; trow.getCell(q).value={formula:'SUM('+Lq+'4:'+Lq+(lt-1)+')'}; trow.getCell(q).numFmt=MONEY; }
+    for(var z=1;z<=15;z++){ var cz=trow.getCell(z); cz.font={name:'Calibri',bold:true,size:10,color:{argb:'FFFFFFFF'}}; cz.fill=fill('FF1C2B4A'); cz.border=BD; }
+    w3.columns=[{width:13},{width:12},{width:17},{width:13},{width:18},{width:14},{width:14},{width:14},{width:15},{width:15},{width:14},{width:14},{width:15},{width:16},{width:16}];
+    w3.autoFilter={from:{row:3,column:1},to:{row:3,column:15}};
+
+    wb.xlsx.writeBuffer().then(function(buf){
+      var blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+      var url=URL.createObjectURL(blob), a=document.createElement('a'); a.href=url;
+      a.download='Ahorro_Corredor_Mensual_'+new Date().toISOString().slice(0,10)+'.xlsx';
+      document.body.appendChild(a); a.click();
+      setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); },1000);
+      if(typeof _showToast==='function') _showToast('📅 Excel mensual descargado','green',2500);
+    }).catch(function(err){ alert('Error al exportar: '+err.message); });
+  }
+  if(typeof ExcelJS!=='undefined'){ go(); return; }
+  var s=document.createElement('script'); s.src='https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js';
+  s.onload=go; s.onerror=function(){ alert('Error cargando ExcelJS. Verifica tu conexión.'); };
   document.head.appendChild(s);
 }
 
