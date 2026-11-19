@@ -4831,7 +4831,7 @@ var dv=L.getItem('_mxDevice');if(dv!=='phone'&&dv!=='tablet'&&dv!=='desktop')dv=
 
 <div class="card" style="margin-bottom:14px" id="emb-puente-card">
   <div class="card-hd" style="cursor:pointer;user-select:none" onclick="_toggleSection('embp-body','embp-icon',this)">
-    <div class="dot" style="background:#2de2c9"></div><h3>🌉 Puente de Embarques (Excel EXTERIOR)</h3>
+    <div class="dot" style="background:#2de2c9"></div><h3>🌉 Puente de Embarques (Importación / Zona Libre)</h3>
     <span id="embp-icon" style="margin-left:auto;font-size:12px;color:var(--muted)">▶</span>
   </div>
   <div id="embp-body" class="card-bd" style="display:none">
@@ -4845,7 +4845,7 @@ var dv=L.getItem('_mxDevice');if(dv!=='phone'&&dv!=='tablet'&&dv!=='desktop')dv=
     <div style="font-size:11px;color:var(--muted);margin:10px 0 4px;font-weight:700">Dirección corta (favorito simple)</div>
     <input id="embp-url" readonly onclick="this.select()" style="width:100%;box-sizing:border-box;font-family:monospace;font-size:10px;background:var(--s2);border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:6px">
     <div style="font-size:11px;color:var(--muted);margin:12px 0 6px;font-weight:700">Sin puente (prueba manual): pega aquí las filas copiadas del Excel</div>
-    <textarea id="embp-ta" rows="4" placeholder="Pega aquí (Ctrl+V) las filas filtradas del Excel EXTERIOR, desde la columna A" style="width:100%;box-sizing:border-box;font-size:11px;background:var(--s2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px"></textarea>
+    <textarea id="embp-ta" rows="4" placeholder="Pega aquí (Ctrl+V) las filas filtradas del Excel (Importación o Zona Libre), desde la columna A" style="width:100%;box-sizing:border-box;font-size:11px;background:var(--s2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px"></textarea>
     <button type="button" onclick="_embPuenteManual()" style="margin-top:6px;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.35);color:var(--green-l,#3fb950);border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer">🆕 Crear embarque con lo pegado</button>
     <div style="font-size:10px;color:var(--muted2);margin-top:6px;line-height:1.5">Importación (EXTERIOR): A Dpto · B Suplidor · C Contenedor · D Factura · E Valor · L País · M Puerto · O ETD · P ETA · T OC madre · U Bultos. Zona Libre (LISTADO): A Proveedor · B Dpto · C Factura · D Fecha de pedido · G Monto · H Traspaso · I Bultos · K Destino (CDF/Westland) · L Fecha de llegada · N OC madre. Crear un embarque por el puente reinicia el formulario actual (como el botón Nuevo).</div>
   </div>
@@ -40431,6 +40431,23 @@ window._plnModuloEmbarques = async function(){
     });
     return out;
   }
+  // Botón «Aplicar» de Fecha recibida (también se dispara solo al cargar el reporte, con la fecha que ya trae el Excel)
+  function aplicarFechaMasiva(f,quiet){
+    var ic=ensureCol('FECHA_RECEPCION'), n=0;
+    S.rows.forEach(function(r){ var o=rowObj(r); if(clasificar(o).k==='merc' && !parseFecha(r[ic])){ r[ic]=f; n++; } });
+    normalize(); render(); if(!quiet) toast('Fecha aplicada a '+n+' fila(s)','green',2000);
+    try{ if(window._embSincronizarLlegada) window._embSincronizarLlegada(f); }catch(e){}
+    try{ document.querySelectorAll('[id="fac-fecha-masiva"]').forEach(function(e){ e.value=f; }); }catch(e){}
+    return n;
+  }
+  function aplicarFechaAuto(){
+    try{
+      var f=zlFecha(); if(!f) return '';
+      var inp=document.getElementById('_pm_fecha'); if(inp) inp.value=f;
+      aplicarFechaMasiva(f,true);
+      return f;
+    }catch(e){ console.warn(e); return ''; }
+  }
   async function leerReporteEmbarque(file){
     var lab=document.getElementById('_pm_repn');
     try{
@@ -40458,15 +40475,47 @@ window._plnModuloEmbarques = async function(){
       if(!_merge) S.embPuente=false;
       var iT=ensureCol('TIPO'), iP=ensureCol('PROVEEDOR'), iF=ensureCol('FACTURA'), iM=ensureCol('MONTO'); ensureCol('DEPARTAMENTO');
       // Tipo de movimiento: «Mercancia Puente» = montos HOMOLOGADOS (solo proveedores S.I / Sababa) · «Mercancia» = valor ORIGINAL
-      var _lig=[], _sinM=[];
+      var _lig=[], _sinM=[], _sinE=0, _sinH=0;
       if(_merge){
-        R.merc.forEach(function(x){
-          var f=String(x.fact||'').trim().toUpperCase(), row=null;
-          if(f) S.rows.forEach(function(r){ if(!row && String(r[iF]==null?'':r[iF]).trim().toUpperCase()===f) row=r; });
-          var tok=false;
-          if(!row && f.length>=3) S.rows.forEach(function(r){ if(row) return; var ps=String(r[iF]==null?'':r[iF]).toUpperCase().split(/[\/\s\-_,;]+/); if(ps.indexOf(f)>=0){ row=r; tok=true; } });
-          if(row) _lig.push({row:row,x:x,tok:tok}); else _sinM.push(x);
+        // (nov-2026) Cada mercancía del reporte se liga a una fila del Excel por MONTO: el homologado si la fila lo tiene
+        // (celda o Excel de artículos); si no, el original. Luego el N° de factura del Excel (pedido, proforma,
+        // cotización…) se REEMPLAZA por el N° de factura del reporte.
+        var _iH0=S.cols.indexOf('MONTO_HOMOLOGADO');
+        var _c2=function(v){ return Math.round((+v||0)*100)/100; };
+        var _pn=function(t){ return String(t||'').toUpperCase().replace(/[^A-Z0-9]/g,''); };
+        var _mismoProv=function(a,b){ a=_pn(a); b=_pn(b); return !!(a&&b&&(a.indexOf(b)>=0||b.indexOf(a)>=0)); };
+        var _tokOK=function(c,f){ if(!f) return 0; if(c.fact===f) return 2; return c.fact.split(/[\/\s\-_,;]+/).indexOf(f)>=0?1:0; };
+        var _cand=[];
+        S.rows.forEach(function(r){
+          var o=rowObj(r), orig=num(o.MONTO), h=(_iH0>=0?num(r[_iH0]):0);
+          if(!(h>0)){ try{ var ai0=artInfo(o.OC); if(ai0 && ai0.montoHomol>0) h=ai0.montoHomol; }catch(e){} }
+          if(!(orig>0) && !(h>0)) return;
+          var cl=null; try{ cl=clasificar(o); }catch(e){}
+          if(cl && cl.k && cl.k!=='merc') return;
+          _cand.push({row:r,key:_c2(h>0?h:orig),prov:String(r[iP]==null?'':r[iP]),fact:String(r[iF]==null?'':r[iF]).trim().toUpperCase(),usada:false,sinH:!(h>0)});
         });
+        var _pend=[];
+        R.merc.forEach(function(x){
+          var f=String(x.fact||'').trim().toUpperCase(), m=_c2(x.monto), best=null, bs=-1;
+          _cand.forEach(function(c){
+            if(c.usada || Math.abs(c.key-m)>=0.005) return;
+            var sc=_tokOK(c,f)*2+(_mismoProv(c.prov,x.prov)?1:0);
+            if(sc>bs){ bs=sc; best=c; }
+          });
+          if(!best && f){   // sin coincidencia de monto: respaldo por el N° de factura que ya traía el Excel
+            _cand.forEach(function(c){ if(c.usada) return; var t=_tokOK(c,f); if(t>0 && (!best || t>bs)){ best=c; bs=t; } });
+          }
+          if(best){ best.usada=true; _lig.push({row:best.row,x:x}); } else _pend.push(x);
+        });
+        // respaldo final: un único pendiente y una única fila libre del mismo proveedor → se ligan
+        _pend.slice().forEach(function(x){
+          var mp=_pend.filter(function(y){ return _mismoProv(y.prov,x.prov); });
+          var fr=_cand.filter(function(c){ return !c.usada && _mismoProv(c.prov,x.prov); });
+          if(mp.length===1 && fr.length===1){ fr[0].usada=true; _lig.push({row:fr[0].row,x:x}); _pend.splice(_pend.indexOf(x),1); }
+        });
+        _pend.forEach(function(x){ _sinM.push(x); });
+        _sinE=_cand.filter(function(c){ return !c.usada; }).length;
+        _sinH=_cand.filter(function(c){ return c.sinH; }).length;   // filas sin monto homologado (conviene subir primero el Excel de artículos)
       }
       var nPuente=_merge?_lig.filter(function(l){ return l.x.puente; }).length:R.merc.filter(function(x){ return x.puente; }).length;
       var iH=nPuente?ensureCol('MONTO_HOMOLOGADO'):S.cols.indexOf('MONTO_HOMOLOGADO');
@@ -40483,12 +40532,13 @@ window._plnModuloEmbarques = async function(){
       R.comis.forEach(function(x){ fila('gastos_origen',x); });
       R.otros.forEach(function(x){ fila('otros_costos_no_gravados',x); });
       R.info.forEach(function(x){ fila('informativo',x); });
-      var _nExc=0, _nSum=0, _nDup=0, _nTok=0;
+      var _nExc=0, _nSum=0, _nDup=0, _nTok=0, _nProv=0;
       if(_merge){
         var _ex=S.rows.filter(function(r){ return r.some(function(v){ return String(v==null?'':v).trim(); }); });
         _nExc=_ex.length;
         _lig.forEach(function(l){
-          var r=l.row, x=l.x; if(l.tok){ r[iF]=x.fact; _nTok++; } r._interna=x.interna||r._interna||''; r._tm=x.puente?'puente':'merc';
+          var r=l.row, x=l.x; if(x.fact && String(r[iF]==null?'':r[iF]).trim()!==String(x.fact).trim()){ r[iF]=x.fact; _nTok++; } if(x.prov){ var _pv=limpiarProv(x.prov); if(_pv && String(r[iP]==null?'':r[iP]).trim()!==_pv){ r[iP]=_pv; _nProv++; } }
+          r._interna=x.interna||r._interna||''; r._tm=x.puente?'puente':'merc';
           if(x.puente && iH>=0){ r[iH]=x.monto.toFixed(2); r._mhManual=true; }
           else if(!x.puente && !String(r[iM]==null?'':r[iM]).trim()) r[iM]=x.monto.toFixed(2);
         });
@@ -40516,15 +40566,16 @@ window._plnModuloEmbarques = async function(){
       if(nPuente && window._embMapSI) window._embMapSI(true);   // la mercancía puente es solo de Sababa
       var sumM=R.merc.reduce(function(a,x){ return a+x.monto; },0);
       S.rep={file:file.name, tesoro:R.tesoro||'', resumen:R.merc.length+' mercancías ('+f2(sumM)+')'+(nPuente?' ('+nPuente+' puente → homologado)':'')+' · '+R.flete.length+' flete · '+R.gastos.length+' gastos origen · '+R.comis.length+' comisiones'+(R.otros.length?' · '+R.otros.length+' otros costos no gravados':'')+(R.info.length?' · '+R.info.length+' informativas (MV/Sababa)':'')};
-      if(_merge) S.rep.resumen=_nExc+' filas del Excel conservadas'+(_lig.length?' · '+_lig.length+' ligadas al reporte'+(nPuente?' ('+nPuente+' puente → homologado)':''):'')+' · '+_nSum+' facturas de servicio agregadas'+(_nDup?' ('+_nDup+' ya estaban)':'')+(_nTok?' · '+_nTok+' N° de factura reemplazados por los del reporte':'')+(_sinM.length?' · '+_sinM.length+' de mercancía del reporte sin coincidencia en el Excel ('+_sinM.map(function(x){ return x.fact; }).join(', ')+')':'');
+      if(_merge) S.rep.resumen=_nExc+' filas del Excel conservadas'+(_lig.length?' · '+_lig.length+' ligadas al reporte'+(nPuente?' ('+nPuente+' puente → homologado)':''):'')+' · '+_nSum+' facturas de servicio agregadas'+(_nDup?' ('+_nDup+' ya estaban)':'')+(_nTok?' · '+_nTok+' N° de factura reemplazados por los del reporte':'')+(_sinM.length?' · '+_sinM.length+' de mercancía del reporte sin coincidencia en el Excel ('+_sinM.map(function(x){ return x.fact; }).join(', ')+')':'')+(_sinE?' · '+_sinE+' fila(s) del Excel sin factura en el reporte (conservan su número)':'')+(_nProv?' · '+_nProv+' proveedores actualizados desde el reporte':'')+(_sinH?' · ⚠️ '+_sinH+' fila(s) sin monto homologado (se ligaron por el original): sube primero el Excel de artículos':'');
       var tin=document.getElementById('_pm_tesoro'); if(tin) tin.value=S.rep.tesoro;
       aplicarTesoro(true);
       if((S.recibos||[]).length) aplicarRecibos();
       actualizarTabla(true);   // nombres oficiales de suplidor (render incluido)
       try{ detectarSababa10(true); var _mp=mapearInfoCampos(); if(_mp.length){ actualizarTabla(true); toast('🔗 Mapeado en el cálculo: '+_mp.join(' · '),'green',5000); } }catch(e){ console.warn(e); }
+      var _fAuto=aplicarFechaAuto();   // (nov-2026) Fecha recibida del Excel → como pulsar «Aplicar» internamente
       var om=Object.keys(R.omitidos).map(function(k){ return k+' ('+R.omitidos[k]+')'; }).join(', ');
       lab=document.getElementById('_pm_repn');
-      if(lab) lab.innerHTML='✅ '+esc(file.name)+' · '+esc(S.rep.resumen)+(R.tesoro?' · Tesoro N° <b>'+esc(R.tesoro)+'</b>':' · <span style="color:#f0883e">no encontré el N° de Tesoro, escríbelo</span>')+(om?' · <span style="color:var(--muted,#8b949e)">omitido: '+esc(om)+'</span>':'')+'<br><span style="color:var(--muted,#8b949e)">Columnas detectadas → Suplidor ➜ Proveedor · Factura ➜ N° Factura · Tipo de movimiento ➜ Tipo · Monto ➜ Valor original'+(R.encabezados.length?' (encabezados leídos: '+esc(R.encabezados.join(' | '))+')':'')+'</span>'+' · <b>Falta elegir los departamentos</b>';
+      if(lab) lab.innerHTML=(_merge?'🌉 Origen: Puente · ':'✍️ Origen: Manual · ')+'✅ '+esc(file.name)+' · '+esc(S.rep.resumen)+(R.tesoro?' · Tesoro N° <b>'+esc(R.tesoro)+'</b>':' · <span style="color:#f0883e">no encontré el N° de Tesoro, escríbelo</span>')+(om?' · <span style="color:var(--muted,#8b949e)">omitido: '+esc(om)+'</span>':'')+(_fAuto?' · 📅 Fecha recibida <b>'+esc(_fAuto)+'</b> aplicada':'')+'<br><span style="color:var(--muted,#8b949e)">Columnas detectadas → Suplidor ➜ Proveedor · Factura ➜ N° Factura · Tipo de movimiento ➜ Tipo · Monto ➜ Valor original'+(R.encabezados.length?' (encabezados leídos: '+esc(R.encabezados.join(' | '))+')':'')+'</span>'+' · <b>Falta elegir los departamentos</b>';
       if(_merge) toast('✅ Reporte sumado: '+_nSum+' facturas de servicio agregadas, '+_nExc+' filas del Excel conservadas'+(_sinM.length?' · '+_sinM.length+' sin coincidencia':''),_sinM.length?'orange':'green',6000);
       else toast('✅ Reporte cargado: '+nTot+' líneas — elige los departamentos','green',4500);
     }catch(err){
@@ -40792,11 +40843,7 @@ window._plnModuloEmbarques = async function(){
       else if(a==='delrow'){ S.rows.splice(+t.getAttribute('data-ri'),1); normalize(); render(); }
       else if(a==='fecha'){
         var f=document.getElementById('_pm_fecha').value; if(!f){ toast('Elige una fecha','orange',2000); return; }
-        var ic=ensureCol('FECHA_RECEPCION'), n=0;
-        S.rows.forEach(function(r){ var o=rowObj(r); if(clasificar(o).k==='merc' && !parseFecha(r[ic])){ r[ic]=f; n++; } });
-        normalize(); render(); toast('Fecha aplicada a '+n+' fila(s)','green',2000);
-        try{ if(window._embSincronizarLlegada) window._embSincronizarLlegada(f); }catch(e){}
-        try{ document.querySelectorAll('[id="fac-fecha-masiva"]').forEach(function(e){ e.value=f; }); }catch(e){}
+        aplicarFechaMasiva(f,false);
       }
       else if(a==='crear'){
         var ri=+t.closest('tr').getAttribute('data-ri'), o=rowObj(S.rows[ri]);
