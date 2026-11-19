@@ -4253,11 +4253,18 @@ var dv=L.getItem('_mxDevice');if(dv!=='phone'&&dv!=='tablet'&&dv!=='desktop')dv=
         </label>
         <div id="fi-tope-info" class="info-box">Factor de Importación = Costo No Mercancía ÷ Valor Mercancía Homologado × 100. Escribe el factor que quieres dejar: la diferencia contra el factor actual se resta SOLO del Master Value (el puente) y, al Aplicar, se suma como Gasto Complementario negativo en Equipo (sobre el que ya tengas), para que el Costo Landed siga exacto. Si el Master Value no alcanza, se lleva a $0.00 (límite).</div>
         <div id="fi_tope_resumen" style="margin-top:6px;font-size:11px;line-height:1.7;color:var(--muted)"></div>
+        <div id="fi_tope_rango" style="margin-top:6px;padding:6px 8px;border-radius:6px;background:rgba(240,136,62,.12);font-size:11px;font-weight:700;color:var(--orange-l)"></div>
         <div class="r2" style="margin-top:8px">
           <div class="field" style="margin-bottom:0"><label style="font-size:10px">Factor de importación deseado (%)</label>
-            <input type="number" id="fi_tope_input" placeholder="Ej: 35.00" step="0.01" min="0" oninput="_fiTopeVista()" onkeydown="if(event.key==='Enter'){event.preventDefault();_aplicarFiTope(parseFloat(this.value));}" style="border-color:rgba(240,136,62,.35)"></div>
+            <input type="number" id="fi_tope_input" placeholder="Ej: 35.00" step="0.01" min="0" oninput="window._fiTopeExact=null;_fiTopeVista()" onkeydown="if(event.key==='Enter'){event.preventDefault();_aplicarFiTope(parseFloat(this.value));}" style="border-color:rgba(240,136,62,.35)"></div>
           <div class="field" style="margin-bottom:0"><label style="font-size:10px">Diferencia (puntos %)</label>
             <input type="text" id="fi_tope_dif" readonly style="background:var(--bg);color:var(--orange-l);font-weight:700"></div>
+        </div>
+        <div class="r2" style="margin-top:8px">
+          <div class="field" style="margin-bottom:0"><label style="font-size:10px;color:var(--blue-l);font-weight:700">⭐ Master Value que quiero dejar (pts %)</label>
+            <input type="number" id="fi_tope_mvpts" placeholder="Ej: 0.52" step="0.01" min="0" oninput="_fiTopeDesdeMV('pts')" style="border-color:rgba(88,166,255,.6)"></div>
+          <div class="field" style="margin-bottom:0"><label style="font-size:10px;color:var(--blue-l);font-weight:700">…o Master Value a dejar (USD)</label>
+            <input type="number" id="fi_tope_mvusd" placeholder="Ej: 67.12" step="0.01" min="0" oninput="_fiTopeDesdeMV('usd')" style="border-color:rgba(88,166,255,.6)"></div>
         </div>
         <div id="fi_tope_status" style="margin-top:8px;font-size:11px;line-height:1.7;color:var(--muted)"></div>
         <div style="display:flex;gap:6px;margin-top:8px">
@@ -37012,8 +37019,11 @@ function _calcFiTope(){
       +'<br>Master Value: <strong style="color:var(--blue-l)">'+_fiM(b.mvBase)+'</strong> ('+(b.merc>0?(b.mvBase/b.merc*100).toFixed(2):'0.00')+'%)'
       +' · Piso sin Master Value: <strong>'+b.fMin.toFixed(2)+'%</strong>';
   }
+  var rg=_sabEl('fi_tope_rango');
+  if(rg) rg.innerHTML='🎯 TOPE MÍNIMO del factor: <span style="font-size:13px">'+b.fMin.toFixed(2)+'%</span> (Master Value = $0.00) &nbsp;·&nbsp; MÁXIMO: '+b.fBase.toFixed(2)+'% (Master Value completo)<br><span style="font-weight:400;color:var(--muted)">Escribe un factor entre '+b.fMin.toFixed(2)+' y '+b.fBase.toFixed(2)+'. Lo que sobre del piso ('+b.fMin.toFixed(2)+'%) es el Master Value que le dejas.</span>';
   var inp=_sabEl('fi_tope_input');
-  if(inp && inp.value==='' && window._fiTopeTarget!=null && Math.abs(window._fiTopeDelta||0)>0.004) inp.value=window._fiTopeTarget;
+  if(inp){ inp.min=b.fMin.toFixed(2); inp.max=b.fBase.toFixed(2); inp.placeholder='Ej: '+(b.fMin+0.5).toFixed(2); }
+  if(inp && inp.value==='' && window._fiTopeTarget!=null && Math.abs(window._fiTopeDelta||0)>0.004) inp.value=Number(window._fiTopeTarget).toFixed(2);
   _fiTopeVista();
 }
 // Vista previa en vivo (al escribir el % deseado) — no aplica nada hasta presionar Aplicar
@@ -37023,6 +37033,7 @@ function _fiTopeVista(){
   var b=_fiTopeBase();
   var raw=inp?inp.value:'';
   var target=parseFloat(raw);
+  if(window._fiTopeExact!=null && !isNaN(target) && Math.abs(window._fiTopeExact-target)<0.005) target=window._fiTopeExact;
   var aplicado = Math.abs(window._fiTopeDelta||0)>0.004;
   if(raw===''||isNaN(target)){
     if(difEl) difEl.value='';
@@ -37032,8 +37043,12 @@ function _fiTopeVista(){
     return;
   }
   var ev=_fiTopeEvalua(target);
-  var dif=Math.round((b.fBase-target)*100)/100;
-  if(difEl) difEl.value = (dif>0?'−':'')+Math.abs(dif).toFixed(2)+' pts';
+  // Diferencia REAL: lo que de verdad se descuenta (no más que el Master Value disponible)
+  var dif=(ev.estado==='ok'||ev.estado==='limite') ? (b.merc>0?ev.reduccion/b.merc*100:0) : Math.max(0,b.fBase-target);
+  if(difEl) difEl.value = (dif>0?'−':'')+Math.abs(dif).toFixed(2)+' pts'+(ev.estado==='limite'?' (máx. posible)':'');
+  var mvp=_sabEl('fi_tope_mvpts'), mvu=_sabEl('fi_tope_mvusd');
+  if(mvp && document.activeElement!==mvp && (ev.estado==='ok'||ev.estado==='limite')) mvp.value=(b.merc>0?ev.mvNuevo/b.merc*100:0).toFixed(2);
+  if(mvu && document.activeElement!==mvu && (ev.estado==='ok'||ev.estado==='limite')) mvu.value=ev.mvNuevo.toFixed(2);
   var t='';
   if(ev.estado==='yaCumple'){
     t='ℹ️ El factor actual ('+b.fBase.toFixed(2)+'%) ya es menor o igual a '+target.toFixed(2)+'% — no hay nada que rebajar.';
@@ -37045,7 +37060,7 @@ function _fiTopeVista(){
      +'<br><strong>Se le descuenta:</strong> <span style="color:var(--orange-l);font-weight:700">'+_fiM(ev.reduccion)+'</span> ('+(b.merc>0?(ev.reduccion/b.merc*100).toFixed(2):'0.00')+' pts)'
      +'<br><strong>Master Value después:</strong> <span style="color:var(--green-l);font-weight:700">'+_fiM(ev.mvNuevo)+'</span> ('+pD.toFixed(2)+'%)'
      +'<br><strong>Factor de importación:</strong> '+b.fBase.toFixed(2)+'% → <span style="color:var(--green-l);font-weight:700">'+ev.fNuevo.toFixed(2)+'%</span>'
-     +(ev.estado==='limite'?'<br><span style="color:var(--orange-l);font-weight:700">⚠ Límite: el Master Value no alcanza; queda en $0.00 y el factor no baja de '+ev.fNuevo.toFixed(2)+'%.</span>':'');
+     +(ev.estado==='limite'?'<br><span style="color:var(--orange-l);font-weight:700">⚠ Estás por debajo del tope: el factor mínimo posible es '+ev.fNuevo.toFixed(2)+'% (Master Value $0.00). Escribe '+ev.fNuevo.toFixed(2)+'% o más para dejarle algo al Master Value.</span>':'');
   }
   if(aplicado && window._fiTopeTarget!=null && Math.abs(window._fiTopeTarget-target)<0.005) t='✅ <strong>Aplicado</strong> — Gasto Complementario '+_fiM(window._fiTopeDelta)+'<br>'+t;
   st.innerHTML=t;
@@ -37055,9 +37070,23 @@ function _fiTopeVista(){
     clearTimeout(window._fiTopeAutoT);
     window._fiTopeAutoT=setTimeout(function(){
       var i2=_sabEl('fi_tope_input'), t2=parseFloat(i2&&i2.value);
-      if(!isNaN(t2) && Math.abs(t2-target)<0.0001 && !(Math.abs(window._fiTopeDelta||0)>0.004 && window._fiTopeTarget!=null && Math.abs(window._fiTopeTarget-t2)<0.005)) _aplicarFiTope(target);
+      if(!isNaN(t2) && Math.abs(t2-target)<0.0051 && !(Math.abs(window._fiTopeDelta||0)>0.004 && window._fiTopeTarget!=null && Math.abs(window._fiTopeTarget-t2)<0.005)) _aplicarFiTope(target);
     },900);
   }
+}
+// El usuario escribe cuántos puntos % quiere dejar al Master Value → factor = piso + puntos
+function _fiTopeDesdeMV(modo){
+  var mvp=_sabEl('fi_tope_mvpts'), mvu=_sabEl('fi_tope_mvusd'), inp=_sabEl('fi_tope_input'); if(!inp) return;
+  var b=_fiTopeBase(); if(!(b.merc>0)) return;
+  var pts;
+  if(modo==='usd'){ var u=parseFloat(mvu&&mvu.value); if(isNaN(u)||u<0) return; pts=u/b.merc*100; if(mvp) mvp.value=pts.toFixed(2); }
+  else { pts=parseFloat(mvp&&mvp.value); if(isNaN(pts)||pts<0) return; if(mvu) mvu.value=(pts*b.merc/100).toFixed(2); }
+  var maxPts=b.mvBase/b.merc*100;               // no puede dejar más Master Value del que existe
+  if(pts>maxPts){ pts=maxPts; if(mvp&&modo!=='pts') mvp.value=pts.toFixed(2); if(mvu&&modo!=='usd') mvu.value=b.mvBase.toFixed(2); }
+  var t=b.fMin+pts;                              // factor exacto = piso + MV que se deja
+  window._fiTopeExact=t;
+  inp.value=t.toFixed(2);
+  _fiTopeVista();
 }
 function _aplicarFiTope(target){
   if(typeof _guardarNFacturasVisibles==='function') _guardarNFacturasVisibles();
@@ -37078,7 +37107,8 @@ function _aplicarFiTope(target){
   var nuevo = Math.round((actual - (window._fiTopeDelta||0) + nuevoDelta)*100)/100;
   if(gcEl) gcEl.value = nuevo.toFixed(2);
   window._fiTopeDelta  = nuevoDelta;
-  window._fiTopeTarget = target;
+  window._fiTopeTarget = (ev.estado==='limite') ? ev.fNuevo : target;
+  var _inpT=_sabEl('fi_tope_input'); if(_inpT && ev.estado==='limite') _inpT.value=ev.fNuevo.toFixed(2);
   window._fiTopeInfo = (nuevoDelta<0) ? {
     estado:ev.estado, mvAntes:b.mvBase, mvDespues:ev.mvNuevo,
     pAntes: b.merc>0? b.mvBase/b.merc*100:0, pDespues: b.merc>0? ev.mvNuevo/b.merc*100:0,
