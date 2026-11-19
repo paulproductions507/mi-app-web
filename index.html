@@ -27906,7 +27906,7 @@ function _renderGroupSections(data){
 
     // ── Facturas de Mercancía ──
     rows.push(['── FACTURAS DE MERCANCÍA ──']);
-    rows.push(['Proveedor'+SEP+'Departamento'+SEP+'OC'+SEP+'N° Factura'+SEP+'CIF/FOB Original'+SEP+(fobHomol>0?'Valor Homologado'+SEP:'')+'%'+SEP+'Costo No Merc.'+SEP+'Costo Landed Costeable']);
+    rows.push(['Proveedor'+SEP+'Departamento'+SEP+'OC'+SEP+'N° Factura'+SEP+'CIF/FOB Original'+SEP+(fobHomol>0?'Valor Homologado'+SEP:'')+'Costo Landed Costeable'+SEP+'%'+SEP+'Costo No Merc.']);
     mercL.forEach(function(l){
       var pct = totalMerc>0 ? (l.costo||0)/totalMerc : 0;
       var costoBase = fobHomol>0 ? fobHomol*pct : (l.costo||0);
@@ -27914,7 +27914,7 @@ function _renderGroupSections(data){
       var landedPorcion = costoBase + noMercPorcion;
       var row = (l.prov||'—')+SEP+(l.deptCat||'—')+SEP+(l.oc||'—')+SEP+(l.numFact||l.nfac||'—')+SEP+fn(l.costo||0)+SEP;
       if(fobHomol>0) row += fn(costoBase)+SEP;
-      row += fn(pct*100)+'%'+SEP+fn(noMercPorcion)+SEP+fn(landedPorcion);
+      row += fn(landedPorcion)+SEP+fn(pct*100)+'%'+SEP+fn(noMercPorcion);
       rows.push([row]);
     });
     rows.push(['']);
@@ -28012,10 +28012,10 @@ function _renderGroupSections(data){
       _exjsTitle(ws2,'FACTURAS DE MERCANCÍA — #'+(d.nro||''),fobHomol>0?9:8);
       var mHdrs=['Proveedor','Departamento','OC','N° Factura','CIF/FOB Original'];
       if(fobHomol>0) mHdrs.push('Homologado');
-      mHdrs.push('%','No Mercancía','Landed Costeable');
+      mHdrs.push('Landed Costeable','%','No Mercancía');
       var mCols=[26,20,14,16,16];
       if(fobHomol>0) mCols.push(16);
-      mCols.push(10,16,18);
+      mCols.push(18,10,16);
       mHdrs.forEach(function(h,i){ _exjsHdr(ws2.getCell(3,i+1),h); ws2.getColumn(i+1).width=mCols[i]; });
       ws2.getRow(3).height=30;
       mercL.forEach(function(l,ri){
@@ -28031,11 +28031,11 @@ function _renderGroupSections(data){
         _exjsCenter(ws2.getCell(row,ci++),l.numFact||l.nfac||'—',alt);
         _exjsMoney(ws2.getCell(row,ci++),l.costo||0,alt);
         if(fobHomol>0) _exjsMoney(ws2.getCell(row,ci++),costoBase,alt);
+        _exjsMoney(ws2.getCell(row,ci++),landedP,alt);
         var pctCell=ws2.getCell(row,ci++); pctCell.value=pct; pctCell.numFmt='0.00%';
         pctCell.font={name:'Calibri',size:9}; pctCell.alignment={horizontal:'center'};
         if(alt) pctCell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFEEF4FB'}};
         _exjsMoney(ws2.getCell(row,ci++),noMp,alt);
-        _exjsMoney(ws2.getCell(row,ci++),landedP,alt);
         ws2.getRow(row).height=17;
       });
       ws2.views=[{state:'frozen',ySplit:3}];
