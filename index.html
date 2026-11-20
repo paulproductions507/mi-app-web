@@ -23664,8 +23664,12 @@ function _ahorroCalcEmb(d){
   var esc=(d.esc||'').toLowerCase();
   var isCif=esc.includes('cif')||esc.includes('express');
   var isSab=esc.includes('sababa')||esc.includes('sab');
-  if(!isCif && !isSab) return null;
-  var r={isCif:isCif};
+  // FIX (nov-2026): los embarques de Escenario Único no generan ahorro comparativo.
+  // Antes caían como "Sababa" con Pagado=0 y el ahorro calculado salía igual a todo el
+  // Regular (falso). Ahora se marcan isUnico y su ahorro/comparativo queda en 0.
+  var _unico=_ahorroEsUnico(d);
+  if(!_unico && !isCif && !isSab) return null;
+  var r={isCif:isCif&&!_unico, isUnico:_unico};
   // Escenario Regular (lo que se hubiera pagado)
   r.regLiq=sc1.arancel||0;
   r.regItbms=(sc1.itbms||0)+(sc1.itbmsTasaFinal||0);
@@ -23686,7 +23690,60 @@ function _ahorroCalcEmb(d){
     r.merc=ms>0?ms:(sc1.base>0?sc1.base:(d.cif||0));
   }
   r.ahorroReg=d.ahorro||0;
+  if(_unico){
+    r.regLiq=0; r.regItbms=0; r.regTasa=0; r.regGastos=0; r.regHon=0;
+    r.altItbms=0; r.altTasa=0; r.altHon=0; r.ahorroReg=0;
+  }
   return r;
+}
+
+// Escenario Único: misma definición que usa el modal "Detalle Facturas del Embarque".
+function _ahorroEsUnico(d){
+  var esc=(d.esc||'').toLowerCase(), snap=d.snap||{};
+  return !!(d.modoUnico || d.tipoEsc==='unico' || esc.includes('único') || esc.includes('unico')
+    || (snap.sc1 && !snap.sc2 && !snap.sc3));
+}
+
+// Montos REALES facturados de un embarque, separados por rubro, tomados de sus facturas
+// (invLines). Sirve para trazabilidad en todos los embarques y es la única fuente de la
+// comisión real de Sababa en los Escenario Único.
+//   flete    = Flete (flete, flete_sababa)
+//   gastos   = Gastos origen/destino (acarreo, gastos destino, DMCE, almacenaje, inspección, otros gastos)
+//   liq      = Liquidación/DAI + tasas (liquidacion, tasa, uso_sistema)
+//   otros    = cualquier otro rubro no clasificado
+//   comision = facturas de Sababa: honorarios + manejo liquidación + formulario + acarreo +
+//              otros gastos + DMCE, MENOS notas de crédito/descuentos (suman negativo)
+//   itbms    = ITBMS facturado (informativo, no entra al total de costo no mercancía)
+function _ahorroRealPagado(d){
+  var snap=d.snap||{}, sc3=snap.sc3||{};
+  var lines=(snap.invLines&&snap.invLines.length)?snap.invLines:(d.invLines||[]);
+  var COM={honorarios:1,manejo_liquidacion:1,manejo_liquid_grabada:1,manejo_liquid_grabava:1,
+           formulario:1,acarreo:1,gastos:1,dmce:1,nota_credito:1,descuento:1};
+  var GAS={acarreo:1,gastos_destino:1,gastos_origen:1,dmce:1,almacenaje:1,inspeccion:1,gastos:1};
+  var o={flete:0,gastos:0,liq:0,otros:0,comision:0,itbms:0};
+  var provSab=false, provCif=false, homolLinea=false;
+  lines.forEach(function(l){
+    var t=l.tipoFac||'mercancia', c=parseFloat(l.costo)||0, p=(l.prov||'').toLowerCase();
+    if(t==='mercancia'){ if((l.montoHomologado||0)>0) homolLinea=true; return; }
+    var esSab=p.indexOf('sababa')>=0;
+    if(esSab) provSab=true;
+    if(p.indexOf('cif')>=0) provCif=true;
+    if(t==='seguro') return;                       // el seguro no es gasto real de inventario
+    if(t==='itbms'){ o.itbms+=c; return; }
+    if(t==='flete'||t==='flete_sababa') o.flete+=c;
+    else if(esSab && COM[t]) o.comision+=c;
+    else if(t==='liquidacion'||t==='tasa'||t==='uso_sistema') o.liq+=c;
+    else if(GAS[t]) o.gastos+=c;
+    else o.otros+=c;
+  });
+  Object.keys(o).forEach(function(k){ o[k]=Math.round(o[k]*100)/100; });
+  var esc=(d.esc||'').toLowerCase();
+  o.corredor = esc.indexOf('cif')>=0 ? 'CIF Express' : esc.indexOf('sababa')>=0 ? 'Sababa'
+             : provSab ? 'Sababa' : provCif ? 'CIF Express' : '—';
+  // Local = homologado (Sababa cobra comisión sobre valor homologado); si no, Liquidación.
+  var homol = ((sc3.mercHomol||0)>0) || homolLinea || !!(d._overrideFin && (d._overrideFin.mercHomol||0)>0);
+  o.tipoEmb = homol ? 'Local' : 'Liquidación';
+  return o;
 }
 
 function _exportAhorroMensualXLSX(){
@@ -23698,7 +23755,9 @@ function _exportAhorroMensualXLSX(){
     var f=(typeof _fechaEmbarqueReal==='function'?_fechaEmbarqueReal(d):null)||'';
     var k=f?f.slice(0,7):'Sin fecha';
     r.nro=d.nro||''; r.fecha=f; r.mes=k;
+    r.real=_ahorroRealPagado(d);
     filas.push(r);
+    if(r.isUnico) return; // Escenario Único: ahorro 0 — aparece solo en el Detalle por embarque
     var m=meses[k]||(meses[k]={n:0,nc:0,ns:0,merc:0,regLiq:0,regItbms:0,regTasa:0,regGastos:0,regHon:0,
       cItbms:0,cTasa:0,cHon:0,sItbms:0,sHon:0,ahorroReg:0});
     m.n++; if(r.isCif) m.nc++; else m.ns++;
@@ -23708,7 +23767,7 @@ function _exportAhorroMensualXLSX(){
     m.ahorroReg+=r.ahorroReg;
   });
   var keys=Object.keys(meses).sort();
-  if(!keys.length){ if(typeof _showToast==='function') _showToast('Sin embarques CIF/Sababa para exportar','orange',2500); return; }
+  if(!filas.length){ if(typeof _showToast==='function') _showToast('Sin embarques CIF/Sababa para exportar','orange',2500); return; }
   function lbl(k){ var p=k.split('-'); return p.length===2?(MESES[parseInt(p[1],10)-1]+' '+p[0]):k; }
   function go(){
     var wb=new ExcelJS.Workbook(); wb.creator='Gestión Integral de Compras y Costeo'; wb.created=new Date();
@@ -23798,21 +23857,52 @@ function _exportAhorroMensualXLSX(){
     w2.columns=[{width:18},{width:32},{width:18},{width:20},{width:18},{width:18},{width:16},{width:16}];
 
     // ═══ HOJA 3: Detalle por embarque (auditoría) ═══
+    var NC3=25; // A..Y
     var w3=wb.addWorksheet('Detalle Embarques',{views:[{state:'frozen',xSplit:1,ySplit:3}]});
-    title(w3,'DETALLE POR EMBARQUE · '+periodo,15);
-    hdr(w3,3,['N° Embarque','Fecha','Mes','Corredor','Valor Mercancía Original','Regular: Arancel','Regular: ITBMS','Regular: Tasa y Uso','Regular: Acarreo+DMCE','Regular: Honorarios','Pagado: ITBMS','Pagado: Tasa y Uso','Pagado: Honorarios','Ahorro (calculado)','Ahorro registrado']);
+    title(w3,'DETALLE POR EMBARQUE · '+periodo,NC3);
+    // fila 2: grupos
+    [[1,13,'EMBARQUE Y COMPARATIVO (trazabilidad)','FF475569'],[14,14,'COMISIÓN','FFB59A00'],[15,16,'AHORRO','FF116329'],
+     [17,18,'CLASIFICACIÓN','FF1F6FEB'],[19,25,'COSTOS REALES FACTURADOS (desde las facturas del embarque)','FFB45309']].forEach(function(g){
+      if(g[1]>g[0]) w3.mergeCells(2,g[0],2,g[1]); var c=w3.getCell(2,g[0]); c.value=g[2];
+      c.font={name:'Calibri',bold:true,size:9,color:{argb:'FFFFFFFF'}}; c.fill=fill(g[3]); c.alignment={horizontal:'center',wrapText:true}; });
+    hdr(w3,3,['N° Embarque','Fecha','Mes','Corredor','Valor Mercancía Original','Regular: Arancel','Regular: ITBMS','Regular: Tasa y Uso','Regular: Acarreo+DMCE','Regular: Honorarios','Pagado: ITBMS','Pagado: Tasa y Uso','Pagado: Honorarios',
+      'Total comisión pagada (ITBMS + Honorarios)','Ahorro (calculado)','Ahorro registrado',
+      'Escenario','Tipo de embarque',
+      'Flete','Gastos Origen / Destino','Liquidación / DAI y Tasas','Otros gastos','ITBMS facturado','Comisión Sababa real (neta de notas de crédito)','Total costo no mercancía real']);
+    // encabezado amarillo (texto oscuro para que se lea) en la columna de comisión total
+    var hN=w3.getRow(3).getCell(14); hN.fill=fill('FFFFFF00'); hN.font={name:'Calibri',bold:true,size:10,color:{argb:'FF000000'}};
+    var hX=w3.getRow(3).getCell(24); hX.fill=fill('FFB45309');
     filas.sort(function(a,b){ return (a.fecha||'').localeCompare(b.fecha||'') || String(a.nro).localeCompare(String(b.nro),undefined,{numeric:true}); });
+    var nz=function(x){ return (x&&Math.abs(x)>=0.005)?x:null; }; // sin monto -> celda vacía
     filas.forEach(function(r,i){
-      var rn=4+i, row=w3.getRow(rn);
-      var v=[r.nro,r.fecha,r.mes==='Sin fecha'?r.mes:lbl(r.mes),r.isCif?'CIF Express':'Sababa',r.merc,r.regLiq,r.regItbms,r.regTasa,r.regGastos,r.regHon,r.altItbms,r.altTasa,r.altHon,{formula:'SUM(F'+rn+':J'+rn+')-SUM(K'+rn+':M'+rn+')'},r.ahorroReg];
-      v.forEach(function(x,j){ var c=row.getCell(j+1); c.value=x; c.border=BD; c.font={name:'Calibri',size:9};
-        if(j>=4) c.numFmt=MONEY; c.alignment={horizontal:j<4?'left':'right'}; if(i%2) c.fill=fill('FFEEF4FB'); });
+      var rn=4+i, row=w3.getRow(rn), rl=r.real||{}, u=!!r.isUnico;
+      var escLbl=u?'Único':(r.isCif?'CIF Express':'Sababa');
+      var v=[r.nro,r.fecha,r.mes==='Sin fecha'?r.mes:lbl(r.mes),u?(rl.corredor||'—'):(r.isCif?'CIF Express':'Sababa'),r.merc,r.regLiq,r.regItbms,r.regTasa,r.regGastos,r.regHon,r.altItbms,r.altTasa,r.altHon,
+        // Único: la comisión total es la comisión real de Sababa (col. X); resto: ITBMS + Honorarios pagados
+        {formula:'IF(Q'+rn+'="Único",N(X'+rn+'),K'+rn+'+M'+rn+')'},
+        u?0:{formula:'SUM(F'+rn+':J'+rn+')-SUM(K'+rn+':M'+rn+')'}, u?0:r.ahorroReg,
+        escLbl, rl.tipoEmb||'',
+        nz(rl.flete),nz(rl.gastos),nz(rl.liq),nz(rl.otros),nz(rl.itbms),nz(rl.comision),
+        {formula:'N(S'+rn+')+N(T'+rn+')+N(U'+rn+')+N(V'+rn+')+N(X'+rn+')'}];
+      v.forEach(function(x,j){ var c=row.getCell(j+1); c.value=x; c.border=BD; c.font={name:'Calibri',size:9,bold:(j===13)};
+        if(j>=4&&j!==16&&j!==17) c.numFmt=MONEY; c.alignment={horizontal:(j<4||j===16||j===17)?'left':'right'};
+        if(i%2) c.fill=fill('FFEEF4FB');
+        if(j===13) c.fill=fill('FFFFF9C4'); });
     });
     var lt=4+filas.length, trow=w3.getRow(lt); trow.getCell(1).value='TOTAL';
-    for(var q=5;q<=15;q++){ var Lq=w3.getColumn(q).letter; trow.getCell(q).value={formula:'SUM('+Lq+'4:'+Lq+(lt-1)+')'}; trow.getCell(q).numFmt=MONEY; }
-    for(var z=1;z<=15;z++){ var cz=trow.getCell(z); cz.font={name:'Calibri',bold:true,size:10,color:{argb:'FFFFFFFF'}}; cz.fill=fill('FF1C2B4A'); cz.border=BD; }
-    w3.columns=[{width:13},{width:12},{width:17},{width:13},{width:18},{width:14},{width:14},{width:14},{width:15},{width:15},{width:14},{width:14},{width:15},{width:16},{width:16}];
-    w3.autoFilter={from:{row:3,column:1},to:{row:3,column:15}};
+    for(var q=5;q<=NC3;q++){ if(q===17||q===18) continue; var Lq=w3.getColumn(q).letter; trow.getCell(q).value={formula:'SUM('+Lq+'4:'+Lq+(lt-1)+')'}; trow.getCell(q).numFmt=MONEY; }
+    for(var z=1;z<=NC3;z++){ var cz=trow.getCell(z); cz.font={name:'Calibri',bold:true,size:10,color:{argb:'FFFFFFFF'}}; cz.fill=fill('FF1C2B4A'); cz.border=BD; }
+    var notas3=[
+      'Notas:',
+      '• Total comisión pagada = ITBMS + Honorarios pagados (Sababa/CIF). En Escenario Único = Comisión Sababa real (col. X). Las columnas de Regular/Pagado se conservan como trazabilidad.',
+      '• Escenario Único no genera ahorro comparativo: Regular y Pagado van en 0 y el Ahorro dice 0; sus montos reales están en las columnas S–X.',
+      '• Columnas S–X salen de las facturas del embarque (celda vacía = sin ese rubro). Flete incluye flete Sababa; Gastos Origen/Destino = acarreo, gastos destino, DMCE y otros gastos de proveedores distintos a Sababa.',
+      '• Comisión Sababa real = facturas de Sababa (honorarios, manejo de liquidación, formulario, acarreo, otros gastos, DMCE) menos notas de crédito/descuentos. No incluye ITBMS ni Liquidación/DAI.',
+      '• Tipo de embarque: Local = valor homologado (Sababa cobra sobre el homologado); Liquidación = sin homologación.',
+      '• Total costo no mercancía real = Flete + Gastos O/D + Liquidación/Tasas + Otros + Comisión real (sin ITBMS ni seguro).'];
+    notas3.forEach(function(t,i){ var c=w3.getCell(lt+2+i,1); c.value=t; c.font={name:'Calibri',size:9,italic:i>0,bold:i===0,color:{argb:'FF555555'}}; });
+    w3.columns=[{width:13},{width:12},{width:17},{width:13},{width:18},{width:14},{width:14},{width:14},{width:15},{width:15},{width:14},{width:14},{width:15},{width:22},{width:16},{width:16},{width:11},{width:15},{width:13},{width:16},{width:16},{width:13},{width:14},{width:22},{width:18}];
+    w3.autoFilter={from:{row:3,column:1},to:{row:3,column:NC3}};
 
     wb.xlsx.writeBuffer().then(function(buf){
       var blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
