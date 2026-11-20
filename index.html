@@ -10893,6 +10893,7 @@ function _renderModalEmbarquesMes(){
     var ci = (typeof _calcCostoInventario==='function') ? _calcCostoInventario(d) : {mercInv:0,landedG:0,landed1:0};
     var valorInv = ci.mercInv||0;
     var landed = ci.landedG||ci.landed1||0;
+    if(!d._overrideFin && d._ajusteRedondeoInv){ var _ajM=d._ajusteRedondeoInv; landed += (_ajM.mercancia||0)+(_ajM.nomerc||0)+(_ajM.itbms||0); }
     var allLines = (d.snap&&d.snap.invLines)||d.invLines||[];
     var mercLines = allLines.filter(function(l){ return (l.tipoFac||'mercancia')==='mercancia'; });
     var piezas = mercLines.reduce(function(s,l){ return s+(parseInt(l.piezas)||0); },0);
@@ -28125,6 +28126,32 @@ window.abrirFacturasEmbarque = function(idx){
                               : (sc2.landedG||sc2.landed1||0);
     var landedCosteable = isUnicoM ? (sc1u.landed||0) : (totalMerc + totalNoMerc);
     var fobHomol = isSab ? ((d._overrideFin&&d._overrideFin.mercHomol>0)?d._overrideFin.mercHomol:(sc3.mercHomol||0)) : 0; // Solo Sababa tiene FOB homologado
+  // ── FIX (nov-2026): los valores financieros editados a mano (Editar embarque →
+  //    Valores financieros → _overrideFin) y el ajuste de redondeo (_ajusteRedondeoInv)
+  //    ahora MANDAN sobre el snapshot viejo en este detalle, igual que en
+  //    _calcCostoInventario. Las facturas individuales NO se tocan. ──
+  var _ovF = d._overrideFin || null;
+  var _ajRF = d._ajusteRedondeoInv || {};
+  var _ajMercF = _ajRF.mercancia||0, _ajNMF = _ajRF.nomerc||0, _ajItbmsF = _ajRF.itbms||0;
+  var _hayAjusteManual = false;
+  if(_ovF){
+    _hayAjusteManual = true;
+    totalNoMerc = _ovF.costoNM||0;
+    totalItbms  = _ovF.itbms||0;
+    var _ovMercInv = (_ovF.mercHomol>0) ? _ovF.mercHomol : (_ovF.mercOrig||0);
+    landedCosteable = _ovMercInv + totalNoMerc;
+    landed = isUnicoM ? landedCosteable : ((_ovF.landed>0) ? _ovF.landed : (landedCosteable + totalItbms));
+    if(isSab && _ovF.mercHomol>0) fobHomol = _ovF.mercHomol;
+    if(isUnicoM) sc1u = Object.assign({}, sc1u, {factor:null}); // recalcular factor, no usar el guardado
+  } else if(_ajMercF || _ajNMF || _ajItbmsF){
+    _hayAjusteManual = true;
+    totalNoMerc += _ajNMF;
+    totalItbms  += _ajItbmsF;
+    if(isSab && fobHomol>0) fobHomol += _ajMercF;
+    landedCosteable += _ajMercF + _ajNMF;
+    landed += _ajMercF + _ajNMF + (isUnicoM ? 0 : _ajItbmsF);
+    if(isUnicoM) sc1u = Object.assign({}, sc1u, {factor:null});
+  }
     // fmt2l and fmtKl both respect the modal format toggle
     var _facFull = (window._facDetailFmtCompact === false); // true = show full amounts
     var fmt2l = function(n){
@@ -28165,6 +28192,7 @@ window.abrirFacturasEmbarque = function(idx){
       +'<div style="text-align:right">'
       +'<div style="font-size:10px;color:var(--muted)">'+(isUnicoM?'Landed Costeable':hideItbms?'Landed Global (comisión incl. ITBMS)':'Landed Global (incl. ITBMS)')+'</div>'
       +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:14px;font-weight:800;color:var(--orange-l)">'+fmtKl(landed)+'</div>'
+      +(_hayAjusteManual?'<div style="font-size:9px;color:#a371f7;font-weight:700;margin-top:2px">✏️ Ajuste manual aplicado</div>':'')
       +'</div>'
       +'</div>'
       // Resumen financiero del embarque — para Sababa el ITBMS está incluido en la comisión, no se muestra por separado
@@ -28647,6 +28675,32 @@ window.abrirFacturasEmbarque = function(idx){
                             : (sc2.landedG||sc2.landed1||0);
   var landedCosteable = isUnicoM ? (sc1u.landed||0) : (totalMerc + totalNoMerc); // Único: landed already IS costeable
   var fobHomol = isSab ? ((d._overrideFin&&d._overrideFin.mercHomol>0)?d._overrideFin.mercHomol:(sc3.mercHomol||0)) : 0; // Solo Sababa tiene FOB homologado
+  // ── FIX (nov-2026): los valores financieros editados a mano (Editar embarque →
+  //    Valores financieros → _overrideFin) y el ajuste de redondeo (_ajusteRedondeoInv)
+  //    ahora MANDAN sobre el snapshot viejo en este detalle, igual que en
+  //    _calcCostoInventario. Las facturas individuales NO se tocan. ──
+  var _ovF = d._overrideFin || null;
+  var _ajRF = d._ajusteRedondeoInv || {};
+  var _ajMercF = _ajRF.mercancia||0, _ajNMF = _ajRF.nomerc||0, _ajItbmsF = _ajRF.itbms||0;
+  var _hayAjusteManual = false;
+  if(_ovF){
+    _hayAjusteManual = true;
+    totalNoMerc = _ovF.costoNM||0;
+    totalItbms  = _ovF.itbms||0;
+    var _ovMercInv = (_ovF.mercHomol>0) ? _ovF.mercHomol : (_ovF.mercOrig||0);
+    landedCosteable = _ovMercInv + totalNoMerc;
+    landed = isUnicoM ? landedCosteable : ((_ovF.landed>0) ? _ovF.landed : (landedCosteable + totalItbms));
+    if(isSab && _ovF.mercHomol>0) fobHomol = _ovF.mercHomol;
+    if(isUnicoM) sc1u = Object.assign({}, sc1u, {factor:null}); // recalcular factor, no usar el guardado
+  } else if(_ajMercF || _ajNMF || _ajItbmsF){
+    _hayAjusteManual = true;
+    totalNoMerc += _ajNMF;
+    totalItbms  += _ajItbmsF;
+    if(isSab && fobHomol>0) fobHomol += _ajMercF;
+    landedCosteable += _ajMercF + _ajNMF;
+    landed += _ajMercF + _ajNMF + (isUnicoM ? 0 : _ajItbmsF);
+    if(isUnicoM) sc1u = Object.assign({}, sc1u, {factor:null});
+  }
   var _facFull2 = (window._facDetailFmtCompact === false);
   var fmt2l = function(n){
     if(_facFull2) return '$'+Number(parseFloat(n)||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -28687,6 +28741,7 @@ window.abrirFacturasEmbarque = function(idx){
     +'<div style="text-align:right">'
     +'<div style="font-size:10px;color:var(--muted)">'+(isUnicoM?'Landed Costeable':hideItbms?'Landed Global (comisión incl. ITBMS)':'Landed Global (incl. ITBMS)')+'</div>'
     +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:14px;font-weight:800;color:var(--orange-l)">'+fmtKl(landed)+'</div>'
+      +(_hayAjusteManual?'<div style="font-size:9px;color:#a371f7;font-weight:700;margin-top:2px">✏️ Ajuste manual aplicado</div>':'')
     +'</div>'
     +'</div>'
     // Resumen financiero del embarque — para Sababa el ITBMS está incluido en la comisión, no se muestra por separado
