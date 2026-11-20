@@ -17264,6 +17264,9 @@ async function _forzarSincronizacionCompleta(btn){
     // 1. Índice liviano de la nube (nro + ts) — no se descarga ningún embarque todavía.
     const cloudIdx = await _embLeerIndice();
     if(cloudIdx === null) throw new Error('No se pudo leer la tabla embarques (¿ya se ejecutó el SQL de migración?)');
+    // ── NO GRATOS (dic-2026): los embarques eliminados definitivamente se descartan (aquí y en la nube)
+    //    ANTES de comparar, para que esta sincronización nunca los vuelva a subir ni a traer. ──
+    var _bloq = (typeof _papeleraFiltrarSync==='function') ? await _papeleraFiltrarSync(cloudIdx) : {local:0,nube:0,nros:[]};
 
     var localList = (tendData||[]).filter(function(d){ return d && d.nro; });
     var sinNro    = (tendData||[]).length - localList.length;
@@ -17286,7 +17289,8 @@ async function _forzarSincronizacionCompleta(btn){
     var resumenPrevio = '📊 DIAGNÓSTICO DE SINCRONIZACIÓN\n\n'
       + 'En este dispositivo: ' + localList.length + ' embarque(s) con N° válido'
       + (sinNro ? ('\n⚠️ ' + sinNro + ' registro(s) local(es) SIN N° de embarque — no se pueden sincronizar, revísalos aparte') : '')
-      + '\nEn Supabase (nube): ' + Object.keys(cloudIdx).length + ' embarque(s)\n\n'
+      + '\nEn Supabase (nube): ' + Object.keys(cloudIdx).length + ' embarque(s)\n'
+      + (_bloq.nros.length ? ('🚫 NO GRATOS descartados (no restaurables): ' + _bloq.nros.join(', ') + '\n') : '') + '\n'
       + '➜ Solo aquí (se suben): ' + soloLocal.length + (soloLocal.length ? ('\n   ' + lista(soloLocal)) : '')
       + '\n➜ Modificados aquí (se suben): ' + localNuevo.length + (localNuevo.length ? ('\n   ' + lista(localNuevo)) : '')
       + '\n➜ Solo en la nube (se traen): ' + soloNube.length + (soloNube.length ? ('\n   ' + lista(soloNube)) : '')
@@ -18443,6 +18447,16 @@ async function procesarEmbarque(){
       document.getElementById('_sn_cancel').onclick=function(){ov.remove();resolve(false);};
     });
     if(!sinNro) return;
+  }
+  // ── SEGURIDAD DEL N° (dic-2026): N° no grato y salto > +10 sobre el último consecutivo ──
+  if(nro && typeof _nroValidar==='function'){
+    const _gv=_nroValidar(nro);
+    if(!_gv.ok){
+      await _nroAlerta(_gv);
+      const _nEl=document.getElementById('s1_nro_emb');
+      if(_nEl){ _nEl.style.borderColor='var(--red-l)'; _nEl.style.boxShadow='0 0 0 3px rgba(248,81,73,.25)'; _nEl.focus(); setTimeout(()=>{ _nEl.style.borderColor=''; _nEl.style.boxShadow=''; },3000); }
+      return;
+    }
   }
   // ── REGLA DE ORO: no duplicar numeracion (permite reemplazar con confirmacion) ──
   if(nro){
@@ -19854,6 +19868,7 @@ function registrarAhorro(){
   const fecha=document.getElementById('tend_fecha').value||_hoyLocalISO();
   const esc=document.getElementById('tend_esc')?.value||'CIF Express';
   if(!ahorro){ alert('Ingresa el monto de ahorro.'); return; }
+  if(nro && typeof _nroValidar==='function'){ const _gv=_nroValidar(nro); if(!_gv.ok){ alert(_gv.titulo+'\n\n'+_gv.msg); return; } }
   tendData.push({nro,desc,ahorro,cif,fecha,esc,ts:Date.now()});
   saveTendData();
   renderTend();
@@ -19865,9 +19880,10 @@ function deleteTend(idx){
     alert('🔒 Este mes está cerrado con candado. Ábrelo primero desde el encabezado del mes en Historial para poder eliminar embarques.');
     return;
   }
-  if(!confirm('¿Eliminar este registro?')) return;
+  if(!confirm('¿Eliminar este registro?\n\nSe enviará a la Bandeja de eliminados (Configuración → Bandeja de eliminados), desde donde se puede restaurar.')) return;
   const d = tendData[idx];
   if(d){
+    if(typeof _papeleraEnviar==='function') _papeleraEnviar(d); // bandeja: se puede restaurar
     // Agregar a lista negra permanente para que no resurja de sesiones individuales
     if(!window._deletedEmbarques) window._deletedEmbarques = new Set();
     if(d.nro) window._deletedEmbarques.add(String(d.nro));
@@ -19921,7 +19937,7 @@ function deleteTend(idx){
   const skC=document.getElementById('sk-cif'); if(skC) skC.textContent=totalCIF>0?('$'+Number(totalCIF).toLocaleString('en-US',{minimumFractionDigits:2})):'—';
   const skF=document.getElementById('sk-facturas'); if(skF) skF.textContent=totalFact>0?totalFact:'—';
   const skE=document.getElementById('sk-embarques'); if(skE) skE.textContent=tendData.length||'—';
-  _showToast('🗑 Registro eliminado', 'red', 1800);
+  _showToast('🗑 Enviado a la bandeja de eliminados', 'red', 2200);
 }
 // ── Toggle genérico para secciones de Tendencias ──
 function _toggleTendSection(bodyId, chevId){
@@ -35399,7 +35415,8 @@ function _modCompDeleteEmb(idx) {
   const d = tendData[idx];
   if (!d) return;
   const nro = d.nro || '—';
-  if (!confirm('¿Eliminar el embarque ' + nro + ' del historial?\nEsta acción no se puede deshacer.')) return;
+  if (!confirm('¿Eliminar el embarque ' + nro + ' del historial?\nSe enviará a la Bandeja de eliminados, desde donde se puede restaurar.')) return;
+  if(typeof _papeleraEnviar==='function') _papeleraEnviar(d); // bandeja: se puede restaurar
   // Agregar a lista negra permanente
   if(!window._deletedEmbarques) window._deletedEmbarques = new Set();
   if(d.nro) window._deletedEmbarques.add(String(d.nro));
@@ -36359,6 +36376,7 @@ body.costeo-mode #tab-facturas .page {
       // Disparar renders en el clon
       setTimeout(function(){
         if(tabId==='config'    && typeof renderConfig==='function')    { renderConfig(); if(typeof renderDeptConfig==='function') renderDeptConfig(); }
+        if(tabId==='config'    && typeof _cfgTilesDesktop==='function') { setTimeout(function(){ _cfgTilesDesktop(body); }, 120); }
         if(tabId==='histprovs' && typeof renderHistProv==='function')  renderHistProv();
         if(tabId==='factdisp'){ renderFactDisp(); _fdAllProvNames=null; setTimeout(function(){ _fdFilterSelect(''); }, 400); }
         if(tabId==='tendencias' && typeof renderTend==='function'){
@@ -42777,5 +42795,448 @@ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded'
 })();
 
 </script>
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   BANDEJA DE ELIMINADOS + "NO GRATO" + REGLA DEL CONSECUTIVO + CONFIG EN MOSAICOS
+   (dic-2026)
+   ─ Eliminar un embarque ya no es definitivo: va a la Bandeja (se puede restaurar).
+   ─ Desde la Bandeja se puede "Eliminar definitivamente": el N° queda marcado como NO GRATO
+     (no restaurable) y la sincronización forzada / el pull / el sync lo descartan en
+     cualquier dispositivo, y no se puede volver a registrar con ese N°.
+   ─ Registrar un N° mayor al último consecutivo + 10 se bloquea (error de dedo).
+   ─ Configuración en escritorio: mosaicos circulares; cada uno abre su modal.
+   ═══════════════════════════════════════════════════════════════════════════ */
+(function(){
+  'use strict';
+  var KEY='_PAPELERA_EMB', LSK='_papeleraBloq_v1', MAX_ITEMS=40;
+  window._NRO_MAX_SALTO = 10;               // máximo permitido sobre el último consecutivo
+  var P = window._papelera = { items:[], permanentes:{} };
+  function norm(n){ return String(n==null?'':n).trim().toUpperCase(); }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function fmt(n){ return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  function toast(m,c,t){ if(typeof _showToast==='function') _showToast(m,c||'green',t||2500); }
+  function getTend(){ return (typeof tendData!=='undefined' && tendData) ? tendData : (window.tendData||[]); }
+  // Solo los N° bloqueados (sin datos de embarques) se guardan en localStorage
+  try{ var _ls=JSON.parse(localStorage.getItem(LSK)||'{}'); if(_ls && typeof _ls==='object') P.permanentes=_ls; }catch(e){}
+  function guardarLocal(){ try{ localStorage.setItem(LSK, JSON.stringify(P.permanentes)); }catch(e){} }
+
+  /* ── cola: las operaciones sobre la bandeja corren una tras otra ── */
+  var cola=Promise.resolve();
+  function enCola(fn){ cola=cola.then(fn).catch(function(e){ console.warn('Bandeja:',e); }); return cola; }
+
+  function mergeNube(datos){
+    var o; try{ o=(typeof datos==='string')?JSON.parse(datos||'{}'):(datos||{}); }catch(e){ return; }
+    var perm=o.permanentes||{}; Object.keys(perm).forEach(function(k){ P.permanentes[k]=perm[k]; });
+    (Array.isArray(o.items)?o.items:[]).forEach(function(it){
+      if(!it||!it.nro||P.permanentes[norm(it.nro)]) return;
+      var i=P.items.findIndex(function(x){ return norm(x.nro)===norm(it.nro); });
+      if(i<0) P.items.push(it); else if((it.deletedAt||'')>(P.items[i].deletedAt||'')) P.items[i]=it;
+    });
+    P.items=P.items.filter(function(it){ return !P.permanentes[norm(it.nro)]; });
+  }
+  async function cargar(){
+    var sb=window._sb; if(!sb) return false;
+    try{
+      var r=await sb.from('simulador_sesiones').select('datos').eq('nombre',KEY).maybeSingle();
+      if(r && r.data) mergeNube(r.data.datos);
+      guardarLocal(); return true;
+    }catch(e){ return false; }
+  }
+  async function subir(){
+    var sb=window._sb; if(!sb) return false;
+    P.items.sort(function(a,b){ return (b.deletedAt||'').localeCompare(a.deletedAt||''); });
+    P.items=P.items.slice(0,MAX_ITEMS);
+    try{
+      var r=await sb.from('simulador_sesiones').upsert(
+        { nombre:KEY, datos:JSON.stringify({items:P.items,permanentes:P.permanentes}), updated_at:new Date().toISOString() },
+        { onConflict:'nombre' });
+      guardarLocal(); return !(r && r.error);
+    }catch(e){ return false; }
+  }
+  // Los N° no gratos siempre están en la lista negra de eliminados (para que el pull no los traiga)
+  function asegurarLista(){
+    if(!window._deletedEmbarques) window._deletedEmbarques=new Set();
+    Object.keys(P.permanentes).forEach(function(k){ window._deletedEmbarques.add(k); });
+  }
+  function purgarLocal(){
+    asegurarLista();
+    var td=getTend(), n=0;
+    for(var i=td.length-1;i>=0;i--){
+      var d=td[i];
+      if(d && d.nro && P.permanentes[norm(d.nro)]){ td.splice(i,1); n++; if(window._lastSyncedTs) delete window._lastSyncedTs[norm(d.nro)]; }
+    }
+    if(n){ window.tendData=td; try{ saveTendData(); }catch(e){} }
+    return n;
+  }
+  function refrescar(){
+    ['renderTend','renderTopProvs','updateCmpNroList','renderDashboardKPIs'].forEach(function(f){ try{ if(typeof window[f]==='function') window[f](); }catch(e){} });
+    actualizarBadges();
+  }
+  function actualizarBadges(){
+    document.querySelectorAll('[data-papelera-badge]').forEach(function(b){ var n=P.items.length; b.textContent=n; b.style.display=n?'':'none'; });
+  }
+
+  /* ── API ── */
+  window._papeleraEsBloqueado=function(nro){ return !!P.permanentes[norm(nro)]; };
+
+  // Llamada al eliminar un embarque: lo guarda completo en la bandeja
+  window._papeleraEnviar=function(d){
+    if(!d||!d.nro) return;
+    var k=norm(d.nro); if(P.permanentes[k]) return;
+    var rec; try{ rec=JSON.parse(JSON.stringify(d)); }catch(e){ return; }
+    var it={ nro:String(d.nro).trim(), ts:d.ts||null, fecha:d.fecha||'', esc:d.esc||'', cif:d.cif||0, desc:d.desc||'', deletedAt:new Date().toISOString(), rec:rec };
+    var i=P.items.findIndex(function(x){ return norm(x.nro)===k; });
+    if(i>=0) P.items[i]=it; else P.items.unshift(it);
+    actualizarBadges();
+    enCola(async function(){ await cargar(); await subir(); actualizarBadges(); });
+  };
+
+  window._papeleraRestaurar=function(nro){
+    var k=norm(nro);
+    return enCola(async function(){
+      await cargar();
+      if(P.permanentes[k]){ toast('🚫 Ese embarque está marcado como NO GRATO y no se puede restaurar','red',3500); return; }
+      var i=P.items.findIndex(function(x){ return norm(x.nro)===k; });
+      if(i<0){ toast('No se encontró en la bandeja','orange'); return; }
+      var it=P.items[i], td=getTend();
+      var ya=td.some(function(d){ return d && d.nro && norm(d.nro)===k; });
+      if(!ya && it.rec){ td.push(it.rec); window.tendData=td; }
+      P.items.splice(i,1);
+      // sacarlo de la lista negra para que el pull/sync no lo filtre
+      if(window._deletedEmbarques){
+        Array.from(window._deletedEmbarques).forEach(function(x){ if(norm(x)===k || (it.ts && String(x)===String(it.ts))) window._deletedEmbarques.delete(x); });
+      }
+      await subir();
+      try{ if(typeof _pushDeletedListToCloud==='function') await _pushDeletedListToCloud(); }catch(e){}
+      try{ saveTendData(); if(typeof _flushSaveTendData==='function') _flushSaveTendData(); }catch(e){}
+      refrescar(); pintar();
+      toast(ya?('ℹ️ El embarque '+it.nro+' ya estaba en el historial'):('♻️ Embarque '+it.nro+' restaurado'),'green',3000);
+    });
+  };
+
+  function marcarNoGrato(nro, ts, nota){
+    var k=norm(nro);
+    P.permanentes[k]={ at:new Date().toISOString(), ts:ts||null, nota:nota||'' };
+    P.items=P.items.filter(function(x){ return norm(x.nro)!==k; });
+    asegurarLista(); if(window._deletedEmbarques && ts) window._deletedEmbarques.add(String(ts));
+    purgarLocal();
+  }
+  async function limpiarNube(k){
+    var sb=window._sb; if(!sb) return;
+    try{ await sb.from('embarques').delete().eq('nro',k); }catch(e){}
+    try{ await sb.from('simulador_sesiones').delete().eq('nombre',k); }catch(e){}
+  }
+  window._papeleraEliminarDefinitivo=function(nro){
+    var k=norm(nro);
+    if(!confirm('⛔ ELIMINAR DEFINITIVAMENTE el embarque '+nro+'\n\nQuedará marcado como NO GRATO: no se podrá restaurar, la sincronización forzada lo descartará en todos los dispositivos y no se podrá volver a registrar con ese N°.\n\n¿Continuar?')) return;
+    return enCola(async function(){
+      await cargar();
+      var it=P.items.find(function(x){ return norm(x.nro)===k; });
+      marcarNoGrato(nro, it&&it.ts, 'Eliminado definitivamente desde la bandeja');
+      await subir();
+      try{ if(typeof _pushDeletedListToCloud==='function') await _pushDeletedListToCloud(); }catch(e){}
+      await limpiarNube(k);
+      refrescar(); pintar();
+      toast('🚫 Embarque '+nro+' marcado como NO GRATO (no restaurable)','red',3500);
+    });
+  };
+  window._papeleraBloquearManual=function(){
+    var inp=document.getElementById('_pap_manual'); var nro=inp?inp.value.trim():''; if(!nro) return;
+    var k=norm(nro);
+    if(!confirm('🚫 Marcar el N° '+nro+' como NO GRATO.\n\nSi existe en el historial se quitará, la sincronización lo descartará en todos los dispositivos y no se podrá registrar de nuevo.\n\n¿Continuar?')) return;
+    return enCola(async function(){
+      await cargar();
+      var d=getTend().find(function(x){ return x && x.nro && norm(x.nro)===k; });
+      marcarNoGrato(nro, d&&d.ts, 'Marcado manualmente');
+      await subir();
+      try{ if(typeof _pushDeletedListToCloud==='function') await _pushDeletedListToCloud(); }catch(e){}
+      await limpiarNube(k);
+      refrescar(); pintar();
+      toast('🚫 N° '+nro+' marcado como NO GRATO','red',3500);
+    });
+  };
+  window._papeleraQuitarBloqueo=function(nro){
+    var k=norm(nro);
+    if(!confirm('¿Quitar el bloqueo del N° '+nro+'?\n\nVolverá a poder registrarse. Úsalo solo si el N° se bloqueó por error.')) return;
+    return enCola(async function(){
+      await cargar(); delete P.permanentes[k];
+      if(window._deletedEmbarques) Array.from(window._deletedEmbarques).forEach(function(x){ if(norm(x)===k) window._deletedEmbarques.delete(x); });
+      await subir();
+      try{ if(typeof _pushDeletedListToCloud==='function') await _pushDeletedListToCloud(); }catch(e){}
+      pintar(); toast('Bloqueo quitado del N° '+nro,'orange');
+    });
+  };
+
+  /* ── Pantalla de la Bandeja ── */
+  function pintar(){
+    var box=document.getElementById('_papBody'); if(!box) return;
+    var h='';
+    h+='<div style="font-size:11.5px;color:var(--muted);line-height:1.5;margin-bottom:14px">Los embarques eliminados llegan aquí. Puedes <b>restaurarlos</b> o <b>eliminarlos definitivamente</b>: un N° eliminado definitivamente queda como <b style="color:#f85149">NO GRATO</b> (no restaurable) y la sincronización ya no lo puede traer de vuelta. Se conservan los últimos '+MAX_ITEMS+'.</div>';
+    h+='<div style="font-size:10px;font-weight:800;letter-spacing:.1em;color:var(--muted);margin:4px 0 8px">EN LA BANDEJA ('+P.items.length+')</div>';
+    if(!P.items.length) h+='<div style="padding:16px;text-align:center;color:var(--muted);font-size:12px;border:1px dashed var(--border);border-radius:10px">La bandeja está vacía.</div>';
+    P.items.forEach(function(it){
+      var f=''; try{ f=new Date(it.deletedAt).toLocaleString('es-PA',{dateStyle:'short',timeStyle:'short'}); }catch(e){ f=it.deletedAt||''; }
+      var n=esc(it.nro).replace(/'/g,'&#39;');
+      h+='<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px">'
+        +'<div style="flex:1;min-width:160px"><div style="font-size:13px;font-weight:800;color:var(--text)">📦 Embarque '+esc(it.nro)+'</div>'
+        +'<div style="font-size:10.5px;color:var(--muted);margin-top:2px">'+esc(it.fecha||'')+' · '+esc(it.esc||'')+' · '+fmt(it.cif)+'<br>Eliminado: '+esc(f)+'</div></div>'
+        +'<button onclick="_papeleraRestaurar(\''+n+'\')" style="background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.35);color:#3fb950;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">♻️ Restaurar</button>'
+        +'<button onclick="_papeleraEliminarDefinitivo(\''+n+'\')" style="background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.35);color:#f85149;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">⛔ Eliminar definitivamente</button></div>';
+    });
+    var perm=Object.keys(P.permanentes).sort();
+    h+='<div style="font-size:10px;font-weight:800;letter-spacing:.1em;color:#f85149;margin:18px 0 8px">🚫 NO GRATOS — NO RESTAURABLES ('+perm.length+')</div>';
+    if(!perm.length) h+='<div style="padding:12px;text-align:center;color:var(--muted);font-size:12px;border:1px dashed var(--border);border-radius:10px">Ninguno.</div>';
+    perm.forEach(function(k){
+      var p=P.permanentes[k]||{}, f=''; try{ f=new Date(p.at).toLocaleDateString('es-PA'); }catch(e){}
+      h+='<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:rgba(248,81,73,.06);border:1px solid rgba(248,81,73,.3);border-radius:10px;padding:9px 12px;margin-bottom:6px">'
+        +'<div style="flex:1;min-width:150px"><span style="font-size:13px;font-weight:800;color:#f85149">🚫 '+esc(k)+'</span> <span style="font-size:10px;font-weight:800;background:#f85149;color:#fff;border-radius:99px;padding:2px 8px;margin-left:6px">NO RESTAURABLE</span>'
+        +'<div style="font-size:10.5px;color:var(--muted);margin-top:2px">'+esc(f)+(p.nota?(' · '+esc(p.nota)):'')+'</div></div>'
+        +'<button onclick="_papeleraQuitarBloqueo(\''+esc(k)+'\')" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:5px 10px;font-size:11px;cursor:pointer">Quitar bloqueo</button></div>';
+    });
+    h+='<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)"><div style="font-size:10px;font-weight:800;letter-spacing:.1em;color:var(--muted);margin-bottom:6px">MARCAR UN N° COMO NO GRATO</div>'
+      +'<div style="display:flex;gap:8px"><input id="_pap_manual" placeholder="Ej: 22761" style="flex:1;background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:13px">'
+      +'<button onclick="_papeleraBloquearManual()" style="background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.35);color:#f85149;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer">🚫 Bloquear</button></div>'
+      +'<div style="font-size:10.5px;color:var(--muted);margin-top:6px">Para un embarque erróneo que ya no está en la bandeja (por ejemplo, uno que se elimina y reaparece).</div></div>';
+    box.innerHTML=h;
+  }
+  window._papeleraAbrir=function(){
+    var old=document.getElementById('_papOv'); if(old) old.remove();
+    var ov=document.createElement('div'); ov.id='_papOv';
+    ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:2000100;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px)';
+    ov.innerHTML='<div style="background:var(--s1);border:1px solid var(--border);border-radius:16px;width:100%;max-width:640px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 24px 64px rgba(0,0,0,.6)">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border)"><div style="font-size:14px;font-weight:800;color:var(--text)">🗑 Bandeja de eliminados</div>'
+      +'<button onclick="document.getElementById(\'_papOv\').remove()" style="background:rgba(218,54,51,.12);border:1px solid rgba(218,54,51,.25);color:#f85149;border-radius:8px;padding:5px 14px;font-size:12px;font-weight:600;cursor:pointer">✕ Cerrar</button></div>'
+      +'<div id="_papBody" style="padding:16px 18px;overflow-y:auto"><div style="padding:24px;text-align:center;color:var(--muted)">Cargando…</div></div></div>';
+    ov.addEventListener('click',function(e){ if(e.target===ov) ov.remove(); });
+    document.body.appendChild(ov);
+    pintar();
+    enCola(async function(){ await cargar(); asegurarLista(); pintar(); actualizarBadges(); });
+  };
+
+  /* ── Sincronización forzada: descarta los NO GRATOS (local y nube) antes de comparar ── */
+  window._papeleraFiltrarSync=async function(cloudIdx){
+    var res={local:0,nube:0,nros:[]};
+    await enCola(async function(){
+      await cargar();
+      getTend().forEach(function(d){ if(d&&d.nro&&P.permanentes[norm(d.nro)]) res.nros.push(norm(d.nro)); });
+      res.local=purgarLocal();
+      var sb=window._sb;
+      for(var k in (cloudIdx||{})){
+        if(P.permanentes[k]){
+          res.nube++; if(res.nros.indexOf(k)<0) res.nros.push(k);
+          try{ if(sb) await sb.from('embarques').delete().eq('nro',k); }catch(e){}
+          delete cloudIdx[k];
+        }
+      }
+    });
+    return res;
+  };
+
+  /* ── Regla del N° de embarque ── */
+  function ultimoConsecutivo(){
+    var max=null;
+    getTend().forEach(function(d){
+      if(!d||!d.nro) return; var k=norm(d.nro);
+      if(!/^\d+$/.test(k) || P.permanentes[k]) return;
+      var n=parseInt(k,10); if(max===null||n>max) max=n;
+    });
+    return max;
+  }
+  window._nroUltimoConsecutivo=ultimoConsecutivo;
+  window._nroValidar=function(nro){
+    var k=norm(nro); if(!k) return {ok:true};
+    if(P.permanentes[k]) return { ok:false, tipo:'bloqueado', nro:k,
+      titulo:'🚫 N° de embarque NO GRATO',
+      msg:'El N° '+k+' fue eliminado definitivamente (marcado como no grato) y ya no se puede registrar ni restaurar. Si es un error, quita el bloqueo en Configuración → Bandeja de eliminados.' };
+    var existe=getTend().some(function(d){ return d && d.nro && norm(d.nro)===k; });
+    if(existe || !/^\d+$/.test(k)) return {ok:true};
+    var n=parseInt(k,10), last=ultimoConsecutivo(), MAX=window._NRO_MAX_SALTO||10;
+    if(last!==null && (n-last)>MAX) return { ok:false, tipo:'salto', nro:k, ultimo:last, dif:n-last, max:MAX,
+      titulo:'⛔ N° de embarque fuera de rango',
+      msg:'Último consecutivo registrado: '+last+'. Estás registrando el '+n+' (diferencia de +'+(n-last)+'). El máximo permitido es +'+MAX+' (hasta el '+(last+MAX)+'). Puede ser un error de dedo: revisa el número y corrígelo. Si es correcto, verifica que este dispositivo esté sincronizado (🔄 Forzar Sincronización).' };
+    return {ok:true};
+  };
+  window._nroAlerta=function(v){
+    return new Promise(function(resolve){
+      var ov=document.createElement('div');
+      ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:2000200;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(3px)';
+      ov.innerHTML='<div style="background:var(--s1);border:2px solid rgba(248,81,73,.45);border-radius:16px;max-width:440px;width:100%;padding:22px;box-shadow:0 24px 64px rgba(0,0,0,.6)">'
+        +'<div style="font-size:15px;font-weight:800;color:#f85149;margin-bottom:10px">'+esc(v.titulo)+'</div>'
+        +'<div style="font-size:12.5px;color:var(--text);line-height:1.55;margin-bottom:16px">'+esc(v.msg)+'</div>'
+        +'<button id="_nroAlOk" style="width:100%;background:rgba(248,81,73,.12);border:1px solid rgba(248,81,73,.4);color:#f85149;border-radius:10px;padding:11px;font-size:13px;font-weight:700;cursor:pointer">Entendido — corregir el número</button></div>';
+      document.body.appendChild(ov);
+      ov.querySelector('#_nroAlOk').onclick=function(){ ov.remove(); resolve(); };
+    });
+  };
+
+  /* ── Arranque: cargar la lista de NO GRATOS y limpiar este dispositivo ── */
+  asegurarLista();
+  var intentos=0;
+  (function arrancar(){
+    try{ purgarLocal(); }catch(e){}
+    if(window._sb){ enCola(async function(){ await cargar(); asegurarLista(); purgarLocal(); actualizarBadges(); }); }
+    else if(intentos++<20) setTimeout(arrancar,1500);
+  })();
+  // pull y sync normales: antes/después, aplicar la lista de NO GRATOS
+  var _pull=window._pullTendFromCloud;
+  if(typeof _pull==='function') window._pullTendFromCloud=async function(){
+    try{ await enCola(cargar); }catch(e){}
+    var r=await _pull.apply(this,arguments);
+    try{ asegurarLista(); if(purgarLocal()) refrescar(); }catch(e){}
+    return r;
+  };
+  var _sync=window._syncTendToCloud;
+  if(typeof _sync==='function') window._syncTendToCloud=function(){
+    try{ purgarLocal(); }catch(e){}
+    return _sync.apply(this,arguments);
+  };
+
+  /* ═══════════ CONFIGURACIÓN EN ESCRITORIO: MOSAICOS + MODAL POR SECCIÓN ═══════════ */
+  var ICO={
+    factory:'<path d="M3 21V10l6 4v-4l6 4V5h4v16z"/><path d="M3 21h18"/>',
+    clip:'<rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4h6v3H9zM9 12h6M9 16h6"/>',
+    wrench:'<path d="M14.7 6.3a4 4 0 0 0-5.4 5.1L3 17.7 6.3 21l6.3-6.3a4 4 0 0 0 5.1-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>',
+    layout:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/>',
+    bridge:'<path d="M2 18h20M4 18V9M20 18V9M4 9c3 6 13 6 16 0M12 15V9"/>',
+    palette:'<path d="M12 3a9 9 0 1 0 0 18c1.5 0 2-1 1.4-2.1-.6-1.1 0-2.4 1.3-2.4H17a4 4 0 0 0 4-4c0-5-4-9.5-9-9.5z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="15" cy="7.5" r="1"/>',
+    folder:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+    chart:'<path d="M4 20V5M4 20h16M8 16v-5M12 16V8M16 16v-3"/>',
+    layers:'<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/>',
+    tag:'<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.2"/>',
+    receipt:'<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/>',
+    cart:'<circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l2.5 12h11L21 7H6"/>',
+    trash:'<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/>'
+  };
+  var SECS=[
+    {g:'DATOS Y CATÁLOGOS', k:'prov',  ic:'factory', t:'Origen de Proveedores', l:'Origen de Proveedores', sm:'País y ciudad por defecto', body:'provconfig-body',
+       open:function(){ if(typeof _pcCargarCache==='function') _pcCargarCache().then(function(){ if(typeof _pcRenderSinOrigen==='function') _pcRenderSinOrigen(); }); } },
+    {g:'DATOS Y CATÁLOGOS', k:'plan',  ic:'clip',    t:'Datos de Planeación', l:'Datos de Planeación', sm:'Información para planificar', body:'pln-data-body'},
+    {g:'DATOS Y CATÁLOGOS', k:'dept',  ic:'folder',  t:'Departamentos / Categorías de Inventario', l:'Departamentos', sm:'Categorías de inventario', body:'card-body-__departamentos___ca'},
+    {g:'DATOS Y CATÁLOGOS', k:'agr',   ic:'layers',  t:'Factores por Agrupación', l:'Factores', sm:'% arancelario por tipo', body:'agrup-body'},
+    {g:'DATOS Y CATÁLOGOS', k:'art',   ic:'tag',     t:'Aranceles por Artículo', l:'Aranceles', sm:'Lista editable por artículo', body:'art-body'},
+    {g:'DATOS Y CATÁLOGOS', k:'rub',   ic:'receipt', t:'Rubros de Gastos — Editar Lista', l:'Rubros de Gastos', sm:'Editar la lista', body:'rubros-body'},
+    {g:'DATOS Y CATÁLOGOS', k:'comp',  ic:'cart',    t:'Compradores — Módulo Tránsito', l:'Compradores', sm:'Módulo Tránsito', body:'compradores-body'},
+    {g:'APARIENCIA', k:'mx',    ic:'layout',  t:'Estilo de interfaz', l:'Estilo de interfaz', sm:'Menú y animaciones', body:'mxcfg-body'},
+    {g:'APARIENCIA', k:'temas', ic:'palette', t:'Temas y Apariencia', l:'Temas y Apariencia', sm:'Colores y tema', body:'temas-body'},
+    {g:'APARIENCIA', k:'viz',   ic:'chart',   t:'Visualización de Gráficas', l:'Gráficas', sm:'Cómo se muestran', body:'card-body-__visualizaci_n_de_g'},
+    {g:'SISTEMA', k:'mant',  ic:'wrench', t:'Mantenimiento de Datos', l:'Mantenimiento', sm:'Limpieza y respaldos', body:'mant-body'},
+    {g:'SISTEMA', k:'emb',   ic:'bridge', t:'Puente de Embarques (Importación / Zona Libre)', l:'Puente de Embarques', sm:'Importación / Zona Libre', body:'embp-body'},
+    {g:'SISTEMA', k:'pap',   ic:'trash',  t:'Bandeja de eliminados', l:'Bandeja de eliminados', sm:'Restaurar embarques', badge:true, fn:function(){ window._papeleraAbrir(); }}
+  ];
+  function svg(n){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">'+(ICO[n]||'')+'</svg>'; }
+  function css(){
+    if(document.getElementById('_cfgtCss')) return;
+    var s=document.createElement('style'); s.id='_cfgtCss';
+    s.textContent=
+      '.cfgt{padding:8px 4px 28px}'
+     +'.cfgt-sec{display:flex;align-items:center;gap:12px;font:800 11px var(--mxff,inherit);letter-spacing:.16em;color:var(--muted);margin:22px 4px 18px}'
+     +'.cfgt-sec:after{content:"";flex:1;height:1px;background:var(--border)}'
+     +'.cfgt-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:30px 16px;justify-items:center}'
+     +'.cfgt-it{--d:124px;appearance:none;border:0;background:none;color:inherit;font:inherit;cursor:pointer;padding:0;display:flex;flex-direction:column;align-items:center;width:100%;max-width:210px;position:relative}'
+     +'.cfgt-ring{position:relative;width:var(--d);height:var(--d);border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle at 30% 22%,#10606f 0,#08404c 55%,#052c35 100%);box-shadow:0 12px 28px #00000055,inset 0 0 0 1px #17697a;transition:transform .25s cubic-bezier(.2,.8,.2,1),box-shadow .25s}'
+     +'.cfgt-orb{position:absolute;inset:-5px;width:calc(100% + 10px);height:calc(100% + 10px);animation:cfgtSpin 22s linear infinite;pointer-events:none}'
+     +'.cfgt-orb .o1{fill:none;stroke:#2de2c9;stroke-width:1.6;stroke-dasharray:230 110;stroke-linecap:round;opacity:.9}'
+     +'.cfgt-orb .o2{fill:none;stroke:#2de2c9;stroke-width:1;opacity:.28}'
+     +'.cfgt-orb .dt{fill:#06303a;stroke:#2de2c9;stroke-width:1.6}'
+     +'@keyframes cfgtSpin{to{transform:rotate(360deg)}}'
+     +'.cfgt-ic{width:42%;height:42%;color:#f1fffc;filter:drop-shadow(0 2px 6px #0006);transition:transform .25s}'
+     +'.cfgt-ic svg{width:100%;height:100%}'
+     +'.cfgt-lb{position:relative;margin-top:calc(var(--d)*-.17);padding:8px 14px;border-radius:99px;background:#f4fffd;color:#06303a;font:800 13px/1.15 var(--mxff,inherit);box-shadow:0 6px 16px #0000004d;max-width:100%;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+     +'body.theme-light .cfgt-lb{background:#fff;border:1px solid #b4cbd3}'
+     +'.cfgt-sm{display:block;margin-top:8px;color:var(--muted);font-size:11.5px;line-height:1.3;text-align:center;max-width:170px}'
+     +'.cfgt-it:hover .cfgt-ring,.cfgt-it:focus-visible .cfgt-ring{transform:translateY(-5px);box-shadow:0 18px 36px #00000066,0 0 0 1px #2de2c9,0 0 28px #2de2c933}'
+     +'.cfgt-it:hover .cfgt-ic{transform:scale(1.08)}.cfgt-it:active .cfgt-ring{transform:scale(.96)}.cfgt-it:focus-visible{outline:none}'
+     +'.cfgt-bd{position:absolute;top:2px;right:calc(50% - var(--d)/2 - 2px);min-width:22px;height:22px;padding:0 6px;border-radius:99px;background:#f0883e;color:#2a1d00;font:800 12px/22px var(--mxff,inherit);text-align:center;box-shadow:0 3px 8px #0006;z-index:2}'
+     +'.cfgt-ov{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:2000000;display:flex;align-items:center;justify-content:center;padding:18px;backdrop-filter:blur(3px)}'
+     +'.cfgt-box{background:var(--s1);border:1px solid var(--border);border-radius:16px;width:100%;max-width:860px;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 24px 64px rgba(0,0,0,.6);animation:_tmPopIn .22s ease}'
+     +'.cfgt-hd{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border)}'
+     +'.cfgt-tt{font-size:15px;font-weight:800;color:var(--text)}'
+     +'.cfgt-x{background:rgba(218,54,51,.12);border:1px solid rgba(218,54,51,.25);color:#f85149;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer}'
+     +'.cfgt-body{padding:16px 18px;overflow-y:auto;flex:1}'
+     +'.cfgt-body .card{margin:0!important;border:none!important;background:transparent!important;box-shadow:none!important}'
+     +'.cfgt-body .card-bd{padding:0!important}'
+     +'.cfgt-ft{display:flex;gap:10px;padding:12px 18px;border-top:1px solid var(--border)}'
+     +'.cfgt-ft button{flex:1;border-radius:9px;padding:11px;font-size:13px;font-weight:700;cursor:pointer}'
+     +'@media(prefers-reduced-motion:reduce){.cfgt-orb{animation:none}}';
+    document.head.appendChild(s);
+  }
+  var sub=null;                       // sección abierta en el modal
+  function cerrarSub(){
+    if(!sub) return;
+    var s=sub; sub=null;
+    try{
+      if(s.hd) s.hd.style.display='';
+      if(s.bodyEl) s.bodyEl.style.display=s.prevDisp||'none';
+      if(s.marker && s.marker.parentNode){ s.marker.parentNode.insertBefore(s.card,s.marker); s.marker.parentNode.removeChild(s.marker); }
+    }catch(e){}
+    if(s.ov && s.ov.parentNode) s.ov.parentNode.removeChild(s.ov);
+  }
+  function guardarGen(){
+    try{ if(typeof saveAgrupToStorage==='function') saveAgrupToStorage(); if(typeof saveArtsToStorage==='function') saveArtsToStorage(); }catch(e){}
+    toast('✅ Guardado','green',1500);
+  }
+  function abrirSub(sec, clone){
+    cerrarSub();
+    if(sec.fn){ sec.fn(); return; }
+    var card=sec.card; if(!card) return;
+    var ov=document.createElement('div'); ov.className='cfgt-ov';
+    ov.innerHTML='<div class="cfgt-box"><div class="cfgt-hd"><div class="cfgt-tt">'+esc(sec.t)+'</div><button class="cfgt-x" type="button">✕ Cerrar</button></div>'
+      +'<div class="cfgt-body"></div>'
+      +'<div class="cfgt-ft"><button type="button" data-a="g" style="background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.3);color:var(--green-l,#3fb950)">💾 Guardar</button>'
+      +'<button type="button" data-a="ac" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);color:var(--blue-l,#58a6ff)">✓ Aplicar y cerrar</button></div></div>';
+    clone.appendChild(ov);
+    var marker=document.createComment('cfgt'); card.parentNode.insertBefore(marker,card);
+    ov.querySelector('.cfgt-body').appendChild(card);
+    var hd=card.querySelector('.card-hd'); if(hd) hd.style.display='none';
+    var bodyEl=card.querySelector('[id="'+sec.body+'"]'); var prev=bodyEl?bodyEl.style.display:'';
+    if(bodyEl) bodyEl.style.display='block';
+    sub={ sec:sec, ov:ov, card:card, hd:hd, bodyEl:bodyEl, prevDisp:(prev==='block'?'none':(prev||'none')), marker:marker };
+    ov.querySelector('.cfgt-x').onclick=cerrarSub;
+    ov.addEventListener('click',function(e){ if(e.target===ov) cerrarSub(); });
+    ov.querySelector('[data-a="g"]').onclick=guardarGen;
+    ov.querySelector('[data-a="ac"]').onclick=function(){ guardarGen(); cerrarSub(); };
+    if(sec.open){ try{ sec.open(); }catch(e){} }
+  }
+  // Esc cierra primero el modal de la sección (sin cerrar Configuración)
+  document.addEventListener('keydown',function(e){
+    if(e.key==='Escape' && sub){ e.stopImmediatePropagation(); e.stopPropagation(); cerrarSub(); }
+  },true);
+
+  window._cfgTilesDesktop=function(body){
+    try{
+      if(!(window.matchMedia && window.matchMedia('(min-width: 900px)').matches)) return;   // móvil: queda el acordeón
+      var clone=body && body.querySelector('#tab-config-clone'); if(!clone || clone.querySelector('.cfgt')) return;
+      css();
+      // localizar la tarjeta de cada sección (antes de ocultar nada)
+      SECS.forEach(function(s){
+        if(s.body){ var b=clone.querySelector('[id="'+s.body+'"]'); s.card=b?b.closest('.card'):null; } else s.card=null;
+      });
+      Array.prototype.forEach.call(clone.children,function(c){ c.style.display='none'; });
+      var wrap=document.createElement('div'); wrap.className='cfgt';
+      var h='', grupo='', i=0;
+      SECS.forEach(function(s){
+        if(!s.fn && !s.card) return;                      // sección que no existe en esta versión
+        if(s.g!==grupo){ if(grupo) h+='</div>'; grupo=s.g; h+='<div class="cfgt-sec">'+esc(grupo)+'</div><div class="cfgt-grid">'; }
+        h+='<button type="button" class="cfgt-it" data-i="'+(i++)+'" data-k="'+s.k+'">'
+          +'<span class="cfgt-ring"><svg class="cfgt-orb" viewBox="0 0 100 100"><circle class="o2" cx="50" cy="50" r="48"/><circle class="o1" cx="50" cy="50" r="48"/><circle class="dt" cx="50" cy="2" r="3.2"/></svg>'
+          +'<span class="cfgt-ic">'+svg(s.ic)+'</span></span>'
+          +(s.badge?'<span class="cfgt-bd" data-papelera-badge style="display:none">0</span>':'')
+          +'<span class="cfgt-lb">'+esc(s.l)+'</span><span class="cfgt-sm">'+esc(s.sm)+'</span></button>';
+      });
+      if(grupo) h+='</div>';
+      wrap.innerHTML=h;
+      clone.insertBefore(wrap, clone.firstChild); wrap.style.display='block';
+      var vis=SECS.filter(function(s){ return s.fn || s.card; });
+      wrap.addEventListener('click',function(e){
+        var b=e.target.closest('.cfgt-it'); if(!b) return;
+        abrirSub(vis[parseInt(b.getAttribute('data-i'),10)], clone);
+      });
+      actualizarBadges();
+      enCola(async function(){ await cargar(); actualizarBadges(); });
+    }catch(err){ console.warn('Config mosaicos:',err); }
+  };
+})();
+</script>
+
 </body>
 </html>
