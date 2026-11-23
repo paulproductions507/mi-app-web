@@ -235,6 +235,8 @@ details[open]>.card{animation:rise .35s both}
 .dlg p{margin:0 0 6px;color:var(--modal-text);font-size:1rem;animation:rise .45s .18s both;word-break:break-word}
 .dlg-actions{margin-top:22px;animation:rise .45s .25s both}
 .dlg-actions button{min-width:8.5rem;font-size:1.05rem;padding:11px 30px;border-radius:var(--r-s)}
+.dlg-actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.dlg-actions button[hidden]{display:none}
 .dlg-actions button:focus{outline:0;box-shadow:0 0 0 .3rem var(--ring)}
 .dlg-bar{position:absolute;left:0;bottom:0;height:5px;width:100%;background:var(--accent);opacity:.55;transform-origin:left;animation:bar 3s linear forwards}
 
@@ -414,7 +416,7 @@ button.mini{min-height:36px;padding:4px 12px;font-size:.82rem;border-radius:.4re
     <div class="dlg-ico" id="dlgIco" aria-hidden="true"></div>
     <h3 id="dlgT"></h3>
     <p id="dlgX"></p>
-    <div class="dlg-actions"><button type="button" class="primary" id="dlgOk">OK</button></div>
+    <div class="dlg-actions"><button type="button" id="dlgNo" hidden>No</button> <button type="button" class="primary" id="dlgOk">OK</button></div>
     <div class="dlg-bar" id="dlgBar" hidden></div>
   </div>
 </div>
@@ -460,22 +462,27 @@ const ICONOS = {
   warn: '<svg viewBox="0 0 80 80"><circle class="ring" cx="40" cy="40" r="36"/><path class="mark" d="M40 22v26"/><circle class="dot" cx="40" cy="58" r="3.4"/></svg>',
   info: '<svg viewBox="0 0 80 80"><circle class="ring" cx="40" cy="40" r="36"/><path class="mark" d="M40 36v22"/><circle class="dot" cx="40" cy="24" r="3.4"/></svg>'
 };
-let dlgTimer = null, dlgPrev = null;
+let dlgTimer = null, dlgPrev = null, askRes = null;
 function dialog({ tipo = 'info', titulo = '', texto = '', boton = 'OK', auto = 0 }) {
   const back = $('#dlgBack'), bar = $('#dlgBar');
   clearTimeout(dlgTimer);
   if (back.hidden) dlgPrev = document.activeElement;
   $('#dlgIco').className = 'dlg-ico ' + tipo; $('#dlgIco').innerHTML = ICONOS[tipo] || ICONOS.info;
-  $('#dlgT').textContent = titulo; $('#dlgX').textContent = texto; $('#dlgX').hidden = !texto; $('#dlgOk').textContent = boton;
+  $('#dlgT').textContent = titulo; $('#dlgX').textContent = texto; $('#dlgX').hidden = !texto; $('#dlgOk').textContent = boton; $('#dlgNo').hidden = !askRes;
   bar.hidden = !auto; bar.style.animation = 'none'; void bar.offsetWidth;
   if (auto) { bar.style.animation = 'bar ' + auto + 'ms linear forwards'; dlgTimer = setTimeout(cerrarDialog, auto); }
   back.classList.remove('out'); back.hidden = false;
   try { $('#dlgOk').focus({ preventScroll: true }); } catch (e) {}
 }
+function resolverAsk(v) { if (askRes) { const r = askRes; askRes = null; $('#dlgNo').hidden = true; r(v); } }
+function preguntar({ titulo, texto, si = 'Sí', no = 'No' }) {
+  return new Promise(res => { askRes = res; $('#dlgNo').textContent = no; dialog({ tipo: 'warn', titulo, texto, boton: si }); });
+}
 function cerrarDialog() {
+  resolverAsk(false);
   const back = $('#dlgBack'); if (back.hidden || back.classList.contains('out')) return;
   clearTimeout(dlgTimer); back.classList.add('out');
-  setTimeout(() => { back.hidden = true; back.classList.remove('out'); try { dlgPrev && dlgPrev.focus({ preventScroll: true }); } catch (e) {} }, 190);
+  setTimeout(() => { if (!back.classList.contains('out')) return; back.hidden = true; back.classList.remove('out'); try { dlgPrev && dlgPrev.focus({ preventScroll: true }); } catch (e) {} }, 190);
 }
 const fmtFecha = ts => new Date(ts).toLocaleString('es-PA', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 
@@ -595,9 +602,10 @@ async function extraerItems(file) {
 const limpiar = s => String(s || '').replace(/~/g, '-').replace(/[\\\/:*?"<>|#%\u0000-\u001f]/g, '-')
   .replace(/\s+/g, ' ').replace(/\s*-\s*-\s*/g, '-').trim();
 const state = { file: null, recibo: '', codigo: '', proveedor: '', depto: '', bodega: store.get('bodega', 'CDF'),
-  tipo: store.get('tipo', 'ZL'), comp: true, asis: true, clasif: '', avisos: [] };
+  tipo: store.get('tipo', 'ZL'), comp: true, asis: true, clasif: '', avisos: [], reenvio: false };
 function buildName(s = state) {
   const partes = ['RECIBO ' + s.recibo, limpiar(s.proveedor), limpiar(s.depto), s.bodega, s.tipo, s.comp ? 'SI' : 'NO', s.asis ? 'SI' : 'NO'];
+  if (s.reenvio) partes.push('REENVIO');   // el flujo salta la regla de duplicados solo con esta marca
   return partes.join(' ~ ') + '.pdf';
 }
 function listo(s = state) { return /^\d{4,8}$/.test(s.recibo) && !!limpiar(s.proveedor) && !!s.depto; }
@@ -764,11 +772,39 @@ async function copiar(t) {
   try { await navigator.clipboard.writeText(t); toast('Nombre copiado'); }
   catch (e) { const r = document.createRange(); r.selectNodeContents($('#fname')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); toast('Selecciona y copia el nombre'); }
 }
+
+/* ---- Regla de duplicados: si el recibo ya se emitió, se pregunta antes de reenviar ---- */
+async function buscarPrevio(h) {
+  const out = [];
+  const lh = store.get('hist', []).find(x => x.recibo === state.recibo);
+  if (lh) out.push({ ts: lh.ts, quien: 'emitido desde este equipo' });
+  if (h) {
+    try {
+      const pref = 'RECIBO ' + state.recibo + ' ~';
+      for await (const [n, fh] of h.entries()) {
+        if (fh.kind === 'file' && norm(n).startsWith(pref)) { const f = await fh.getFile(); out.push({ ts: f.lastModified, quien: 'ya hay un archivo de este recibo en la carpeta' }); }
+      }
+    } catch (e) {}
+  }
+  out.sort((a, b) => b.ts - a.ts);
+  return out[0] || null;
+}
+async function confirmarDuplicado(h) {
+  state.reenvio = false;
+  const p = await buscarPrevio(h);
+  if (!p) return true;
+  const ok = await preguntar({ titulo: 'Este recibo ya fue enviado',
+    texto: 'El recibo ' + state.recibo + ' se emitió el ' + fmtFecha(p.ts) + ' (' + p.quien + '). ¿Deseas reenviarlo? Se volverán a mandar los correos.',
+    si: 'Sí, reenviar', no: 'No, cancelar' });
+  if (ok) { state.reenvio = true; refresh(); }
+  return ok;
+}
 const archivoFinal = () => new File([state.file], buildName(), { type: 'application/pdf' });
 
 /* ================= Acciones de entrega ================= */
-function descargarPDF() {
+async function descargarPDF() {
   if (!listo()) return;
+  if (!(await confirmarDuplicado(null))) return;
   const f = archivoFinal(), url = URL.createObjectURL(f), a = document.createElement('a');
   a.href = url; a.download = f.name; document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 5000); guardarHist();
@@ -776,6 +812,7 @@ function descargarPDF() {
 }
 $('#copy').onclick = () => copiar(buildName());
 $('#share').onclick = async () => {
+  if (!(await confirmarDuplicado(null))) return;
   try { await navigator.share({ files: [archivoFinal()], title: buildName() }); guardarHist(); }
   catch (e) { if (e.name !== 'AbortError') dialog({ tipo: 'err', titulo: 'No se pudo compartir', texto: 'Vuelve a intentar.' }); }
 };
@@ -803,6 +840,7 @@ $('#dir').onclick = async () => {
       if ((await h.requestPermission({ mode: 'readwrite' })) !== 'granted') h = null;
     }
     if (!h) { h = await window.showDirectoryPicker({ mode: 'readwrite' }); await idbKV('set', 'dir', h); }
+    if (!(await confirmarDuplicado(h))) return;
     const fh = await h.getFileHandle(buildName(), { create: true }), w = await fh.createWritable();
     await w.write(state.file); await w.close(); guardarHist(); infoCarpeta();
     dialog({ tipo: 'ok', titulo: 'Recibo emitido', texto: 'Quedó en la carpeta «' + h.name + '». El flujo envía los correos solo.', auto: 4200 });
@@ -820,7 +858,7 @@ const ancho = () => matchMedia('(min-width:1100px)').matches;
 function veA(e) { if (!ancho()) e.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 function nuevo() {
   Object.assign(state, { file: null, recibo: '', reciboPdf: '', reciboNombre: '', codigo: '', proveedor: '', proveedorCodigo: '', depto: '',
-    deptos: [], deptoLibre: '', leido: undefined, clasif: '', comp: true, asis: true, emitidoNombre: '', confirmado: false });
+    deptos: [], deptoLibre: '', leido: undefined, clasif: '', comp: true, asis: true, emitidoNombre: '', confirmado: false, reenvio: false });
   $('#s2').hidden = true; $('#dropName').textContent = 'Elegir el PDF'; $('#dropTxt').textContent = 'Toca aquí o arrastra el archivo';
   $('#readMsg').className = 'msg'; $('#readMsg').textContent = '';
   $('#recibo').value = ''; $('#codigo').value = ''; $('#depto').value = ''; $('#clasif').textContent = '';
@@ -840,7 +878,7 @@ async function cargar(file) {
   $('#readMsg').className = 'msg';
   const r = parseRecibo(items, LISTAS.departamentos, file.name);
   Object.assign(state, { file, recibo: r.recibo, reciboPdf: r.reciboPdf, reciboNombre: r.reciboNombre, codigo: r.codigo, depto: r.depto,
-    deptos: r.deptos, deptoLibre: r.deptoLibre, leido: r.leido, clasif: r.clasif, proveedor: '', proveedorCodigo: '', comp: true, asis: true, emitidoNombre: '', confirmado: false });
+    deptos: r.deptos, deptoLibre: r.deptoLibre, leido: r.leido, clasif: r.clasif, proveedor: '', proveedorCodigo: '', comp: true, asis: true, emitidoNombre: '', confirmado: false, reenvio: false });
   $('#s2').hidden = false;
   $('#recibo').value = state.recibo; $('#codigo').value = state.codigo; $('#depto').value = state.depto;
   $('#comp').checked = $('#asis').checked = true;
@@ -905,7 +943,8 @@ function setTheme(t) {
 }
 $('#themeBtn').onclick = () => setTheme(document.documentElement.getAttribute('data-theme') === 'verde' ? 'claro' : 'verde');
 setTheme(store.get('theme', 'claro') === 'verde' ? 'verde' : 'claro');
-$('#dlgOk').onclick = cerrarDialog;
+$('#dlgOk').onclick = () => { resolverAsk(true); cerrarDialog(); };
+$('#dlgNo').onclick = cerrarDialog;
 $('#dlgBack').addEventListener('click', e => { if (e.target.id === 'dlgBack') cerrarDialog(); });
 addEventListener('keydown', e => {
   if ($('#dlgBack').hidden) return;
