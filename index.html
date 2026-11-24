@@ -39569,7 +39569,7 @@ window._plnModuloEmbarques = async function(){
   var TIPOS = ['mercancia','flete','gastos_origen','gastos_destino','otros_costos_no_gravados','informativo','honorarios','itbms','acarreo','dmce','seguro'];
 
   var S = window._pmState = window._pmState || { cols: COLS_DEF.slice(), rows: [], art: null, artNombre:'', usarHomolSiVacio:false, si:null };
-  S.fiscal = S.fiscal || {sub:0, sin:0, sinManual:false, file:''};
+  S.fiscal = S.fiscal || {sub:0, sin:0, sinManual:false, file:'', items:0};
   // si: null = automático (según escenario Sababa), true/false = elegido por el usuario
   if(S.cols.indexOf('FECHA_RECEPCION')<0 && S.cols.indexOf('TIPO')<0 && S.cols.indexOf('OC_HOMOLOGADA')<0){ /* estado viejo de v1 */ S.cols=COLS_DEF.slice(); S.rows=[]; }
 
@@ -40495,6 +40495,7 @@ window._plnModuloEmbarques = async function(){
           [200,450,1300].forEach(function(ms){ setTimeout(function(){ try{ if(typeof _setGrupoFactura==='function') _setGrupoFactura(g,o.FACTURA,true); }catch(e){} },ms); });
         });
         if(S.fiscal.sub>0){ var _sub=S.fiscal.sub; [450,1300].forEach(function(ms){ setTimeout(function(){ aplicarSubtotalFiscal(_sub); },ms); }); }
+        if(S.fiscal.items>0){ var _it=S.fiscal.items; [450,1300].forEach(function(ms){ setTimeout(function(){ aplicarItemsFiscal(_it); },ms); }); }
         // fecha de recepción (el motor no la lee): se asigna por factura|OC
         var L=window.invLines||[];
         L.forEach(function(l){
@@ -40531,6 +40532,23 @@ window._plnModuloEmbarques = async function(){
       if(typeof _recalcDifDesdePagoManual==='function') _recalcDifDesdePagoManual(sub);
       if(typeof calcSab2==='function') calcSab2();
     }
+  }
+  // (nov-2026) «Cantidad Total de Ítems» de la factura fiscal → Honorarios · Renglones (líneas agregadas, s1_reng)
+  function aplicarItemsFiscal(n){
+    n=parseInt(n,10); if(!(n>0)) return;
+    var el=document.getElementById('s1_reng'); if(!el) return;
+    el.value=n; ev(el,'input'); ev(el,'change');
+    try{
+      // mismo mapeo que «Guardar» del modal de Honorarios: Formularios → Uso del Sistema (si no hay honorario manual / omitido)
+      var noHon=window._noHonorarios===true, man=(typeof window._honManual==='number'&&window._honManual>0);
+      if(!noHon && !man){
+        var uso=document.getElementById('s1_uso_sistema');
+        if(uso){ uso.value=(n<=5?1:1+Math.ceil((n-5)/10))*3; }
+      }
+      if(typeof calc==='function') calc();
+      if(typeof _actualizarSummaryHonorarios==='function') _actualizarSummaryHonorarios();
+      if(typeof _actualizarSummaryImpuestos==='function') _actualizarSummaryImpuestos();
+    }catch(e){}
   }
   function pintarFiscal(){
     var a=document.getElementById('_pm_fsub'), b=document.getElementById('_pm_fsin');
@@ -40977,10 +40995,19 @@ window._plnModuloEmbarques = async function(){
         var fs=document.getElementById('_pm_fsub'); if(fs) fs.focus(); return;
       }
       S.fiscal.sub=res.sub; S.fiscal.sin=(res.sin>0)?res.sin:Math.round(res.sub/1.07*100)/100; S.fiscal.sinManual=false; S.fiscal.file=file.name;
+      // (nov-2026) Cantidad de ítems facturados: «Cantidad Total de Ítems: 21» (respaldo: contar las filas de la tabla)
+      var nItems=0, mi;
+      lines.forEach(function(l){ if(!nItems && (mi=/Cantidad\s+Total\s+de\s+[ÍIií]tems?\s*:?\s*(\d{1,4})/i.exec(l))) nItems=parseInt(mi[1],10); });
+      if(!nItems){
+        var mx=0; lines.forEach(function(l){ var mr=/^(\d{1,3})\s+.+\s(?:und|unid|uds?|pza|pzas)\s+[\d,]+\.\d{2}\s+[\d,]+\.\d{2}\s+[\d,]+\.\d{2}$/i.exec(l); if(mr) mx=Math.max(mx,parseInt(mr[1],10)); });
+        nItems=mx;
+      }
+      S.fiscal.items=nItems||0;
       aplicarSubtotalFiscal(res.sub); pintarFiscal();
+      if(nItems>0) aplicarItemsFiscal(nItems);
       var chk=Math.abs(S.fiscal.sin-res.sub/1.07)>0.02;
-      if(lab) lab.innerHTML='✅ '+esc(file.name)+' · '+res.metodo+' · Subtotal '+f2(res.sub)+' → Total Pago Realizado'+(chk?' <span style="color:#f0883e">(ojo: sin impuestos ≠ subtotal ÷ 1.07, revísalos)</span>':'');
-      toast('✅ Total Pago Realizado = '+f2(res.sub),'green',3500);
+      if(lab) lab.innerHTML='✅ '+esc(file.name)+' · '+res.metodo+' · Subtotal '+f2(res.sub)+' → Total Pago Realizado'+(nItems>0?' · '+nItems+' ítems → Honorarios (renglones)':' <span style="color:#f0883e">(no encontré la cantidad de ítems)</span>')+(chk?' <span style="color:#f0883e">(ojo: sin impuestos ≠ subtotal ÷ 1.07, revísalos)</span>':'');
+      toast('✅ Total Pago Realizado = '+f2(res.sub)+(nItems>0?' · '+nItems+' ítems en Honorarios':''),'green',3500);
     }catch(err){
       if(lab) lab.textContent='⚠️ '+(err&&err.message||err);
       toast('⚠️ No se pudo leer el PDF','orange',4000);
@@ -41334,7 +41361,7 @@ window._plnModuloEmbarques = async function(){
   window._pmResetTotal=function(){
     try{ clearTimeout(_bdT); }catch(e){}
     S.cols=COLS_DEF.slice(); S.rows=[]; S.art=null; S.artNombre=''; S.usarHomolSiVacio=false; S.si=null;
-    S.rep=null; S.recibos=[]; S.recibosRes=''; S.fiscal={sub:0,sin:0,sinManual:false,file:''};
+    S.rep=null; S.recibos=[]; S.recibosRes=''; S.fiscal={sub:0,sin:0,sinManual:false,file:'',items:0};
     try{ normalize(); }catch(e){}
     _restaurado=true;
     try{ localStorage.removeItem(_LSK); }catch(e){}
@@ -42498,11 +42525,22 @@ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded'
   function mapPais(raw){
     var n=norm(raw); if(!n) return '';
     if(PAISES[n]) return PAISES[n];
+    /* (nov-2026) «USA, NJ» · «US - NY» · «EE.UU. (NJ)» → país = lo que va antes del estado/ciudad */
+    var _p1=n.split(/\s*[,;\/\(\-]\s*/)[0].replace(/[\s.]+$/,'');
+    if(PAISES[_p1]) return PAISES[_p1];
+    if(PAISES[_p1.replace(/\./g,'')]) return PAISES[_p1.replace(/\./g,'')];
     var sel=document.getElementById('s1_pais_emb');
     if(sel){ var o=[].slice.call(sel.options).filter(function(x){ return x.value && x.value!=='__otro__' && (norm(x.value)===n||norm(x.textContent.replace(/^[^A-Za-z]+/,''))===n); })[0]; if(o) return o.value; }
     return titulo(raw);
   }
 
+  /* (nov-2026) Puerto del Excel → ciudad de la lista de la app. «New York and NJ» · «NY/NJ» · «New York, NJ» → Nueva York */
+  function mapPuertoUSA(raw){
+    var n=norm(raw); if(!n) return '';
+    if(/(NEW YORK|NUEVA YORK|\bNYC?\b)/.test(n)) return 'Nueva York';
+    if(/(NEW JERSEY|NUEVA JERSEY|\bNJ\b|NEWARK)/.test(n)) return (/NEWARK/.test(n)?'Newark':'Nueva Jersey');
+    return '';
+  }
   /* ── Lee el texto copiado (ya compactado a 11 columnas) ── */
   function compactar(t){
     return String(t||'').split(/\r?\n/).map(function(l){ var c=l.split('\t'); return COLS.map(function(i){ return (c[i]||'').replace(/\s+/g,' ').trim(); }).join('\t'); })
@@ -42577,6 +42615,8 @@ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded'
         var sc=document.getElementById('s1_ciudad_emb'), nc=norm(d.puerto);
         var op=[].slice.call(sc.options).filter(function(o){ return o.value && o.value!=='__otro__' && norm(o.value)===nc; })[0]
             || [].slice.call(sc.options).filter(function(o){ return o.value && o.value!=='__otro__' && (norm(o.value).indexOf(nc)>=0||nc.indexOf(norm(o.value))>=0); })[0];
+        var _usa=(pais==='USA')?mapPuertoUSA(d.puerto):'';
+        if(_usa){ var _ou=[].slice.call(sc.options).filter(function(o){ return norm(o.value)===norm(_usa); })[0]; if(_ou) op=_ou; }
         ciudad=op?op.value:titulo(d.puerto);
         _selSetOrCustom('s1_ciudad_emb',ciudad);
       } else avisos.push('el puerto de origen (col. M)');
