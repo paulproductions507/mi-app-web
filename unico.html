@@ -423,6 +423,7 @@ datalist option{background:var(--s2);color:var(--text)}
 <div style="display:flex;gap:8px;margin-bottom:8px">
 <button class="btn btn-proc" id="btn-proc" style="display:none;border:1px solid;flex:2" onclick="procesar()">✅ Procesar al Historial</button>
 <button onclick="_guardarNubeManual()" style="display:none;flex:1;background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:#58a6ff;border-radius:10px;padding:10px 8px;font-size:12px;font-weight:700;cursor:pointer" id="btn-nube-manual" title="Guardar este embarque en la nube sin reiniciar el formulario">☁️ Guardar Nube</button>
+<button type="button" onclick="if(window._embSPConfigurar)_embSPConfigurar()" style="flex-shrink:0;background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--muted);border-radius:10px;padding:10px 12px;font-size:12px;cursor:pointer" title="Elegir la carpeta EMBARQUES de SharePoint donde se crea el resumen que dispara el correo">📨</button>
 </div>
 
 <!-- ══ DESCARGAR RESULTADO ══ -->
@@ -1383,6 +1384,8 @@ async function procesar(){
   if(!lastCalc||!lastCalc.cif){ toast('⚠️ Calcula primero.','red'); return; }
   var d=lastCalc;
   if(!d.nro){ if(!confirm('No hay N° de Embarque. ¿Continuar?')) return; }
+  // (nov-2026) permiso de la carpeta de SharePoint (notificación de embarque) mientras hay gesto del usuario
+  var _spH=null; try{ if(window._embSPPreparar) _spH=await window._embSPPreparar(); }catch(e){}
 
   // ── 2+ equipos/contenedores: preguntar si las facturas son las mismas o distintas ──
   var _modoFact = await _preguntarFacturasPorContenedor();
@@ -1413,6 +1416,8 @@ async function procesar(){
   var ok = await _pushToCloud(data);
 
   if(ok){
+    // (nov-2026) notificación de embarque: carpeta AÑO/MES/EMB# + _resumen_embarque.json para el flujo de correo
+    try{ if(window._embSPEmitirUnico) await Promise.race([ window._embSPEmitirUnico(data,_spH), new Promise(function(r){ setTimeout(r,9000); }) ]); }catch(e){ console.warn('embSP',e); }
     localStorage.removeItem('_unico_estado2');
     lastCalc=null;
     // Transición del spinner a check verde, luego muestra el resultado
@@ -2234,6 +2239,117 @@ function _recibirPlantillaIndex(){
   // Init Supabase
   setTimeout(initSB, 500);
 setTimeout(_recuperarUnicosAlDashboard, 2500);
+})();
+</script>
+<script id="emb-sharepoint-notif-unico">
+/* ═══ 📨 Notificación de embarque (Único) (nov-2026) — resumen del embarque en SharePoint para el correo automático (Power Automate). Envuelto en try: si falla, la app sigue igual. ═══ */
+(function(){
+  if(window._embSPInst_emb_sharepoint_notif_unico) return; window._embSPInst_emb_sharepoint_notif_unico=true;
+  try{
+
+  var LS_HIST='_embSP_emitidos_v1', DB='_embSP', ST='h';
+  var MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  function toast(m,c,d){
+    try{ if(typeof _showToast==='function'){ _showToast(m,c||'green',d||4000); return; } }catch(e){}
+    try{ if(typeof window.toast==='function'){ window.toast(m,(c==='green')?'green':'red'); } }catch(e){}
+  }
+  function val(id){ var e=document.getElementById(id); return e?String(e.value||'').trim():''; }
+  function limpia(s){ return String(s||'').replace(/[\\\/:*?"<>|~{}%&]/g,'').replace(/\s+/g,' ').trim(); } // «#» sí es válido en SharePoint
+  function idb(op,v){
+    return new Promise(function(ok,fail){
+      var r=indexedDB.open(DB,1);
+      r.onupgradeneeded=function(){ r.result.createObjectStore(ST); };
+      r.onerror=function(){ fail(r.error); };
+      r.onsuccess=function(){
+        var tx=r.result.transaction(ST,op==='get'?'readonly':'readwrite'), s=tx.objectStore(ST), q=op==='get'?s.get('dir'):s.put(v,'dir');
+        q.onsuccess=function(){ ok(q.result); }; q.onerror=function(){ fail(q.error); };
+      };
+    });
+  }
+  async function carpetaRaiz(pedir){ /* el selector de carpeta SOLO se abre desde el botón 📨 */
+    if(!window.showDirectoryPicker) return null;
+    var h=null; try{ h=await idb('get'); }catch(e){}
+    if(h){
+      try{
+        var p=await h.queryPermission({mode:'readwrite'});
+        if(p!=='granted' && pedir) p=await h.requestPermission({mode:'readwrite'});
+        if(p!=='granted') h=null;
+      }catch(e){ h=null; }
+    }
+    return h;
+  }
+  // Se llama al PULSAR Procesar (aún hay gesto del usuario): deja el permiso de la carpeta ya concedido.
+  window._embSPPreparar=async function(){
+    try{ window._embSPH=await carpetaRaiz(true); }catch(e){ window._embSPH=null; }
+    return window._embSPH;
+  };
+  window._embSPConfigurar=async function(){
+    try{
+      if(!window.showDirectoryPicker){ toast('Este navegador no puede elegir carpetas (usa Chrome o Edge en la computadora).','orange',5000); return; }
+      var h=await window.showDirectoryPicker({mode:'readwrite'}); await idb('set',h); window._embSPH=h;
+      toast('📨 Carpeta de embarques lista: «'+h.name+'». Debe ser la carpeta raíz EMBARQUES sincronizada con SharePoint.','green',6000);
+    }catch(e){ if(e&&e.name!=='AbortError') toast('No se pudo elegir la carpeta: '+(e.message||e),'orange',5000); }
+  };
+  function nombreCarpeta(m){
+    var cor=/SABABA/.test(m.corredor)?'SABABA':(/CIF/.test(m.corredor)?'CIF EXPRESS':String(m.corredor||'CORREDOR').replace(/,?\s*S\.?\s?A\.?$/i,''));
+    return limpia('EMB#'+m.embarque+' - '+m.cantidad+' CTNS - '+cor+(m.tipoProveedor==='Exterior'?' (E)':'')+(m.tipoCarga==='Suministro'?' (S)':''));
+  }
+  function agrupar(lineas,fDept,fNum){
+    var merc=lineas.filter(function(l){ return l && (l.tipoFac||'mercancia')==='mercancia'; }), por={};
+    merc.forEach(function(l){
+      var d=String(fDept(l)||'').trim().toUpperCase()||'SIN DEPARTAMENTO', f=String(fNum(l)||'').trim();
+      var o=por[d]||(por[d]={set:{},sinNum:0});
+      if(f) o.set[f.toUpperCase()]=1; else o.sinNum++;
+    });
+    var deps=Object.keys(por).map(function(d){ return {departamento:d,facturas:Object.keys(por[d].set).length+por[d].sinNum}; })
+      .sort(function(a,b){ return b.facturas-a.facturas || (a.departamento<b.departamento?-1:1); });
+    return {merc:merc,deps:deps,total:deps.reduce(function(s,x){ return s+x.facturas; },0)};
+  }
+  function hist(){ try{ return JSON.parse(localStorage.getItem(LS_HIST)||'{}'); }catch(e){ return {}; } }
+  function marcar(nro){ try{ var h=hist(); h[nro]=Date.now(); localStorage.setItem(LS_HIST,JSON.stringify(h)); }catch(e){} }
+  function descargar(nombre,txt){
+    var a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([txt],{type:'application/json'})); a.download=nombre;
+    document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },500);
+  }
+  async function emitirManifest(m,forzar,raizPrev){
+    try{
+      var nro=String(m.embarque||'');
+      if(!nro || /^(UNI|EMB)-\d{10,}$/i.test(nro) || /^\d{13}$/.test(nro)) return {ok:false,motivo:'sin número de embarque'};
+      if(!forzar && hist()[nro]) return {ok:true,omitido:true};          // ya se notificó: reprocesar no duplica el correo
+      if(!m.departamentos.length){ toast('📨 Sin facturas de mercancía: no se emitió la notificación de embarque','orange',4500); return {ok:false,motivo:'sin facturas'}; }
+      var txt=JSON.stringify(m,null,2), carpeta=nombreCarpeta(m), d=new Date();
+      var raiz=raizPrev||window._embSPH||null; if(!raiz){ try{ raiz=await carpetaRaiz(true); }catch(e){ raiz=null; } }
+      if(!raiz){ descargar('_resumen_embarque.json',txt); toast('📨 No hay carpeta de SharePoint elegida: se descargó _resumen_embarque.json. Súbelo a la carpeta del embarque ('+carpeta+') o toca 📨 en la app para elegirla.','orange',8000); return {ok:false,descargado:true}; }
+      var a=await raiz.getDirectoryHandle(String(d.getFullYear()),{create:true});
+      var b=await a.getDirectoryHandle(MESES[d.getMonth()],{create:true});
+      var c=await b.getDirectoryHandle(carpeta,{create:true});
+      var fh=await c.getFileHandle('_resumen_embarque.json',{create:true}), w=await fh.createWritable();
+      await w.write(txt); await w.close();
+      marcar(nro);
+      toast('📨 Notificación emitida: '+d.getFullYear()+' / '+MESES[d.getMonth()]+' / '+carpeta,'green',5000);
+      return {ok:true,carpeta:carpeta};
+    }catch(e){
+      console.warn('embSP:',e); toast('📨 No se pudo emitir la notificación del embarque: '+(e&&e.message||e),'orange',6000);
+      return {ok:false,error:String(e&&e.message||e)};
+    }
+  }
+
+  // Único (liquidación): arma el resumen desde el mismo "data" que se guarda en el historial
+  function armarUnico(data){
+    var L=data.invLines||[];
+    var g=agrupar(L,function(l){ return l.deptCat||l.dept; },function(l){ return l.nfac||l.numFact; });
+    var cor=String(data.corredor||'').toLowerCase();
+    var nombreCor=cor==='sababa'?'SABABA IMPORTS, S.A.':(cor==='cifexp'?'CIF EXPRESS, S.A.':String(data.provCorredor||'').trim()||'No identificado');
+    var tp=String(data.tipoProveedor||'ZL').toUpperCase();
+    var sumi=g.merc.some(function(l){ return String(l.deptCat||'').toUpperCase().indexOf('SUMI')>=0; }) || /suministro|supply/i.test(String(data.desc||''));
+    return { v:2, embarque:String(data.nro||'').trim(), cantidad:parseInt(data.cartones,10)||0,
+      corredor:nombreCor, tipoProveedor:tp==='IMP'?'Exterior':(tp==='MIX'?'Mixto':'Zona Libre'),
+      tipoEmbarque:'Liquidación', tipoCarga:sumi?'Suministro':'Mercancía',
+      totalFacturas:g.total, departamentos:g.deps, generado:new Date().toISOString() };
+  }
+  window._embSPEmitirUnico=function(data,raiz,forzar){ return emitirManifest(armarUnico(data),forzar,raiz); };
+
+  }catch(e){ console.warn("embSP init",e); }
 })();
 </script>
 </body>
