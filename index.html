@@ -43506,7 +43506,7 @@ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded'
     try{
       if(!window.showDirectoryPicker){ toast('Este navegador no puede elegir carpetas (usa Chrome o Edge en la computadora).','orange',5000); return; }
       var h=await window.showDirectoryPicker({mode:'readwrite'}); await idb('set',h); window._embSPH=h;
-      toast('📨 Carpeta de embarques lista: «'+h.name+'». Elige EMBARQUES (o la carpeta que contiene EMBARQUES y EMBARQUES - LIQUIDACIONES), sincronizada con SharePoint. Queda recordada.','green',6000);
+      toast('📨 Carpeta de embarques lista: «'+h.name+'». Elige la carpeta EMBARQUES (o General), sincronizada con SharePoint. Queda recordada.','green',6000);
     }catch(e){ if(e&&e.name!=='AbortError') toast('No se pudo elegir la carpeta: '+(e.message||e),'orange',5000); }
   };
   function nombreCarpeta(m){
@@ -43527,31 +43527,40 @@ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded'
   }
   function pad2(n){ return (n<10?'0':'')+n; }
   function esAnio(name,d){ var n=norm(name); return n.indexOf(String(d.getFullYear()))>=0 && !/^mes\s*#/.test(n) && n.indexOf('emb#')!==0; }
-  function esBase(name,liq){ var n=norm(name).replace(/\s+/g,' ').trim(); return liq ? n.indexOf('liquidaciones')>=0 : n==='embarques'; }
+  function esBase(name){ return norm(name).indexOf('liquidaciones')>=0; }
   async function subdir(h,pred){ for await (var ent of h.entries()){ if(ent[1].kind==='directory' && pred(ent[0])) return {h:ent[1],n:ent[0]}; } return null; }
-  /* Ruta real de SharePoint:  EMBARQUES / EMBARQUES - 2026 / Mes #11 - Embarques Noviembre 2026 / Emb#22320 - 1126 CTNS - SABABA IMPORTS (E)
-     Si falta el año o el mes (ej. llega diciembre o enero) los crea con ese mismo formato. */
-  async function resolverRuta(raiz,d,liq){
+  async function buscarBase(raiz){ /* baja hasta «EMBARQUES - LIQUIDACIONES» (máx. 3 niveles) */
+    if(esBase(raiz.name)) return {h:raiz,ruta:raiz.name};
+    var cola=[{h:raiz,ruta:raiz.name,nivel:0}];
+    while(cola.length){
+      var cur=cola.shift(); if(cur.nivel>=3) continue;
+      for await (var ent of cur.h.entries()){
+        if(ent[1].kind!=='directory') continue;
+        var n=norm(ent[0]); if(n.indexOf('emb#')===0 || /^mes\s*#/.test(n)) continue;
+        if(esBase(ent[0])) return {h:ent[1],ruta:cur.ruta+' / '+ent[0]};
+        cola.push({h:ent[1],ruta:cur.ruta+' / '+ent[0],nivel:cur.nivel+1});
+      }
+    }
+    return null;
+  }
+  /* Ruta real de SharePoint:  General / EMBARQUES / EMBARQUES - LIQUIDACIONES / EMBARQUES - 2026 / Mes #11 - Embarques Noviembre 2026 / Emb#22320 - 1126 CTNS - SABABA IMPORTS (E)
+     (Sababa y CIF Express usan la misma ruta.) Si falta el año o el mes (ej. llega diciembre o enero) los crea con ese mismo formato. */
+  async function resolverRuta(raiz,d){
     var anio=d.getFullYear(), creados=[], ruta=raiz.name;
     var nomAnio='EMBARQUES - '+anio, nomMes='Mes #'+pad2(d.getMonth()+1)+' - Embarques '+MESES[d.getMonth()]+' '+anio;
     if(esMes(raiz.name,d)) return {h:raiz,ruta:ruta,creados:creados};
     var yearH=null;
     if(esAnio(raiz.name,d)) yearH=raiz;
     else{
-      var base=null;
-      if(esBase(raiz.name,liq)) base=raiz;
-      else{ var f=await subdir(raiz,function(n){ return esBase(n,liq); }); if(f){ base=f.h; ruta+=' / '+f.n; } }
-      if(!base) return {error:'En «'+raiz.name+'» no encuentro la carpeta '+(liq?'«EMBARQUES - LIQUIDACIONES»':'«EMBARQUES»')+'. Toca 📨 y elige la carpeta EMBARQUES (o la carpeta que contiene EMBARQUES y EMBARQUES - LIQUIDACIONES).'};
-      var y=await subdir(base,function(n){ return esAnio(n,d); });
+      var base=await buscarBase(raiz);
+      if(!base) return {error:'Desde «'+raiz.name+'» no encuentro la carpeta «EMBARQUES - LIQUIDACIONES». Toca 📨 y elige la carpeta EMBARQUES (o General).'};
+      ruta=base.ruta;
+      var y=await subdir(base.h,function(n){ return esAnio(n,d); });
       if(y){ yearH=y.h; ruta+=' / '+y.n; }
-      else{
-        if(liq) return {error:'No encuentro la carpeta del año '+anio+' dentro de «'+base.name+'» y no sé cómo se nombra en Liquidaciones para crearla.'};
-        yearH=await base.getDirectoryHandle(nomAnio,{create:true}); creados.push(nomAnio); ruta+=' / '+nomAnio;
-      }
+      else{ yearH=await base.h.getDirectoryHandle(nomAnio,{create:true}); creados.push(nomAnio); ruta+=' / '+nomAnio; }
     }
     var m=await subdir(yearH,function(n){ return esMes(n,d); });
     if(m) return {h:m.h,ruta:ruta+' / '+m.n,creados:creados};
-    if(liq && !creados.length) return {error:'No encuentro la carpeta del mes '+pad2(d.getMonth()+1)+' en Liquidaciones y no sé cómo se nombra para crearla.'};
     var mh=await yearH.getDirectoryHandle(nomMes,{create:true}); creados.push(nomMes);
     return {h:mh,ruta:ruta+' / '+nomMes,creados:creados};
   }
@@ -43622,10 +43631,10 @@ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded'
       var nro=String(m.embarque||'');
       if(!nro || /^(UNI|EMB)-\d{10,}$/i.test(nro) || /^\d{13}$/.test(nro)) return {ok:false,motivo:'sin número de embarque'};
       if(!m.departamentos.length){ toast('📨 Sin facturas de mercancía: no se emitió la notificación de embarque','orange',4500); return {ok:false,motivo:'sin facturas'}; }
-      var txt=JSON.stringify(m,null,2), carpeta=nombreCarpeta(m), d=new Date(), liq=false; /* Liquidación (CIF Express) usa la misma estructura EMBARQUES */
+      var txt=JSON.stringify(m,null,2), carpeta=nombreCarpeta(m), d=new Date(), liq=false;
       var raiz=raizPrev||window._embSPH||null; if(!raiz){ try{ raiz=await carpetaRaiz(true); }catch(e){ raiz=null; } }
       if(!raiz){ descargar('_resumen_embarque.json',txt); toast('📨 No hay carpeta de SharePoint elegida: se descargó _resumen_embarque.json. Súbelo a la carpeta del embarque ('+carpeta+') o toca 📨 en la app para elegirla.','orange',8000); return {ok:false,descargado:true}; }
-      var rt=await resolverRuta(raiz,d,liq);
+      var rt=await resolverRuta(raiz,d);
       if(rt.error){ descargar('_resumen_embarque.json',txt); toast('📨 '+rt.error+' Se descargó _resumen_embarque.json.','orange',10000); return {ok:false,descargado:true}; }
       var ex=await buscarEmbarque(rt.h,nro), c, nuevaCarpeta=false, cambios=[], reemplazo=false;
       if(ex){
