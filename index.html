@@ -32164,7 +32164,7 @@ async function _guardarYRecargar(nombre){
   try { localStorage.setItem('_tendData_v2', JSON.stringify(tendData||[])); } catch(e){}
 
   // (nov-2026) Notificación de embarque: crea la carpeta en SharePoint y deja _resumen_embarque.json para el flujo de correo
-  try { if(window._embSPEmitir) await Promise.race([ window._embSPEmitir(nombre), new Promise(function(r){ setTimeout(r,90000); }) ]); } catch(e){ console.warn('embSP', e); }
+  try { if(window._embSPEmitir) await Promise.race([ window._embSPEmitir(nombre,false,true), new Promise(function(r){ setTimeout(r,90000); }) ]); } catch(e){ console.warn('embSP', e); }
 
   // Vincular automáticamente cualquier plantilla usada en esta sesión con este embarque real
   if(typeof _plntConsumirSesion==='function') _plntConsumirSesion(nombre);
@@ -43500,6 +43500,14 @@ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded'
   // Se llama al PULSAR Procesar (aún hay gesto del usuario): deja el permiso de la carpeta ya concedido.
   window._embSPPreparar=async function(){
     try{ window._embSPH=await carpetaRaiz(true); }catch(e){ window._embSPH=null; }
+    if(!window._embSPH){
+      if(!window.showDirectoryPicker){
+        await aviso('Este navegador no puede crear carpetas','Para que la app cree la carpeta del embarque en SharePoint abre la app en Chrome o Edge desde la computadora. Mientras tanto se descargará el archivo _resumen_embarque.json para subirlo a mano.');
+      } else {
+        var r=await dialogo('Falta elegir la carpeta de SharePoint','La app crea la carpeta del embarque dentro de la carpeta EMBARQUES sincronizada con OneDrive.\n\nLa carpeta se recuerda por navegador y por dirección web: la app en la web, la instalada y la local la guardan por separado, por eso hay que elegirla una vez en cada una.\n\nElige EMBARQUES (o General).',['Elegir carpeta ahora','Ahora no']);
+        if(r===0) await window._embSPConfigurar();
+      }
+    }
     return window._embSPH;
   };
   window._embSPConfigurar=async function(){
@@ -43583,6 +43591,29 @@ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded'
     if(p.tipoProveedor && String(p.tipoProveedor)!==String(m.tipoProveedor)) r.push('Tipo: '+(p.tipoProveedor==='Exterior'?'Extranjero (E)':'Zona Libre (Z)')+' → '+(m.tipoProveedor==='Exterior'?'Extranjero (E)':'Zona Libre (Z)'));
     return r;
   }
+
+  function dialogo(titulo,texto,botones){ /* devuelve el índice del botón pulsado (0 = principal); Esc = último botón */
+    return new Promise(function(ok){
+      var ov=document.createElement('div');
+      ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2147483000;display:flex;align-items:center;justify-content:center;padding:16px;font-family:system-ui,sans-serif';
+      var caja=document.createElement('div');
+      caja.style.cssText='background:#08303a;color:#f1fffc;border:1px solid #17697a;border-radius:14px;max-width:460px;width:100%;padding:20px;box-shadow:0 20px 50px #000a';
+      var t=document.createElement('div'); t.style.cssText='font-size:17px;font-weight:700;margin-bottom:8px'; t.textContent=titulo;
+      var x=document.createElement('div'); x.style.cssText='font-size:14px;line-height:1.45;opacity:.92;white-space:pre-line;margin-bottom:16px'; x.textContent=texto;
+      var fila=document.createElement('div'); fila.style.cssText='display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap';
+      function fin(v){ try{ document.removeEventListener('keydown',kd,true); ov.remove(); }catch(e){} ok(v); }
+      function kd(e){ if(e.key==='Escape'){ e.preventDefault(); fin(botones.length-1); } }
+      botones.forEach(function(txt,i){
+        var b=document.createElement('button'); b.textContent=txt;
+        b.style.cssText='padding:9px 18px;border-radius:9px;cursor:pointer;'+(i===0?'border:0;background:#2de2c9;color:#04252b;font-weight:700':'border:1px solid #17697a;background:transparent;color:#f1fffc');
+        b.addEventListener('click',function(){ fin(i); }); fila.appendChild(b);
+      });
+      caja.appendChild(t); caja.appendChild(x); caja.appendChild(fila); ov.appendChild(caja);
+      document.addEventListener('keydown',kd,true); document.body.appendChild(ov);
+      try{ fila.firstChild.focus(); }catch(e){}
+    });
+  }
+  function aviso(titulo,texto){ return dialogo(titulo,texto,['Entendido']); }
   function preguntar(titulo,texto){ /* Sí / No; «No» queda como opción principal */
     return new Promise(function(ok){
       var ov=document.createElement('div');
@@ -43626,22 +43657,23 @@ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded'
     var a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([txt],{type:'application/json'})); a.download=nombre;
     document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },500);
   }
-  async function emitirManifest(m,forzar,raizPrev){
+  async function emitirManifest(m,forzar,raizPrev,silencioso){
     try{
       var nro=String(m.embarque||'');
       if(!nro || /^(UNI|EMB)-\d{10,}$/i.test(nro) || /^\d{13}$/.test(nro)) return {ok:false,motivo:'sin número de embarque'};
       if(!m.departamentos.length){ toast('📨 Sin facturas de mercancía: no se emitió la notificación de embarque','orange',4500); return {ok:false,motivo:'sin facturas'}; }
       var txt=JSON.stringify(m,null,2), carpeta=nombreCarpeta(m), d=new Date(), liq=false;
       var raiz=raizPrev||window._embSPH||null; if(!raiz){ try{ raiz=await carpetaRaiz(true); }catch(e){ raiz=null; } }
-      if(!raiz){ descargar('_resumen_embarque.json',txt); toast('📨 No hay carpeta de SharePoint elegida: se descargó _resumen_embarque.json. Súbelo a la carpeta del embarque ('+carpeta+') o toca 📨 en la app para elegirla.','orange',8000); return {ok:false,descargado:true}; }
+      if(!raiz){ descargar('_resumen_embarque.json',txt); await aviso('No se creó la carpeta del embarque','No hay carpeta de SharePoint elegida en este navegador. Se descargó _resumen_embarque.json.\n\nCrea a mano la carpeta:\n'+carpeta+'\ny sube ahí el archivo; o toca 📨 en la app, elige EMBARQUES y vuelve a emitir.'); return {ok:false,descargado:true}; }
       var rt=await resolverRuta(raiz,d);
-      if(rt.error){ descargar('_resumen_embarque.json',txt); toast('📨 '+rt.error+' Se descargó _resumen_embarque.json.','orange',10000); return {ok:false,descargado:true}; }
+      if(rt.error){ descargar('_resumen_embarque.json',txt); await aviso('No se creó la carpeta del embarque',rt.error+'\n\nSe descargó _resumen_embarque.json.'); return {ok:false,descargado:true}; }
       var ex=await buscarEmbarque(rt.h,nro), c, nuevaCarpeta=false, cambios=[], reemplazo=false;
       if(ex){
         /* El embarque ya tiene carpeta (aunque le hayan cambiado el nombre): NO se envía correo, salvo actualización real o confirmación */
         c=ex.h; carpeta=ex.nombre;
         var prev=await leerPrevio(c); if(!prev){ var hh=hist()[nro]; if(hh && typeof hh==='object') prev=hh; }
         cambios=prev?diferencias(prev,m):[];
+        if(!forzar && !cambios.length && silencioso && hist()[nro]){ return {ok:true,omitido:true}; } /* ya se emitió al conformar: no volver a preguntar */
         if(!forzar && !cambios.length){
           var si=await preguntar('Esta carpeta ya existe','El embarque '+nro+' ya tiene carpeta:\n«'+carpeta+'»\n\nNo cambió la cantidad de cartones, el corredor ni el tipo (E/Z).\n¿Deseas reemplazar? Si dices Sí se enviará OTRO correo.');
           if(!si){ toast('📨 Embarque '+nro+' ya existe: no se envió correo.','green',5000); return {ok:true,omitido:true}; }
@@ -43657,7 +43689,7 @@ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded'
       toast('📨 '+(cambios.length?'Actualización emitida ('+cambios.join('; ')+')':'Notificación emitida')+' · '+(nuevaCarpeta?'carpeta NUEVA: ':'carpeta existente: ')+rt.ruta+' / '+carpeta+(rt.creados.length?' · creado: '+rt.creados.join(', '):''),(nuevaCarpeta||rt.creados.length)?'orange':'green',8000);
       return {ok:true,carpeta:carpeta};
     }catch(e){
-      console.warn('embSP:',e); toast('📨 No se pudo emitir la notificación del embarque: '+(e&&e.message||e),'orange',6000);
+      console.warn('embSP:',e); try{ await aviso('No se pudo emitir la notificación del embarque',String(e&&e.message||e)+'\n\nRevisa que la carpeta elegida siga disponible y vuelve a intentarlo (📨).'); }catch(x){}
       return {ok:false,error:String(e&&e.message||e)};
     }
   }
@@ -43673,9 +43705,9 @@ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded'
       tipoEmbarque:sab?'Local':'Liquidación', tipoCarga:sumi?'Suministro':'Mercancía',
       totalFacturas:g.total, departamentos:g.deps, generado:new Date().toISOString() };
   }
-  window._embSPEmitir=function(nombre,forzar){
+  window._embSPEmitir=function(nombre,forzar,silencioso){
     var nro=val('s1_nro_emb')||String(nombre||'').replace(/^EMB-?/i,'');
-    return emitirManifest(armar(nro),forzar);
+    return emitirManifest(armar(nro),forzar,undefined,silencioso);
   };
   window._embSPReemitir=function(){ return window._embSPEmitir(val('s1_nro_emb'),true); };
 
@@ -43790,10 +43822,11 @@ body.costos-lock #btn-aplicar-cambios{opacity:.3!important;pointer-events:none!i
     }
 
     // ── Conformar ──
-    function conformar(){
+    async function conformar(){
       var nro=val('s1_nro_emb');
       if(!nro){ toast('⚠️ Falta el N° de embarque','orange',3000); return; }
       if(!(parseFloat(val('s1_cif'))>0 || parseFloat(val('s1_fob'))>0)){ toast('⚠️ No hay valores para costear','orange',3000); return; }
+      try{ if(window._embSPPreparar) await window._embSPPreparar(); }catch(e){} /* con el clic aún activo: permiso/selección de la carpeta de SharePoint */
       if(!confirm('¿Conformar los costos de importación del embarque #'+nro+'?\n\nSe bloquean todos los campos y cálculos y el embarque queda como PROCESADO.')) return;
       window._costosBypass=true;
       try{ if(typeof calc==='function') calc(); if(typeof syncSC3fromSC1==='function') syncSC3fromSC1(); }catch(e){ console.warn(e); }
@@ -43806,6 +43839,8 @@ body.costos-lock #btn-aplicar-cambios{opacity:.3!important;pointer-events:none!i
         persistir('procesado');
         lockUI(true);
         animacion(nro);
+        /* (nov-2026) Conformar deja el embarque PROCESADO sin pasar por «Procesar Embarque»: aquí también se crea la carpeta y se emite la notificación */
+        try{ if(window._embSPEmitir) window._embSPEmitir(nro,false,false); }catch(e){ console.warn('embSP conformar',e); }
       },250);
     }
 
