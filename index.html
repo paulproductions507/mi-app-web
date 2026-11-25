@@ -32164,7 +32164,7 @@ async function _guardarYRecargar(nombre){
   try { localStorage.setItem('_tendData_v2', JSON.stringify(tendData||[])); } catch(e){}
 
   // (nov-2026) Notificación de embarque: crea la carpeta en SharePoint y deja _resumen_embarque.json para el flujo de correo
-  try { if(window._embSPEmitir) await Promise.race([ window._embSPEmitir(nombre), new Promise(function(r){ setTimeout(r,9000); }) ]); } catch(e){ console.warn('embSP', e); }
+  try { if(window._embSPEmitir) await Promise.race([ window._embSPEmitir(nombre), new Promise(function(r){ setTimeout(r,90000); }) ]); } catch(e){ console.warn('embSP', e); }
 
   // Vincular automáticamente cualquier plantilla usada en esta sesión con este embarque real
   if(typeof _plntConsumirSesion==='function') _plntConsumirSesion(nombre);
@@ -43506,13 +43506,100 @@ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded'
     try{
       if(!window.showDirectoryPicker){ toast('Este navegador no puede elegir carpetas (usa Chrome o Edge en la computadora).','orange',5000); return; }
       var h=await window.showDirectoryPicker({mode:'readwrite'}); await idb('set',h); window._embSPH=h;
-      toast('📨 Carpeta de embarques lista: «'+h.name+'». Debe ser la carpeta raíz EMBARQUES sincronizada con SharePoint.','green',6000);
+      toast('📨 Carpeta de embarques lista: «'+h.name+'». Elige EMBARQUES (o la carpeta que contiene EMBARQUES y EMBARQUES - LIQUIDACIONES), sincronizada con SharePoint. Queda recordada.','green',6000);
     }catch(e){ if(e&&e.name!=='AbortError') toast('No se pudo elegir la carpeta: '+(e.message||e),'orange',5000); }
   };
   function nombreCarpeta(m){
-    var cor=/SABABA/.test(m.corredor)?'SABABA':(/CIF/.test(m.corredor)?'CIF EXPRESS':String(m.corredor||'CORREDOR').replace(/,?\s*S\.?\s?A\.?$/i,''));
-    return limpia('EMB#'+m.embarque+' - '+m.cantidad+' CTNS - '+cor+(m.tipoProveedor==='Exterior'?' (E)':'')+(m.tipoCarga==='Suministro'?' (S)':''));
+    var cor=/SABABA/.test(m.corredor)?'SABABA IMPORTS':(/CIF/.test(m.corredor)?'CIF EXPRESS':String(m.corredor||'CORREDOR').replace(/,?\s*S\.?\s?A\.?$/i,''));
+    return limpia('Emb#'+m.embarque+' - '+m.cantidad+' CTNS - '+cor+(m.tipoProveedor==='Exterior'?' (E)':' (Z)')+(m.tipoCarga==='Suministro'?' (S)':''));
   }
+
+  /* ── (nov-2026) Usar SIEMPRE las carpetas que ya existen en SharePoint: Año → «Mes #11 - Embarques Noviembre 2026» → «Emb#NNNNN - …» ── */
+  function norm(x){ return String(x||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase(); }
+  function esMes(name,d){
+    var n=norm(name), mes=d.getMonth()+1, anio=d.getFullYear(), mn=norm(MESES[d.getMonth()]);
+    var y=n.match(/\b(20\d\d)\b/); if(y && parseInt(y[1],10)!==anio) return false;
+    var k=n.match(/^mes\s*#?\s*0*(\d{1,2})(?!\d)/);
+    if(k) return parseInt(k[1],10)===mes;
+    var k2=n.match(/^0*(\d{1,2})(?!\d)/);
+    if(k2 && n.indexOf(mn)>=0) return parseInt(k2[1],10)===mes;
+    return n.indexOf(mn)>=0 && n.indexOf('emb#')<0;
+  }
+  function pad2(n){ return (n<10?'0':'')+n; }
+  function esAnio(name,d){ var n=norm(name); return n.indexOf(String(d.getFullYear()))>=0 && !/^mes\s*#/.test(n) && n.indexOf('emb#')!==0; }
+  function esBase(name,liq){ var n=norm(name).replace(/\s+/g,' ').trim(); return liq ? n.indexOf('liquidaciones')>=0 : n==='embarques'; }
+  async function subdir(h,pred){ for await (var ent of h.entries()){ if(ent[1].kind==='directory' && pred(ent[0])) return {h:ent[1],n:ent[0]}; } return null; }
+  /* Ruta real de SharePoint:  EMBARQUES / EMBARQUES - 2026 / Mes #11 - Embarques Noviembre 2026 / Emb#22320 - 1126 CTNS - SABABA IMPORTS (E)
+     Si falta el año o el mes (ej. llega diciembre o enero) los crea con ese mismo formato. */
+  async function resolverRuta(raiz,d,liq){
+    var anio=d.getFullYear(), creados=[], ruta=raiz.name;
+    var nomAnio='EMBARQUES - '+anio, nomMes='Mes #'+pad2(d.getMonth()+1)+' - Embarques '+MESES[d.getMonth()]+' '+anio;
+    if(esMes(raiz.name,d)) return {h:raiz,ruta:ruta,creados:creados};
+    var yearH=null;
+    if(esAnio(raiz.name,d)) yearH=raiz;
+    else{
+      var base=null;
+      if(esBase(raiz.name,liq)) base=raiz;
+      else{ var f=await subdir(raiz,function(n){ return esBase(n,liq); }); if(f){ base=f.h; ruta+=' / '+f.n; } }
+      if(!base) return {error:'En «'+raiz.name+'» no encuentro la carpeta '+(liq?'«EMBARQUES - LIQUIDACIONES»':'«EMBARQUES»')+'. Toca 📨 y elige la carpeta EMBARQUES (o la carpeta que contiene EMBARQUES y EMBARQUES - LIQUIDACIONES).'};
+      var y=await subdir(base,function(n){ return esAnio(n,d); });
+      if(y){ yearH=y.h; ruta+=' / '+y.n; }
+      else{
+        if(liq) return {error:'No encuentro la carpeta del año '+anio+' dentro de «'+base.name+'» y no sé cómo se nombra en Liquidaciones para crearla.'};
+        yearH=await base.getDirectoryHandle(nomAnio,{create:true}); creados.push(nomAnio); ruta+=' / '+nomAnio;
+      }
+    }
+    var m=await subdir(yearH,function(n){ return esMes(n,d); });
+    if(m) return {h:m.h,ruta:ruta+' / '+m.n,creados:creados};
+    if(liq && !creados.length) return {error:'No encuentro la carpeta del mes '+pad2(d.getMonth()+1)+' en Liquidaciones y no sé cómo se nombra para crearla.'};
+    var mh=await yearH.getDirectoryHandle(nomMes,{create:true}); creados.push(nomMes);
+    return {h:mh,ruta:ruta+' / '+nomMes,creados:creados};
+  }
+  function claveCorr(x){ return /SABABA/i.test(x||'')?'SABABA':(/CIF/i.test(x||'')?'CIF':String(x||'').toUpperCase()); }
+  async function leerPrevio(dir){ /* lee el _resumen_embarque*.json más reciente de la carpeta del embarque */
+    var mejor=null;
+    try{
+      for await (var ent of dir.entries()){
+        if(ent[1].kind!=='file' || !/^_resumen_embarque.*\.json$/i.test(ent[0])) continue;
+        var f=await ent[1].getFile(); if(!mejor || f.lastModified>mejor.t) mejor={t:f.lastModified,f:f};
+      }
+      if(mejor) return JSON.parse(await mejor.f.text());
+    }catch(e){}
+    return null;
+  }
+  function diferencias(p,m){
+    var r=[];
+    if(parseInt(p.cantidad,10)!==parseInt(m.cantidad,10)) r.push('Cartones: '+p.cantidad+' → '+m.cantidad);
+    if(claveCorr(p.corredor)!==claveCorr(m.corredor)) r.push('Corredor: '+claveCorr(p.corredor)+' → '+claveCorr(m.corredor));
+    if(p.tipoProveedor && String(p.tipoProveedor)!==String(m.tipoProveedor)) r.push('Tipo: '+(p.tipoProveedor==='Exterior'?'Extranjero (E)':'Zona Libre (Z)')+' → '+(m.tipoProveedor==='Exterior'?'Extranjero (E)':'Zona Libre (Z)'));
+    return r;
+  }
+  function preguntar(titulo,texto){ /* Sí / No; «No» queda como opción principal */
+    return new Promise(function(ok){
+      var ov=document.createElement('div');
+      ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2147483000;display:flex;align-items:center;justify-content:center;padding:16px;font-family:system-ui,sans-serif';
+      ov.innerHTML='<div style="background:#08303a;color:#f1fffc;border:1px solid #17697a;border-radius:14px;max-width:440px;width:100%;padding:20px;box-shadow:0 20px 50px #000a">'
+        +'<div style="font-size:17px;font-weight:700;margin-bottom:8px"></div><div style="font-size:14px;line-height:1.45;opacity:.92;white-space:pre-line;margin-bottom:16px"></div>'
+        +'<div style="display:flex;gap:10px;justify-content:flex-end"><button data-r="0" style="padding:9px 18px;border-radius:9px;border:0;background:#2de2c9;color:#04252b;font-weight:700;cursor:pointer">No</button>'
+        +'<button data-r="1" style="padding:9px 18px;border-radius:9px;border:1px solid #17697a;background:transparent;color:#f1fffc;cursor:pointer">Sí, reemplazar</button></div></div>';
+      ov.firstChild.children[0].textContent=titulo; ov.firstChild.children[1].textContent=texto;
+      function fin(v){ try{ document.removeEventListener('keydown',kd,true); ov.remove(); }catch(e){} ok(v); }
+      function kd(e){ if(e.key==='Escape'){ e.preventDefault(); fin(false); } }
+      ov.addEventListener('click',function(e){ var b=e.target.closest&&e.target.closest('button[data-r]'); if(b) fin(b.getAttribute('data-r')==='1'); });
+      document.addEventListener('keydown',kd,true); document.body.appendChild(ov);
+      try{ ov.querySelector('button[data-r="0"]').focus(); }catch(e){}
+    });
+  }
+  async function buscarEmbarque(mesH,nro){
+    var num=String(nro).replace(/[^0-9A-Za-z]/g,'').replace(/^0+/,'');
+    var re=new RegExp('^emb\\s*#\\s*0*'+num+'(?![0-9])','i');
+    for await (var ent of mesH.entries()){
+      if(ent[1].kind==='directory' && re.test(norm(ent[0]))) return {h:ent[1],nombre:ent[0]};
+    }
+    return null;
+  }
+  async function existeArchivo(dir,nom){ try{ await dir.getFileHandle(nom); return true; }catch(e){ return false; } }
+  function sello(d){ function p(n){ return (n<10?'0':'')+n; } return d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+'-'+p(d.getHours())+p(d.getMinutes())+p(d.getSeconds()); }
   function agrupar(lineas,fDept,fNum){
     var merc=lineas.filter(function(l){ return l && (l.tipoFac||'mercancia')==='mercancia'; }), por={};
     merc.forEach(function(l){
@@ -43525,7 +43612,7 @@ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded'
     return {merc:merc,deps:deps,total:deps.reduce(function(s,x){ return s+x.facturas; },0)};
   }
   function hist(){ try{ return JSON.parse(localStorage.getItem(LS_HIST)||'{}'); }catch(e){ return {}; } }
-  function marcar(nro){ try{ var h=hist(); h[nro]=Date.now(); localStorage.setItem(LS_HIST,JSON.stringify(h)); }catch(e){} }
+  function marcar(nro,m){ try{ var h=hist(); h[nro]={t:Date.now(),cantidad:m&&m.cantidad,corredor:m&&m.corredor,tipoProveedor:m&&m.tipoProveedor}; localStorage.setItem(LS_HIST,JSON.stringify(h)); }catch(e){} }
   function descargar(nombre,txt){
     var a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([txt],{type:'application/json'})); a.download=nombre;
     document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },500);
@@ -43534,18 +43621,31 @@ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded'
     try{
       var nro=String(m.embarque||'');
       if(!nro || /^(UNI|EMB)-\d{10,}$/i.test(nro) || /^\d{13}$/.test(nro)) return {ok:false,motivo:'sin número de embarque'};
-      if(!forzar && hist()[nro]) return {ok:true,omitido:true};          // ya se notificó: reprocesar no duplica el correo
       if(!m.departamentos.length){ toast('📨 Sin facturas de mercancía: no se emitió la notificación de embarque','orange',4500); return {ok:false,motivo:'sin facturas'}; }
-      var txt=JSON.stringify(m,null,2), carpeta=nombreCarpeta(m), d=new Date();
+      var txt=JSON.stringify(m,null,2), carpeta=nombreCarpeta(m), d=new Date(), liq=false; /* Liquidación (CIF Express) usa la misma estructura EMBARQUES */
       var raiz=raizPrev||window._embSPH||null; if(!raiz){ try{ raiz=await carpetaRaiz(true); }catch(e){ raiz=null; } }
       if(!raiz){ descargar('_resumen_embarque.json',txt); toast('📨 No hay carpeta de SharePoint elegida: se descargó _resumen_embarque.json. Súbelo a la carpeta del embarque ('+carpeta+') o toca 📨 en la app para elegirla.','orange',8000); return {ok:false,descargado:true}; }
-      var a=await raiz.getDirectoryHandle(String(d.getFullYear()),{create:true});
-      var b=await a.getDirectoryHandle(MESES[d.getMonth()],{create:true});
-      var c=await b.getDirectoryHandle(carpeta,{create:true});
-      var fh=await c.getFileHandle('_resumen_embarque.json',{create:true}), w=await fh.createWritable();
+      var rt=await resolverRuta(raiz,d,liq);
+      if(rt.error){ descargar('_resumen_embarque.json',txt); toast('📨 '+rt.error+' Se descargó _resumen_embarque.json.','orange',10000); return {ok:false,descargado:true}; }
+      var ex=await buscarEmbarque(rt.h,nro), c, nuevaCarpeta=false, cambios=[], reemplazo=false;
+      if(ex){
+        /* El embarque ya tiene carpeta (aunque le hayan cambiado el nombre): NO se envía correo, salvo actualización real o confirmación */
+        c=ex.h; carpeta=ex.nombre;
+        var prev=await leerPrevio(c); if(!prev){ var hh=hist()[nro]; if(hh && typeof hh==='object') prev=hh; }
+        cambios=prev?diferencias(prev,m):[];
+        if(!forzar && !cambios.length){
+          var si=await preguntar('Esta carpeta ya existe','El embarque '+nro+' ya tiene carpeta:\n«'+carpeta+'»\n\nNo cambió la cantidad de cartones, el corredor ni el tipo (E/Z).\n¿Deseas reemplazar? Si dices Sí se enviará OTRO correo.');
+          if(!si){ toast('📨 Embarque '+nro+' ya existe: no se envió correo.','green',5000); return {ok:true,omitido:true}; }
+          reemplazo=true;
+        }
+      } else { c=await rt.h.getDirectoryHandle(carpeta,{create:true}); nuevaCarpeta=true; }
+      if(cambios.length||reemplazo){ m.actualizacion=true; m.cambios=cambios.length?cambios:['Reemplazo confirmado por el usuario']; txt=JSON.stringify(m,null,2); }
+      var nomJson='_resumen_embarque.json';
+      if(await existeArchivo(c,nomJson)) nomJson='_resumen_embarque_'+sello(d)+'.json'; // el flujo solo dispara con archivos NUEVOS
+      var fh=await c.getFileHandle(nomJson,{create:true}), w=await fh.createWritable();
       await w.write(txt); await w.close();
-      marcar(nro);
-      toast('📨 Notificación emitida: '+d.getFullYear()+' / '+MESES[d.getMonth()]+' / '+carpeta,'green',5000);
+      marcar(nro,m);
+      toast('📨 '+(cambios.length?'Actualización emitida ('+cambios.join('; ')+')':'Notificación emitida')+' · '+(nuevaCarpeta?'carpeta NUEVA: ':'carpeta existente: ')+rt.ruta+' / '+carpeta+(rt.creados.length?' · creado: '+rt.creados.join(', '):''),(nuevaCarpeta||rt.creados.length)?'orange':'green',8000);
       return {ok:true,carpeta:carpeta};
     }catch(e){
       console.warn('embSP:',e); toast('📨 No se pudo emitir la notificación del embarque: '+(e&&e.message||e),'orange',6000);
