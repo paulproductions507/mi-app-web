@@ -605,7 +605,7 @@ const state = { file: null, recibo: '', codigo: '', proveedor: '', depto: '', bo
   tipo: store.get('tipo', 'ZL'), comp: true, asis: true, clasif: '', avisos: [], reenvio: false };
 function buildName(s = state) {
   const partes = ['RECIBO ' + s.recibo, limpiar(s.proveedor), limpiar(s.depto), s.bodega, s.tipo, s.comp ? 'SI' : 'NO', s.asis ? 'SI' : 'NO'];
-  if (s.reenvio) partes.push('REENVIO');   // el flujo salta la regla de duplicados solo con esta marca
+  if (s.reenvio) partes.push(s.reenvioTag || 'REENVIO');   // el flujo salta la regla de duplicados solo con esta marca; la fecha-hora hace único cada reenvío
   return partes.join(' ~ ') + '.pdf';
 }
 function listo(s = state) { return /^\d{4,8}$/.test(s.recibo) && !!limpiar(s.proveedor) && !!s.depto; }
@@ -782,7 +782,11 @@ async function buscarPrevio(h) {
     try {
       const pref = 'RECIBO ' + state.recibo + ' ~';
       for await (const [n, fh] of h.entries()) {
-        if (fh.kind === 'file' && norm(n).startsWith(pref)) { const f = await fh.getFile(); out.push({ ts: f.lastModified, quien: 'ya hay un archivo de este recibo en la carpeta' }); }
+        if (fh.kind === 'file' && norm(n).startsWith(pref) && /\.pdf$/i.test(n)) {
+          const f = await fh.getFile();
+          if (f.size < 1024) { try { await h.removeEntry(n); } catch (e) {} continue; }   // archivo vacío/incompleto de un intento fallido: se descarta
+          out.push({ ts: f.lastModified, quien: 'ya hay un archivo de este recibo en la carpeta' });
+        }
       }
     } catch (e) {}
   }
@@ -790,13 +794,17 @@ async function buscarPrevio(h) {
   return out[0] || null;
 }
 async function confirmarDuplicado(h) {
-  state.reenvio = false;
+  state.reenvio = false; state.reenvioTag = '';
   const p = await buscarPrevio(h);
   if (!p) return true;
   const ok = await preguntar({ titulo: 'Este recibo ya fue enviado',
     texto: 'El recibo ' + state.recibo + ' se emitió el ' + fmtFecha(p.ts) + ' (' + p.quien + '). ¿Deseas reenviarlo? Se volverán a mandar los correos.',
     si: 'Sí, reenviar', no: 'No, cancelar' });
-  if (ok) { state.reenvio = true; refresh(); }
+  if (ok) {
+    const d = new Date(), z = n => String(n).padStart(2, '0');
+    state.reenvioTag = 'REENVIO-' + d.getFullYear() + z(d.getMonth() + 1) + z(d.getDate()) + '-' + z(d.getHours()) + z(d.getMinutes()) + z(d.getSeconds());
+    state.reenvio = true; refresh();
+  }
   return ok;
 }
 const archivoFinal = () => new File([state.file], buildName(), { type: 'application/pdf' });
@@ -831,9 +839,40 @@ async function infoCarpeta() {
       : 'La primera vez eliges la carpeta de recibos de OneDrive/SharePoint; después se recuerda y el envío es de un solo clic.';
   } catch (e) { $('#dirInfo').textContent = ''; }
 }
+/* Escritura segura: el PDF se escribe completo con un nombre temporal (el flujo lo ignora: no termina en .pdf)
+   y solo toma su nombre final cuando ya está verificado. Así el flujo nunca ve un PDF vacío o a medias. */
+let enviando = false;
+const pausa = ms => new Promise(r => setTimeout(r, ms));
+async function guardarSeguro(h, nombre, blob) {
+  // El temporal termina en .tmp: OneDrive no lo sincroniza y el flujo lo ignora.
+  const tmp = 'RECIBO ' + state.recibo + ' (en proceso ' + Date.now() + ').tmp';
+  const quitar = async n => { try { await h.removeEntry(n); } catch (e) {} };
+  const escribir = async n => {
+    const fh = await h.getFileHandle(n, { create: true });
+    const w = await fh.createWritable(); await w.write(blob); await w.close();
+    if ((await fh.getFile()).size !== blob.size) throw new Error('size');
+    return fh;
+  };
+  let ultimo;
+  for (let intento = 0; intento < 4; intento++) {      // OneDrive a veces bloquea el archivo un instante: se reintenta
+    if (intento) await pausa(900 * intento);
+    try {
+      const fh = await escribir(tmp);
+      let movido = false;
+      if (typeof fh.move === 'function') { try { await fh.move(nombre); movido = true; } catch (e) {} }
+      if (!movido) {
+        try { await escribir(nombre); } catch (e) { await quitar(nombre); throw e; }
+        await quitar(tmp);
+      }
+      return;
+    } catch (e) { ultimo = e; await quitar(tmp); }
+  }
+  throw ultimo;
+}
 $('#dir').onclick = async () => {
-  if (!listo()) return;
+  if (!listo() || enviando) return;
   if (!window.showDirectoryPicker) { descargarPDF(); return; }   // navegador sin acceso a carpetas: descarga normal
+  enviando = true;
   try {
     let h = await idbKV('get', 'dir');
     if (h && (await h.queryPermission({ mode: 'readwrite' })) !== 'granted') {
@@ -841,10 +880,18 @@ $('#dir').onclick = async () => {
     }
     if (!h) { h = await window.showDirectoryPicker({ mode: 'readwrite' }); await idbKV('set', 'dir', h); }
     if (!(await confirmarDuplicado(h))) return;
-    const fh = await h.getFileHandle(buildName(), { create: true }), w = await fh.createWritable();
-    await w.write(state.file); await w.close(); guardarHist(); infoCarpeta();
+    try { await guardarSeguro(h, buildName(), state.file); }
+    catch (err) {
+      // Plan B sin pérdida: se descarga el PDF ya con su nombre final para arrastrarlo a la carpeta del mes.
+      const f = archivoFinal(), url = URL.createObjectURL(f), a = document.createElement('a');
+      a.href = url; a.download = f.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000);
+      dialog({ tipo: 'info', titulo: 'PDF listo para arrastrar', texto: 'La carpeta no aceptó el guardado directo. El PDF se descargó con su nombre final: arrástralo a la carpeta del mes y el flujo envía los correos solo.' });
+      return;
+    }
+    guardarHist(); infoCarpeta();
     dialog({ tipo: 'ok', titulo: 'Recibo emitido', texto: 'Quedó en la carpeta «' + h.name + '». El flujo envía los correos solo.', auto: 4200 });
-  } catch (e) { if (e.name !== 'AbortError') dialog({ tipo: 'err', titulo: 'No se pudo enviar a la carpeta', texto: 'Vuelve a intentar.' }); }
+  } catch (e) { if (e.name !== 'AbortError') dialog({ tipo: 'err', titulo: 'No se pudo enviar a la carpeta', texto: 'No se emitió nada; el flujo no enviará correos. Vuelve a intentar.' + (e && e.name ? ' (' + e.name + ')' : '') }); }
+  finally { enviando = false; }
 };
 $('#forgetDir').onclick = async () => {
   try { await idbKV('del', 'dir'); } catch (e) {}
