@@ -100,6 +100,10 @@ main{max-width:1400px;margin:0 auto;padding:26px 24px calc(56px + env(safe-area-
 
 /* Tarjetas */
 .nombre-tec{margin:0 0 12px}.nombre-tec summary{cursor:pointer;display:inline-block}
+.esperando{display:flex;align-items:center;gap:10px;margin:0 0 8px}.esperando .pulse{display:inline-flex;gap:5px}.esperando .pulse i{width:9px;height:9px;border-radius:50%;background:var(--accent);animation:espera 1.2s ease-in-out infinite}.esperando .pulse i:nth-child(2){animation-delay:.2s}.esperando .pulse i:nth-child(3){animation-delay:.4s}
+@keyframes espera{0%,80%,100%{opacity:.25;transform:translateX(0) scale(.8)}40%{opacity:1;transform:translateX(5px) scale(1.15)}}
+@media (prefers-reduced-motion:reduce){.esperando .pulse i{animation:none;opacity:.7}}
+.espera code{word-break:break-all}.espera details{margin-top:10px}
 .espera{border:1.5px solid var(--accent);background:var(--accent-soft);border-radius:14px;padding:14px 16px;margin-top:8px}.espera p{margin:0 0 6px}
 .card{position:relative;background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:20px 18px;margin:0 0 16px;box-shadow:var(--shadow);animation:rise .5s cubic-bezier(.2,.8,.2,1) both}
 .card h2{font-size:1.05rem;font-weight:700;margin:0 0 16px;display:flex;align-items:center;gap:12px;letter-spacing:-.005em}
@@ -366,16 +370,19 @@ button.mini{min-height:36px;padding:4px 12px;font-size:.82rem;border-radius:.4re
     <button class="primary" id="dir" type="button">Emitir recibo</button>
     <button id="share" type="button" hidden>Compartir…</button>
   </div>
-  <p class="hint" id="hintEmitir">Al emitir se descarga el PDF y se abre la carpeta del mes en SharePoint. Arrastra el archivo ahí: el flujo envía los correos solo.</p>
+  <p class="hint" id="hintEmitir">Al emitir se abre la carpeta del mes en SharePoint (no se genera ningún archivo). Arrastra ahí el mismo PDF que ya descargaste: el flujo envía los correos solo.</p>
   <div class="espera" id="espera" hidden role="status" aria-live="polite">
-    <p><b>Arrastra el PDF descargado a la carpeta de SharePoint.</b></p>
-    <p class="hint" style="margin:0 0 10px">Usa el archivo que descargó esta app (el nombre ya trae los datos para el flujo), no el original. Cuando termine de subir, vuelve aquí.</p>
+    <div class="esperando"><span class="pulse" aria-hidden="true"><i></i><i></i><i></i></span><b id="esperaTit">Esperando el PDF en la carpeta…</b></div>
+    <p class="hint" style="margin:0 0 6px">Arrastra a SharePoint el PDF original (el mismo, sin renombrar): <code id="origName"></code></p>
+    <p class="hint" id="autoMsg" style="margin:0 0 10px">Cuando lo arrastres, confirma con el botón.</p>
     <div class="actions">
       <button class="primary" id="subido" type="button">Ya lo arrastré</button>
       <a class="btn" id="sp" target="_blank" rel="noopener">Abrir carpeta del mes en SharePoint</a>
-      <button id="rebajar" type="button">Descargar otra vez</button>
       <button id="cancelaEspera" type="button" class="small">Cancelar</button>
     </div>
+    <details><summary class="hint">Solo si el flujo aún lee los datos del nombre del archivo</summary>
+      <div class="actions" style="margin-top:8px"><button id="rebajar" type="button" class="small">Descargar copia con el nombre del flujo</button></div>
+    </details>
   </div>
 </section>
 </div>
@@ -392,6 +399,9 @@ button.mini{min-height:36px;padding:4px 12px;font-size:.82rem;border-radius:.4re
       <button id="expExtra" type="button" class="small" hidden>Descargar proveedores nuevos (CSV)</button>
     </div>
     <p class="hint">Para que todos los compañeros vean la lista actualizada, sube <b>listas.json</b> al servidor, junto a este archivo.</p>
+    <div id="vincBox" style="margin-top:14px"><span class="hint">Vincula una sola vez la carpeta principal RECIBOS COMPLETADOS sincronizada en tu OneDrive. Así la app le pasa los datos al flujo (sin generar ningún PDF) y confirma sola cuando el PDF aparece.</span>
+      <div class="actions" style="margin-top:6px"><button id="vincBtn" type="button" class="small">Vincular carpeta sincronizada</button><button id="desvincBtn" type="button" class="small" hidden>Desvincular</button></div>
+      <p class="msg" id="vincMsg" role="status" aria-live="polite"></p></div>
     <label class="f" style="margin-top:14px"><span>Ruta de la carpeta en SharePoint</span><input type="text" id="spPath" autocomplete="off" spellcheck="false"></label>
   </div>
 </details>
@@ -851,34 +861,87 @@ $('#share').onclick = async () => {
   catch (e) { if (e.name !== 'AbortError') dialog({ tipo: 'err', titulo: 'No se pudo compartir', texto: 'Vuelve a intentar.' }); }
 };
 let enviando = false;
+/* ---- Carpeta sincronizada (opcional): confirmación automática ---- */
+const idb = (modo, fn) => new Promise((ok, no) => { const r = indexedDB.open('rt-recibos', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv');
+  r.onsuccess = () => { const t = r.result.transaction('kv', modo), q = fn(t.objectStore('kv')); t.oncomplete = () => ok(q && q.result); t.onerror = () => no(t.error); }; r.onerror = () => no(r.error); });
+let dirH = null, snap = new Map(), vistos = new Map(), vigilando = null;
+async function cargarVinculo() {
+  const ok = !!window.showDirectoryPicker; $('#vincBox').hidden = !ok; if (!ok) return;
+  try { dirH = await idb('readonly', st => st.get('dir')); } catch (e) { dirH = null; }
+  $('#vincBtn').hidden = !!dirH; $('#desvincBtn').hidden = !dirH;
+  $('#vincMsg').textContent = dirH ? 'Carpeta vinculada: ' + dirH.name : '';
+}
+$('#vincBtn').onclick = async () => {
+  try { const h = await showDirectoryPicker({ mode: 'readwrite' }); await idb('readwrite', st => st.put(h, 'dir')); await cargarVinculo(); toast('Carpeta vinculada'); }
+  catch (e) { if (e.name !== 'AbortError') $('#vincMsg').textContent = 'No se pudo vincular: ' + e.message; }
+};
+$('#desvincBtn').onclick = async () => { try { await idb('readwrite', st => st.delete('dir')); } catch (e) {} dirH = null; await cargarVinculo(); };
+async function buscarRecibo(dir, num, depth = 0, out = []) {
+  const re = new RegExp('^RECIBO\\s*0*' + num + '(\\D|$)'), hoy = new Date();
+  for await (const [n, fh] of dir.entries()) {
+    if (fh.kind === 'file') { if (/\.pdf$/i.test(n) && re.test(norm(n))) { try { const f = await fh.getFile(); out.push([n, f.size]); } catch (e) {} } }
+    else if (depth < 3 && (n === String(hoy.getFullYear()) || norm(n) === norm(MESES[hoy.getMonth()]))) await buscarRecibo(fh, num, depth + 1, out);
+  }
+  return out;
+}
+async function iniciarVigilancia() {
+  detenerVigilancia(); snap = new Map(); vistos = new Map(); state.ctlName = '';
+  const msg = $('#autoMsg');
+  if (!dirH) { msg.textContent = 'Sin carpeta vinculada: el flujo no recibe los datos del recibo. Vincúlala en «Listas y ajustes» (una sola vez) o usa la copia con nombre del flujo de abajo.'; return; }
+  try {
+    if ((await dirH.queryPermission({ mode: 'readwrite' })) !== 'granted' && (await dirH.requestPermission({ mode: 'readwrite' })) !== 'granted') { msg.textContent = 'Sin permiso sobre la carpeta vinculada. Vuelve a emitir y acepta el permiso.'; return; }
+    const ctl = await dirH.getDirectoryHandle('CONTROL', { create: true }), pref = 'RECIBO ' + state.recibo + ' ~', viejos = [];
+    for await (const [n] of ctl.entries()) if (norm(n).startsWith(pref)) viejos.push(n);
+    for (const n of viejos) { try { await ctl.removeEntry(n); } catch (e) {} }
+    const nombre = buildName().replace(/\.pdf$/i, '.ctl'), w = await (await ctl.getFileHandle(nombre, { create: true })).createWritable();
+    await w.write(nombre); await w.close(); state.ctlName = nombre;
+    (await buscarRecibo(dirH, state.recibo)).forEach(([n, z]) => snap.set(n, z));
+  } catch (e) { msg.textContent = 'No pude escribir en la carpeta vinculada (' + e.message + '). Usa la copia con nombre del flujo de abajo.'; return; }
+  msg.textContent = 'Datos enviados al flujo. Vigilando la carpeta: se confirma solo cuando el PDF aparezca (o confirma tú con el botón).';
+  vigilando = setInterval(async () => {
+    if (!state.pendiente) return detenerVigilancia();
+    try {
+      for (const [n, z] of await buscarRecibo(dirH, state.recibo)) {
+        if (snap.has(n) || z < 1024) continue;
+        if (vistos.get(n) === z) { detenerVigilancia(); return confirmarSubido(true); }
+        vistos.set(n, z);
+      }
+    } catch (e) {}
+  }, 3000);
+}
+function detenerVigilancia() { if (vigilando) clearInterval(vigilando); vigilando = null; }
 $('#dir').onclick = async () => {
   if (!listo() || enviando) return;
   enviando = true;
   try {
     if (!(await confirmarDuplicado(null))) return;
-    bajarArchivo();
-    window.open(carpetaURL(), '_blank');           // carpeta del mes en SharePoint (web): ahí se arrastra el PDF
-    state.pendiente = true; guardarHist(true); veA($('#espera'));
+    window.open(carpetaURL(), '_blank');           // carpeta del mes en SharePoint (web): ahí se arrastra el PDF original; la app no genera ningún archivo
+    state.pendiente = true; $('#origName').textContent = state.file.name; guardarHist(true); veA($('#espera'));
+    iniciarVigilancia();
   } finally { enviando = false; }
 };
-$('#rebajar').onclick = () => { if (listo()) { bajarArchivo(); toast('PDF descargado otra vez'); } };
-$('#subido').onclick = () => {
+$('#rebajar').onclick = () => { if (listo()) { bajarArchivo(); toast('Copia con nombre del flujo descargada'); } };
+function confirmarSubido(auto) {
+  detenerVigilancia();
   const h = store.get('hist', []), x = h.find(y => y.nombre === state.emitidoNombre);
   if (x) { x.pend = false; store.set('hist', h); }
   state.pendiente = false; state.subido = true; pintarRecientes(); refresh();
-  dialog({ tipo: 'ok', titulo: 'Recibo emitido', texto: 'El flujo envía los correos solo cuando detecta el archivo en la carpeta.', auto: 3800 });
+  dialog({ tipo: 'ok', titulo: auto ? 'PDF confirmado' : 'Recibo emitido', texto: auto ? 'El PDF ya está en la carpeta. El flujo envía los correos solo.' : 'El flujo envía los correos solo cuando detecta el archivo en la carpeta.', auto: 3800 });
   setTimeout(nuevo, 400);
-};
+}
+$('#subido').onclick = () => confirmarSubido(false);
 $('#cancelaEspera').onclick = () => {
   store.set('hist', store.get('hist', []).filter(y => y.nombre !== state.emitidoNombre));
-  state.pendiente = false; state.subido = false; state.emitidoNombre = ''; state.reenvio = false; pintarRecientes(); refresh();
+  detenerVigilancia(); (async () => { try { if (dirH && state.ctlName) await (await dirH.getDirectoryHandle('CONTROL')).removeEntry(state.ctlName); } catch (e) {} state.ctlName = ''; })(); state.pendiente = false; state.subido = false; state.emitidoNombre = ''; state.reenvio = false; pintarRecientes(); refresh();
 };
-try { if (navigator.canShare && navigator.canShare({ files: [new File([''], 'a.pdf', { type: 'application/pdf' })] })) $('#share').hidden = false; } catch (e) {}
+cargarVinculo();
+
 
 /* ================= Carga del PDF ================= */
 const ancho = () => matchMedia('(min-width:1100px)').matches;
 function veA(e) { if (!ancho()) e.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 function nuevo() {
+  detenerVigilancia();
   Object.assign(state, { file: null, recibo: '', reciboPdf: '', reciboNombre: '', codigo: '', proveedor: '', proveedorCodigo: '', depto: '',
     deptos: [], deptoLibre: '', leido: undefined, clasif: '', comp: true, asis: true, emitidoNombre: '', confirmado: false, pendiente: false, subido: false, reenvio: false });
   $('#s2').hidden = true; $('#dropName').textContent = 'Elegir el PDF'; $('#dropTxt').textContent = 'Toca aquí o arrastra el archivo';
