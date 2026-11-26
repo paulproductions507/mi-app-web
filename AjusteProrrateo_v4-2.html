@@ -270,6 +270,8 @@
   .rep-switch { display:flex; gap:10px; align-items:flex-start; font-size:13px; margin-top:16px; line-height:1.5; cursor:pointer; }
   .rep-switch input { margin-top:3px; }
   .rep-drop { border:2px dashed var(--teal-line); border-radius:12px; padding:18px; text-align:center; font-size:13px; color:var(--muted); cursor:pointer; background:#fafdfc; transition:all .2s; }
+  @keyframes repPulse { 0%,100% { box-shadow:0 0 0 0 rgba(0,128,110,.45); } 50% { box-shadow:0 0 0 10px rgba(0,128,110,0); } }
+  .rep-drop.pulse { animation: repPulse 1.2s infinite; border-color:var(--teal-dark); background:var(--teal-light); font-weight:700; }
   .rep-drop.over, .rep-drop:hover { border-color:var(--teal-dark); background:var(--teal-light); }
   .rep-empty { font-size:13px; color:var(--muted); padding:14px 4px; }
   .rep-tag { font-size:10.5px; padding:2px 7px; border-radius:10px; font-weight:600; }
@@ -1362,7 +1364,9 @@ function findSupplierMatches(query){
 }
 
 
-  return {find:findSupplierMatches, code:normalizeSupplierCode, name:c=>SUPPLIERS[normalizeSupplierCode(c)]||""};
+  const IDX={};
+  Object.keys(SUPPLIERS).forEach(k=>{ const n=normalizeSupplierCode(k); if(!(n in IDX)) IDX[n]=SUPPLIERS[k]; });
+  return {find:findSupplierMatches, code:normalizeSupplierCode, name:c=>IDX[normalizeSupplierCode(c)]||""};
 })();
 
 </script>
@@ -2145,7 +2149,7 @@ function repAfterExcel(entry) {
     const m = repMatch(w.data, entry);
     if ((m.nameHit && m.score >= 0.5) || m.score >= 0.98) {
       repSave('rep_mails_v1', waiting.filter(x => x !== w && x.id !== w.id), 10);
-      REP.data = w.data; REP.origin = 'correo en espera';
+      REP.data = w.data; REP.origin = 'correo en espera'; REP.inv = w.data.inv || ''; REP.sup = w.data.supCode || '';
       repStatus(`El Excel "${repEsc(entry.name)}" corresponde al correo del ajuste ${repEsc(w.data.adjustment || '—')} que estaba en espera.`, 'ok');
       repStartConfirm();
       return true;
@@ -2162,7 +2166,7 @@ async function repCheckHash() {
   history.replaceState(null, '', location.pathname + location.search);
   try {
     const p = await repDecodeHash(h);
-    if (p.kind === 'tableau') repIngestTableau(p); else repIngestMail({lines: p.lines || [], rows: p.rows || []}, p.src || '');
+    if (p.kind === 'tableau') repIngestTableau(p); else repIngestMail({lines: p.lines || [], rows: p.rows || []}, p.src || '', p.inv || '', p.sup || '');
   } catch (e) {
     showReport(); repStatus('El puente envió datos que no pude leer (' + repEsc(e.message) + '). Prueba con la carga manual.', 'err');
   }
@@ -2179,11 +2183,14 @@ function repIngestTableau(p) {
     if (!repAfterExcel(entry)) repStatus(`🔗 Tableau → bandeja: ${pos.length} líneas, ${repFmt(pos.reduce((s, r) => s + r.qty, 0), 0)} unidades${entry.adjustment ? ' (ajuste ' + repEsc(entry.adjustment) + ')' : ''}. Quedó pendiente: ahora abre el correo de aprobación en Outlook y pulsa el otro marcador.${note}`, entry.missing.length ? 'err' : 'ok');
   } catch (e) { repStatus('Tableau → bandeja: ' + repEsc(e.message), 'err'); }
 }
-function repIngestMail(input, origin) {
+function repIngestMail(input, origin, inv, sup) {
   try {
+    REP.inv = String(inv || '').trim();
+    REP.sup = String(sup || '').trim();
     const d = repParse(input.lines, input.rows);
     if (!d.items.length) throw new Error('No encontré la tabla de productos del correo (columnas PRODUCTO … UNIDADES).');
     if (!d.receipt && !d.adjustment) throw new Error('No pude identificar ni el recibo ni el ajuste en el correo. ¿Es el correo de APROBACIÓN DE PRODUCTOS?');
+    d.inv = REP.inv; d.supCode = REP.sup;
     REP.data = d; REP.origin = origin || '';
     showReport();
     repStatus(`Correo leído: recibo ${repEsc(d.receipt || '—')}, ajuste ${repEsc(d.adjustment || '—')}, ${d.lines.length} productos.`, 'ok');
@@ -2191,7 +2198,9 @@ function repIngestMail(input, origin) {
   } catch (e) { showReport(); repStatus(repEsc(e.message), 'err'); }
 }
 function repSupplierState(d) {
-  const ms = repSup.find(d.provider);
+  const lc = repSup.code((d && d.supCode) || '');
+  if (lc) return {matches: [lc], code: lc, fromLotes: true};
+  const ms = [...new Set(repSup.find(d.provider).map(c => repSup.code(c)))];
   return {matches: ms, code: ms.length === 1 ? ms[0] : ''};
 }
 function repStartConfirm() {
@@ -2201,7 +2210,7 @@ function repStartConfirm() {
   const critical = !d.receipt || !d.mother || !d.adjustment || !d.provider || !d.user;
   const emailOk = d.checks.every(c => c.lvl !== 'warn');
   const t = REP.pick.auto;
-  if (repEl('repAuto').checked && !critical && emailOk && t && t.m.ok && !t.m.warnings.length && sup.code) {
+  if (repEl('repAuto').checked && !critical && emailOk && t && t.m.ok && !t.m.warnings.length && sup.code && REP.inv) {
     repFillModal(); repGenerate(true);
   } else { repOpenModal(); }
 }
@@ -2231,9 +2240,12 @@ const repChk = (lvl, txt) => `<div class="rep-chk ${lvl}">${lvl === 'ok' ? '✔'
 function repFillModal() {
   const d = REP.data, set = (id, v) => { repEl(id).value = v || ''; };
   set('repProv', d.provider); set('repRec', d.receipt); set('repMad', d.mother); set('repMadDesc', d.motherDesc);
-  set('repAdj', d.adjustment); set('repUser', d.user); set('repDate', d.date); set('repInv', '');
+  set('repAdj', d.adjustment); set('repUser', d.user); set('repDate', d.date); set('repInv', REP.inv || '');
   repEl('repOrigin').innerHTML = REP.origin && /^https?:/.test(REP.origin) && !REP_ORIGINS.test(REP.origin)
     ? `<div class="rep-chk warn">⚠ Los datos llegaron desde <b>${repEsc(REP.origin)}</b>, que no es un dominio de Outlook conocido. Revisa bien la información antes de generar el PDF.</div>` : '';
+  const ih = repEl('repInvHint');
+  ih.innerHTML = REP.inv ? '✔ Traída del Sistema de Lotes (Fac. Proveedor).' : '⚠ No llegó del Sistema de Lotes: escríbela a mano.';
+  ih.className = 'rep-hint ' + (REP.inv ? 'ok' : 'warn');
   // proveedor
   const sup = repSupplierState(d);
   const selS = repEl('repSupSel');
@@ -2253,8 +2265,9 @@ function repFillModal() {
 function repSupHint() {
   const code = repEl('repProvCode').value.trim();
   const nm = code ? repSup.name(code) : '';
-  repEl('repProvHint').innerHTML = nm ? `✔ ${repEsc(nm)}` : (code ? '⚠ Código no encontrado en el catálogo de proveedores.' : 'Escribe el código del proveedor (ej. AS-3040S).');
-  repEl('repProvHint').className = 'rep-hint ' + (nm ? 'ok' : 'warn');
+  const lot = code && REP.data && REP.data.supCode && repSup.code(code) === repSup.code(REP.data.supCode);
+  repEl('repProvHint').innerHTML = nm ? `✔ ${repEsc(nm)}` : (lot ? '✔ Código tomado del Sistema de Lotes (paréntesis del Suplidor).' : (code ? '⚠ Código no encontrado en el catálogo de proveedores.' : 'Escribe el código del proveedor (ej. AS-3040S).'));
+  repEl('repProvHint').className = 'rep-hint ' + ((nm || lot) ? 'ok' : 'warn');
 }
 function repSupPicked() { repEl('repProvCode').value = repEl('repSupSel').value; repSupHint(); }
 function repSelectedEntry() { const id = repEl('repXlSel').value; return id ? (repInbox().find(e => e.id === id) || null) : null; }
@@ -2303,7 +2316,9 @@ function repWaitForExcel() {
   w.unshift({id: 'm' + Date.now().toString(36), at: new Date().toISOString(), data: d});
   repSave('rep_mails_v1', w, 10);
   repCloseModal(); repRenderInbox();
-  repStatus(`Correo del ajuste ${repEsc(d.adjustment || '—')} guardado. Cuando llegue su Excel (marcador de Tableau o carga a la bandeja) se abrirá la confirmación sola.`, 'ok');
+  repStatus(`⏳ <b>ESPERANDO EL EXCEL</b> del ajuste ${repEsc(d.adjustment || '—')}. Arrástralo al cuadro punteado de abajo: al soltarlo se compara con el correo y el PDF se genera solo.`, 'ok');
+  const dz = repEl('repDrop'); dz.classList.add('pulse'); dz.scrollIntoView({behavior: 'smooth', block: 'center'});
+  setTimeout(() => dz.classList.remove('pulse'), 6000);
 }
 
 function repGenerate(silent) {
@@ -2333,12 +2348,18 @@ function repGenerate(silent) {
 
 /* ── Arranque ─────────────────────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
-  repEl('repAuto').checked = repStore.get('rep_auto') === '1';
+  repEl('repAuto').checked = repStore.get('rep_auto') !== '0';
   repEl('repAuto').addEventListener('change', e => repStore.set('rep_auto', e.target.checked ? '1' : '0'));
   repEl('repAppUrl').addEventListener('input', repRefreshBookmarklets);
   ['repBm', 'repBmTab'].forEach(id => repEl(id).addEventListener('click', e => { e.preventDefault(); repStatus('No lo pulses aquí: arrástralo a la barra de marcadores y púlsalo desde Outlook / Tableau.', 'err'); }));
   repEl('repFile').addEventListener('change', e => repLoadMailFile(e.target.files[0]));
   repEl('repXlsx').addEventListener('change', e => repAddFiles(e.target.files));
+  const modalXl = async fl => { await repAddFiles(fl); repEl('repXlsx2').value = ''; if (REP.data) repStartConfirm(); };
+  repEl('repXlsx2').addEventListener('change', e => modalXl(e.target.files));
+  const dz2 = repEl('repDrop2');
+  ['dragenter', 'dragover'].forEach(ev => dz2.addEventListener(ev, e => { e.preventDefault(); dz2.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(ev => dz2.addEventListener(ev, e => { e.preventDefault(); dz2.classList.remove('over'); }));
+  dz2.addEventListener('drop', e => modalXl(e.dataTransfer.files));
   const dz = repEl('repDrop');
   ['dragenter', 'dragover'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add('over'); }));
   ['dragleave', 'drop'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.remove('over'); }));
@@ -2370,9 +2391,11 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="rep-field"><label for="repDate">Fecha de aprobación</label><input id="repDate" autocomplete="off"></div>
         <div class="rep-field"><label for="repProvCode">Código de proveedor</label><input id="repProvCode" autocomplete="off" oninput="repSupHint()">
           <select id="repSupSel" style="display:none;margin-top:6px" onchange="repSupPicked()"></select><div id="repProvHint" class="rep-hint"></div></div>
-        <div class="rep-field"><label for="repInv">Factura (opcional, no viene en el correo)</label><input id="repInv" autocomplete="off"></div>
+        <div class="rep-field"><label for="repInv">Factura del proveedor</label><input id="repInv" autocomplete="off"><div id="repInvHint" class="rep-hint"></div></div>
       </div>
       <div class="rep-sec">Excel del ajuste (bandeja)</div>
+      <div id="repDrop2" class="rep-drop" style="margin-bottom:10px" onclick="document.getElementById('repXlsx2').click()">📄 ¿Aún no está el Excel? Arrástralo aquí (o haz clic). Se compara con el correo y el PDF se genera solo si todo coincide.</div>
+      <input type="file" id="repXlsx2" accept=".xlsx,.xls,.csv" multiple style="display:none">
       <div class="rep-field"><select id="repXlSel" onchange="repRenderExcel()"></select></div>
       <label id="repForceBox" class="rep-switch" style="display:none;margin-top:10px"><input type="checkbox" id="repForce"><span>Generar de todos modos aunque el Excel no coincida con el correo (no recomendado).</span></label>
       <div id="repMetrics" class="metrics" style="margin-top:14px"></div>
