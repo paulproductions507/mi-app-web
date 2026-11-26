@@ -99,6 +99,8 @@ main{max-width:1400px;margin:0 auto;padding:26px 24px calc(56px + env(safe-area-
 .lead{margin:-6px 0 14px}
 
 /* Tarjetas */
+.nombre-tec{margin:0 0 12px}.nombre-tec summary{cursor:pointer;display:inline-block}
+.espera{border:1.5px solid var(--accent);background:var(--accent-soft);border-radius:14px;padding:14px 16px;margin-top:8px}.espera p{margin:0 0 6px}
 .card{position:relative;background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:20px 18px;margin:0 0 16px;box-shadow:var(--shadow);animation:rise .5s cubic-bezier(.2,.8,.2,1) both}
 .card h2{font-size:1.05rem;font-weight:700;margin:0 0 16px;display:flex;align-items:center;gap:12px;letter-spacing:-.005em}
 .n{display:inline-grid;place-items:center;width:1.7rem;height:1.7rem;border-radius:50%;background:var(--accent);color:var(--accent-ink);font-size:.82rem;font-weight:700;box-shadow:0 0 0 .22rem var(--ring)}
@@ -351,22 +353,30 @@ button.mini{min-height:36px;padding:4px 12px;font-size:.82rem;border-radius:.4re
       <label><input type="checkbox" id="asis" checked> Asistentes</label>
     </div>
   </fieldset>
-  <div class="confirm-row"><button type="button" class="confirm" id="confirmar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Confirmar</button></div>
 </section>
 
 <section class="card" id="s3" hidden aria-labelledby="h3">
-  <h2 id="h3"><span class="n">3</span>Archivo listo</h2>
+  <h2 id="h3"><span class="n">3</span>Emitir recibo</h2>
   <div class="warns" id="warns"></div>
   <div class="chips" id="chips"></div>
-  <div class="fname"><code id="fname"></code><button class="small" id="copy" type="button">Copiar</button></div>
-  <div class="actions">
+  <details class="nombre-tec"><summary class="hint">Ver nombre técnico del archivo</summary>
+    <div class="fname"><code id="fname"></code><button class="small" id="copy" type="button">Copiar</button></div>
+  </details>
+  <div class="actions" id="acEmitir">
     <button class="primary" id="dir" type="button">Emitir recibo</button>
     <button id="share" type="button" hidden>Compartir…</button>
-    <a class="btn" id="sp" target="_blank" rel="noopener">Abrir carpeta del mes en SharePoint</a>
   </div>
-  <p class="hint" id="dirInfo"></p>
-  <button id="forgetDir" type="button" class="small" hidden>Cambiar carpeta de envío</button>
-  <p class="hint">Al emitir, el PDF queda en la carpeta de recibos con su nombre completo. El flujo lo detecta y envía los correos solo; no hay que escribir nada en el Excel.</p>
+  <p class="hint" id="hintEmitir">Al emitir se descarga el PDF y se abre la carpeta del mes en SharePoint. Arrastra el archivo ahí: el flujo envía los correos solo.</p>
+  <div class="espera" id="espera" hidden role="status" aria-live="polite">
+    <p><b>Arrastra el PDF descargado a la carpeta de SharePoint.</b></p>
+    <p class="hint" style="margin:0 0 10px">Usa el archivo que descargó esta app (el nombre ya trae los datos para el flujo), no el original. Cuando termine de subir, vuelve aquí.</p>
+    <div class="actions">
+      <button class="primary" id="subido" type="button">Ya lo arrastré</button>
+      <a class="btn" id="sp" target="_blank" rel="noopener">Abrir carpeta del mes en SharePoint</a>
+      <button id="rebajar" type="button">Descargar otra vez</button>
+      <button id="cancelaEspera" type="button" class="small">Cancelar</button>
+    </div>
+  </div>
 </section>
 </div>
 
@@ -512,14 +522,31 @@ if (/^https?:/.test(location.protocol)) {
 function detectDepto(items, depts) {
   const list = depts.map(d => ({ d, n: norm(d) })).filter(x => x.n).sort((a, b) => b.n.length - a.n.length);
   const count = new Map(), first = new Map(); let order = 0, clasif = '';
+  const anotar = (d, it) => { count.set(d, (count.get(d) || 0) + 1); if (!first.has(d)) { first.set(d, order++); clasif = clasif || it; } };
   for (const it of items) {
     const n = norm(it);
+    let hit = null;
     for (const { d, n: dn } of list) {
-      if (n === dn || n.startsWith(dn + '-') || n.startsWith(dn + ' -')) {
-        count.set(d, (count.get(d) || 0) + 1);
-        if (!first.has(d)) { first.set(d, order++); clasif = clasif || it; }
-        break;
+      if (n === dn || n.startsWith(dn + '-') || n.startsWith(dn + ' -')) { hit = d; break; }
+    }
+    // El ERP corta la columna Clasificación («BISUTERIA/JOYERIAS/ACCE»): se acepta el texto cortado si identifica un solo departamento
+    if (!hit) {
+      for (const v of [n, n.replace(/\s+[A-Z]$/, '')]) {
+        if (v.length < 8) continue;
+        const c = list.filter(x => x.n.startsWith(v));
+        if (c.length === 1) { hit = c[0].d; break; }
       }
+    }
+    if (hit) anotar(hit, it);
+  }
+  // Respaldo: si el PDF junta celdas en un mismo texto, se busca el comienzo del nombre del departamento dentro del texto
+  if (!count.size) {
+    const todo = norm(items.join(' | '));
+    for (const { d, n: dn } of list) {
+      const k = dn.slice(0, Math.min(dn.length, 20));
+      if (k.length < 9) continue;
+      const m = todo.split(k).length - 1;
+      if (m) { count.set(d, m); first.set(d, order++); clasif = clasif || d; }
     }
   }
   const found = [...count.keys()].sort((a, b) => count.get(b) - count.get(a) || first.get(a) - first.get(b));
@@ -643,7 +670,7 @@ function avisos() {
   if (state.deptoLibre && !state.depto)
     a.push(['', `El departamento «${state.deptoLibre}» no está en la lista de Hoja2. Elige uno o agrégalo en Hoja2 y actualiza las listas.`]);
   const h = store.get('hist', []).find(x => x.recibo === state.recibo);
-  if (h && state.recibo) a.push(['', `Este recibo ya se generó aquí el ${fmtFecha(h.ts)}. Si es el mismo, súbelo solo una vez para no repetir correos.`]);
+  if (h && state.recibo && !state.emitidoNombre) a.push(['', `Este recibo ya se generó aquí el ${fmtFecha(h.ts)}. Si es el mismo, súbelo solo una vez para no repetir correos.`]);
   if (buildName().length > 200) a.push(['err', 'El nombre del archivo es muy largo.']);
   return a;
 }
@@ -673,8 +700,9 @@ function onInput() {
 }
 function refresh() {
   const ok = listo();
-  $('#s3').hidden = !(state.file && state.confirmado);
-  $('#confirmar').disabled = !ok; $('#confirmar').parentNode.hidden = !!state.confirmado;
+  state.confirmado = !!(state.file && ok);   // «Emitir recibo» es la confirmación: el paso 3 aparece en cuanto los datos están completos
+  $('#s3').hidden = !state.confirmado;
+  $('#acEmitir').hidden = $('#hintEmitir').hidden = !!state.pendiente; $('#espera').hidden = !state.pendiente;
   $('#share').disabled = !ok; $('#dir').disabled = !ok; $('#copy').disabled = !ok;
   $('#fname').textContent = ok ? buildName() : 'Completa recibo, proveedor y departamento para ver el nombre.';
   const bod = BODEGAS.find(b => b.v === state.bodega)?.t, tip = TIPOS.find(t => t.v === state.tipo)?.t;
@@ -686,7 +714,7 @@ function refresh() {
   pintarProceso(); pintarPasos();
 }
 /* ---- Actividad: en proceso · emitidos hoy · historial ---- */
-const yaEmitido = () => !!state.emitidoNombre && listo() && state.emitidoNombre === buildName();
+const yaEmitido = () => !!state.emitidoNombre && !!state.subido && listo() && state.emitidoNombre === buildName();
 const diaDe = ts => {
   const d = new Date(ts), h = new Date(), ay = new Date(); ay.setDate(h.getDate() - 1);
   if (d.toDateString() === h.toDateString()) return 'Hoy';
@@ -703,6 +731,7 @@ function filaHist(x) {
   const p = partesNombre(x.nombre), li = el('li', 'row'), main = el('div', 'row-main'), side = el('div', 'row-side');
   main.append(el('b', '', 'Recibo ' + (p.recibo || x.recibo || '')), el('span', 'row-t', p.prov),
     el('span', 'row-m', [p.depto, p.bodega, p.tipo].filter(Boolean).join(' · ')));
+  if (x.pend) main.append(el('span', 'st wip', 'Por subir a SharePoint'));
   const t = el('time', '', horaDe(x.ts)); t.dateTime = new Date(x.ts).toISOString();
   const b = el('button', 'small mini', 'Copiar'); b.type = 'button'; b.onclick = () => copiar(x.nombre);
   side.append(t, b); li.append(main, side); return li;
@@ -713,7 +742,7 @@ function pintarProceso() {
   $('#nProceso').textContent = activo ? 1 : 0;
   if (!activo) { box.appendChild(el('p', 'empty', 'No hay ningún recibo en proceso. Sube un PDF para empezar.')); return; }
   const ok = listo(), c = el('div', 'proc'), top = el('div', 'proc-top');
-  top.append(el('b', '', 'Recibo ' + (state.recibo || 'sin número')), el('span', 'st ' + (ok && state.confirmado ? 'ok' : 'wip'), !ok ? 'Faltan datos' : state.confirmado ? 'Listo para emitir' : 'Falta confirmar'));
+  top.append(el('b', '', 'Recibo ' + (state.recibo || 'sin número')), el('span', 'st ' + (ok && !state.pendiente ? 'ok' : 'wip'), !ok ? 'Faltan datos' : state.pendiente ? 'Falta arrastrar el PDF' : 'Listo para emitir'));
   c.append(top, el('span', 'row-t', limpiar(state.proveedor) || 'Proveedor sin confirmar'), el('span', 'row-m', state.file.name));
   if (!ok) {
     const f = []; if (!/^\d{4,8}$/.test(state.recibo)) f.push('n.º de recibo'); if (!limpiar(state.proveedor)) f.push('proveedor'); if (!state.depto) f.push('departamento');
@@ -763,10 +792,10 @@ $('#histBtn').onclick = () => { setHist(true); $('#pHist').scrollIntoView({ beha
 $('#histQ').oninput = pintarHist;
 $('#histClr').onclick = () => { $('#histQ').value = ''; pintarHist(); $('#histQ').focus(); };
 $('#histQ').onkeydown = e => { if (e.key === 'Escape' && $('#histQ').value) { e.stopPropagation(); $('#histQ').value = ''; pintarHist(); } };
-function guardarHist() {
+function guardarHist(pend) {
   const h = store.get('hist', []).filter(x => x.nombre !== buildName());
-  h.unshift({ recibo: state.recibo, nombre: buildName(), ts: Date.now() });
-  store.set('hist', h.slice(0, 200)); state.emitidoNombre = buildName(); pintarRecientes(); refresh();
+  h.unshift({ recibo: state.recibo, nombre: buildName(), ts: Date.now(), pend: !!pend });
+  store.set('hist', h.slice(0, 200)); state.emitidoNombre = buildName(); state.subido = !pend; pintarRecientes(); refresh();
 }
 async function copiar(t) {
   try { await navigator.clipboard.writeText(t); toast('Nombre copiado'); }
@@ -810,13 +839,10 @@ async function confirmarDuplicado(h) {
 const archivoFinal = () => new File([state.file], buildName(), { type: 'application/pdf' });
 
 /* ================= Acciones de entrega ================= */
-async function descargarPDF() {
-  if (!listo()) return;
-  if (!(await confirmarDuplicado(null))) return;
+function bajarArchivo() {
   const f = archivoFinal(), url = URL.createObjectURL(f), a = document.createElement('a');
   a.href = url; a.download = f.name; document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 5000); guardarHist();
-  dialog({ tipo: 'ok', titulo: 'Recibo emitido', texto: 'El PDF se guardó con su nombre completo.', auto: 3800 });
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 $('#copy').onclick = () => copiar(buildName());
 $('#share').onclick = async () => {
@@ -824,80 +850,29 @@ $('#share').onclick = async () => {
   try { await navigator.share({ files: [archivoFinal()], title: buildName() }); guardarHist(); }
   catch (e) { if (e.name !== 'AbortError') dialog({ tipo: 'err', titulo: 'No se pudo compartir', texto: 'Vuelve a intentar.' }); }
 };
-function idb() {
-  return new Promise((ok, fail) => { const r = indexedDB.open('rt', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => ok(r.result); r.onerror = () => fail(r.error); });
-}
-async function idbKV(op, key, val) {
-  const db = await idb();
-  return new Promise((ok, fail) => { const tx = db.transaction('kv', 'readwrite'), st = tx.objectStore('kv'), r = op === 'get' ? st.get(key) : op === 'set' ? st.put(val, key) : st.delete(key); r.onsuccess = () => ok(r.result); r.onerror = () => fail(r.error); });
-}
-async function infoCarpeta() {
-  try {
-    const h = await idbKV('get', 'dir');
-    $('#forgetDir').hidden = !h;
-    $('#dirInfo').textContent = h ? 'Carpeta de envío: «' + h.name + '» (recordada). El correo sale solo cuando el flujo detecta el archivo.'
-      : 'La primera vez eliges la carpeta de recibos de OneDrive/SharePoint; después se recuerda y el envío es de un solo clic.';
-  } catch (e) { $('#dirInfo').textContent = ''; }
-}
-/* Escritura segura: el PDF se escribe completo con un nombre temporal (el flujo lo ignora: no termina en .pdf)
-   y solo toma su nombre final cuando ya está verificado. Así el flujo nunca ve un PDF vacío o a medias. */
 let enviando = false;
-const pausa = ms => new Promise(r => setTimeout(r, ms));
-async function guardarSeguro(h, nombre, blob) {
-  // El temporal termina en .tmp: OneDrive no lo sincroniza y el flujo lo ignora.
-  const tmp = 'RECIBO ' + state.recibo + ' (en proceso ' + Date.now() + ').tmp';
-  const quitar = async n => { try { await h.removeEntry(n); } catch (e) {} };
-  const escribir = async n => {
-    const fh = await h.getFileHandle(n, { create: true });
-    const w = await fh.createWritable(); await w.write(blob); await w.close();
-    if ((await fh.getFile()).size !== blob.size) throw new Error('size');
-    return fh;
-  };
-  let ultimo;
-  for (let intento = 0; intento < 4; intento++) {      // OneDrive a veces bloquea el archivo un instante: se reintenta
-    if (intento) await pausa(900 * intento);
-    try {
-      const fh = await escribir(tmp);
-      let movido = false;
-      if (typeof fh.move === 'function') { try { await fh.move(nombre); movido = true; } catch (e) {} }
-      if (!movido) {
-        try { await escribir(nombre); } catch (e) { await quitar(nombre); throw e; }
-        await quitar(tmp);
-      }
-      return;
-    } catch (e) { ultimo = e; await quitar(tmp); }
-  }
-  throw ultimo;
-}
 $('#dir').onclick = async () => {
   if (!listo() || enviando) return;
-  if (!window.showDirectoryPicker) { descargarPDF(); return; }   // navegador sin acceso a carpetas: descarga normal
   enviando = true;
   try {
-    let h = await idbKV('get', 'dir');
-    if (h && (await h.queryPermission({ mode: 'readwrite' })) !== 'granted') {
-      if ((await h.requestPermission({ mode: 'readwrite' })) !== 'granted') h = null;
-    }
-    if (!h) { h = await window.showDirectoryPicker({ mode: 'readwrite' }); await idbKV('set', 'dir', h); }
-    if (!(await confirmarDuplicado(h))) return;
-    try { await guardarSeguro(h, buildName(), state.file); }
-    catch (err) {
-      // Plan B sin pérdida: se descarga el PDF ya con su nombre final para arrastrarlo a la carpeta del mes.
-      const f = archivoFinal(), url = URL.createObjectURL(f), a = document.createElement('a');
-      a.href = url; a.download = f.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000);
-      dialog({ tipo: 'info', titulo: 'PDF listo para arrastrar', texto: 'La carpeta no aceptó el guardado directo. El PDF se descargó con su nombre final: arrástralo a la carpeta del mes y el flujo envía los correos solo.' });
-      return;
-    }
-    guardarHist(); infoCarpeta();
-    dialog({ tipo: 'ok', titulo: 'Recibo emitido', texto: 'Quedó en la carpeta «' + h.name + '». El flujo envía los correos solo.', auto: 4200 });
-  } catch (e) { if (e.name !== 'AbortError') dialog({ tipo: 'err', titulo: 'No se pudo enviar a la carpeta', texto: 'No se emitió nada; el flujo no enviará correos. Vuelve a intentar.' + (e && e.name ? ' (' + e.name + ')' : '') }); }
-  finally { enviando = false; }
+    if (!(await confirmarDuplicado(null))) return;
+    bajarArchivo();
+    window.open(carpetaURL(), '_blank');           // carpeta del mes en SharePoint (web): ahí se arrastra el PDF
+    state.pendiente = true; guardarHist(true); veA($('#espera'));
+  } finally { enviando = false; }
 };
-$('#forgetDir').onclick = async () => {
-  try { await idbKV('del', 'dir'); } catch (e) {}
-  infoCarpeta(); toast('Elige la nueva carpeta al enviar');
+$('#rebajar').onclick = () => { if (listo()) { bajarArchivo(); toast('PDF descargado otra vez'); } };
+$('#subido').onclick = () => {
+  const h = store.get('hist', []), x = h.find(y => y.nombre === state.emitidoNombre);
+  if (x) { x.pend = false; store.set('hist', h); }
+  state.pendiente = false; state.subido = true; pintarRecientes(); refresh();
+  dialog({ tipo: 'ok', titulo: 'Recibo emitido', texto: 'El flujo envía los correos solo cuando detecta el archivo en la carpeta.', auto: 3800 });
+  setTimeout(nuevo, 400);
 };
-infoCarpeta();
+$('#cancelaEspera').onclick = () => {
+  store.set('hist', store.get('hist', []).filter(y => y.nombre !== state.emitidoNombre));
+  state.pendiente = false; state.subido = false; state.emitidoNombre = ''; state.reenvio = false; pintarRecientes(); refresh();
+};
 try { if (navigator.canShare && navigator.canShare({ files: [new File([''], 'a.pdf', { type: 'application/pdf' })] })) $('#share').hidden = false; } catch (e) {}
 
 /* ================= Carga del PDF ================= */
@@ -905,7 +880,7 @@ const ancho = () => matchMedia('(min-width:1100px)').matches;
 function veA(e) { if (!ancho()) e.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 function nuevo() {
   Object.assign(state, { file: null, recibo: '', reciboPdf: '', reciboNombre: '', codigo: '', proveedor: '', proveedorCodigo: '', depto: '',
-    deptos: [], deptoLibre: '', leido: undefined, clasif: '', comp: true, asis: true, emitidoNombre: '', confirmado: false, reenvio: false });
+    deptos: [], deptoLibre: '', leido: undefined, clasif: '', comp: true, asis: true, emitidoNombre: '', confirmado: false, pendiente: false, subido: false, reenvio: false });
   $('#s2').hidden = true; $('#dropName').textContent = 'Elegir el PDF'; $('#dropTxt').textContent = 'Toca aquí o arrastra el archivo';
   $('#readMsg').className = 'msg'; $('#readMsg').textContent = '';
   $('#recibo').value = ''; $('#codigo').value = ''; $('#depto').value = ''; $('#clasif').textContent = '';
@@ -913,7 +888,6 @@ function nuevo() {
   onInput(); scrollTo({ top: 0, behavior: 'smooth' });
 }
 $('#nuevoBtn').onclick = nuevo;
-$('#confirmar').onclick = () => { if (!listo()) return; state.confirmado = true; refresh(); veA($('#s3')); };
 async function cargar(file) {
   if (!file) return;
   if (!/\.pdf$/i.test(file.name) && file.type !== 'application/pdf') { $('#readMsg').textContent = 'El archivo debe ser un PDF.'; return; }
@@ -925,7 +899,7 @@ async function cargar(file) {
   $('#readMsg').className = 'msg';
   const r = parseRecibo(items, LISTAS.departamentos, file.name);
   Object.assign(state, { file, recibo: r.recibo, reciboPdf: r.reciboPdf, reciboNombre: r.reciboNombre, codigo: r.codigo, depto: r.depto,
-    deptos: r.deptos, deptoLibre: r.deptoLibre, leido: r.leido, clasif: r.clasif, proveedor: '', proveedorCodigo: '', comp: true, asis: true, emitidoNombre: '', confirmado: false, reenvio: false });
+    deptos: r.deptos, deptoLibre: r.deptoLibre, leido: r.leido, clasif: r.clasif, proveedor: '', proveedorCodigo: '', comp: true, asis: true, emitidoNombre: '', confirmado: false, pendiente: false, subido: false, reenvio: false });
   $('#s2').hidden = false;
   $('#recibo').value = state.recibo; $('#codigo').value = state.codigo; $('#depto').value = state.depto;
   $('#comp').checked = $('#asis').checked = true;
