@@ -370,18 +370,18 @@ button.mini{min-height:36px;padding:4px 12px;font-size:.82rem;border-radius:.4re
     <button class="primary" id="dir" type="button">Emitir recibo</button>
     <button id="share" type="button" hidden>Compartir…</button>
   </div>
-  <p class="hint" id="hintEmitir">Al emitir se abre la carpeta del mes en SharePoint (no se genera ningún archivo). Arrastra ahí el mismo PDF que ya descargaste: el flujo envía los correos solo.</p>
+  <p class="hint" id="hintEmitir">Al emitir se descarga el PDF con el nombre que pide el flujo y se abre la carpeta del mes en SharePoint. Arrastra ahí ese PDF: el flujo envía los correos solo.</p>
   <div class="espera" id="espera" hidden role="status" aria-live="polite">
     <div class="esperando"><span class="pulse" aria-hidden="true"><i></i><i></i><i></i></span><b id="esperaTit">Esperando el PDF en la carpeta…</b></div>
-    <p class="hint" style="margin:0 0 6px">Arrastra a SharePoint el PDF original (el mismo, sin renombrar): <code id="origName"></code></p>
+    <p class="hint" style="margin:0 0 6px">Arrastra a SharePoint el PDF que se acaba de descargar (ya viene renombrado): <code id="origName"></code></p>
     <p class="hint" id="autoMsg" style="margin:0 0 10px">Cuando lo arrastres, confirma con el botón.</p>
     <div class="actions">
       <button class="primary" id="subido" type="button">Ya lo arrastré</button>
       <a class="btn" id="sp" target="_blank" rel="noopener">Abrir carpeta del mes en SharePoint</a>
       <button id="cancelaEspera" type="button" class="small">Cancelar</button>
     </div>
-    <details><summary class="hint">Solo si el flujo aún lee los datos del nombre del archivo</summary>
-      <div class="actions" style="margin-top:8px"><button id="rebajar" type="button" class="small">Descargar copia con el nombre del flujo</button></div>
+    <details><summary class="hint">¿No se descargó? Descárgalo otra vez</summary>
+      <div class="actions" style="margin-top:8px"><button id="rebajar" type="button" class="small">Descargar PDF renombrado</button></div>
     </details>
   </div>
 </section>
@@ -836,9 +836,14 @@ async function confirmarDuplicado(h) {
   state.reenvio = false; state.reenvioTag = '';
   const p = await buscarPrevio(h);
   if (!p) return true;
-  const ok = await preguntar({ titulo: 'Este recibo ya fue enviado',
-    texto: 'El recibo ' + state.recibo + ' se emitió el ' + fmtFecha(p.ts) + ' (' + p.quien + '). ¿Deseas reenviarlo? Se volverán a mandar los correos.',
-    si: 'Sí, reenviar', no: 'No, cancelar' });
+  const ok = await preguntar({ titulo: 'Este recibo ya se emitió antes',
+    texto: 'El recibo ' + state.recibo + ' se emitió el ' + fmtFecha(p.ts) + ' (' + p.quien + '). ¿Ya llegaron los correos de notificación?',
+    si: 'Sí llegaron: reenviar', no: 'No llegaron: emitir normal' });
+  if (!ok) {   // nunca se notificó: se borra el registro local y sigue como recibo nuevo (sin marca REENVÍO)
+    store.set('hist', store.get('hist', []).filter(x => x.recibo !== state.recibo));
+    pintarRecientes(); refresh();
+    return true;
+  }
   if (ok) {
     const d = new Date(), z = n => String(n).padStart(2, '0');
     state.reenvioTag = 'REENVIO-' + d.getFullYear() + z(d.getMonth() + 1) + z(d.getDate()) + '-' + z(d.getHours()) + z(d.getMinutes()) + z(d.getSeconds());
@@ -885,19 +890,14 @@ async function buscarRecibo(dir, num, depth = 0, out = []) {
   return out;
 }
 async function iniciarVigilancia() {
-  detenerVigilancia(); snap = new Map(); vistos = new Map(); state.ctlName = '';
+  detenerVigilancia(); snap = new Map(); vistos = new Map();
   const msg = $('#autoMsg');
-  if (!dirH) { msg.textContent = 'Sin carpeta vinculada: el flujo no recibe los datos del recibo. Vincúlala en «Listas y ajustes» (una sola vez) o usa la copia con nombre del flujo de abajo.'; return; }
+  if (!dirH) { msg.textContent = 'Arrastra el PDF descargado a SharePoint y confirma con el botón.'; return; }
   try {
     if ((await dirH.queryPermission({ mode: 'readwrite' })) !== 'granted' && (await dirH.requestPermission({ mode: 'readwrite' })) !== 'granted') { msg.textContent = 'Sin permiso sobre la carpeta vinculada. Vuelve a emitir y acepta el permiso.'; return; }
-    const ctl = await dirH.getDirectoryHandle('CONTROL', { create: true }), pref = 'RECIBO ' + state.recibo + ' ~', viejos = [];
-    for await (const [n] of ctl.entries()) if (norm(n).startsWith(pref)) viejos.push(n);
-    for (const n of viejos) { try { await ctl.removeEntry(n); } catch (e) {} }
-    const nombre = buildName().replace(/\.pdf$/i, '.ctl'), w = await (await ctl.getFileHandle(nombre, { create: true })).createWritable();
-    await w.write(nombre); await w.close(); state.ctlName = nombre;
     (await buscarRecibo(dirH, state.recibo)).forEach(([n, z]) => snap.set(n, z));
-  } catch (e) { msg.textContent = 'No pude escribir en la carpeta vinculada (' + e.message + '). Usa la copia con nombre del flujo de abajo.'; return; }
-  msg.textContent = 'Datos enviados al flujo. Vigilando la carpeta: se confirma solo cuando el PDF aparezca (o confirma tú con el botón).';
+  } catch (e) { msg.textContent = 'No pude leer la carpeta vinculada (' + e.message + '). Confirma tú con el botón cuando lo arrastres.'; return; }
+  msg.textContent = 'Vigilando la carpeta: se confirma solo cuando el PDF aparezca (o confirma tú con el botón).';
   vigilando = setInterval(async () => {
     if (!state.pendiente) return detenerVigilancia();
     try {
@@ -915,12 +915,13 @@ $('#dir').onclick = async () => {
   enviando = true;
   try {
     if (!(await confirmarDuplicado(null))) return;
-    window.open(carpetaURL(), '_blank');           // carpeta del mes en SharePoint (web): ahí se arrastra el PDF original; la app no genera ningún archivo
-    state.pendiente = true; $('#origName').textContent = state.file.name; guardarHist(true); veA($('#espera'));
+    bajarArchivo();                                  // descarga el PDF con el nombre del flujo (guárdalo en tu carpeta de siempre)
+    setTimeout(() => window.open(carpetaURL(), '_blank'), 400);   // carpeta del mes en SharePoint (web): ahí se arrastra ese PDF
+    state.pendiente = true; $('#origName').textContent = buildName(); guardarHist(true); veA($('#espera'));
     iniciarVigilancia();
   } finally { enviando = false; }
 };
-$('#rebajar').onclick = () => { if (listo()) { bajarArchivo(); toast('Copia con nombre del flujo descargada'); } };
+$('#rebajar').onclick = () => { if (listo()) { bajarArchivo(); toast('PDF renombrado descargado'); } };
 function confirmarSubido(auto) {
   detenerVigilancia();
   const h = store.get('hist', []), x = h.find(y => y.nombre === state.emitidoNombre);
